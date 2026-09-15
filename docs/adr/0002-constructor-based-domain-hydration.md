@@ -20,6 +20,36 @@ business rules remain in the domain, and infrastructure connects through ports.
 
 ## Decision
 
+### Separate persisted state from domain authority
+
+There are two different kinds of source of truth. The database is authoritative
+for persisted facts and the latest stored state. The domain is authoritative for
+what that state means, which transitions are valid, and which business rules
+apply. The adapter is the translation boundary between them; it does not make
+business decisions.
+
+```mermaid
+flowchart LR
+    DB[(Database<br/>persisted facts and latest stored state)]
+    Adapter[Repository adapter<br/>map storage <-> domain]
+    Domain[Domain model<br/>business meaning, invariants, behavior]
+    Command[Domain command<br/>validate and calculate]
+
+    DB -->|load persisted state| Adapter
+    Adapter -->|hydrate validated objects| Domain
+    Domain -->|accept or reject transition| Command
+    Command -->|updated domain state| Domain
+    Domain -->|map state for storage| Adapter
+    Adapter -->|save persisted state| DB
+
+```
+
+The domain is therefore not a second database, and the database is not a second
+domain model. On reads, stored data is mapped into valid domain objects. On
+writes, a domain command determines the next valid state, which the adapter
+persists. A database row is authoritative for what was stored; the domain is
+authoritative for whether a change is allowed and what it means.
+
 ### Constructors accept valid domain state
 
 Hydration means constructing objects from existing state. Domain entities and
