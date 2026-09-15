@@ -9,7 +9,7 @@ import type { PayoutStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Money } from "./money";
 
-export interface PayoutSnapshot {
+export interface PayoutDetails {
   readonly payoutId: UUID;
   readonly sessionId: UUID;
   readonly payoutAccountId: UUID;
@@ -27,17 +27,108 @@ export interface PayoutSnapshot {
 
 /** Aggregate representing one immutable settlement batch and its provider attempt. */
 export class Payout {
-  #snapshot: PayoutSnapshot;
+  readonly #payoutId: UUID;
+  readonly #sessionId: UUID;
+  readonly #payoutAccountId: UUID;
+  readonly #amount: Money;
+  #status: PayoutStatus;
+  readonly #idempotencyKey: string;
+  readonly #requestedAt: Date;
+  #completedAt?: Date;
+  #failedAt?: Date;
+  #failureReason?: string;
+  #providerReference?: string;
+  readonly #destination: PayoutDestination;
+  readonly #lines: readonly SettlementBatch["lines"][number][];
 
-  private constructor(snapshot: PayoutSnapshot) {
-    this.#snapshot = Object.freeze({
-      ...snapshot,
-      requestedAt: copyDate(snapshot.requestedAt, "requestedAt"),
-      completedAt: copyOptionalDate(snapshot.completedAt, "completedAt"),
-      failedAt: copyOptionalDate(snapshot.failedAt, "failedAt"),
-      destination: Object.freeze({ ...snapshot.destination }),
-      lines: Object.freeze(snapshot.lines.map((line) => ({ ...line }))),
+  constructor(details: PayoutDetails) {
+    requireDomain(
+      ["REQUESTED", "COMPLETED", "FAILED"].includes(details.status),
+      "INVALID_INPUT",
+      "Unknown payout status",
+    );
+    requireDomain(
+      details.amount instanceof Money,
+      "INVALID_INPUT",
+      "Payout amount must be Money",
+    );
+    requireDomain(
+      Array.isArray(details.lines),
+      "INVALID_INPUT",
+      "A payout needs settlement lines",
+    );
+    requireDomain(
+      details.destination !== undefined && details.destination !== null,
+      "INVALID_INPUT",
+      "A payout needs a destination",
+    );
+    validateText(details.payoutId, "payoutId");
+    validateText(details.sessionId, "sessionId");
+    validateText(details.idempotencyKey, "idempotencyKey");
+    validateBatch({
+      payoutId: details.payoutId,
+      sessionId: details.sessionId,
+      idempotencyKey: details.idempotencyKey,
+      requestedAt: details.requestedAt,
+      destination: details.destination,
+      lines: details.lines,
     });
+    const amount = details.lines.reduce(
+      (sum, line) => sum.add(line.amount),
+      Money.fromCents(0),
+    );
+    requireDomain(
+      details.amount.equals(amount),
+      "INVALID_INPUT",
+      "Payout amount must equal its settlement lines",
+    );
+    requireDomain(
+      details.payoutAccountId === details.destination.payoutAccountId,
+      "INVALID_INPUT",
+      "Payout account must match its destination",
+    );
+    if (details.status === "COMPLETED") {
+      validateText(details.providerReference, "providerReference");
+      requireDomain(
+        details.completedAt !== undefined &&
+          details.failedAt === undefined &&
+          details.failureReason === undefined,
+        "INVALID_INPUT",
+        "A completed payout needs only completedAt",
+      );
+    } else if (details.status === "FAILED") {
+      validateText(details.failureReason, "failureReason");
+      requireDomain(
+        details.failedAt !== undefined &&
+          details.completedAt === undefined &&
+          details.providerReference === undefined,
+        "INVALID_INPUT",
+        "A failed payout needs failedAt and a reason",
+      );
+    } else {
+      requireDomain(
+        details.completedAt === undefined &&
+          details.failedAt === undefined &&
+          details.failureReason === undefined &&
+          details.providerReference === undefined,
+        "INVALID_INPUT",
+        "A requested payout cannot contain an outcome",
+      );
+    }
+
+    this.#payoutId = details.payoutId;
+    this.#sessionId = details.sessionId;
+    this.#payoutAccountId = details.payoutAccountId;
+    this.#amount = details.amount;
+    this.#status = details.status;
+    this.#idempotencyKey = details.idempotencyKey;
+    this.#requestedAt = copyDate(details.requestedAt, "requestedAt");
+    this.#completedAt = copyOptionalDate(details.completedAt, "completedAt");
+    this.#failedAt = copyOptionalDate(details.failedAt, "failedAt");
+    this.#failureReason = details.failureReason;
+    this.#providerReference = details.providerReference;
+    this.#destination = { ...details.destination };
+    this.#lines = details.lines.map((line) => ({ ...line }));
   }
 
   static create(batch: SettlementBatch): Payout {
@@ -59,83 +150,6 @@ export class Payout {
     });
   }
 
-  static reconstitute(snapshot: PayoutSnapshot): Payout {
-    requireDomain(
-      ["REQUESTED", "COMPLETED", "FAILED"].includes(snapshot.status),
-      "INVALID_INPUT",
-      "Unknown payout status",
-    );
-    requireDomain(
-      snapshot.amount instanceof Money,
-      "INVALID_INPUT",
-      "Payout amount must be Money",
-    );
-    requireDomain(
-      Array.isArray(snapshot.lines),
-      "INVALID_INPUT",
-      "A payout needs settlement lines",
-    );
-    requireDomain(
-      snapshot.destination !== undefined && snapshot.destination !== null,
-      "INVALID_INPUT",
-      "A payout needs a destination",
-    );
-    validateText(snapshot.payoutId, "payoutId");
-    validateText(snapshot.sessionId, "sessionId");
-    validateText(snapshot.idempotencyKey, "idempotencyKey");
-    validateBatch({
-      payoutId: snapshot.payoutId,
-      sessionId: snapshot.sessionId,
-      idempotencyKey: snapshot.idempotencyKey,
-      requestedAt: snapshot.requestedAt,
-      destination: snapshot.destination,
-      lines: snapshot.lines,
-    });
-    const amount = snapshot.lines.reduce(
-      (sum, line) => sum.add(line.amount),
-      Money.fromCents(0),
-    );
-    requireDomain(
-      snapshot.amount.equals(amount),
-      "INVALID_INPUT",
-      "Payout amount must equal its settlement lines",
-    );
-    requireDomain(
-      snapshot.payoutAccountId === snapshot.destination.payoutAccountId,
-      "INVALID_INPUT",
-      "Payout account must match its destination",
-    );
-    if (snapshot.status === "COMPLETED") {
-      validateText(snapshot.providerReference, "providerReference");
-      requireDomain(
-        snapshot.completedAt !== undefined &&
-          snapshot.failedAt === undefined &&
-          snapshot.failureReason === undefined,
-        "INVALID_INPUT",
-        "A completed payout needs only completedAt",
-      );
-    } else if (snapshot.status === "FAILED") {
-      validateText(snapshot.failureReason, "failureReason");
-      requireDomain(
-        snapshot.failedAt !== undefined &&
-          snapshot.completedAt === undefined &&
-          snapshot.providerReference === undefined,
-        "INVALID_INPUT",
-        "A failed payout needs failedAt and a reason",
-      );
-    } else {
-      requireDomain(
-        snapshot.completedAt === undefined &&
-          snapshot.failedAt === undefined &&
-          snapshot.failureReason === undefined &&
-          snapshot.providerReference === undefined,
-        "INVALID_INPUT",
-        "A requested payout cannot contain an outcome",
-      );
-    }
-    return new Payout({ ...snapshot, amount });
-  }
-
   complete(providerReference: string, at: Date): boolean {
     validateText(providerReference, "providerReference");
     const completedAt = copyDate(at, "completedAt");
@@ -151,11 +165,10 @@ export class Payout {
         "STALE_PAYOUT",
         "A failed payout cannot be completed",
       );
-    return this.replace({
-      status: "COMPLETED",
-      completedAt,
-      providerReference,
-    });
+    this.#status = "COMPLETED";
+    this.#completedAt = completedAt;
+    this.#providerReference = providerReference;
+    return true;
   }
 
   fail(reason: string, at: Date): boolean {
@@ -170,11 +183,10 @@ export class Payout {
     }
     if (this.status === "COMPLETED")
       throw new DomainError("STALE_PAYOUT", "A completed payout cannot fail");
-    return this.replace({
-      status: "FAILED",
-      failedAt,
-      failureReason: reason,
-    });
+    this.#status = "FAILED";
+    this.#failedAt = failedAt;
+    this.#failureReason = reason;
+    return true;
   }
 
   requestedIntent(): PayoutRequestedIntent {
@@ -189,76 +201,44 @@ export class Payout {
     });
   }
 
-  snapshot(): PayoutSnapshot {
-    return {
-      ...this.#snapshot,
-      requestedAt: this.requestedAt,
-      completedAt: this.completedAt,
-      failedAt: this.failedAt,
-      destination: { ...this.destination },
-      lines: this.lines.map((line) => ({ ...line })),
-    };
-  }
-
   get payoutId(): UUID {
-    return this.#snapshot.payoutId;
+    return this.#payoutId;
   }
   get sessionId(): UUID {
-    return this.#snapshot.sessionId;
+    return this.#sessionId;
   }
   get payoutAccountId(): UUID {
-    return this.#snapshot.payoutAccountId;
+    return this.#payoutAccountId;
   }
   get amount(): Money {
-    return this.#snapshot.amount;
+    return this.#amount;
   }
   get status(): PayoutStatus {
-    return this.#snapshot.status;
+    return this.#status;
   }
   get idempotencyKey(): string {
-    return this.#snapshot.idempotencyKey;
+    return this.#idempotencyKey;
   }
   get requestedAt(): Date {
-    return copyDate(this.#snapshot.requestedAt, "requestedAt");
+    return copyDate(this.#requestedAt, "requestedAt");
   }
   get completedAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.completedAt, "completedAt");
+    return copyOptionalDate(this.#completedAt, "completedAt");
   }
   get failedAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.failedAt, "failedAt");
+    return copyOptionalDate(this.#failedAt, "failedAt");
   }
   get failureReason(): string | undefined {
-    return this.#snapshot.failureReason;
+    return this.#failureReason;
   }
   get providerReference(): string | undefined {
-    return this.#snapshot.providerReference;
+    return this.#providerReference;
   }
   get destination(): PayoutDestination {
-    return { ...this.#snapshot.destination };
+    return { ...this.#destination };
   }
   get lines(): readonly SettlementBatch["lines"][number][] {
-    return this.#snapshot.lines.map((line) => ({ ...line }));
-  }
-
-  private replace(change: Partial<PayoutSnapshot>): boolean {
-    const next = { ...this.snapshot(), ...change };
-    if (next.status === "COMPLETED") {
-      next.failedAt = undefined;
-      next.failureReason = undefined;
-    }
-    if (next.status === "FAILED") {
-      next.completedAt = undefined;
-      next.providerReference = undefined;
-    }
-    this.#snapshot = Object.freeze({
-      ...next,
-      requestedAt: copyDate(next.requestedAt, "requestedAt"),
-      completedAt: copyOptionalDate(next.completedAt, "completedAt"),
-      failedAt: copyOptionalDate(next.failedAt, "failedAt"),
-      destination: Object.freeze({ ...next.destination }),
-      lines: Object.freeze(next.lines.map((line) => ({ ...line }))),
-    });
-    return true;
+    return this.#lines.map((line) => ({ ...line }));
   }
 }
 

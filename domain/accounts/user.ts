@@ -8,15 +8,15 @@ import type { AccountStatus } from "../shared/statuses";
 import type { Region, Sport, UUID } from "../shared/types";
 import { Booker } from "./booker";
 import { Participant } from "./participant";
-import { PayoutAccount, type PayoutAccountSnapshot } from "./payout-account";
+import { PayoutAccount } from "./payout-account";
 
-export interface UserSnapshot {
+export interface UserDetails {
   readonly userId: UUID;
   readonly email: string | null;
   readonly preferredSports: ReadonlySet<Sport>;
   readonly preferredRegions: ReadonlySet<Region>;
   readonly accountStatus: AccountStatus;
-  readonly payoutAccount?: PayoutAccountSnapshot;
+  readonly payoutAccount?: PayoutAccount;
 }
 
 export interface UserRegistration {
@@ -35,46 +35,40 @@ export class User {
   #accountStatus: AccountStatus;
   #payoutAccount?: PayoutAccount;
 
-  private constructor(snapshot: UserSnapshot) {
-    this.#userId = snapshot.userId;
-    this.#email = snapshot.email;
-    this.#preferredSports = new Set(snapshot.preferredSports);
-    this.#preferredRegions = new Set(snapshot.preferredRegions);
-    this.#accountStatus = snapshot.accountStatus;
-    this.#payoutAccount =
-      snapshot.payoutAccount === undefined
-        ? undefined
-        : PayoutAccount.reconstitute(snapshot.payoutAccount);
+  constructor(details: UserDetails) {
+    requireDomain(
+      details.preferredSports !== undefined &&
+        details.preferredSports !== null &&
+        details.preferredRegions !== undefined &&
+        details.preferredRegions !== null &&
+        typeof details.preferredSports[Symbol.iterator] === "function" &&
+        typeof details.preferredRegions[Symbol.iterator] === "function",
+      "INVALID_INPUT",
+      "A user needs iterable preference sets",
+    );
+
+    requireDomain(
+      details.payoutAccount === undefined ||
+        details.payoutAccount instanceof PayoutAccount,
+      "INVALID_INPUT",
+      "A payout account must be a PayoutAccount",
+    );
+    this.#userId = details.userId;
+    this.#email = details.email;
+    this.#preferredSports = new Set(details.preferredSports);
+    this.#preferredRegions = new Set(details.preferredRegions);
+    this.#accountStatus = details.accountStatus;
+    this.#payoutAccount = details.payoutAccount;
     this.validate();
   }
 
   static create(details: UserRegistration): User {
-    validateId(details.userId, "userId");
-    validateEmail(details.email);
     return new User({
       userId: details.userId,
       email: details.email,
-      preferredSports: new Set(details.preferredSports ?? []),
-      preferredRegions: new Set(details.preferredRegions ?? []),
+      preferredSports: details.preferredSports ?? new Set(),
+      preferredRegions: details.preferredRegions ?? new Set(),
       accountStatus: "ACTIVE",
-    });
-  }
-
-  static reconstitute(snapshot: UserSnapshot): User {
-    requireDomain(
-      snapshot.preferredSports !== undefined &&
-        snapshot.preferredSports !== null &&
-        snapshot.preferredRegions !== undefined &&
-        snapshot.preferredRegions !== null &&
-        typeof snapshot.preferredSports[Symbol.iterator] === "function" &&
-        typeof snapshot.preferredRegions[Symbol.iterator] === "function",
-      "INVALID_INPUT",
-      "A user needs iterable preference sets",
-    );
-    return new User({
-      ...snapshot,
-      preferredSports: new Set(snapshot.preferredSports),
-      preferredRegions: new Set(snapshot.preferredRegions),
     });
   }
 
@@ -187,17 +181,6 @@ export class User {
     this.#preferredRegions.clear();
   }
 
-  snapshot(): UserSnapshot {
-    return {
-      userId: this.#userId,
-      email: this.#email,
-      preferredSports: new Set(this.#preferredSports),
-      preferredRegions: new Set(this.#preferredRegions),
-      accountStatus: this.#accountStatus,
-      payoutAccount: this.#payoutAccount?.snapshot(),
-    };
-  }
-
   get userId(): UUID {
     return this.#userId;
   }
@@ -214,9 +197,7 @@ export class User {
     return this.#accountStatus;
   }
   get payoutAccount(): PayoutAccount | undefined {
-    return this.#payoutAccount === undefined
-      ? undefined
-      : PayoutAccount.reconstitute(this.#payoutAccount.snapshot());
+    return this.#payoutAccount;
   }
 
   private assertActive(): void {

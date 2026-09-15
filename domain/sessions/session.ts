@@ -18,15 +18,15 @@ import type {
   Visibility,
 } from "../shared/statuses";
 import type { UUID } from "../shared/types";
-import { Booking, type BookingSnapshot } from "./booking";
+import { Booking } from "./booking";
 import { FundHold } from "./fund-hold";
-import { Participation, type ParticipationSnapshot } from "./participation";
+import { Participation } from "./participation";
 
-export interface SessionSnapshot {
+export interface SessionDetails {
   readonly sessionId: UUID;
   readonly bookerId: UUID;
   readonly invitedGroupId?: UUID;
-  readonly booking: BookingSnapshot;
+  readonly booking: Booking;
   readonly totalSlots: number;
   readonly minimumHeadcount: number;
   readonly visibility: Visibility;
@@ -34,7 +34,7 @@ export interface SessionSnapshot {
   readonly minimumReliability?: ReliabilityScore;
   readonly roomToken: string;
   readonly holdingAccountId: UUID;
-  readonly participations: readonly ParticipationSnapshot[];
+  readonly participations: readonly Participation[];
   readonly nextQueueSequence: number;
   readonly pendingSettlement?: SettlementBatch;
   readonly payoutAttemptIds?: readonly UUID[];
@@ -96,24 +96,67 @@ export class Session {
   #payoutAttemptIds: Set<UUID>;
   #payoutIdempotencyKeys: Set<string>;
 
-  private constructor(details: {
-    readonly sessionId: UUID;
-    readonly bookerId: UUID;
-    readonly booking: Booking;
-    readonly totalSlots: number;
-    readonly minimumHeadcount: number;
-    readonly roomToken: string;
-    readonly holdingAccountId: UUID;
-    readonly visibility: Visibility;
-    readonly status: SessionStatus;
-    readonly minimumReliability?: ReliabilityScore;
-    readonly invitedGroupId?: UUID;
-    readonly participations: readonly Participation[];
-    readonly nextQueueSequence: number;
-    readonly pendingSettlement?: SettlementBatch;
-    readonly payoutAttemptIds?: readonly UUID[];
-    readonly payoutIdempotencyKeys?: readonly string[];
-  }) {
+  constructor(details: SessionDetails) {
+    requireDomain(
+      details.booking instanceof Booking,
+      "INVALID_INPUT",
+      "A session needs a Booking value object",
+    );
+    requireId(details.sessionId, "sessionId");
+    requireId(details.bookerId, "bookerId");
+    requireId(details.holdingAccountId, "holdingAccountId");
+    requireDomain(
+      typeof details.roomToken === "string" && details.roomToken.trim() !== "",
+      "INVALID_INPUT",
+      "A session needs a room token",
+    );
+    requireDomain(
+      Array.isArray(details.participations),
+      "INVALID_INPUT",
+      "A session needs a participation roster",
+    );
+    requireDomain(
+      details.participations.every((p) => p instanceof Participation),
+      "INVALID_INPUT",
+      "A roster needs Participation values",
+    );
+    const participations = details.participations;
+    if (details.minimumReliability !== undefined)
+      requireDomain(
+        details.minimumReliability instanceof ReliabilityScore,
+        "INVALID_INPUT",
+        "minimumReliability must be a ReliabilityScore",
+      );
+    if (details.invitedGroupId !== undefined)
+      requireId(details.invitedGroupId, "invitedGroupId");
+    if (details.pendingSettlement !== undefined)
+      validateSettlementBatch(details.pendingSettlement);
+    if (details.payoutAttemptIds !== undefined)
+      requireDomain(
+        Array.isArray(details.payoutAttemptIds) &&
+          new Set(details.payoutAttemptIds).size ===
+            details.payoutAttemptIds.length,
+        "DUPLICATE_ID",
+        "Payout attempt IDs must be unique",
+      );
+    if (details.payoutIdempotencyKeys !== undefined)
+      requireDomain(
+        Array.isArray(details.payoutIdempotencyKeys) &&
+          new Set(details.payoutIdempotencyKeys).size ===
+            details.payoutIdempotencyKeys.length,
+        "DUPLICATE_ID",
+        "Payout idempotency keys must be unique",
+      );
+    const maxSequence = participations.reduce(
+      (max, p) => Math.max(max, p.queueSequence ?? 0),
+      0,
+    );
+    requireDomain(
+      details.nextQueueSequence > maxSequence,
+      "INVALID_INPUT",
+      "Queue sequence must be ahead of the roster",
+    );
+
     this.#sessionId = details.sessionId;
     this.#bookerId = details.bookerId;
     this.#booking = details.booking;
@@ -131,20 +174,20 @@ export class Session {
       details.pendingSettlement === undefined
         ? undefined
         : { batch: cloneBatch(details.pendingSettlement) };
-    this.#payoutAttemptIds = new Set(details.payoutAttemptIds ?? []);
-    this.#payoutIdempotencyKeys = new Set(details.payoutIdempotencyKeys ?? []);
+    this.#payoutAttemptIds = new Set(
+      details.payoutAttemptIds ??
+        (details.pendingSettlement ? [details.pendingSettlement.payoutId] : []),
+    );
+    this.#payoutIdempotencyKeys = new Set(
+      details.payoutIdempotencyKeys ??
+        (details.pendingSettlement
+          ? [details.pendingSettlement.idempotencyKey]
+          : []),
+    );
     this.validateRoster();
   }
 
   static create(details: SessionCreation): Session {
-    requireId(details.sessionId, "sessionId");
-    requireId(details.bookerId, "bookerId");
-    requireId(details.holdingAccountId, "holdingAccountId");
-    requireDomain(
-      details.booking instanceof Booking,
-      "INVALID_INPUT",
-      "A session needs a Booking value object",
-    );
     requireDomain(
       details.bookerStatus === "ACTIVE",
       "INACTIVE_ACCOUNT",
@@ -155,20 +198,7 @@ export class Session {
       "PAYOUT_ACCOUNT_NOT_READY",
       "A session needs a completed payout account",
     );
-    requireDomain(
-      typeof details.roomToken === "string" && details.roomToken.trim() !== "",
-      "INVALID_INPUT",
-      "A session needs a room token",
-    );
     const now = validDate(details.now, "now");
-    if (details.minimumReliability !== undefined)
-      requireDomain(
-        details.minimumReliability instanceof ReliabilityScore,
-        "INVALID_INPUT",
-        "minimumReliability must be a ReliabilityScore",
-      );
-    if (details.invitedGroupId !== undefined)
-      requireId(details.invitedGroupId, "invitedGroupId");
     const session = new Session({
       sessionId: details.sessionId,
       bookerId: details.bookerId,
@@ -197,111 +227,6 @@ export class Session {
       "The booking share must be positive",
     );
     return session;
-  }
-
-  static reconstitute(snapshot: SessionSnapshot): Session {
-    requireId(snapshot.sessionId, "sessionId");
-    requireId(snapshot.bookerId, "bookerId");
-    requireId(snapshot.holdingAccountId, "holdingAccountId");
-    requireDomain(
-      typeof snapshot.roomToken === "string" &&
-        snapshot.roomToken.trim() !== "",
-      "INVALID_INPUT",
-      "A session needs a room token",
-    );
-    requireDomain(
-      Array.isArray(snapshot.participations),
-      "INVALID_INPUT",
-      "A session needs a participation roster",
-    );
-    const participations = snapshot.participations.map((p) =>
-      Participation.reconstitute(p),
-    );
-    if (snapshot.minimumReliability !== undefined)
-      requireDomain(
-        snapshot.minimumReliability instanceof ReliabilityScore,
-        "INVALID_INPUT",
-        "minimumReliability must be a ReliabilityScore",
-      );
-    if (snapshot.invitedGroupId !== undefined)
-      requireId(snapshot.invitedGroupId, "invitedGroupId");
-    if (snapshot.pendingSettlement !== undefined)
-      validateSettlementBatch(snapshot.pendingSettlement);
-    if (snapshot.payoutAttemptIds !== undefined)
-      requireDomain(
-        Array.isArray(snapshot.payoutAttemptIds) &&
-          new Set(snapshot.payoutAttemptIds).size ===
-            snapshot.payoutAttemptIds.length,
-        "DUPLICATE_ID",
-        "Payout attempt IDs must be unique",
-      );
-    if (snapshot.payoutIdempotencyKeys !== undefined)
-      requireDomain(
-        Array.isArray(snapshot.payoutIdempotencyKeys) &&
-          new Set(snapshot.payoutIdempotencyKeys).size ===
-            snapshot.payoutIdempotencyKeys.length,
-        "DUPLICATE_ID",
-        "Payout idempotency keys must be unique",
-      );
-    const maxSequence = participations.reduce(
-      (max, p) => Math.max(max, p.queueSequence ?? 0),
-      0,
-    );
-    requireDomain(
-      snapshot.nextQueueSequence > maxSequence,
-      "INVALID_INPUT",
-      "Queue sequence must be ahead of the roster",
-    );
-    return new Session({
-      sessionId: snapshot.sessionId,
-      bookerId: snapshot.bookerId,
-      booking: Booking.reconstitute(snapshot.booking),
-      totalSlots: snapshot.totalSlots,
-      minimumHeadcount: snapshot.minimumHeadcount,
-      roomToken: snapshot.roomToken,
-      holdingAccountId: snapshot.holdingAccountId,
-      visibility: snapshot.visibility,
-      status: snapshot.status,
-      minimumReliability: snapshot.minimumReliability,
-      invitedGroupId: snapshot.invitedGroupId,
-      participations,
-      nextQueueSequence: snapshot.nextQueueSequence,
-      pendingSettlement: snapshot.pendingSettlement,
-      payoutAttemptIds:
-        snapshot.payoutAttemptIds ??
-        (snapshot.pendingSettlement === undefined
-          ? []
-          : [snapshot.pendingSettlement.payoutId]),
-      payoutIdempotencyKeys:
-        snapshot.payoutIdempotencyKeys ??
-        (snapshot.pendingSettlement === undefined
-          ? []
-          : [snapshot.pendingSettlement.idempotencyKey]),
-    });
-  }
-
-  snapshot(): SessionSnapshot {
-    return {
-      sessionId: this.#sessionId,
-      bookerId: this.#bookerId,
-      invitedGroupId: this.#invitedGroupId,
-      booking: this.#booking.snapshot(),
-      totalSlots: this.#totalSlots,
-      minimumHeadcount: this.#minimumHeadcount,
-      visibility: this.#visibility,
-      status: this.#status,
-      minimumReliability: this.#minimumReliability,
-      roomToken: this.#roomToken,
-      holdingAccountId: this.#holdingAccountId,
-      participations: this.#participations.map((p) => p.snapshot()),
-      nextQueueSequence: this.#nextQueueSequence,
-      pendingSettlement:
-        this.#pendingSettlement === undefined
-          ? undefined
-          : cloneBatch(this.#pendingSettlement.batch),
-      payoutAttemptIds: [...this.#payoutAttemptIds],
-      payoutIdempotencyKeys: [...this.#payoutIdempotencyKeys],
-    };
   }
 
   join(command: JoinCommand): AdmissionResult {
@@ -407,22 +332,16 @@ export class Session {
         command.now,
       ),
       command.now,
+      replacement?.participationId,
     );
-    const committedWithReplacement = Participation.reconstitute({
-      ...committed.snapshot(),
-      replacesParticipationId: replacement?.participationId,
-    });
-    this.#participations = this.replace(
-      next.participationId,
-      committedWithReplacement,
-    );
+    this.#participations = this.replace(next.participationId, committed);
     const refund = this.refundOldestAwaiting(command.now);
     return {
       kind: "PROMOTED",
-      participationId: committedWithReplacement.participationId,
+      participationId: committed.participationId,
       refundedParticipationId: refund.participationId,
       instructions: [
-        this.lockInstruction(committedWithReplacement, command.now),
+        this.lockInstruction(committed, command.now),
         ...(refund.instruction === undefined ? [] : [refund.instruction]),
       ],
     };
@@ -565,18 +484,9 @@ export class Session {
   expireReplacements(now: Date): void {
     validDate(now, "now");
     if (!this.#booking.hasStarted(now)) return;
-    this.#participations = this.#participations.map((participation) => {
-      if (
-        participation.status === "WITHDRAWN" &&
-        participation.hold?.state === "AWAITING_REPLACEMENT"
-      ) {
-        return Participation.reconstitute({
-          ...participation.snapshot(),
-          hold: participation.hold.markForfeitureDue(now).snapshot(),
-        });
-      }
-      return participation;
-    });
+    this.#participations = this.#participations.map((participation) =>
+      participation.expireReplacement(now),
+    );
   }
 
   verifyAttendance(command: {
@@ -649,22 +559,6 @@ export class Session {
     readonly destination: PayoutDestination;
     readonly now: Date;
   }): SettlementBatch | undefined {
-    const before = this.snapshot();
-    try {
-      return this.prepareSettlementUnsafe(command);
-    } catch (error) {
-      this.restore(before);
-      throw error;
-    }
-  }
-
-  private prepareSettlementUnsafe(command: {
-    readonly actorId: UUID;
-    readonly payoutId: UUID;
-    readonly idempotencyKey: string;
-    readonly destination: PayoutDestination;
-    readonly now: Date;
-  }): SettlementBatch | undefined {
     requireId(command.payoutId, "payoutId");
     requireDomain(
       typeof command.idempotencyKey === "string" &&
@@ -690,10 +584,15 @@ export class Session {
       "SESSION_NOT_ENDED",
       "Settlement requires the session to end",
     );
-    this.expireReplacements(command.now);
-    this.markAwaitingPayoutIfComplete();
+    const next = this.#participations.map((participation) =>
+      participation.expireReplacement(command.now),
+    );
     requireDomain(
-      this.#status === "AWAITING_PAYOUT",
+      next.every(
+        (participation) =>
+          participation.status !== "COMMITTED" ||
+          participation.attendance !== "UNVERIFIED",
+      ),
       "ATTENDANCE_INCOMPLETE",
       "All committed participants must be finalized before settlement",
     );
@@ -718,7 +617,7 @@ export class Session {
       "A payout idempotency key can only be used once for this session",
     );
     const lines: SettlementLine[] = [];
-    for (const participation of this.#participations) {
+    for (const participation of next) {
       if (
         !(
           participation.status === "COMMITTED" ||
@@ -749,11 +648,10 @@ export class Session {
       });
     }
     if (lines.length === 0) {
+      this.#participations = next;
       this.#status = "SETTLED";
       return undefined;
     }
-    this.#payoutAttemptIds.add(command.payoutId);
-    this.#payoutIdempotencyKeys.add(command.idempotencyKey);
     const batch: SettlementBatch = {
       payoutId: command.payoutId,
       sessionId: this.#sessionId,
@@ -762,22 +660,21 @@ export class Session {
       destination: command.destination,
       lines,
     };
-    this.#pendingSettlement = { batch: cloneBatch(batch) };
+    const pending = { batch: cloneBatch(batch) };
+    const result = cloneBatch(batch);
+    const attemptIds = new Set(this.#payoutAttemptIds).add(command.payoutId);
+    const idempotencyKeys = new Set(this.#payoutIdempotencyKeys).add(
+      command.idempotencyKey,
+    );
+    this.#participations = next;
+    this.#payoutAttemptIds = attemptIds;
+    this.#payoutIdempotencyKeys = idempotencyKeys;
+    this.#pendingSettlement = pending;
     this.#status = "PAYOUT_PENDING";
-    return cloneBatch(batch);
+    return result;
   }
 
   completeSettlement(payoutId: UUID, at: Date): FinancialResult {
-    const before = this.snapshot();
-    try {
-      return this.completeSettlementUnsafe(payoutId, at);
-    } catch (error) {
-      this.restore(before);
-      throw error;
-    }
-  }
-
-  private completeSettlementUnsafe(payoutId: UUID, at: Date): FinancialResult {
     requireId(payoutId, "payoutId");
     validDate(at, "at");
     const pending = this.#pendingSettlement;
@@ -800,15 +697,7 @@ export class Session {
         "INVALID_STATE",
         "Settlement hold no longer matches the batch",
       );
-      const hold = participation.hold;
-      const settled =
-        line.kind === "RELEASE"
-          ? hold.release(payoutId, at)
-          : hold.forfeit(payoutId, at);
-      const updated = Participation.reconstitute({
-        ...participation.snapshot(),
-        hold: settled.snapshot(),
-      });
+      const updated = participation.settleHold(line.kind, payoutId, at);
       next = this.replaceIn(next, participation.participationId, updated);
       instructions.push({
         kind: line.kind,
@@ -878,9 +767,17 @@ export class Session {
     return this.#invitedGroupId;
   }
   get participations(): readonly Participation[] {
-    return this.#participations.map((participation) =>
-      Participation.reconstitute(participation.snapshot()),
-    );
+    return [...this.#participations];
+  }
+
+  get nextQueueSequence(): number {
+    return this.#nextQueueSequence;
+  }
+  get payoutAttemptIds(): readonly UUID[] {
+    return [...this.#payoutAttemptIds];
+  }
+  get payoutIdempotencyKeys(): readonly string[] {
+    return [...this.#payoutIdempotencyKeys];
   }
   get nextWaitlistedUserId(): UUID | undefined {
     return this.nextWaitlisted()?.userId;
@@ -963,10 +860,7 @@ export class Session {
   } {
     const awaiting = this.oldestAwaiting();
     if (awaiting === undefined || awaiting.hold === undefined) return {};
-    const refunded = Participation.reconstitute({
-      ...awaiting.snapshot(),
-      hold: awaiting.hold.refund(at).snapshot(),
-    });
+    const refunded = awaiting.refundReplacement(at);
     this.#participations = this.replace(awaiting.participationId, refunded);
     return {
       participationId: awaiting.participationId,
@@ -1376,21 +1270,6 @@ export class Session {
         "INVALID_INPUT",
         "A cancelled session must cancel its participations",
       );
-  }
-
-  private restore(snapshot: SessionSnapshot): void {
-    this.#status = snapshot.status;
-    this.#visibility = snapshot.visibility;
-    this.#participations = snapshot.participations.map((participation) =>
-      Participation.reconstitute(participation),
-    );
-    this.#nextQueueSequence = snapshot.nextQueueSequence;
-    this.#pendingSettlement =
-      snapshot.pendingSettlement === undefined
-        ? undefined
-        : { batch: cloneBatch(snapshot.pendingSettlement) };
-    this.#payoutAttemptIds = new Set(snapshot.payoutAttemptIds ?? []);
-    this.#payoutIdempotencyKeys = new Set(snapshot.payoutIdempotencyKeys ?? []);
   }
 }
 

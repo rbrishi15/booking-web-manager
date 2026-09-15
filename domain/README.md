@@ -23,16 +23,25 @@ work.
 - `Wallet`, the shared `HoldingAccount`, and `LedgerTransaction` represent
   identities and immutable facts. Their balances are ledger projections.
 
-Entities are created with named `create(...)` factories and loaded with
-`reconstitute(snapshot)`. Child state is immutable; callers receive defensive
-copies. Root commands validate a complete transition before replacing the
-aggregate state and throw `DomainError` with a stable code when the transition is
-not allowed.
+Public constructors accept valid domain state and validate its invariants.
+Nested arguments are domain objects, such as a `Booking` and `Participation`
+children for a `Session`. Repository adapters construct these objects directly
+and own the mapping between storage values and domain properties.
 
-Creation contracts use domain language (`UserRegistration`, `SessionCreation`,
-`GroupCreation`, and `BookingDetails`). `Snapshot` types are persistence
-representations used only at the reconstitution boundary; they are not mutable
-entity state or UI props.
+Named creation factories remain where they apply business rules or defaults:
+`User.create(...)` registers an active user, and `Session.create(...)` checks
+booker eligibility and an upcoming booking. Simple identities and values such
+as `Wallet` and `Booking` use constructors directly. Hydrating existing state
+does not repeat creation workflows or reset lifecycle fields.
+
+Child state is immutable and can be shared directly. Constructors and getters
+defensively copy mutable dates, collections, and settlement data. Root commands
+validate a complete transition and prepare their results before applying state
+changes; rejected transitions leave state unchanged and throw `DomainError`
+with a stable code.
+
+See [ADR-0002: Constructor-based domain hydration](../docs/adr/0002-constructor-based-domain-hydration.md)
+for construction, mapping, and encapsulation conventions.
 
 ## Money and booking
 

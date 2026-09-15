@@ -1,4 +1,9 @@
-import { DomainError, GroupMembership, RegularGroup } from "@/domain";
+import {
+  DomainError,
+  GroupMembership,
+  RegularGroup,
+  type RegularGroupDetails,
+} from "@/domain";
 import { describe, expect, test } from "vitest";
 
 const now = () => new Date("2026-09-15T00:00:00Z");
@@ -10,6 +15,21 @@ const newGroup = () =>
     invitationToken: "first-token",
     now: now(),
   });
+
+function groupDetails(
+  overrides: Partial<RegularGroupDetails> = {},
+): RegularGroupDetails {
+  return {
+    groupId: "group",
+    ownerId: "owner",
+    name: "Badminton",
+    invitationToken: "invite",
+    invitationActive: true,
+    status: "ACTIVE",
+    memberships: [new GroupMembership({ userId: "owner", joinedAt: now() })],
+    ...overrides,
+  };
+}
 
 function captureError(run: () => unknown): unknown {
   try {
@@ -110,7 +130,11 @@ describe("RegularGroup aggregate", () => {
     for (const error of rejected) {
       expect(error).toEqual(expect.objectContaining({ code: "UNAUTHORIZED" }));
     }
-    expect(group.snapshot()).toEqual(newGroup().snapshot());
+    expect(group.name).toBe(newGroup().name);
+    expect(group.invitationToken).toBe(newGroup().invitationToken);
+    expect(group.invitationActive).toBe(true);
+    expect(group.memberships.map((member) => member.userId)).toEqual(["owner"]);
+    expect(group.status).toBe("ACTIVE");
   });
 
   test("owner may rename and remove others but never remove themselves", () => {
@@ -190,40 +214,41 @@ describe("RegularGroup aggregate", () => {
     );
   });
 
-  test("rehydration and snapshots protect child membership dates and collections", () => {
+  test("constructors and getters protect child membership dates and collections", () => {
     // Arrange
     const group = newGroup();
-    const snapshot = group.snapshot();
+    const memberships = [
+      new GroupMembership({ userId: "owner", joinedAt: now() }),
+    ];
+    const details = groupDetails({ memberships });
 
     // Act
-    const reloaded = RegularGroup.reconstitute(snapshot);
-    snapshot.memberships[0]?.joinedAt.setUTCFullYear(2000);
-    (snapshot.memberships as unknown[]).pop();
+    const constructed = new RegularGroup(details);
+    memberships[0]?.joinedAt.setUTCFullYear(2000);
+    memberships.pop();
     group.memberships[0]?.joinedAt.setUTCFullYear(2000);
     (group.memberships as GroupMembership[]).pop();
 
     // Assert
     expect(group.memberships).toHaveLength(1);
-    expect(reloaded.memberships).toHaveLength(1);
+    expect(constructed.memberships).toHaveLength(1);
     expect(group.memberships[0]?.joinedAt).toEqual(now());
-    expect(reloaded.memberships[0]?.joinedAt).toEqual(now());
+    expect(constructed.memberships[0]?.joinedAt).toEqual(now());
   });
 
-  test("reconstitution rejects empty, duplicate, ownerless, and inconsistently archived groups", () => {
+  test("constructors reject empty, duplicate, ownerless, and inconsistently archived groups", () => {
     // Arrange
-    const snapshot = newGroup().snapshot();
+    const details = groupDetails();
     // Act
-    const empty = () =>
-      RegularGroup.reconstitute({ ...snapshot, memberships: [] });
+    const empty = () => new RegularGroup({ ...details, memberships: [] });
     const duplicate = () =>
-      RegularGroup.reconstitute({
-        ...snapshot,
-        memberships: [...snapshot.memberships, ...snapshot.memberships],
+      new RegularGroup({
+        ...details,
+        memberships: [...details.memberships, ...details.memberships],
       });
     const ownerless = () =>
-      RegularGroup.reconstitute({ ...snapshot, ownerId: "missing" });
-    const archived = () =>
-      RegularGroup.reconstitute({ ...snapshot, status: "ARCHIVED" });
+      new RegularGroup({ ...details, ownerId: "missing" });
+    const archived = () => new RegularGroup({ ...details, status: "ARCHIVED" });
 
     // Assert
     expect(empty).toThrow(DomainError);
@@ -236,19 +261,18 @@ describe("GroupMembership child entity", () => {
   test("copies all mutable timestamps and rejects invalid values", () => {
     // Arrange
     const joinedAt = now();
-    const member = GroupMembership.create({ userId: "owner", joinedAt });
+    const member = new GroupMembership({ userId: "owner", joinedAt });
 
     // Act
     joinedAt.setUTCFullYear(2000);
     member.joinedAt.setUTCFullYear(2000);
-    member.snapshot().joinedAt.setUTCFullYear(2000);
     const invalidDate = () =>
-      GroupMembership.create({
+      new GroupMembership({
         userId: "owner",
         joinedAt: new Date("invalid"),
       });
     const blankUser = () =>
-      GroupMembership.create({ userId: " ", joinedAt: now() });
+      new GroupMembership({ userId: " ", joinedAt: now() });
 
     // Assert
     expect(member.joinedAt).toEqual(now());

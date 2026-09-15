@@ -4,7 +4,7 @@ import { DomainError, requireDomain } from "../shared/errors";
 import type { HoldState } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 
-export interface FundHoldSnapshot {
+export interface FundHoldDetails {
   readonly holdId: UUID;
   readonly participationId: UUID;
   readonly holdingAccountId: UUID;
@@ -18,28 +18,34 @@ export interface FundHoldSnapshot {
 
 /** Child entity that protects the lifecycle of one participant's held share. */
 export class FundHold {
-  readonly #snapshot: FundHoldSnapshot;
+  readonly #holdId: UUID;
+  readonly #participationId: UUID;
+  readonly #holdingAccountId: UUID;
+  readonly #walletId: UUID;
+  readonly #payoutId?: UUID;
+  readonly #amount: Money;
+  readonly #state: HoldState;
+  readonly #createdAt: Date;
+  readonly #settledAt?: Date;
 
-  private constructor(snapshot: FundHoldSnapshot) {
-    this.#snapshot = Object.freeze({
-      ...snapshot,
-      createdAt: copyDate(snapshot.createdAt, "createdAt"),
-      settledAt: copyOptionalDate(snapshot.settledAt, "settledAt"),
-    });
-  }
-
-  static create(details: {
-    readonly holdId: UUID;
-    readonly participationId: UUID;
-    readonly holdingAccountId: UUID;
-    readonly walletId: UUID;
-    readonly amount: Money;
-    readonly createdAt: Date;
-  }): FundHold {
+  constructor(details: FundHoldDetails) {
     requireId(details.holdId, "holdId");
     requireId(details.participationId, "participationId");
     requireId(details.holdingAccountId, "holdingAccountId");
     requireId(details.walletId, "walletId");
+    if (details.payoutId !== undefined) requireId(details.payoutId, "payoutId");
+    requireDomain(
+      [
+        "HELD",
+        "AWAITING_REPLACEMENT",
+        "FORFEITURE_DUE",
+        "RELEASED",
+        "REFUNDED",
+        "FORFEITED",
+      ].includes(details.state),
+      "INVALID_INPUT",
+      "Unknown hold state",
+    );
     requireDomain(
       details.amount instanceof Money,
       "INVALID_INPUT",
@@ -50,40 +56,10 @@ export class FundHold {
       "INVALID_INPUT",
       "A fund hold must be positive",
     );
-    return new FundHold({ ...details, state: "HELD" });
-  }
-
-  static reconstitute(snapshot: FundHoldSnapshot): FundHold {
-    requireId(snapshot.holdId, "holdId");
-    requireId(snapshot.participationId, "participationId");
-    requireId(snapshot.holdingAccountId, "holdingAccountId");
-    requireId(snapshot.walletId, "walletId");
-    requireDomain(
-      [
-        "HELD",
-        "AWAITING_REPLACEMENT",
-        "FORFEITURE_DUE",
-        "RELEASED",
-        "REFUNDED",
-        "FORFEITED",
-      ].includes(snapshot.state),
-      "INVALID_INPUT",
-      "Unknown hold state",
-    );
-    requireDomain(
-      snapshot.amount instanceof Money,
-      "INVALID_INPUT",
-      "A fund hold needs a Money amount",
-    );
-    requireDomain(
-      snapshot.amount.toCents() > 0,
-      "INVALID_INPUT",
-      "A fund hold must be positive",
-    );
-    const createdAt = copyDate(snapshot.createdAt, "createdAt");
-    const settledAt = copyOptionalDate(snapshot.settledAt, "settledAt");
+    const createdAt = copyDate(details.createdAt, "createdAt");
+    const settledAt = copyOptionalDate(details.settledAt, "settledAt");
     const terminal = ["REFUNDED", "RELEASED", "FORFEITED"].includes(
-      snapshot.state,
+      details.state,
     );
     if (terminal) {
       requireDomain(
@@ -91,15 +67,15 @@ export class FundHold {
         "INVALID_INPUT",
         "A settled hold needs settledAt",
       );
-      if (snapshot.state !== "REFUNDED") {
+      if (details.state !== "REFUNDED") {
         requireDomain(
-          snapshot.payoutId !== undefined,
+          details.payoutId !== undefined,
           "INVALID_INPUT",
           "A payout settlement needs payoutId",
         );
       } else {
         requireDomain(
-          snapshot.payoutId === undefined,
+          details.payoutId === undefined,
           "INVALID_INPUT",
           "A refund cannot have a payout ID",
         );
@@ -111,20 +87,32 @@ export class FundHold {
         "An active hold cannot have settledAt",
       );
       requireDomain(
-        snapshot.payoutId === undefined,
+        details.payoutId === undefined,
         "INVALID_INPUT",
         "An active hold cannot have payoutId",
       );
     }
-    return new FundHold({ ...snapshot, createdAt, settledAt });
+
+    this.#holdId = details.holdId;
+    this.#participationId = details.participationId;
+    this.#holdingAccountId = details.holdingAccountId;
+    this.#walletId = details.walletId;
+    this.#payoutId = details.payoutId;
+    this.#amount = details.amount;
+    this.#state = details.state;
+    this.#createdAt = createdAt;
+    this.#settledAt = settledAt;
   }
 
-  snapshot(): FundHoldSnapshot {
-    return {
-      ...this.#snapshot,
-      createdAt: copyDate(this.#snapshot.createdAt, "createdAt"),
-      settledAt: copyOptionalDate(this.#snapshot.settledAt, "settledAt"),
-    };
+  static create(details: {
+    readonly holdId: UUID;
+    readonly participationId: UUID;
+    readonly holdingAccountId: UUID;
+    readonly walletId: UUID;
+    readonly amount: Money;
+    readonly createdAt: Date;
+  }): FundHold {
+    return new FundHold({ ...details, state: "HELD" });
   }
 
   awaitReplacement(): FundHold {
@@ -194,31 +182,31 @@ export class FundHold {
   }
 
   get holdId(): UUID {
-    return this.#snapshot.holdId;
+    return this.#holdId;
   }
   get participationId(): UUID {
-    return this.#snapshot.participationId;
+    return this.#participationId;
   }
   get holdingAccountId(): UUID {
-    return this.#snapshot.holdingAccountId;
+    return this.#holdingAccountId;
   }
   get walletId(): UUID {
-    return this.#snapshot.walletId;
+    return this.#walletId;
   }
   get payoutId(): UUID | undefined {
-    return this.#snapshot.payoutId;
+    return this.#payoutId;
   }
   get amount(): Money {
-    return this.#snapshot.amount;
+    return this.#amount;
   }
   get state(): HoldState {
-    return this.#snapshot.state;
+    return this.#state;
   }
   get createdAt(): Date {
-    return copyDate(this.#snapshot.createdAt, "createdAt");
+    return copyDate(this.#createdAt, "createdAt");
   }
   get settledAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.settledAt, "settledAt");
+    return copyOptionalDate(this.#settledAt, "settledAt");
   }
 
   private requireActive(): void {
@@ -228,7 +216,17 @@ export class FundHold {
   }
 
   private withState(state: HoldState): FundHold {
-    return new FundHold({ ...this.snapshot(), state });
+    return new FundHold({
+      holdId: this.#holdId,
+      participationId: this.#participationId,
+      holdingAccountId: this.#holdingAccountId,
+      walletId: this.#walletId,
+      payoutId: this.#payoutId,
+      amount: this.#amount,
+      createdAt: this.#createdAt,
+      settledAt: this.#settledAt,
+      state,
+    });
   }
 
   private withSettlement(
@@ -237,7 +235,12 @@ export class FundHold {
     at: Date,
   ): FundHold {
     return new FundHold({
-      ...this.snapshot(),
+      holdId: this.#holdId,
+      participationId: this.#participationId,
+      holdingAccountId: this.#holdingAccountId,
+      walletId: this.#walletId,
+      amount: this.#amount,
+      createdAt: this.#createdAt,
       state,
       payoutId,
       settledAt: copyDate(at, "at"),

@@ -4,6 +4,8 @@ import {
   Money,
   PayoutAccount,
   User,
+  type UserDetails,
+  type PayoutAccountDetails,
 } from "@/domain";
 import { describe, expect, test } from "vitest";
 
@@ -17,6 +19,42 @@ const clearFacts = (): DeactivationFacts => ({
   pendingPayouts: 0,
   activeOwnedGroups: 0,
 });
+
+function userDetails(overrides: Partial<UserDetails> = {}): UserDetails {
+  return {
+    userId: "owner",
+    email: "owner@example.com",
+    accountStatus: "ACTIVE",
+    preferredSports: new Set(),
+    preferredRegions: new Set(),
+    ...overrides,
+  };
+}
+function accountDetails(
+  overrides: Partial<PayoutAccountDetails> = {},
+): PayoutAccountDetails {
+  return {
+    payoutAccountId: "account",
+    userId: "owner",
+    providerAccountReference: "provider",
+    setupStatus: "PENDING",
+    ...overrides,
+  };
+}
+// Observe the properties affected by profile, preference, and deactivation commands.
+function profileOf(user: User) {
+  return {
+    email: user.email,
+    accountStatus: user.accountStatus,
+    preferredSports: [...user.preferredSports],
+    preferredRegions: [...user.preferredRegions],
+    payoutAccount: user.payoutAccount && {
+      payoutAccountId: user.payoutAccount.payoutAccountId,
+      setupStatus: user.payoutAccount.setupStatus,
+      bankAccountReference: user.payoutAccount.bankAccountReference,
+    },
+  };
+}
 
 function captureError(run: () => unknown): unknown {
   try {
@@ -47,7 +85,7 @@ describe("User aggregate", () => {
     expect([...user.preferredRegions]).toEqual(["West"]);
   });
 
-  test("copies incoming, outgoing, and reconstituted preference sets", () => {
+  test("constructors and getters isolate preference sets", () => {
     // Arrange
     const sports = new Set(["Tennis"]);
     const user = User.create({
@@ -59,19 +97,21 @@ describe("User aggregate", () => {
     // Act
     sports.clear();
     (user.preferredSports as Set<string>).clear();
-    const snapshot = user.snapshot();
-    const reloaded = User.reconstitute(snapshot);
-    (snapshot.preferredSports as Set<string>).clear();
+    const constructorSports = new Set(["Tennis"]);
+    const constructed = new User(
+      userDetails({ preferredSports: constructorSports }),
+    );
+    constructorSports.clear();
 
     // Assert
     expect([...user.preferredSports]).toEqual(["Tennis"]);
-    expect([...reloaded.preferredSports]).toEqual(["Tennis"]);
+    expect([...constructed.preferredSports]).toEqual(["Tennis"]);
   });
 
   test("rejects invalid profile and preference updates before changing state", () => {
     // Arrange
     const user = newUser();
-    const before = user.snapshot();
+    const before = profileOf(user);
 
     // Act
     const invalidProfile = captureError(() =>
@@ -91,7 +131,7 @@ describe("User aggregate", () => {
     expect(invalidPreferences).toEqual(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );
-    expect(user.snapshot()).toEqual(before);
+    expect(profileOf(user)).toEqual(before);
   });
 
   test("payout setup produces a frozen usable destination only after completion", () => {
@@ -196,7 +236,7 @@ describe("User aggregate", () => {
     (field) => {
       // Arrange
       const user = newUser();
-      const before = user.snapshot();
+      const before = profileOf(user);
 
       // Act
       const rejection = captureError(() =>
@@ -207,7 +247,7 @@ describe("User aggregate", () => {
       expect(rejection).toEqual(
         expect.objectContaining({ code: "ACTIVE_OBLIGATIONS" }),
       );
-      expect(user.snapshot()).toEqual(before);
+      expect(profileOf(user)).toEqual(before);
     },
   );
 
@@ -219,7 +259,7 @@ describe("User aggregate", () => {
   ] as const)("checks %s before deactivation", (field) => {
     // Arrange
     const user = newUser();
-    const before = user.snapshot();
+    const before = profileOf(user);
 
     // Act
     const activeObligation = captureError(() =>
@@ -242,7 +282,7 @@ describe("User aggregate", () => {
     expect(fractionalValue).toEqual(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );
-    expect(user.snapshot()).toEqual(before);
+    expect(profileOf(user)).toEqual(before);
   });
 
   test("deactivation anonymises profile, retains financial identity, and is repeatable", () => {
@@ -262,7 +302,13 @@ describe("User aggregate", () => {
     user.deactivate(clearFacts());
     user.deactivate(clearFacts());
 
-    const reconstituted = User.reconstitute(user.snapshot());
+    const constructed = new User(
+      userDetails({
+        email: null,
+        accountStatus: "INACTIVE",
+        payoutAccount: user.payoutAccount,
+      }),
+    );
     const updateInactiveProfile = () =>
       user.updateProfile({ email: "new@example.com" });
     const updateInactivePreferences = () =>
@@ -278,7 +324,7 @@ describe("User aggregate", () => {
     expect(user.preferredSports.size).toBe(0);
     expect(user.preferredRegions.size).toBe(0);
     expect(user.payoutAccount?.bankAccountReference).toBe("bank");
-    expect(reconstituted.snapshot()).toEqual(user.snapshot());
+    expect(profileOf(constructed)).toEqual(profileOf(user));
     expect(updateInactiveProfile).toThrow(
       expect.objectContaining({ code: "INACTIVE_ACCOUNT" }),
     );
@@ -290,21 +336,19 @@ describe("User aggregate", () => {
     );
   });
 
-  test("reconstitution rejects foreign payout accounts and inconsistent account state", () => {
+  test("constructors reject foreign payout accounts and inconsistent account state", () => {
     // Arrange
-    const snapshot = newUser().snapshot();
+    const details = userDetails();
     const payoutAccount = PayoutAccount.create({
       payoutAccountId: "account",
       userId: "other-user",
       providerAccountReference: "provider",
-    }).snapshot();
+    });
     // Act
-    const foreignAccount = () =>
-      User.reconstitute({ ...snapshot, payoutAccount });
+    const foreignAccount = () => new User({ ...details, payoutAccount });
     const inactiveWithEmail = () =>
-      User.reconstitute({ ...snapshot, accountStatus: "INACTIVE" });
-    const activeWithoutEmail = () =>
-      User.reconstitute({ ...snapshot, email: null });
+      new User({ ...details, accountStatus: "INACTIVE" });
+    const activeWithoutEmail = () => new User({ ...details, email: null });
 
     // Assert
     expect(foreignAccount).toThrow(DomainError);
@@ -324,29 +368,29 @@ describe("PayoutAccount child entity", () => {
     // Act
     const completed = pending.completeSetup("bank");
     const repeatedCompletion = completed.completeSetup("bank");
-    const reconstituted = PayoutAccount.reconstitute(completed.snapshot());
+    const constructed = new PayoutAccount(
+      accountDetails({ setupStatus: "COMPLETE", bankAccountReference: "bank" }),
+    );
     const failPendingThenComplete = () =>
       pending.failSetup().completeSetup("bank");
 
     // Assert
     expect(pending.setupStatus).toBe("PENDING");
-    expect(repeatedCompletion.snapshot()).toEqual(completed.snapshot());
-    expect(reconstituted.snapshot()).toEqual(completed.snapshot());
+    expect(repeatedCompletion).toBe(completed);
+    expect(constructed.setupStatus).toBe("COMPLETE");
+    expect(constructed.bankAccountReference).toBe("bank");
+    expect(constructed.completeSetup("bank")).toBe(constructed);
     expect(failPendingThenComplete).toThrow(DomainError);
   });
 
-  test("reconstitution validates bank details against setup status", () => {
+  test("constructors validate bank details against setup status", () => {
     // Arrange
-    const snapshot = PayoutAccount.create({
-      payoutAccountId: "account",
-      userId: "owner",
-      providerAccountReference: "provider",
-    }).snapshot();
+    const details = accountDetails();
     // Act
     const completeWithoutBank = () =>
-      PayoutAccount.reconstitute({ ...snapshot, setupStatus: "COMPLETE" });
+      new PayoutAccount({ ...details, setupStatus: "COMPLETE" });
     const pendingWithBank = () =>
-      PayoutAccount.reconstitute({ ...snapshot, bankAccountReference: "bank" });
+      new PayoutAccount({ ...details, bankAccountReference: "bank" });
 
     // Assert
     expect(completeWithoutBank).toThrow(DomainError);

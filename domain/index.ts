@@ -1,54 +1,53 @@
 export {
   Booking,
   type BookingDetails,
-  type BookingSnapshot,
 } from "./sessions/booking";
 export {
   FundHold,
-  type FundHoldSnapshot,
+  type FundHoldDetails,
 } from "./sessions/fund-hold";
 export {
   GroupMembership,
-  type GroupMembershipSnapshot,
+  type GroupMembershipDetails,
 } from "./groups/group-membership";
 export {
   HoldingAccount,
-  type HoldingAccountSnapshot,
+  type HoldingAccountDetails,
 } from "./finance/holding-account";
 export {
   LedgerTransaction,
-  type LedgerTransactionSnapshot,
+  type LedgerTransactionDetails,
 } from "./finance/ledger-transaction";
 export {
   Participation,
-  type ParticipationSnapshot,
+  type ParticipationDetails,
   type ReliabilityOutcome,
 } from "./sessions/participation";
 export {
   Payout,
-  type PayoutSnapshot,
+  type PayoutDetails,
 } from "./finance/payout";
 export {
   PayoutAccount,
-  type PayoutAccountSnapshot,
+  type PayoutAccountDetails,
 } from "./accounts/payout-account";
 export {
   RegularGroup,
   type GroupJoinResult,
   type GroupCreation,
-  type RegularGroupSnapshot,
+  type RegularGroupDetails,
 } from "./groups/regular-group";
 export {
   Session,
   type JoinCommand,
   type PromotionCommand,
   type SessionCreation,
-  type SessionSnapshot,
+  type SessionDetails,
 } from "./sessions/session";
 export {
   User,
   type UserRegistration,
-  type UserSnapshot,
+  type UserDetails,
 } from "./accounts/user";
 export {
   Booker,
@@ -66,7 +65,7 @@ export {
 } from "./accounts/participant";
 export {
   Wallet,
-  type WalletSnapshot,
+  type WalletDetails,
 } from "./finance/wallet";
 export {
   DomainError,
@@ -89,7 +88,7 @@ export type {
 export type { LedgerReadPort } from "./finance/ledger-read-port";
 export type { HoldingAccountBalance } from "./finance/holding-account-balance";
 export {
-  userReliabilitySnapshot,
+  createUserReliability,
   type UserReliability,
 } from "./reliability/user-reliability";
 export type { WalletBalance } from "./finance/wallet-balance";

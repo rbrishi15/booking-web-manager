@@ -1,33 +1,28 @@
 import { requireDomain } from "../shared/errors";
 import type { UUID } from "../shared/types";
 
-export interface WalletSnapshot {
+export interface WalletDetails {
   readonly walletId: UUID;
   readonly userId: UUID;
 }
 
 /** Wallet identity. Balances are projections of the append-only ledger. */
 export class Wallet {
-  readonly #snapshot: WalletSnapshot;
-  private constructor(snapshot: WalletSnapshot) {
-    this.#snapshot = Object.freeze({ ...snapshot });
-  }
-  static create(details: WalletSnapshot): Wallet {
+  readonly #walletId: UUID;
+  readonly #userId: UUID;
+  constructor(details: WalletDetails) {
     validate(details.walletId, "walletId");
     validate(details.userId, "userId");
-    return new Wallet(details);
+
+    this.#walletId = details.walletId;
+    this.#userId = details.userId;
   }
-  static reconstitute(snapshot: WalletSnapshot): Wallet {
-    return Wallet.create(snapshot);
-  }
-  snapshot(): WalletSnapshot {
-    return { ...this.#snapshot };
-  }
+
   get walletId(): UUID {
-    return this.#snapshot.walletId;
+    return this.#walletId;
   }
   get userId(): UUID {
-    return this.#snapshot.userId;
+    return this.#userId;
   }
 }
 function validate(value: string, name: string): void {

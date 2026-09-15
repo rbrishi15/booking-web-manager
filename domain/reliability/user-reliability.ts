@@ -6,12 +6,12 @@ import { ReliabilityScore as ReliabilityScoreValue } from "./reliability-score";
 export interface UserReliability {
   readonly userId: UUID;
   readonly reliabilityScore: ReliabilityScore;
-  /** The calculation's asOf instant. Adapters supply a fresh Date for each snapshot. */
+  /** The calculation's asOf instant. Each read returns a defensive Date copy. */
   readonly calculatedAt: Date;
 }
 
 /** Creates a defensive read model from a derived score. */
-export function userReliabilitySnapshot(
+export function createUserReliability(
   userId: UUID,
   reliabilityScore: ReliabilityScore,
   calculatedAt: Date,

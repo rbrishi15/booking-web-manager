@@ -4,7 +4,7 @@ import type { TransactionKind } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Money } from "./money";
 
-export interface LedgerTransactionSnapshot {
+export interface LedgerTransactionDetails {
   readonly transactionId: UUID;
   readonly amount: Money;
   readonly kind: TransactionKind;
@@ -18,57 +18,59 @@ export interface LedgerTransactionSnapshot {
 
 /** Immutable financial fact. Append-only persistence is enforced by the server adapter. */
 export class LedgerTransaction {
-  readonly #snapshot: LedgerTransactionSnapshot;
-  private constructor(snapshot: LedgerTransactionSnapshot) {
-    this.#snapshot = Object.freeze({
-      ...snapshot,
-      occurredAt: copyDate(snapshot.occurredAt, "occurredAt"),
-    });
+  readonly #transactionId: UUID;
+  readonly #amount: Money;
+  readonly #kind: TransactionKind;
+  readonly #occurredAt: Date;
+  readonly #idempotencyKey: string;
+  readonly #externalReference?: string;
+  readonly #walletId?: UUID;
+  readonly #holdId?: UUID;
+  readonly #payoutId?: UUID;
+  constructor(details: LedgerTransactionDetails) {
+    validate(details);
+
+    this.#transactionId = details.transactionId;
+    this.#amount = details.amount;
+    this.#kind = details.kind;
+    this.#occurredAt = copyDate(details.occurredAt, "occurredAt");
+    this.#idempotencyKey = details.idempotencyKey;
+    this.#externalReference = details.externalReference;
+    this.#walletId = details.walletId;
+    this.#holdId = details.holdId;
+    this.#payoutId = details.payoutId;
   }
 
-  static create(details: LedgerTransactionSnapshot): LedgerTransaction {
-    validate(details);
-    return new LedgerTransaction(details);
-  }
-  static reconstitute(snapshot: LedgerTransactionSnapshot): LedgerTransaction {
-    return LedgerTransaction.create(snapshot);
-  }
-  snapshot(): LedgerTransactionSnapshot {
-    return {
-      ...this.#snapshot,
-      occurredAt: copyDate(this.#snapshot.occurredAt, "occurredAt"),
-    };
-  }
   get transactionId(): UUID {
-    return this.#snapshot.transactionId;
+    return this.#transactionId;
   }
   get amount(): Money {
-    return this.#snapshot.amount;
+    return this.#amount;
   }
   get kind(): TransactionKind {
-    return this.#snapshot.kind;
+    return this.#kind;
   }
   get occurredAt(): Date {
-    return copyDate(this.#snapshot.occurredAt, "occurredAt");
+    return copyDate(this.#occurredAt, "occurredAt");
   }
   get idempotencyKey(): string {
-    return this.#snapshot.idempotencyKey;
+    return this.#idempotencyKey;
   }
   get externalReference(): string | undefined {
-    return this.#snapshot.externalReference;
+    return this.#externalReference;
   }
   get walletId(): UUID | undefined {
-    return this.#snapshot.walletId;
+    return this.#walletId;
   }
   get holdId(): UUID | undefined {
-    return this.#snapshot.holdId;
+    return this.#holdId;
   }
   get payoutId(): UUID | undefined {
-    return this.#snapshot.payoutId;
+    return this.#payoutId;
   }
 }
 
-function validate(details: LedgerTransactionSnapshot): void {
+function validate(details: LedgerTransactionDetails): void {
   requireDomain(
     typeof details.transactionId === "string" &&
       details.transactionId.trim() !== "",

@@ -12,22 +12,16 @@ export interface BookingDetails {
   readonly totalCost: Money;
 }
 
-/** Persistence representation of the immutable booking value. */
-export type BookingSnapshot = BookingDetails;
-
 /** Venue details owned by a Session. The actual venue reservation is external. */
 export class Booking {
-  readonly #snapshot: BookingSnapshot;
+  readonly #venueName: string;
+  readonly #region: Region;
+  readonly #sport: Sport;
+  readonly #startAt: Date;
+  readonly #endAt: Date;
+  readonly #totalCost: Money;
 
-  private constructor(snapshot: BookingSnapshot) {
-    this.#snapshot = Object.freeze({
-      ...snapshot,
-      startAt: copyDate(snapshot.startAt, "startAt"),
-      endAt: copyDate(snapshot.endAt, "endAt"),
-    });
-  }
-
-  static create(details: BookingDetails): Booking {
+  constructor(details: BookingDetails) {
     const startAt = copyDate(details.startAt, "startAt");
     const endAt = copyDate(details.endAt, "endAt");
     if (endAt <= startAt) {
@@ -49,19 +43,13 @@ export class Booking {
     ) {
       throw new RangeError("Booking venue, region, and sport are required");
     }
-    return new Booking({ ...details, startAt, endAt });
-  }
 
-  static reconstitute(snapshot: BookingSnapshot): Booking {
-    return Booking.create(snapshot);
-  }
-
-  snapshot(): BookingSnapshot {
-    return {
-      ...this.#snapshot,
-      startAt: copyDate(this.#snapshot.startAt, "startAt"),
-      endAt: copyDate(this.#snapshot.endAt, "endAt"),
-    };
+    this.#venueName = details.venueName;
+    this.#region = details.region;
+    this.#sport = details.sport;
+    this.#startAt = startAt;
+    this.#endAt = endAt;
+    this.#totalCost = details.totalCost;
   }
 
   equals(other: Booking): boolean {
@@ -76,36 +64,33 @@ export class Booking {
   }
 
   hasStarted(at: Date): boolean {
-    return copyDate(at, "at").getTime() >= this.#snapshot.startAt.getTime();
+    return copyDate(at, "at").getTime() >= this.#startAt.getTime();
   }
 
   hasEnded(at: Date): boolean {
-    return copyDate(at, "at").getTime() >= this.#snapshot.endAt.getTime();
+    return copyDate(at, "at").getTime() >= this.#endAt.getTime();
   }
 
   hoursUntilStart(at: Date): number {
-    return (
-      (this.#snapshot.startAt.getTime() - copyDate(at, "at").getTime()) /
-      3_600_000
-    );
+    return (this.#startAt.getTime() - copyDate(at, "at").getTime()) / 3_600_000;
   }
 
   get venueName(): string {
-    return this.#snapshot.venueName;
+    return this.#venueName;
   }
   get region(): Region {
-    return this.#snapshot.region;
+    return this.#region;
   }
   get sport(): Sport {
-    return this.#snapshot.sport;
+    return this.#sport;
   }
   get startAt(): Date {
-    return copyDate(this.#snapshot.startAt, "startAt");
+    return copyDate(this.#startAt, "startAt");
   }
   get endAt(): Date {
-    return copyDate(this.#snapshot.endAt, "endAt");
+    return copyDate(this.#endAt, "endAt");
   }
   get totalCost(): Money {
-    return this.#snapshot.totalCost;
+    return this.#totalCost;
   }
 }

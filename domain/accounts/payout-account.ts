@@ -2,7 +2,7 @@ import { DomainError, requireDomain } from "../shared/errors";
 import type { PayoutSetupStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 
-export interface PayoutAccountSnapshot {
+export interface PayoutAccountDetails {
   readonly payoutAccountId: UUID;
   readonly userId: UUID;
   readonly providerAccountReference: string;
@@ -12,10 +12,36 @@ export interface PayoutAccountSnapshot {
 
 /** Immutable child containing the destination frozen for future settlements. */
 export class PayoutAccount {
-  readonly #snapshot: PayoutAccountSnapshot;
+  readonly #payoutAccountId: UUID;
+  readonly #userId: UUID;
+  readonly #providerAccountReference: string;
+  readonly #bankAccountReference?: string;
+  readonly #setupStatus: PayoutSetupStatus;
 
-  private constructor(snapshot: PayoutAccountSnapshot) {
-    this.#snapshot = Object.freeze({ ...snapshot });
+  constructor(details: PayoutAccountDetails) {
+    validateText(details.payoutAccountId, "payoutAccountId");
+    validateText(details.userId, "userId");
+    validateText(details.providerAccountReference, "providerAccountReference");
+    requireDomain(
+      ["PENDING", "COMPLETE", "FAILED"].includes(details.setupStatus),
+      "INVALID_INPUT",
+      "Unknown payout setup status",
+    );
+    if (details.setupStatus === "COMPLETE") {
+      validateText(details.bankAccountReference, "bankAccountReference");
+    } else {
+      requireDomain(
+        details.bankAccountReference === undefined,
+        "INVALID_INPUT",
+        "Only a completed payout account has bank details",
+      );
+    }
+
+    this.#payoutAccountId = details.payoutAccountId;
+    this.#userId = details.userId;
+    this.#providerAccountReference = details.providerAccountReference;
+    this.#bankAccountReference = details.bankAccountReference;
+    this.#setupStatus = details.setupStatus;
   }
 
   static create(details: {
@@ -23,31 +49,7 @@ export class PayoutAccount {
     readonly userId: UUID;
     readonly providerAccountReference: string;
   }): PayoutAccount {
-    validateText(details.payoutAccountId, "payoutAccountId");
-    validateText(details.userId, "userId");
-    validateText(details.providerAccountReference, "providerAccountReference");
     return new PayoutAccount({ ...details, setupStatus: "PENDING" });
-  }
-
-  static reconstitute(snapshot: PayoutAccountSnapshot): PayoutAccount {
-    validateText(snapshot.payoutAccountId, "payoutAccountId");
-    validateText(snapshot.userId, "userId");
-    validateText(snapshot.providerAccountReference, "providerAccountReference");
-    requireDomain(
-      ["PENDING", "COMPLETE", "FAILED"].includes(snapshot.setupStatus),
-      "INVALID_INPUT",
-      "Unknown payout setup status",
-    );
-    if (snapshot.setupStatus === "COMPLETE") {
-      validateText(snapshot.bankAccountReference, "bankAccountReference");
-    } else {
-      requireDomain(
-        snapshot.bankAccountReference === undefined,
-        "INVALID_INPUT",
-        "Only a completed payout account has bank details",
-      );
-    }
-    return new PayoutAccount({ ...snapshot });
   }
 
   completeSetup(bankAccountReference: string): PayoutAccount {
@@ -64,8 +66,10 @@ export class PayoutAccount {
       "INVALID_STATE",
       "Only a pending payout setup can complete",
     );
-    return PayoutAccount.reconstitute({
-      ...this.snapshot(),
+    return new PayoutAccount({
+      payoutAccountId: this.#payoutAccountId,
+      userId: this.#userId,
+      providerAccountReference: this.#providerAccountReference,
       setupStatus: "COMPLETE",
       bankAccountReference,
     });
@@ -77,29 +81,28 @@ export class PayoutAccount {
       "INVALID_STATE",
       "Only a pending payout setup can fail",
     );
-    return PayoutAccount.reconstitute({
-      ...this.snapshot(),
+    return new PayoutAccount({
+      payoutAccountId: this.#payoutAccountId,
+      userId: this.#userId,
+      providerAccountReference: this.#providerAccountReference,
       setupStatus: "FAILED",
     });
   }
 
-  snapshot(): PayoutAccountSnapshot {
-    return { ...this.#snapshot };
-  }
   get payoutAccountId(): UUID {
-    return this.#snapshot.payoutAccountId;
+    return this.#payoutAccountId;
   }
   get userId(): UUID {
-    return this.#snapshot.userId;
+    return this.#userId;
   }
   get providerAccountReference(): string {
-    return this.#snapshot.providerAccountReference;
+    return this.#providerAccountReference;
   }
   get bankAccountReference(): string | undefined {
-    return this.#snapshot.bankAccountReference;
+    return this.#bankAccountReference;
   }
   get setupStatus(): PayoutSetupStatus {
-    return this.#snapshot.setupStatus;
+    return this.#setupStatus;
   }
 }
 

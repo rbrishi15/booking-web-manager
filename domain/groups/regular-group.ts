@@ -1,19 +1,16 @@
 import { requireDomain } from "../shared/errors";
 import type { GroupStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
-import {
-  GroupMembership,
-  type GroupMembershipSnapshot,
-} from "./group-membership";
+import { GroupMembership } from "./group-membership";
 
-export interface RegularGroupSnapshot {
+export interface RegularGroupDetails {
   readonly groupId: UUID;
   readonly ownerId: UUID;
   readonly name: string;
   readonly invitationToken: string;
   readonly invitationActive: boolean;
   readonly status: GroupStatus;
-  readonly memberships: readonly GroupMembershipSnapshot[];
+  readonly memberships: readonly GroupMembership[];
 }
 
 export interface GroupCreation {
@@ -36,24 +33,29 @@ export class RegularGroup {
   #status: GroupStatus;
   #memberships: GroupMembership[];
 
-  private constructor(snapshot: RegularGroupSnapshot) {
-    this.#groupId = snapshot.groupId;
-    this.#ownerId = snapshot.ownerId;
-    this.#name = snapshot.name;
-    this.#invitationToken = snapshot.invitationToken;
-    this.#invitationActive = snapshot.invitationActive;
-    this.#status = snapshot.status;
-    this.#memberships = snapshot.memberships.map((membership) =>
-      GroupMembership.reconstitute(membership),
+  constructor(details: RegularGroupDetails) {
+    requireDomain(
+      Array.isArray(details.memberships),
+      "INVALID_INPUT",
+      "A group needs a membership roster",
     );
+
+    requireDomain(
+      details.memberships.every((member) => member instanceof GroupMembership),
+      "INVALID_INPUT",
+      "Group members must be GroupMembership values",
+    );
+    this.#groupId = details.groupId;
+    this.#ownerId = details.ownerId;
+    this.#name = details.name;
+    this.#invitationToken = details.invitationToken;
+    this.#invitationActive = details.invitationActive;
+    this.#status = details.status;
+    this.#memberships = [...details.memberships];
     this.validate();
   }
 
   static create(details: GroupCreation): RegularGroup {
-    validateId(details.groupId, "groupId");
-    validateId(details.ownerId, "ownerId");
-    validateName(details.name);
-    validateToken(details.invitationToken);
     return new RegularGroup({
       groupId: details.groupId,
       ownerId: details.ownerId,
@@ -61,19 +63,9 @@ export class RegularGroup {
       invitationToken: details.invitationToken,
       invitationActive: true,
       status: "ACTIVE",
-      memberships: [{ userId: details.ownerId, joinedAt: details.now }],
-    });
-  }
-
-  static reconstitute(snapshot: RegularGroupSnapshot): RegularGroup {
-    requireDomain(
-      Array.isArray(snapshot.memberships),
-      "INVALID_INPUT",
-      "A group needs a membership roster",
-    );
-    return new RegularGroup({
-      ...snapshot,
-      memberships: [...snapshot.memberships],
+      memberships: [
+        new GroupMembership({ userId: details.ownerId, joinedAt: details.now }),
+      ],
     });
   }
 
@@ -100,7 +92,7 @@ export class RegularGroup {
     if (existing) return "ALREADY_MEMBER";
     this.#memberships = [
       ...this.#memberships,
-      GroupMembership.create({ userId: command.userId, joinedAt: command.now }),
+      new GroupMembership({ userId: command.userId, joinedAt: command.now }),
     ];
     return "JOINED";
   }
@@ -186,18 +178,6 @@ export class RegularGroup {
     this.#invitationActive = false;
   }
 
-  snapshot(): RegularGroupSnapshot {
-    return {
-      groupId: this.#groupId,
-      ownerId: this.#ownerId,
-      name: this.#name,
-      invitationToken: this.#invitationToken,
-      invitationActive: this.#invitationActive,
-      status: this.#status,
-      memberships: this.#memberships.map((membership) => membership.snapshot()),
-    };
-  }
-
   get groupId(): UUID {
     return this.#groupId;
   }
@@ -217,9 +197,7 @@ export class RegularGroup {
     return this.#status;
   }
   get memberships(): readonly GroupMembership[] {
-    return this.#memberships.map((membership) =>
-      GroupMembership.reconstitute(membership.snapshot()),
-    );
+    return [...this.#memberships];
   }
 
   private assertOwner(actorId: UUID): void {

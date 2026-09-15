@@ -12,18 +12,18 @@ const details = {
 describe("Booking value object", () => {
   it("compares by all booking values and uses inclusive time queries", () => {
     // Arrange
-    const booking = Booking.create(details);
-    const restored = Booking.reconstitute(booking.snapshot());
-    const otherBooking = Booking.create({ ...details, venueName: "Other" });
+    const booking = new Booking(details);
+    const equivalent = new Booking(details);
+    const otherBooking = new Booking({ ...details, venueName: "Other" });
 
     // Act
-    const equalsRestored = booking.equals(restored);
+    const equalsEquivalent = booking.equals(equivalent);
     const equalsOther = booking.equals(otherBooking);
     const startsAtStart = booking.hasStarted(details.startAt);
     const endsAtEnd = booking.hasEnded(details.endAt);
 
     // Assert
-    expect(equalsRestored).toBe(true);
+    expect(equalsEquivalent).toBe(true);
     expect(equalsOther).toBe(false);
     expect(startsAtStart).toBe(true);
     expect(endsAtEnd).toBe(true);
@@ -40,7 +40,7 @@ describe("Booking value object", () => {
     // Act
     const rejected = invalidDetails.map((change) => {
       try {
-        Booking.create({ ...details, ...change });
+        new Booking({ ...details, ...change });
         return false;
       } catch {
         return true;
@@ -53,12 +53,12 @@ describe("Booking value object", () => {
   it("does not expose mutable dates", () => {
     // Arrange
     const source = { ...details, startAt: new Date(details.startAt) };
-    const booking = Booking.create(source);
+    const booking = new Booking(source);
 
     // Act
     source.startAt.setFullYear(2000);
     booking.startAt.setFullYear(2001);
-    booking.snapshot().endAt.setFullYear(2002);
+    booking.endAt.setFullYear(2002);
 
     // Assert
     expect(booking.startAt).toEqual(details.startAt);

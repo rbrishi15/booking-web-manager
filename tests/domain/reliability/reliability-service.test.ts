@@ -87,13 +87,9 @@ describe("ReliabilityService", () => {
       awaitingReplacement,
       new Date(end.getTime() - day),
     );
-    const finalized = Participation.reconstitute({
-      ...withdrawn.snapshot(),
-      hold: withdrawn.hold
-        ?.markForfeitureDue(end)
-        .forfeit("payout", end)
-        .snapshot(),
-    });
+    const finalized = withdrawn
+      .expireReplacement(end)
+      .settleHold("FORFEIT", "payout", end);
     const outcome = finalized.reliabilityOutcome(asOf)?.value;
     const score = service
       .recalculate("u", [{ participation: finalized, endAt: end }], asOf)

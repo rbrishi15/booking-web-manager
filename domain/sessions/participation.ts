@@ -7,9 +7,9 @@ import type {
   VerificationMethod,
 } from "../shared/statuses";
 import type { UUID } from "../shared/types";
-import { FundHold, type FundHoldSnapshot } from "./fund-hold";
+import { FundHold } from "./fund-hold";
 
-export interface ParticipationSnapshot {
+export interface ParticipationDetails {
   readonly participationId: UUID;
   readonly userId: UUID;
   readonly status: ParticipationStatus;
@@ -22,7 +22,7 @@ export interface ParticipationSnapshot {
   readonly verifiedAt?: Date;
   readonly verificationMethod?: VerificationMethod;
   readonly replacesParticipationId?: UUID;
-  readonly hold?: FundHoldSnapshot;
+  readonly hold?: FundHold;
   readonly queueSequence?: number;
 }
 
@@ -33,21 +33,207 @@ export interface ReliabilityOutcome {
 
 /** Immutable child of Session. A Session is the only object that changes its lifecycle. */
 export class Participation {
-  readonly #snapshot: ParticipationSnapshot;
+  readonly #participationId: UUID;
+  readonly #userId: UUID;
+  readonly #status: ParticipationStatus;
+  readonly #attendance: AttendanceStatus;
+  readonly #waitlistedAt?: Date;
+  readonly #committedAt?: Date;
+  readonly #withdrawnAt?: Date;
+  readonly #replacementMode?: ReplacementMode;
+  readonly #replacementToken?: string;
+  readonly #verifiedAt?: Date;
+  readonly #verificationMethod?: VerificationMethod;
+  readonly #replacesParticipationId?: UUID;
+  readonly #hold?: FundHold;
+  readonly #queueSequence?: number;
 
-  private constructor(snapshot: ParticipationSnapshot) {
-    const hold =
-      snapshot.hold === undefined
-        ? undefined
-        : FundHold.reconstitute(snapshot.hold);
-    this.#snapshot = Object.freeze({
-      ...snapshot,
-      waitlistedAt: copyOptionalDate(snapshot.waitlistedAt, "waitlistedAt"),
-      committedAt: copyOptionalDate(snapshot.committedAt, "committedAt"),
-      withdrawnAt: copyOptionalDate(snapshot.withdrawnAt, "withdrawnAt"),
-      verifiedAt: copyOptionalDate(snapshot.verifiedAt, "verifiedAt"),
-      hold: hold?.snapshot(),
-    });
+  constructor(details: ParticipationDetails) {
+    requireId(details.participationId, "participationId");
+    requireId(details.userId, "userId");
+    requireDomain(
+      [
+        "WAITLISTED",
+        "COMMITTED",
+        "LEFT_WAITLIST",
+        "WITHDRAWN",
+        "REMOVED",
+        "CANCELLED",
+      ].includes(details.status),
+      "INVALID_INPUT",
+      "Unknown participation status",
+    );
+    requireDomain(
+      ["UNVERIFIED", "ATTENDED", "ABSENT"].includes(details.attendance),
+      "INVALID_INPUT",
+      "Unknown attendance status",
+    );
+    if (details.replacementMode !== undefined)
+      requireDomain(
+        ["OPEN_SLOT", "INVITE_LINK"].includes(details.replacementMode),
+        "INVALID_INPUT",
+        "Unknown replacement mode",
+      );
+    if (details.verificationMethod !== undefined)
+      requireDomain(
+        ["BOOKER", "AUTOMATIC"].includes(details.verificationMethod),
+        "INVALID_INPUT",
+        "Unknown verification method",
+      );
+    const waitlistedAt = copyOptionalDate(details.waitlistedAt, "waitlistedAt");
+    const committedAt = copyOptionalDate(details.committedAt, "committedAt");
+    const withdrawnAt = copyOptionalDate(details.withdrawnAt, "withdrawnAt");
+    const verifiedAt = copyOptionalDate(details.verifiedAt, "verifiedAt");
+    const hold = details.hold;
+    requireDomain(
+      hold === undefined || hold instanceof FundHold,
+      "INVALID_INPUT",
+      "A participation hold must be a FundHold",
+    );
+    requireDomain(
+      hold === undefined || hold.participationId === details.participationId,
+      "INVALID_INPUT",
+      "The hold belongs to another participation",
+    );
+
+    if (
+      details.attendance !== "UNVERIFIED" &&
+      (verifiedAt === undefined || details.verificationMethod === undefined)
+    ) {
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Verified attendance requires verifiedAt and verificationMethod",
+      );
+    }
+    if (
+      details.attendance === "UNVERIFIED" &&
+      (verifiedAt !== undefined || details.verificationMethod !== undefined)
+    ) {
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Unverified attendance cannot have verification metadata",
+      );
+    }
+    if (details.status !== "COMMITTED" && details.attendance !== "UNVERIFIED") {
+      throw new DomainError(
+        "INVALID_INPUT",
+        "Only a committed participation may have an attendance outcome",
+      );
+    }
+    if (details.status === "WAITLISTED") {
+      requireDomain(
+        waitlistedAt !== undefined && details.queueSequence !== undefined,
+        "INVALID_INPUT",
+        "A waitlisted participation needs queue metadata",
+      );
+      requireDomain(
+        hold === undefined,
+        "INVALID_INPUT",
+        "A waitlisted participation cannot hold funds",
+      );
+    }
+    if (details.status === "COMMITTED") {
+      requireDomain(
+        committedAt !== undefined && hold !== undefined,
+        "INVALID_INPUT",
+        "A committed participation needs a commitment time and hold",
+      );
+      requireDomain(
+        ["HELD", "RELEASED", "FORFEITED"].includes(hold.state),
+        "INVALID_INPUT",
+        "A committed participation needs an active or settled hold",
+      );
+    }
+    if (details.status === "WITHDRAWN") {
+      requireDomain(
+        details.attendance === "UNVERIFIED",
+        "INVALID_INPUT",
+        "A withdrawn participation cannot have attendance",
+      );
+      requireDomain(
+        withdrawnAt !== undefined && hold !== undefined,
+        "INVALID_INPUT",
+        "A withdrawn participation needs a withdrawal time and hold",
+      );
+      requireDomain(
+        [
+          "REFUNDED",
+          "AWAITING_REPLACEMENT",
+          "FORFEITURE_DUE",
+          "FORFEITED",
+        ].includes(hold.state),
+        "INVALID_INPUT",
+        "A withdrawn participation has an invalid hold state",
+      );
+    }
+    if (
+      details.status === "LEFT_WAITLIST" ||
+      details.status === "REMOVED" ||
+      details.status === "CANCELLED"
+    ) {
+      requireDomain(
+        hold === undefined ||
+          ["REFUNDED", "RELEASED", "FORFEITED"].includes(hold.state),
+        "INVALID_INPUT",
+        "A closed participation cannot retain an active hold",
+      );
+    }
+    if (details.status !== "WITHDRAWN")
+      requireDomain(
+        details.replacementMode === undefined &&
+          details.replacementToken === undefined,
+        "INVALID_INPUT",
+        "Replacement details belong only to a withdrawn participation",
+      );
+    if (details.replacementToken !== undefined)
+      requireDomain(
+        typeof details.replacementToken === "string" &&
+          details.replacementToken.trim() !== "",
+        "INVALID_INPUT",
+        "A replacement token cannot be empty",
+      );
+    if (details.replacementMode === "INVITE_LINK")
+      requireDomain(
+        details.replacementToken !== undefined,
+        "INVALID_INPUT",
+        "An invitation replacement needs a token",
+      );
+    if (details.replacementMode === "OPEN_SLOT")
+      requireDomain(
+        details.replacementToken === undefined,
+        "INVALID_INPUT",
+        "An open-slot replacement cannot have an invitation token",
+      );
+    if (details.replacesParticipationId !== undefined) {
+      requireId(details.replacesParticipationId, "replacesParticipationId");
+      requireDomain(
+        details.replacesParticipationId !== details.participationId,
+        "INVALID_INPUT",
+        "A participation cannot replace itself",
+      );
+    }
+    if (details.queueSequence !== undefined)
+      requireDomain(
+        Number.isSafeInteger(details.queueSequence) &&
+          details.queueSequence > 0,
+        "INVALID_INPUT",
+        "Queue sequence must be positive",
+      );
+
+    this.#participationId = details.participationId;
+    this.#userId = details.userId;
+    this.#status = details.status;
+    this.#attendance = details.attendance;
+    this.#waitlistedAt = waitlistedAt;
+    this.#committedAt = committedAt;
+    this.#withdrawnAt = withdrawnAt;
+    this.#replacementMode = details.replacementMode;
+    this.#replacementToken = details.replacementToken;
+    this.#verifiedAt = verifiedAt;
+    this.#verificationMethod = details.verificationMethod;
+    this.#replacesParticipationId = details.replacesParticipationId;
+    this.#hold = details.hold;
+    this.#queueSequence = details.queueSequence;
   }
 
   static createWaitlisted(details: {
@@ -69,7 +255,7 @@ export class Participation {
         "INVALID_INPUT",
         "A replacement token cannot be empty",
       );
-    return Participation.reconstitute({
+    return new Participation({
       ...details,
       status: "WAITLISTED",
       attendance: "UNVERIFIED",
@@ -94,209 +280,22 @@ export class Participation {
       "INVALID_INPUT",
       "A new commitment needs a held fund",
     );
-    return Participation.reconstitute({
+    return new Participation({
       participationId: details.participationId,
       userId: details.userId,
       status: "COMMITTED",
       attendance: "UNVERIFIED",
       committedAt: details.committedAt,
       replacesParticipationId: details.replacesParticipationId,
-      hold: details.hold.snapshot(),
+      hold: details.hold,
     });
   }
 
-  static reconstitute(snapshot: ParticipationSnapshot): Participation {
-    requireId(snapshot.participationId, "participationId");
-    requireId(snapshot.userId, "userId");
-    requireDomain(
-      [
-        "WAITLISTED",
-        "COMMITTED",
-        "LEFT_WAITLIST",
-        "WITHDRAWN",
-        "REMOVED",
-        "CANCELLED",
-      ].includes(snapshot.status),
-      "INVALID_INPUT",
-      "Unknown participation status",
-    );
-    requireDomain(
-      ["UNVERIFIED", "ATTENDED", "ABSENT"].includes(snapshot.attendance),
-      "INVALID_INPUT",
-      "Unknown attendance status",
-    );
-    if (snapshot.replacementMode !== undefined)
-      requireDomain(
-        ["OPEN_SLOT", "INVITE_LINK"].includes(snapshot.replacementMode),
-        "INVALID_INPUT",
-        "Unknown replacement mode",
-      );
-    if (snapshot.verificationMethod !== undefined)
-      requireDomain(
-        ["BOOKER", "AUTOMATIC"].includes(snapshot.verificationMethod),
-        "INVALID_INPUT",
-        "Unknown verification method",
-      );
-    const waitlistedAt = copyOptionalDate(
-      snapshot.waitlistedAt,
-      "waitlistedAt",
-    );
-    const committedAt = copyOptionalDate(snapshot.committedAt, "committedAt");
-    const withdrawnAt = copyOptionalDate(snapshot.withdrawnAt, "withdrawnAt");
-    const verifiedAt = copyOptionalDate(snapshot.verifiedAt, "verifiedAt");
-    const hold =
-      snapshot.hold === undefined
-        ? undefined
-        : FundHold.reconstitute(snapshot.hold);
-
-    if (
-      snapshot.attendance !== "UNVERIFIED" &&
-      (verifiedAt === undefined || snapshot.verificationMethod === undefined)
-    ) {
-      throw new DomainError(
-        "INVALID_INPUT",
-        "Verified attendance requires verifiedAt and verificationMethod",
-      );
-    }
-    if (
-      snapshot.attendance === "UNVERIFIED" &&
-      (verifiedAt !== undefined || snapshot.verificationMethod !== undefined)
-    ) {
-      throw new DomainError(
-        "INVALID_INPUT",
-        "Unverified attendance cannot have verification metadata",
-      );
-    }
-    if (
-      snapshot.status !== "COMMITTED" &&
-      snapshot.attendance !== "UNVERIFIED"
-    ) {
-      throw new DomainError(
-        "INVALID_INPUT",
-        "Only a committed participation may have an attendance outcome",
-      );
-    }
-    if (snapshot.status === "WAITLISTED") {
-      requireDomain(
-        waitlistedAt !== undefined && snapshot.queueSequence !== undefined,
-        "INVALID_INPUT",
-        "A waitlisted participation needs queue metadata",
-      );
-      requireDomain(
-        hold === undefined,
-        "INVALID_INPUT",
-        "A waitlisted participation cannot hold funds",
-      );
-    }
-    if (snapshot.status === "COMMITTED") {
-      requireDomain(
-        committedAt !== undefined && hold !== undefined,
-        "INVALID_INPUT",
-        "A committed participation needs a commitment time and hold",
-      );
-      requireDomain(
-        ["HELD", "RELEASED", "FORFEITED"].includes(hold.state),
-        "INVALID_INPUT",
-        "A committed participation needs an active or settled hold",
-      );
-    }
-    if (snapshot.status === "WITHDRAWN") {
-      requireDomain(
-        snapshot.attendance === "UNVERIFIED",
-        "INVALID_INPUT",
-        "A withdrawn participation cannot have attendance",
-      );
-      requireDomain(
-        withdrawnAt !== undefined && hold !== undefined,
-        "INVALID_INPUT",
-        "A withdrawn participation needs a withdrawal time and hold",
-      );
-      requireDomain(
-        [
-          "REFUNDED",
-          "AWAITING_REPLACEMENT",
-          "FORFEITURE_DUE",
-          "FORFEITED",
-        ].includes(hold.state),
-        "INVALID_INPUT",
-        "A withdrawn participation has an invalid hold state",
-      );
-    }
-    if (
-      snapshot.status === "LEFT_WAITLIST" ||
-      snapshot.status === "REMOVED" ||
-      snapshot.status === "CANCELLED"
-    ) {
-      requireDomain(
-        hold === undefined ||
-          ["REFUNDED", "RELEASED", "FORFEITED"].includes(hold.state),
-        "INVALID_INPUT",
-        "A closed participation cannot retain an active hold",
-      );
-    }
-    if (snapshot.status !== "WITHDRAWN")
-      requireDomain(
-        snapshot.replacementMode === undefined &&
-          snapshot.replacementToken === undefined,
-        "INVALID_INPUT",
-        "Replacement details belong only to a withdrawn participation",
-      );
-    if (snapshot.replacementToken !== undefined)
-      requireDomain(
-        typeof snapshot.replacementToken === "string" &&
-          snapshot.replacementToken.trim() !== "",
-        "INVALID_INPUT",
-        "A replacement token cannot be empty",
-      );
-    if (snapshot.replacementMode === "INVITE_LINK")
-      requireDomain(
-        snapshot.replacementToken !== undefined,
-        "INVALID_INPUT",
-        "An invitation replacement needs a token",
-      );
-    if (snapshot.replacementMode === "OPEN_SLOT")
-      requireDomain(
-        snapshot.replacementToken === undefined,
-        "INVALID_INPUT",
-        "An open-slot replacement cannot have an invitation token",
-      );
-    if (snapshot.replacesParticipationId !== undefined) {
-      requireId(snapshot.replacesParticipationId, "replacesParticipationId");
-      requireDomain(
-        snapshot.replacesParticipationId !== snapshot.participationId,
-        "INVALID_INPUT",
-        "A participation cannot replace itself",
-      );
-    }
-    if (snapshot.queueSequence !== undefined)
-      requireDomain(
-        Number.isSafeInteger(snapshot.queueSequence) &&
-          snapshot.queueSequence > 0,
-        "INVALID_INPUT",
-        "Queue sequence must be positive",
-      );
-    return new Participation({
-      ...snapshot,
-      waitlistedAt,
-      committedAt,
-      withdrawnAt,
-      verifiedAt,
-      hold: hold?.snapshot(),
-    });
-  }
-
-  snapshot(): ParticipationSnapshot {
-    return {
-      ...this.#snapshot,
-      waitlistedAt: copyOptionalDate(this.waitlistedAt, "waitlistedAt"),
-      committedAt: copyOptionalDate(this.committedAt, "committedAt"),
-      withdrawnAt: copyOptionalDate(this.withdrawnAt, "withdrawnAt"),
-      verifiedAt: copyOptionalDate(this.verifiedAt, "verifiedAt"),
-      hold: this.hold?.snapshot(),
-    };
-  }
-
-  commit(hold: FundHold, at: Date): Participation {
+  commit(
+    hold: FundHold,
+    at: Date,
+    replacesParticipationId?: UUID,
+  ): Participation {
     requireDomain(
       this.status === "WAITLISTED",
       "INVALID_STATE",
@@ -317,11 +316,11 @@ export class Participation {
       "INVALID_INPUT",
       "The hold belongs to another participation",
     );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       status: "COMMITTED",
       committedAt: at,
-      hold: hold.snapshot(),
+      hold: hold,
+      replacesParticipationId,
     });
   }
 
@@ -331,8 +330,7 @@ export class Participation {
       "INVALID_STATE",
       "Only a waitlisted user can leave the waitlist",
     );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       status: "LEFT_WAITLIST",
     });
   }
@@ -375,13 +373,12 @@ export class Participation {
         "INVALID_INPUT",
         "An open-slot replacement cannot have an invitation token",
       );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       status: "WITHDRAWN",
       withdrawnAt: at,
       replacementMode,
       replacementToken,
-      hold: hold.snapshot(),
+      hold: hold,
     });
   }
 
@@ -406,10 +403,9 @@ export class Participation {
       "INVALID_INPUT",
       "The hold belongs to another participation",
     );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       status: "REMOVED",
-      hold: hold.snapshot(),
+      hold: hold,
     });
   }
 
@@ -445,12 +441,11 @@ export class Participation {
         "INVALID_STATE",
         "Cancellation requires a refund",
       );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       status: "CANCELLED",
       replacementMode: undefined,
       replacementToken: undefined,
-      hold: hold?.snapshot() ?? this.hold?.snapshot(),
+      hold: hold ?? this.hold,
     });
   }
 
@@ -479,11 +474,60 @@ export class Participation {
       "ATTENDANCE_CONFLICT",
       "Attendance has already been verified",
     );
-    return Participation.reconstitute({
-      ...this.snapshot(),
+    return this.withChanges({
       attendance,
       verificationMethod: method,
       verifiedAt: at,
+    });
+  }
+
+  refundReplacement(at: Date): Participation {
+    requireDomain(
+      this.#status === "WITHDRAWN" &&
+        this.#hold?.state === "AWAITING_REPLACEMENT",
+      "INVALID_STATE",
+      "Only an awaiting replacement can be refunded",
+    );
+    return this.withChanges({ hold: this.#hold.refund(at) });
+  }
+
+  expireReplacement(at: Date): Participation {
+    copyDate(at, "at");
+    if (
+      this.#status !== "WITHDRAWN" ||
+      this.#hold?.state !== "AWAITING_REPLACEMENT"
+    )
+      return this;
+    return this.withChanges({ hold: this.#hold.markForfeitureDue(at) });
+  }
+
+  settleHold(
+    kind: "RELEASE" | "FORFEIT",
+    payoutId: UUID,
+    at: Date,
+  ): Participation {
+    const hold = this.#hold;
+    requireDomain(
+      hold !== undefined &&
+        (this.#status === "COMMITTED" || this.#status === "WITHDRAWN"),
+      "INVALID_STATE",
+      "Settlement requires a payable participation",
+    );
+    requireDomain(
+      kind === "RELEASE"
+        ? this.#status === "COMMITTED" && this.#attendance === "ATTENDED"
+        : kind === "FORFEIT" &&
+            (this.#status === "WITHDRAWN" ||
+              this.#attendance === "ABSENT" ||
+              hold.state === "FORFEITURE_DUE"),
+      "INVALID_STATE",
+      "Settlement reason must match the participation outcome",
+    );
+    return this.withChanges({
+      hold:
+        kind === "RELEASE"
+          ? hold.release(payoutId, at)
+          : hold.forfeit(payoutId, at),
     });
   }
 
@@ -512,48 +556,67 @@ export class Participation {
   }
 
   get participationId(): UUID {
-    return this.#snapshot.participationId;
+    return this.#participationId;
   }
   get userId(): UUID {
-    return this.#snapshot.userId;
+    return this.#userId;
   }
   get status(): ParticipationStatus {
-    return this.#snapshot.status;
+    return this.#status;
   }
   get attendance(): AttendanceStatus {
-    return this.#snapshot.attendance;
+    return this.#attendance;
   }
   get waitlistedAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.waitlistedAt, "waitlistedAt");
+    return copyOptionalDate(this.#waitlistedAt, "waitlistedAt");
   }
   get committedAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.committedAt, "committedAt");
+    return copyOptionalDate(this.#committedAt, "committedAt");
   }
   get withdrawnAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.withdrawnAt, "withdrawnAt");
+    return copyOptionalDate(this.#withdrawnAt, "withdrawnAt");
   }
   get replacementMode(): ReplacementMode | undefined {
-    return this.#snapshot.replacementMode;
+    return this.#replacementMode;
   }
   get replacementToken(): string | undefined {
-    return this.#snapshot.replacementToken;
+    return this.#replacementToken;
   }
   get verifiedAt(): Date | undefined {
-    return copyOptionalDate(this.#snapshot.verifiedAt, "verifiedAt");
+    return copyOptionalDate(this.#verifiedAt, "verifiedAt");
   }
   get verificationMethod(): VerificationMethod | undefined {
-    return this.#snapshot.verificationMethod;
+    return this.#verificationMethod;
   }
   get replacesParticipationId(): UUID | undefined {
-    return this.#snapshot.replacesParticipationId;
+    return this.#replacesParticipationId;
   }
   get queueSequence(): number | undefined {
-    return this.#snapshot.queueSequence;
+    return this.#queueSequence;
   }
   get hold(): FundHold | undefined {
-    return this.#snapshot.hold === undefined
-      ? undefined
-      : FundHold.reconstitute(this.#snapshot.hold);
+    return this.#hold;
+  }
+  private withChanges(
+    changes: Partial<Omit<ParticipationDetails, "participationId" | "userId">>,
+  ): Participation {
+    return new Participation({
+      participationId: this.#participationId,
+      userId: this.#userId,
+      status: this.#status,
+      attendance: this.#attendance,
+      waitlistedAt: this.#waitlistedAt,
+      committedAt: this.#committedAt,
+      withdrawnAt: this.#withdrawnAt,
+      replacementMode: this.#replacementMode,
+      replacementToken: this.#replacementToken,
+      verifiedAt: this.#verifiedAt,
+      verificationMethod: this.#verificationMethod,
+      replacesParticipationId: this.#replacesParticipationId,
+      hold: this.#hold,
+      queueSequence: this.#queueSequence,
+      ...changes,
+    });
   }
 }
 

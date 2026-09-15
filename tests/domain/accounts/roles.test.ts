@@ -18,7 +18,7 @@ function sessionOwnedBy(owner: User) {
 
   return owner.asBooker().createSession({
     sessionId: "session",
-    booking: Booking.create({
+    booking: new Booking({
       venueName: "Court",
       region: "North",
       sport: "Badminton",
