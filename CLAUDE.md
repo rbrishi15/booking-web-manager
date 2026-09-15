@@ -125,7 +125,7 @@ likely way this project loses an afternoon.
 ```bash
 npm run dev                    # local dev server
 npm run typecheck              # tsc --noEmit
-npm run lint                   # biome
+npm run lint                   # eslint
 npm test                       # vitest
 npm run test:concurrency       # the 20-commits-8-slots test
 npx supabase start             # local Postgres
