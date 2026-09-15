@@ -1,7 +1,5 @@
+import { Money, Payout, type SettlementBatch } from "@/domain";
 import { describe, expect, it } from "vitest";
-import { Money } from "../../../domain/finance/money";
-import { Payout } from "../../../domain/finance/payout";
-import type { SettlementBatch } from "../../../domain/shared/operations";
 
 const requestedAt = new Date("2026-10-10T12:00:00Z");
 function batch(): SettlementBatch {

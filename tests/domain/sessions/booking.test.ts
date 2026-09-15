@@ -1,6 +1,5 @@
+import { Booking, Money } from "@/domain";
 import { describe, expect, it } from "vitest";
-import { Money } from "../../../domain/finance/money";
-import { Booking } from "../../../domain/sessions/booking";
 const details = {
   venueName: "Court",
   region: "North",

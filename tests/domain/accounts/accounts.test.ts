@@ -1,8 +1,11 @@
+import {
+  type DeactivationFacts,
+  DomainError,
+  Money,
+  PayoutAccount,
+  User,
+} from "@/domain";
 import { describe, expect, test } from "vitest";
-import { PayoutAccount } from "../../../domain/accounts/payout-account";
-import { type DeactivationFacts, User } from "../../../domain/accounts/user";
-import { Money } from "../../../domain/finance/money";
-import { DomainError } from "../../../domain/shared/errors";
 
 const now = () => new Date("2026-09-15T00:00:00Z");
 const newUser = () =>

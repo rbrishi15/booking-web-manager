@@ -1,5 +1,5 @@
+import { ReliabilityScore } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { ReliabilityScore } from "../../../domain/reliability/reliability-score";
 
 describe("ReliabilityScore", () => {
   test.each([0, 100, 48, 66.66666666666667])("preserves score %s", (score) => {

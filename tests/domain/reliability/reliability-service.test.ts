@@ -1,8 +1,5 @@
+import { FundHold, Money, Participation, ReliabilityService } from "@/domain";
 import { describe, expect, it } from "vitest";
-import { Money } from "../../../domain/finance/money";
-import { ReliabilityService } from "../../../domain/reliability/reliability-service";
-import { FundHold } from "../../../domain/sessions/fund-hold";
-import { Participation } from "../../../domain/sessions/participation";
 
 const day = 86_400_000;
 const asOf = new Date("2026-09-15T00:00:00Z");

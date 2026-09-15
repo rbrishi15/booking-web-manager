@@ -1,7 +1,5 @@
+import { DomainError, GroupMembership, RegularGroup } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { GroupMembership } from "../../../domain/groups/group-membership";
-import { RegularGroup } from "../../../domain/groups/regular-group";
-import { DomainError } from "../../../domain/shared/errors";
 
 const now = () => new Date("2026-09-15T00:00:00Z");
 const newGroup = () =>

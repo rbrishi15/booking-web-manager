@@ -1,6 +1,4 @@
-import { DomainError } from "../../domain/shared/errors";
-import type { FinancialInstruction } from "../../domain/shared/operations";
-import type { UUID } from "../../domain/shared/types";
+import { DomainError, type FinancialInstruction, type UUID } from "@/domain";
 import type { DomainTransaction } from "./contracts";
 
 export async function requireAggregate<T>(

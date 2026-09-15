@@ -1,5 +1,5 @@
+import { Money } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { Money } from "../../../domain/finance/money";
 
 describe("Money", () => {
   test.each([0, 1, -1, 1001, Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER])(

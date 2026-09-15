@@ -1,9 +1,11 @@
+import {
+  type AdmissionFacts,
+  Booking,
+  Money,
+  ReliabilityScore,
+  Session,
+} from "@/domain";
 import { describe, expect, it } from "vitest";
-import { Money } from "../../../domain/finance/money";
-import { ReliabilityScore } from "../../../domain/reliability/reliability-score";
-import { Booking } from "../../../domain/sessions/booking";
-import { Session } from "../../../domain/sessions/session";
-import type { AdmissionFacts } from "../../../domain/shared/operations";
 
 const hour = 3_600_000;
 const start = new Date("2026-10-10T10:00:00Z");
