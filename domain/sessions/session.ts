@@ -40,9 +40,8 @@ export interface SessionSnapshot {
   readonly payoutAttemptIds?: readonly UUID[];
   readonly payoutIdempotencyKeys?: readonly string[];
 }
-export type SessionProps = SessionSnapshot;
 
-export interface SessionCreateProps {
+export interface SessionCreation {
   readonly sessionId: UUID;
   readonly bookerId: UUID;
   readonly bookerStatus: AccountStatus;
@@ -97,7 +96,7 @@ export class Session {
   #payoutAttemptIds: Set<UUID>;
   #payoutIdempotencyKeys: Set<string>;
 
-  private constructor(props: {
+  private constructor(details: {
     readonly sessionId: UUID;
     readonly bookerId: UUID;
     readonly booking: Booking;
@@ -115,73 +114,73 @@ export class Session {
     readonly payoutAttemptIds?: readonly UUID[];
     readonly payoutIdempotencyKeys?: readonly string[];
   }) {
-    this.#sessionId = props.sessionId;
-    this.#bookerId = props.bookerId;
-    this.#booking = props.booking;
-    this.#totalSlots = props.totalSlots;
-    this.#minimumHeadcount = props.minimumHeadcount;
-    this.#roomToken = props.roomToken;
-    this.#holdingAccountId = props.holdingAccountId;
-    this.#visibility = props.visibility;
-    this.#status = props.status;
-    this.#minimumReliability = props.minimumReliability;
-    this.#invitedGroupId = props.invitedGroupId;
-    this.#participations = [...props.participations];
-    this.#nextQueueSequence = props.nextQueueSequence;
+    this.#sessionId = details.sessionId;
+    this.#bookerId = details.bookerId;
+    this.#booking = details.booking;
+    this.#totalSlots = details.totalSlots;
+    this.#minimumHeadcount = details.minimumHeadcount;
+    this.#roomToken = details.roomToken;
+    this.#holdingAccountId = details.holdingAccountId;
+    this.#visibility = details.visibility;
+    this.#status = details.status;
+    this.#minimumReliability = details.minimumReliability;
+    this.#invitedGroupId = details.invitedGroupId;
+    this.#participations = [...details.participations];
+    this.#nextQueueSequence = details.nextQueueSequence;
     this.#pendingSettlement =
-      props.pendingSettlement === undefined
+      details.pendingSettlement === undefined
         ? undefined
-        : { batch: cloneBatch(props.pendingSettlement) };
-    this.#payoutAttemptIds = new Set(props.payoutAttemptIds ?? []);
-    this.#payoutIdempotencyKeys = new Set(props.payoutIdempotencyKeys ?? []);
+        : { batch: cloneBatch(details.pendingSettlement) };
+    this.#payoutAttemptIds = new Set(details.payoutAttemptIds ?? []);
+    this.#payoutIdempotencyKeys = new Set(details.payoutIdempotencyKeys ?? []);
     this.validateRoster();
   }
 
-  static create(props: SessionCreateProps): Session {
-    requireId(props.sessionId, "sessionId");
-    requireId(props.bookerId, "bookerId");
-    requireId(props.holdingAccountId, "holdingAccountId");
+  static create(details: SessionCreation): Session {
+    requireId(details.sessionId, "sessionId");
+    requireId(details.bookerId, "bookerId");
+    requireId(details.holdingAccountId, "holdingAccountId");
     requireDomain(
-      props.booking instanceof Booking,
+      details.booking instanceof Booking,
       "INVALID_INPUT",
       "A session needs a Booking value object",
     );
     requireDomain(
-      props.bookerStatus === "ACTIVE",
+      details.bookerStatus === "ACTIVE",
       "INACTIVE_ACCOUNT",
       "An inactive booker cannot create a session",
     );
     requireDomain(
-      props.payoutReady === true,
+      details.payoutReady === true,
       "PAYOUT_ACCOUNT_NOT_READY",
       "A session needs a completed payout account",
     );
     requireDomain(
-      typeof props.roomToken === "string" && props.roomToken.trim() !== "",
+      typeof details.roomToken === "string" && details.roomToken.trim() !== "",
       "INVALID_INPUT",
       "A session needs a room token",
     );
-    const now = validDate(props.now, "now");
-    if (props.minimumReliability !== undefined)
+    const now = validDate(details.now, "now");
+    if (details.minimumReliability !== undefined)
       requireDomain(
-        props.minimumReliability instanceof ReliabilityScore,
+        details.minimumReliability instanceof ReliabilityScore,
         "INVALID_INPUT",
         "minimumReliability must be a ReliabilityScore",
       );
-    if (props.invitedGroupId !== undefined)
-      requireId(props.invitedGroupId, "invitedGroupId");
+    if (details.invitedGroupId !== undefined)
+      requireId(details.invitedGroupId, "invitedGroupId");
     const session = new Session({
-      sessionId: props.sessionId,
-      bookerId: props.bookerId,
-      booking: props.booking,
-      totalSlots: props.totalSlots,
-      minimumHeadcount: props.minimumHeadcount,
-      roomToken: props.roomToken,
-      holdingAccountId: props.holdingAccountId,
-      visibility: props.visibility ?? "PRIVATE",
+      sessionId: details.sessionId,
+      bookerId: details.bookerId,
+      booking: details.booking,
+      totalSlots: details.totalSlots,
+      minimumHeadcount: details.minimumHeadcount,
+      roomToken: details.roomToken,
+      holdingAccountId: details.holdingAccountId,
+      visibility: details.visibility ?? "PRIVATE",
       status: "OPEN",
-      minimumReliability: props.minimumReliability,
-      invitedGroupId: props.invitedGroupId,
+      minimumReliability: details.minimumReliability,
+      invitedGroupId: details.invitedGroupId,
       participations: [],
       nextQueueSequence: 1,
       payoutAttemptIds: [],

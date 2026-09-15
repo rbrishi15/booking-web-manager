@@ -25,7 +25,6 @@ export interface ParticipationSnapshot {
   readonly hold?: FundHoldSnapshot;
   readonly queueSequence?: number;
 }
-export type ParticipationProps = ParticipationSnapshot;
 
 export interface ReliabilityOutcome {
   readonly value: 0 | 1;
@@ -51,7 +50,7 @@ export class Participation {
     });
   }
 
-  static createWaitlisted(props: {
+  static createWaitlisted(details: {
     readonly participationId: UUID;
     readonly userId: UUID;
     readonly waitlistedAt: Date;
@@ -59,25 +58,25 @@ export class Participation {
     readonly replacementToken?: string;
   }): Participation {
     requireDomain(
-      Number.isSafeInteger(props.queueSequence) && props.queueSequence > 0,
+      Number.isSafeInteger(details.queueSequence) && details.queueSequence > 0,
       "INVALID_INPUT",
       "Queue sequence must be positive",
     );
-    if (props.replacementToken !== undefined)
+    if (details.replacementToken !== undefined)
       requireDomain(
-        typeof props.replacementToken === "string" &&
-          props.replacementToken.trim() !== "",
+        typeof details.replacementToken === "string" &&
+          details.replacementToken.trim() !== "",
         "INVALID_INPUT",
         "A replacement token cannot be empty",
       );
     return Participation.reconstitute({
-      ...props,
+      ...details,
       status: "WAITLISTED",
       attendance: "UNVERIFIED",
     });
   }
 
-  static createCommitted(props: {
+  static createCommitted(details: {
     readonly participationId: UUID;
     readonly userId: UUID;
     readonly committedAt: Date;
@@ -86,23 +85,23 @@ export class Participation {
     readonly replacementMode?: ReplacementMode;
   }): Participation {
     requireDomain(
-      props.hold instanceof FundHold,
+      details.hold instanceof FundHold,
       "INVALID_INPUT",
       "A commitment needs a FundHold",
     );
     requireDomain(
-      props.hold.state === "HELD",
+      details.hold.state === "HELD",
       "INVALID_INPUT",
       "A new commitment needs a held fund",
     );
     return Participation.reconstitute({
-      participationId: props.participationId,
-      userId: props.userId,
+      participationId: details.participationId,
+      userId: details.userId,
       status: "COMMITTED",
       attendance: "UNVERIFIED",
-      committedAt: props.committedAt,
-      replacesParticipationId: props.replacesParticipationId,
-      hold: props.hold.snapshot(),
+      committedAt: details.committedAt,
+      replacesParticipationId: details.replacesParticipationId,
+      hold: details.hold.snapshot(),
     });
   }
 

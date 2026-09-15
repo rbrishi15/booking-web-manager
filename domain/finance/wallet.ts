@@ -12,10 +12,10 @@ export class Wallet {
   private constructor(snapshot: WalletSnapshot) {
     this.#snapshot = Object.freeze({ ...snapshot });
   }
-  static create(props: WalletSnapshot): Wallet {
-    validate(props.walletId, "walletId");
-    validate(props.userId, "userId");
-    return new Wallet(props);
+  static create(details: WalletSnapshot): Wallet {
+    validate(details.walletId, "walletId");
+    validate(details.userId, "userId");
+    return new Wallet(details);
   }
   static reconstitute(snapshot: WalletSnapshot): Wallet {
     return Wallet.create(snapshot);
@@ -37,4 +37,3 @@ function validate(value: string, name: string): void {
     `${name} is required`,
   );
 }
-export type WalletProps = WalletSnapshot;

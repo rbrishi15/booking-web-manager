@@ -18,19 +18,19 @@ export class GroupMembership {
     });
   }
 
-  static create(props: GroupMembershipSnapshot): GroupMembership {
+  static create(details: GroupMembershipSnapshot): GroupMembership {
     requireDomain(
-      typeof props.userId === "string" && props.userId.trim() !== "",
+      typeof details.userId === "string" && details.userId.trim() !== "",
       "INVALID_INPUT",
       "A membership needs a user ID",
     );
     requireDomain(
-      props.joinedAt instanceof Date &&
-        Number.isFinite(props.joinedAt.getTime()),
+      details.joinedAt instanceof Date &&
+        Number.isFinite(details.joinedAt.getTime()),
       "INVALID_INPUT",
       "joinedAt must be a valid Date",
     );
-    return new GroupMembership(props);
+    return new GroupMembership(details);
   }
 
   static reconstitute(snapshot: GroupMembershipSnapshot): GroupMembership {
@@ -48,5 +48,3 @@ export class GroupMembership {
     return copyDate(this.#snapshot.joinedAt, "joinedAt");
   }
 }
-
-export type GroupMembershipProps = GroupMembershipSnapshot;

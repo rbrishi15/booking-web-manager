@@ -1,70 +1,58 @@
 export {
   Booking,
-  type BookingCreateProps,
-  type BookingProps,
+  type BookingDetails,
   type BookingSnapshot,
 } from "./sessions/booking";
 export {
   FundHold,
-  type FundHoldProps,
   type FundHoldSnapshot,
 } from "./sessions/fund-hold";
 export {
   GroupMembership,
   type GroupMembershipSnapshot,
-  type GroupMembershipProps,
 } from "./groups/group-membership";
 export {
   HoldingAccount,
   type HoldingAccountSnapshot,
-  type HoldingAccountProps,
 } from "./finance/holding-account";
 export {
   LedgerTransaction,
   type LedgerTransactionSnapshot,
-  type LedgerTransactionProps,
 } from "./finance/ledger-transaction";
 export {
   Participation,
   type ParticipationSnapshot,
-  type ParticipationProps,
   type ReliabilityOutcome,
 } from "./sessions/participation";
 export {
   Payout,
   type PayoutSnapshot,
-  type PayoutProps,
 } from "./finance/payout";
 export {
   PayoutAccount,
   type PayoutAccountSnapshot,
-  type PayoutAccountProps,
 } from "./accounts/payout-account";
 export {
   RegularGroup,
   type GroupJoinResult,
-  type RegularGroupCreateProps,
+  type GroupCreation,
   type RegularGroupSnapshot,
-  type RegularGroupProps,
 } from "./groups/regular-group";
 export {
   Session,
   type JoinCommand,
   type PromotionCommand,
-  type SessionCreateProps,
+  type SessionCreation,
   type SessionSnapshot,
-  type SessionProps,
 } from "./sessions/session";
 export {
   User,
-  type UserCreateProps,
+  type UserRegistration,
   type UserSnapshot,
-  type UserProps,
 } from "./accounts/user";
 export {
   Wallet,
   type WalletSnapshot,
-  type WalletProps,
 } from "./finance/wallet";
 export {
   DomainError,

@@ -1,10 +1,10 @@
 import { User } from "../domain/accounts/user";
 import { Payout } from "../domain/finance/payout";
 import {
+  type GroupCreation,
   RegularGroup,
-  type RegularGroupCreateProps,
 } from "../domain/groups/regular-group";
-import { Session, type SessionCreateProps } from "../domain/sessions/session";
+import { Session, type SessionCreation } from "../domain/sessions/session";
 import { DomainError } from "../domain/shared/errors";
 import type {
   AdmissionResult,
@@ -33,10 +33,9 @@ export class SessionApplicationService {
   constructor(private readonly dependencies: ApplicationServiceDependencies) {}
 
   create(
-    command: Omit<
-      SessionCreateProps,
-      "bookerStatus" | "payoutReady" | "now"
-    > & { readonly idempotencyKey: string },
+    command: Omit<SessionCreation, "bookerStatus" | "payoutReady" | "now"> & {
+      readonly idempotencyKey: string;
+    },
   ): Promise<Session> {
     return this.dependencies.unitOfWork.execute(
       command.idempotencyKey,
@@ -529,7 +528,7 @@ export class UserApplicationService {
 export class GroupApplicationService {
   constructor(private readonly dependencies: ApplicationServiceDependencies) {}
   create(
-    command: Omit<RegularGroupCreateProps, "now"> & {
+    command: Omit<GroupCreation, "now"> & {
       readonly idempotencyKey: string;
     },
   ): Promise<RegularGroup> {

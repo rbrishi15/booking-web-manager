@@ -15,7 +15,6 @@ export interface FundHoldSnapshot {
   readonly createdAt: Date;
   readonly settledAt?: Date;
 }
-export type FundHoldProps = FundHoldSnapshot;
 
 /** Child entity that protects the lifecycle of one participant's held share. */
 export class FundHold {
@@ -29,7 +28,7 @@ export class FundHold {
     });
   }
 
-  static create(props: {
+  static create(details: {
     readonly holdId: UUID;
     readonly participationId: UUID;
     readonly holdingAccountId: UUID;
@@ -37,21 +36,21 @@ export class FundHold {
     readonly amount: Money;
     readonly createdAt: Date;
   }): FundHold {
-    requireId(props.holdId, "holdId");
-    requireId(props.participationId, "participationId");
-    requireId(props.holdingAccountId, "holdingAccountId");
-    requireId(props.walletId, "walletId");
+    requireId(details.holdId, "holdId");
+    requireId(details.participationId, "participationId");
+    requireId(details.holdingAccountId, "holdingAccountId");
+    requireId(details.walletId, "walletId");
     requireDomain(
-      props.amount instanceof Money,
+      details.amount instanceof Money,
       "INVALID_INPUT",
       "A fund hold needs a Money amount",
     );
     requireDomain(
-      props.amount.toCents() > 0,
+      details.amount.toCents() > 0,
       "INVALID_INPUT",
       "A fund hold must be positive",
     );
-    return new FundHold({ ...props, state: "HELD" });
+    return new FundHold({ ...details, state: "HELD" });
   }
 
   static reconstitute(snapshot: FundHoldSnapshot): FundHold {

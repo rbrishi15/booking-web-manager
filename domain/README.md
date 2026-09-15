@@ -25,6 +25,11 @@ copies. Root commands validate a complete transition before replacing the
 aggregate state and throw `DomainError` with a stable code when the transition is
 not allowed.
 
+Creation contracts use domain language (`UserRegistration`, `SessionCreation`,
+`GroupCreation`, and `BookingDetails`). `Snapshot` types are persistence
+representations used only at the reconstitution boundary; they are not mutable
+entity state or UI props.
+
 ## Money and booking
 
 `Money` is an immutable signed SGD-cent value object. It uses safe integer cents,

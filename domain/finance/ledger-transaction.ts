@@ -26,9 +26,9 @@ export class LedgerTransaction {
     });
   }
 
-  static create(props: LedgerTransactionSnapshot): LedgerTransaction {
-    validate(props);
-    return new LedgerTransaction(props);
+  static create(details: LedgerTransactionSnapshot): LedgerTransaction {
+    validate(details);
+    return new LedgerTransaction(details);
   }
   static reconstitute(snapshot: LedgerTransactionSnapshot): LedgerTransaction {
     return LedgerTransaction.create(snapshot);
@@ -68,42 +68,42 @@ export class LedgerTransaction {
   }
 }
 
-function validate(props: LedgerTransactionSnapshot): void {
+function validate(details: LedgerTransactionSnapshot): void {
   requireDomain(
-    typeof props.transactionId === "string" &&
-      props.transactionId.trim() !== "",
+    typeof details.transactionId === "string" &&
+      details.transactionId.trim() !== "",
     "INVALID_INPUT",
     "transactionId is required",
   );
   requireDomain(
-    props.amount instanceof Money,
+    details.amount instanceof Money,
     "INVALID_INPUT",
     "Ledger transaction amount must be Money",
   );
   requireDomain(
-    props.amount.toCents() > 0,
+    details.amount.toCents() > 0,
     "INVALID_INPUT",
     "Ledger transaction amount must be positive",
   );
   requireDomain(
     ["TOP_UP", "LOCK", "RELEASE", "REFUND", "FORFEIT", "PAYOUT"].includes(
-      props.kind,
+      details.kind,
     ),
     "INVALID_INPUT",
     "Unknown transaction kind",
   );
   requireDomain(
-    typeof props.idempotencyKey === "string" &&
-      props.idempotencyKey.trim() !== "",
+    typeof details.idempotencyKey === "string" &&
+      details.idempotencyKey.trim() !== "",
     "INVALID_INPUT",
     "idempotencyKey is required",
   );
-  copyDate(props.occurredAt, "occurredAt");
+  copyDate(details.occurredAt, "occurredAt");
   for (const id of [
-    props.walletId,
-    props.holdId,
-    props.payoutId,
-    props.externalReference,
+    details.walletId,
+    details.holdId,
+    details.payoutId,
+    details.externalReference,
   ])
     if (id !== undefined)
       requireDomain(
@@ -112,5 +112,3 @@ function validate(props: LedgerTransactionSnapshot): void {
         "References cannot be empty",
       );
 }
-
-export type LedgerTransactionProps = LedgerTransactionSnapshot;

@@ -16,7 +16,7 @@ export interface RegularGroupSnapshot {
   readonly memberships: readonly GroupMembershipSnapshot[];
 }
 
-export interface RegularGroupCreateProps {
+export interface GroupCreation {
   readonly groupId: UUID;
   readonly ownerId: UUID;
   readonly name: string;
@@ -49,19 +49,19 @@ export class RegularGroup {
     this.validate();
   }
 
-  static create(props: RegularGroupCreateProps): RegularGroup {
-    validateId(props.groupId, "groupId");
-    validateId(props.ownerId, "ownerId");
-    validateName(props.name);
-    validateToken(props.invitationToken);
+  static create(details: GroupCreation): RegularGroup {
+    validateId(details.groupId, "groupId");
+    validateId(details.ownerId, "ownerId");
+    validateName(details.name);
+    validateToken(details.invitationToken);
     return new RegularGroup({
-      groupId: props.groupId,
-      ownerId: props.ownerId,
-      name: props.name,
-      invitationToken: props.invitationToken,
+      groupId: details.groupId,
+      ownerId: details.ownerId,
+      name: details.name,
+      invitationToken: details.invitationToken,
       invitationActive: true,
       status: "ACTIVE",
-      memberships: [{ userId: props.ownerId, joinedAt: props.now }],
+      memberships: [{ userId: details.ownerId, joinedAt: details.now }],
     });
   }
 
@@ -293,5 +293,3 @@ function validateToken(value: string): void {
     "An invitation token is required",
   );
 }
-
-export type RegularGroupProps = RegularGroupSnapshot;

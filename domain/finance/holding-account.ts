@@ -11,13 +11,13 @@ export class HoldingAccount {
   private constructor(snapshot: HoldingAccountSnapshot) {
     this.#snapshot = Object.freeze({ ...snapshot });
   }
-  static create(props: HoldingAccountSnapshot): HoldingAccount {
+  static create(details: HoldingAccountSnapshot): HoldingAccount {
     requireDomain(
-      typeof props.accountId === "string" && props.accountId.trim() !== "",
+      typeof details.accountId === "string" && details.accountId.trim() !== "",
       "INVALID_INPUT",
       "accountId is required",
     );
-    return new HoldingAccount(props);
+    return new HoldingAccount(details);
   }
   static reconstitute(snapshot: HoldingAccountSnapshot): HoldingAccount {
     return HoldingAccount.create(snapshot);
@@ -29,4 +29,3 @@ export class HoldingAccount {
     return this.#snapshot.accountId;
   }
 }
-export type HoldingAccountProps = HoldingAccountSnapshot;

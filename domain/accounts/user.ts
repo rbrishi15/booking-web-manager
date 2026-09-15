@@ -17,7 +17,7 @@ export interface UserSnapshot {
   readonly payoutAccount?: PayoutAccountSnapshot;
 }
 
-export interface UserCreateProps {
+export interface UserRegistration {
   readonly userId: UUID;
   readonly email: string;
   readonly preferredSports?: ReadonlySet<Sport>;
@@ -46,14 +46,14 @@ export class User {
     this.validate();
   }
 
-  static create(props: UserCreateProps): User {
-    validateId(props.userId, "userId");
-    validateEmail(props.email);
+  static create(details: UserRegistration): User {
+    validateId(details.userId, "userId");
+    validateEmail(details.email);
     return new User({
-      userId: props.userId,
-      email: props.email,
-      preferredSports: new Set(props.preferredSports ?? []),
-      preferredRegions: new Set(props.preferredRegions ?? []),
+      userId: details.userId,
+      email: details.email,
+      preferredSports: new Set(details.preferredSports ?? []),
+      preferredRegions: new Set(details.preferredRegions ?? []),
       accountStatus: "ACTIVE",
     });
   }
@@ -295,5 +295,4 @@ function validateDeactivationFacts(facts: DeactivationFacts): void {
     );
 }
 
-export type UserProps = UserSnapshot;
 export type { DeactivationFacts } from "../shared/operations";

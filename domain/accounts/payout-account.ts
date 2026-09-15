@@ -18,15 +18,15 @@ export class PayoutAccount {
     this.#snapshot = Object.freeze({ ...snapshot });
   }
 
-  static create(props: {
+  static create(details: {
     readonly payoutAccountId: UUID;
     readonly userId: UUID;
     readonly providerAccountReference: string;
   }): PayoutAccount {
-    validateText(props.payoutAccountId, "payoutAccountId");
-    validateText(props.userId, "userId");
-    validateText(props.providerAccountReference, "providerAccountReference");
-    return new PayoutAccount({ ...props, setupStatus: "PENDING" });
+    validateText(details.payoutAccountId, "payoutAccountId");
+    validateText(details.userId, "userId");
+    validateText(details.providerAccountReference, "providerAccountReference");
+    return new PayoutAccount({ ...details, setupStatus: "PENDING" });
   }
 
   static reconstitute(snapshot: PayoutAccountSnapshot): PayoutAccount {
@@ -113,5 +113,3 @@ function validateText(
     `${name} is required`,
   );
 }
-
-export type PayoutAccountProps = PayoutAccountSnapshot;

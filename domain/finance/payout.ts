@@ -323,5 +323,3 @@ function validateText(
     `${name} is required`,
   );
 }
-
-export type PayoutProps = PayoutSnapshot;

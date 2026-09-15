@@ -2,7 +2,8 @@ import { Money } from "../finance/money";
 import { copyDate } from "../shared/date";
 import type { Region, Sport } from "../shared/types";
 
-export interface BookingSnapshot {
+/** Value used when a session is opened. */
+export interface BookingDetails {
   readonly venueName: string;
   readonly region: Region;
   readonly sport: Sport;
@@ -10,8 +11,9 @@ export interface BookingSnapshot {
   readonly endAt: Date;
   readonly totalCost: Money;
 }
-export type BookingCreateProps = BookingSnapshot;
-export type BookingProps = BookingSnapshot;
+
+/** Persistence representation of the immutable booking value. */
+export interface BookingSnapshot extends BookingDetails {}
 
 /** Venue details owned by a Session. The actual venue reservation is external. */
 export class Booking {
@@ -25,29 +27,29 @@ export class Booking {
     });
   }
 
-  static create(props: BookingSnapshot): Booking {
-    const startAt = copyDate(props.startAt, "startAt");
-    const endAt = copyDate(props.endAt, "endAt");
+  static create(details: BookingDetails): Booking {
+    const startAt = copyDate(details.startAt, "startAt");
+    const endAt = copyDate(details.endAt, "endAt");
     if (endAt <= startAt) {
       throw new RangeError("Booking endAt must be after startAt");
     }
-    if (!(props.totalCost instanceof Money)) {
+    if (!(details.totalCost instanceof Money)) {
       throw new RangeError("Booking totalCost must be Money");
     }
-    if (props.totalCost.toCents() <= 0) {
+    if (details.totalCost.toCents() <= 0) {
       throw new RangeError("Booking totalCost must be positive");
     }
     if (
-      typeof props.venueName !== "string" ||
-      props.venueName.trim() === "" ||
-      typeof props.region !== "string" ||
-      props.region.trim() === "" ||
-      typeof props.sport !== "string" ||
-      props.sport.trim() === ""
+      typeof details.venueName !== "string" ||
+      details.venueName.trim() === "" ||
+      typeof details.region !== "string" ||
+      details.region.trim() === "" ||
+      typeof details.sport !== "string" ||
+      details.sport.trim() === ""
     ) {
       throw new RangeError("Booking venue, region, and sport are required");
     }
-    return new Booking({ ...props, startAt, endAt });
+    return new Booking({ ...details, startAt, endAt });
   }
 
   static reconstitute(snapshot: BookingSnapshot): Booking {
