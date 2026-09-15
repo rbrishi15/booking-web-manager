@@ -26,3 +26,20 @@
 /app/profile/ @Jolingoes
 /app/groups/ @Jolingoes
 /components/ui/ @Jolingoes
+
+# Use case test stubs (tests/use-cases) — routed to the same owner as the
+# feature directory that implements the use case, not the /tests default.
+tests/use-cases/UC1-01-*.test.ts @Jolingoes
+tests/use-cases/UC1-02-*.test.ts @Jolingoes
+tests/use-cases/UC1-03-*.test.ts @Jolingoes
+tests/use-cases/UC1-04-*.test.ts @Jolingoes
+tests/use-cases/UC1-06-*.test.ts @Jolingoes
+tests/use-cases/UC1-07-*.test.ts @rbrishi15
+tests/use-cases/UC1-08-*.test.ts @rbrishi15
+tests/use-cases/UC2-01-*.test.ts @liang799
+tests/use-cases/UC2-02-*.test.ts @liang799
+tests/use-cases/UC2-03-*.test.ts @liang799
+tests/use-cases/UC2-03c-*.test.ts @liang799
+tests/use-cases/UC2-04-*.test.ts @Wyjessie
+tests/use-cases/UC2-05-*.test.ts @Wyjessie
+tests/use-cases/UC2-06-*.test.ts @Wyjessie
