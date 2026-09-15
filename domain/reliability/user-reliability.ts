@@ -1,6 +1,6 @@
-import type { UUID } from "../types";
-import type { ReliabilityScore } from "../value-objects/reliability-score";
-import { ReliabilityScore as ReliabilityScoreValue } from "../value-objects/reliability-score";
+import type { UUID } from "../shared/types";
+import type { ReliabilityScore } from "./reliability-score";
+import { ReliabilityScore as ReliabilityScoreValue } from "./reliability-score";
 
 /** A calculated view of participation history, not an independently editable score. */
 export interface UserReliability {

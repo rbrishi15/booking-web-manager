@@ -1,4 +1,6 @@
-import { DomainError, requireDomain } from "../errors";
+import { Money } from "../finance/money";
+import { ReliabilityScore } from "../reliability/reliability-score";
+import { DomainError, requireDomain } from "../shared/errors";
 import type {
   AdmissionFacts,
   AdmissionResult,
@@ -9,12 +11,14 @@ import type {
   SettlementBatch,
   SettlementLine,
   WithdrawalResult,
-} from "../operations";
-import type { AccountStatus, SessionStatus, Visibility } from "../statuses";
-import type { UUID } from "../types";
-import { Booking, type BookingSnapshot } from "../value-objects/booking";
-import { Money } from "../value-objects/money";
-import { ReliabilityScore } from "../value-objects/reliability-score";
+} from "../shared/operations";
+import type {
+  AccountStatus,
+  SessionStatus,
+  Visibility,
+} from "../shared/statuses";
+import type { UUID } from "../shared/types";
+import { Booking, type BookingSnapshot } from "./booking";
 import { FundHold } from "./fund-hold";
 import { Participation, type ParticipationSnapshot } from "./participation";
 

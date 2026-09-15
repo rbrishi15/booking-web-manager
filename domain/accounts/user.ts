@@ -1,8 +1,11 @@
-import { DomainError, requireDomain } from "../errors";
-import type { DeactivationFacts, PayoutDestination } from "../operations";
-import type { AccountStatus } from "../statuses";
-import type { Region, Sport, UUID } from "../types";
-import { Money } from "../value-objects/money";
+import { Money } from "../finance/money";
+import { DomainError, requireDomain } from "../shared/errors";
+import type {
+  DeactivationFacts,
+  PayoutDestination,
+} from "../shared/operations";
+import type { AccountStatus } from "../shared/statuses";
+import type { Region, Sport, UUID } from "../shared/types";
 import { PayoutAccount, type PayoutAccountSnapshot } from "./payout-account";
 
 export interface UserSnapshot {
@@ -293,4 +296,4 @@ function validateDeactivationFacts(facts: DeactivationFacts): void {
 }
 
 export type UserProps = UserSnapshot;
-export type { DeactivationFacts } from "../operations";
+export type { DeactivationFacts } from "../shared/operations";

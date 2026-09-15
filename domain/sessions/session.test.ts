@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { AdmissionFacts } from "../operations";
-import { Money } from "../value-objects/money";
-import { ReliabilityScore } from "../value-objects/reliability-score";
+import { Money } from "../finance/money";
+import { ReliabilityScore } from "../reliability/reliability-score";
+import type { AdmissionFacts } from "../shared/operations";
 import { Booking } from "./booking";
 import { Session } from "./session";
 

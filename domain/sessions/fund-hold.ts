@@ -1,8 +1,8 @@
-import { DomainError, requireDomain } from "../errors";
-import { copyDate, copyOptionalDate } from "../internal/date";
-import type { HoldState } from "../statuses";
-import type { UUID } from "../types";
-import { Money } from "../value-objects/money";
+import { Money } from "../finance/money";
+import { copyDate, copyOptionalDate } from "../shared/date";
+import { DomainError, requireDomain } from "../shared/errors";
+import type { HoldState } from "../shared/statuses";
+import type { UUID } from "../shared/types";
 
 export interface FundHoldSnapshot {
   readonly holdId: UUID;

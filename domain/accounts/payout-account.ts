@@ -1,6 +1,6 @@
-import { DomainError, requireDomain } from "../errors";
-import type { PayoutSetupStatus } from "../statuses";
-import type { UUID } from "../types";
+import { DomainError, requireDomain } from "../shared/errors";
+import type { PayoutSetupStatus } from "../shared/statuses";
+import type { UUID } from "../shared/types";
 
 export interface PayoutAccountSnapshot {
   readonly payoutAccountId: UUID;

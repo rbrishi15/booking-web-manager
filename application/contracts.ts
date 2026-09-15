@@ -1,17 +1,17 @@
-import type { Payout } from "../domain/entities/payout";
+import type { User } from "../domain/accounts/user";
+import type { Payout } from "../domain/finance/payout";
 import type {
   GroupJoinResult,
   RegularGroup,
-} from "../domain/entities/regular-group";
-import type { Session } from "../domain/entities/session";
-import type { User } from "../domain/entities/user";
+} from "../domain/groups/regular-group";
+import type { Session } from "../domain/sessions/session";
 import type {
   AdmissionFacts,
   DeactivationFacts,
   FinancialInstruction,
   PayoutRequestedIntent,
-} from "../domain/operations";
-import type { UUID } from "../domain/types";
+} from "../domain/shared/operations";
+import type { UUID } from "../domain/shared/types";
 
 /** Repository ports are deliberately aggregate-oriented; adapters choose their persistence model. */
 export interface Repository<T> {

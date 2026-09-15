@@ -1,8 +1,8 @@
-import { requireDomain } from "../errors";
-import { copyDate } from "../internal/date";
-import type { TransactionKind } from "../statuses";
-import type { UUID } from "../types";
-import { Money } from "../value-objects/money";
+import { copyDate } from "../shared/date";
+import { requireDomain } from "../shared/errors";
+import type { TransactionKind } from "../shared/statuses";
+import type { UUID } from "../shared/types";
+import { Money } from "./money";
 
 export interface LedgerTransactionSnapshot {
   readonly transactionId: UUID;

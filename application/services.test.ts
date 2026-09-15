@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { Payout } from "../domain/entities/payout";
-import type { RegularGroup } from "../domain/entities/regular-group";
-import type { Session } from "../domain/entities/session";
-import { User } from "../domain/entities/user";
+import { User } from "../domain/accounts/user";
+import { Money } from "../domain/finance/money";
+import type { Payout } from "../domain/finance/payout";
+import type { RegularGroup } from "../domain/groups/regular-group";
+import { ReliabilityScore } from "../domain/reliability/reliability-score";
+import { Booking } from "../domain/sessions/booking";
+import type { Session } from "../domain/sessions/session";
 import type {
   AdmissionFacts,
   DeactivationFacts,
   FinancialInstruction,
   PayoutRequestedIntent,
-} from "../domain/operations";
-import { Booking } from "../domain/value-objects/booking";
-import { Money } from "../domain/value-objects/money";
-import { ReliabilityScore } from "../domain/value-objects/reliability-score";
+} from "../domain/shared/operations";
 import type { DomainTransaction, Repository } from "./contracts";
 import {
   GroupApplicationService,

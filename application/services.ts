@@ -1,11 +1,11 @@
-import { Payout } from "../domain/entities/payout";
+import { User } from "../domain/accounts/user";
+import { Payout } from "../domain/finance/payout";
 import {
   RegularGroup,
   type RegularGroupCreateProps,
-} from "../domain/entities/regular-group";
-import { Session, type SessionCreateProps } from "../domain/entities/session";
-import { User } from "../domain/entities/user";
-import { DomainError } from "../domain/errors";
+} from "../domain/groups/regular-group";
+import { Session, type SessionCreateProps } from "../domain/sessions/session";
+import { DomainError } from "../domain/shared/errors";
 import type {
   AdmissionResult,
   FinancialInstruction,
@@ -13,8 +13,8 @@ import type {
   PayoutRequestedIntent,
   PromotionResult,
   WithdrawalResult,
-} from "../domain/operations";
-import type { UUID } from "../domain/types";
+} from "../domain/shared/operations";
+import type { UUID } from "../domain/shared/types";
 import type {
   Clock,
   DomainTransaction,

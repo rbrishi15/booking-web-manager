@@ -1,13 +1,13 @@
-import { DomainError, requireDomain } from "../errors";
-import { copyDate, copyOptionalDate } from "../internal/date";
+import { copyDate, copyOptionalDate } from "../shared/date";
+import { DomainError, requireDomain } from "../shared/errors";
 import type {
   PayoutDestination,
   PayoutRequestedIntent,
   SettlementBatch,
-} from "../operations";
-import type { PayoutStatus } from "../statuses";
-import type { UUID } from "../types";
-import { Money } from "../value-objects/money";
+} from "../shared/operations";
+import type { PayoutStatus } from "../shared/statuses";
+import type { UUID } from "../shared/types";
+import { Money } from "./money";
 
 export interface PayoutSnapshot {
   readonly payoutId: UUID;

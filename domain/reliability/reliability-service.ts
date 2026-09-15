@@ -1,11 +1,11 @@
-import type { Participation } from "../entities/participation";
-import { copyDate } from "../internal/date";
+import type { Participation } from "../sessions/participation";
+import { copyDate } from "../shared/date";
+import type { UUID } from "../shared/types";
+import { ReliabilityScore } from "./reliability-score";
 import {
   type UserReliability,
   userReliabilitySnapshot,
-} from "../read-models/user-reliability";
-import type { UUID } from "../types";
-import { ReliabilityScore } from "../value-objects/reliability-score";
+} from "./user-reliability";
 
 export interface ParticipationHistoryEntry {
   readonly participation: Participation;

@@ -1,6 +1,6 @@
-import { requireDomain } from "../errors";
-import { copyDate } from "../internal/date";
-import type { UUID } from "../types";
+import { copyDate } from "../shared/date";
+import { requireDomain } from "../shared/errors";
+import type { UUID } from "../shared/types";
 
 export interface GroupMembershipSnapshot {
   readonly userId: UUID;

@@ -1,6 +1,6 @@
-import { copyDate } from "../internal/date";
-import type { Region, Sport } from "../types";
-import { Money } from "./money";
+import { Money } from "../finance/money";
+import { copyDate } from "../shared/date";
+import type { Region, Sport } from "../shared/types";
 
 export interface BookingSnapshot {
   readonly venueName: string;
@@ -11,6 +11,7 @@ export interface BookingSnapshot {
   readonly totalCost: Money;
 }
 export type BookingCreateProps = BookingSnapshot;
+export type BookingProps = BookingSnapshot;
 
 /** Venue details owned by a Session. The actual venue reservation is external. */
 export class Booking {

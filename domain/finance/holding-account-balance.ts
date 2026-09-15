@@ -1,5 +1,5 @@
-import type { UUID } from "../types";
-import type { Money } from "../value-objects/money";
+import type { UUID } from "../shared/types";
+import type { Money } from "./money";
 
 /** Ledger-derived total held across all sessions in the shared platform account. */
 export interface HoldingAccountBalance {

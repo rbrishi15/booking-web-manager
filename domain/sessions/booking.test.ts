@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Booking } from "../value-objects/booking";
-import { Money } from "../value-objects/money";
+import { Money } from "../finance/money";
+import { Booking } from "./booking";
 const props = {
   venueName: "Court",
   region: "North",

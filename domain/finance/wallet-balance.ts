@@ -1,5 +1,5 @@
-import type { UUID } from "../types";
-import type { Money } from "../value-objects/money";
+import type { UUID } from "../shared/types";
+import type { Money } from "./money";
 
 /** Derived exclusively from committed ledger entries, never a writable balance. */
 export interface WalletBalance {

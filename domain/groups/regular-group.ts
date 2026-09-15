@@ -1,6 +1,6 @@
-import { DomainError, requireDomain } from "../errors";
-import type { GroupStatus } from "../statuses";
-import type { UUID } from "../types";
+import { DomainError, requireDomain } from "../shared/errors";
+import type { GroupStatus } from "../shared/statuses";
+import type { UUID } from "../shared/types";
 import {
   GroupMembership,
   type GroupMembershipSnapshot,

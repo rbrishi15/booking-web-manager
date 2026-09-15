@@ -1,5 +1,5 @@
-import { requireDomain } from "../errors";
-import type { UUID } from "../types";
+import { requireDomain } from "../shared/errors";
+import type { UUID } from "../shared/types";
 
 export interface HoldingAccountSnapshot {
   readonly accountId: UUID;

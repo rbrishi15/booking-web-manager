@@ -1,7 +1,7 @@
+import type { Money } from "../finance/money";
+import type { ReliabilityScore } from "../reliability/reliability-score";
 import type { AccountStatus } from "./statuses";
 import type { UUID } from "./types";
-import type { Money } from "./value-objects/money";
-import type { ReliabilityScore } from "./value-objects/reliability-score";
 
 /** Loaded by the application in the transaction, never accepted from a client DTO. */
 export interface AdmissionFacts {

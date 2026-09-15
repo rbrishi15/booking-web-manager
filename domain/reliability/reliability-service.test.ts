@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FundHold } from "../entities/fund-hold";
-import { Participation } from "../entities/participation";
-import { Money } from "../value-objects/money";
+import { Money } from "../finance/money";
+import { FundHold } from "../sessions/fund-hold";
+import { Participation } from "../sessions/participation";
 import { ReliabilityService } from "./reliability-service";
 
 const day = 86_400_000;

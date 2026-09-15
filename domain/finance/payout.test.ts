@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SettlementBatch } from "../operations";
-import { Money } from "../value-objects/money";
+import type { SettlementBatch } from "../shared/operations";
+import { Money } from "./money";
 import { Payout } from "./payout";
 
 const requestedAt = new Date("2026-10-10T12:00:00Z");

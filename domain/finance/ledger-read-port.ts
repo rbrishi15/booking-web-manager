@@ -1,6 +1,6 @@
-import type { HoldingAccountBalance } from "../read-models/holding-account-balance";
-import type { WalletBalance } from "../read-models/wallet-balance";
-import type { UUID } from "../types";
+import type { UUID } from "../shared/types";
+import type { HoldingAccountBalance } from "./holding-account-balance";
+import type { WalletBalance } from "./wallet-balance";
 
 /**
  * Implemented by the server's ledger adapter using committed, append-only entries.

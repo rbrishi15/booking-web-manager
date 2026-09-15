@@ -1,12 +1,12 @@
-import { DomainError, requireDomain } from "../errors";
-import { copyDate, copyOptionalDate } from "../internal/date";
+import { copyDate, copyOptionalDate } from "../shared/date";
+import { DomainError, requireDomain } from "../shared/errors";
 import type {
   AttendanceStatus,
   ParticipationStatus,
   ReplacementMode,
   VerificationMethod,
-} from "../statuses";
-import type { UUID } from "../types";
+} from "../shared/statuses";
+import type { UUID } from "../shared/types";
 import { FundHold, type FundHoldSnapshot } from "./fund-hold";
 
 export interface ParticipationSnapshot {

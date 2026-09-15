@@ -71,3 +71,18 @@ nonnegative balances, and atomic participation/hold/ledger updates. Financial
 history remains after account anonymisation.
 
 See `domain/index.ts` and `application/index.ts` for the public API.
+
+## Capability layout
+
+The source tree follows the business capabilities and aggregate boundaries:
+
+- `domain/sessions` contains `Session`, `Participation`, `FundHold`, and the
+  `Booking` value object they own.
+- `domain/groups` contains `RegularGroup` and `GroupMembership`.
+- `domain/accounts` contains `User` and payout-account setup.
+- `domain/finance` contains money, wallets, holding accounts, ledger facts,
+  payouts, and derived balance read models.
+- `domain/reliability` contains the reliability value object, policy, and read
+  model.
+- `domain/shared` contains cross-capability statuses, IDs, errors, operations,
+  and date-copying primitives.
