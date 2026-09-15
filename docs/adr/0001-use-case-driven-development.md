@@ -38,6 +38,44 @@ Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in
 `tests/use-cases/`, separate from production code.
 
+## Example: session use cases
+
+The session portion of the SRS is a useful example of the intended shape. The
+diagram shows the actors and external systems around discovery, creation,
+commitment, withdrawal, management, attendance verification, cancellation, and
+participant removal:
+
+![Session use-case context diagram](./assets/session-use-case-context.png)
+
+The corresponding production boundary would be organized by use case rather
+than by one large session service:
+
+```text
+use-cases/
+├── shared/
+│   ├── contracts.ts
+│   ├── dependencies.ts
+│   ├── helpers.ts
+│   └── ports.ts
+└── sessions/
+    ├── DiscoverSessions.ts
+    ├── CreateSession.ts
+    ├── ManageSession.ts
+    ├── ToggleSessionVisibility.ts
+    ├── RemoveParticipant.ts
+    ├── CancelSession.ts
+    ├── VerifyAttendance.ts
+    ├── WithdrawFromSession.ts
+    └── CommitToSession.ts
+```
+
+For example, `use-cases/sessions/DiscoverSessions.ts` would coordinate the
+inputs and query ports needed to discover sessions, while `domain/sessions`
+would continue to own session invariants and state transitions. Supabase and
+Stripe remain external adapters; they are not imported directly by the use-case
+coordinator. This is an illustrative target structure, not a claim that every
+file above currently exists.
+
 ## What belongs in `/use-cases`
 
 - Framework-independent workflow coordination.
