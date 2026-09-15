@@ -6,6 +6,8 @@ import type {
 } from "../shared/operations";
 import type { AccountStatus } from "../shared/statuses";
 import type { Region, Sport, UUID } from "../shared/types";
+import { Booker } from "./booker";
+import { Participant } from "./participant";
 import { PayoutAccount, type PayoutAccountSnapshot } from "./payout-account";
 
 export interface UserSnapshot {
@@ -154,6 +156,16 @@ export class User {
       providerAccountReference: account.providerAccountReference,
       bankAccountReference: account.bankAccountReference,
     });
+  }
+
+  /** Enter the booker role for commands on sessions owned by this user. */
+  asBooker(): Booker {
+    return Booker.for(this);
+  }
+
+  /** Enter the participant role for joining and leaving sessions. */
+  asParticipant(): Participant {
+    return Participant.for(this);
   }
 
   deactivate(facts: DeactivationFacts): void {

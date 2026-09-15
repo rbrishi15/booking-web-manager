@@ -13,7 +13,10 @@ work.
   cancellation, attendance, and settlement transitions are commands on the
   aggregate root.
 - `User` owns profile/preferences and payout setup. Reliability is a derived
-  `UserReliability` read model and cannot be assigned to a user.
+  `UserReliability` read model and cannot be assigned to a user. `User` exposes
+  `asBooker()` and `asParticipant()` role views; those roles supply identity to
+  session commands while authoritative wallet, reliability, and group facts
+  remain application inputs.
 - `RegularGroup` owns unique memberships and invitation lifecycle.
 - `Payout` freezes one settlement batch and external destination for one payout
   attempt. A failed attempt remains a fact; a retry gets a new attempt ID.

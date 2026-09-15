@@ -51,6 +51,20 @@ export {
   type UserSnapshot,
 } from "./accounts/user";
 export {
+  Booker,
+  type AttendanceMark,
+  type BookerSessionCreation,
+  type SettlementCommand,
+  type VerifyAttendanceCommand,
+} from "./accounts/booker";
+export {
+  Participant,
+  type LeaveWaitlistCommand,
+  type ParticipantAdmissionFacts,
+  type ParticipantJoinCommand,
+  type ParticipantWithdrawalCommand,
+} from "./accounts/participant";
+export {
   Wallet,
   type WalletSnapshot,
 } from "./finance/wallet";
