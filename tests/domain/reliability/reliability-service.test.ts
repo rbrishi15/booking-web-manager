@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Money } from "../finance/money";
-import { FundHold } from "../sessions/fund-hold";
-import { Participation } from "../sessions/participation";
-import { ReliabilityService } from "./reliability-service";
+import { Money } from "../../../domain/finance/money";
+import { ReliabilityService } from "../../../domain/reliability/reliability-service";
+import { FundHold } from "../../../domain/sessions/fund-hold";
+import { Participation } from "../../../domain/sessions/participation";
 
 const day = 86_400_000;
 const asOf = new Date("2026-09-15T00:00:00Z");
@@ -45,8 +45,11 @@ function absent(id: string, endAt = recentEnd): Participation {
 
 describe("ReliabilityService", () => {
   it("defaults excluded history to 100 and weights an older absence at half life", () => {
-    expect(service.recalculate("u", [], asOf).toNumber()).toBe(100);
+    // Arrange
     const older = new Date(recentEnd.getTime() - 90 * day);
+
+    // Act
+    const emptyHistoryScore = service.recalculate("u", [], asOf).toNumber();
     const score = service
       .recalculate(
         "u",
@@ -57,10 +60,14 @@ describe("ReliabilityService", () => {
         asOf,
       )
       .toNumber();
+
+    // Assert
+    expect(emptyHistoryScore).toBe(100);
     expect(score).toBeCloseTo(100 / 1.5, 8);
   });
 
   it("derives one negative outcome for a finalized late withdrawal", () => {
+    // Arrange
     const end = recentEnd;
     const hold = FundHold.create({
       holdId: "h",
@@ -70,12 +77,19 @@ describe("ReliabilityService", () => {
       amount: Money.fromCents(100),
       createdAt: new Date(end.getTime() - 2 * day),
     });
-    const withdrawn = Participation.createCommitted({
+    const committed = Participation.createCommitted({
       participationId: "p",
       userId: "u",
       committedAt: new Date(end.getTime() - 2 * day),
       hold,
-    }).withdraw(hold.awaitReplacement(), new Date(end.getTime() - day));
+    });
+
+    // Act
+    const awaitingReplacement = hold.awaitReplacement();
+    const withdrawn = committed.withdraw(
+      awaitingReplacement,
+      new Date(end.getTime() - day),
+    );
     const finalized = Participation.reconstitute({
       ...withdrawn.snapshot(),
       hold: withdrawn.hold
@@ -83,31 +97,41 @@ describe("ReliabilityService", () => {
         .forfeit("payout", end)
         .snapshot(),
     });
-    expect(finalized.reliabilityOutcome(asOf)?.value).toBe(0);
-    expect(
-      service
-        .recalculate("u", [{ participation: finalized, endAt: end }], asOf)
-        .toNumber(),
-    ).toBe(0);
+    const outcome = finalized.reliabilityOutcome(asOf)?.value;
+    const score = service
+      .recalculate("u", [{ participation: finalized, endAt: end }], asOf)
+      .toNumber();
+
+    // Assert
+    expect(outcome).toBe(0);
+    expect(score).toBe(0);
   });
 
   it("rejects duplicate or foreign history and keeps scores stable as the clock advances", () => {
-    const history = [
+    // Arrange
+    const olderEnd = new Date(recentEnd.getTime() - 90 * day);
+    const history: [
+      { participation: Participation; endAt: Date },
+      { participation: Participation; endAt: Date },
+    ] = [
       { participation: attended("a"), endAt: recentEnd },
-      {
-        participation: absent("b", new Date(recentEnd.getTime() - 90 * day)),
-        endAt: new Date(recentEnd.getTime() - 90 * day),
-      },
+      { participation: absent("b", olderEnd), endAt: olderEnd },
     ];
-    const first = service.recalculate("u", history, asOf).toNumber();
-    expect(
-      service
-        .recalculate("u", history, new Date(asOf.getTime() + 365 * day))
-        .toNumber(),
-    ).toBe(first);
+
     const firstEntry = history[0];
-    expect(firstEntry).toBeDefined();
-    expect(() =>
+    const foreignParticipation = Participation.createWaitlisted({
+      participationId: "foreign",
+      userId: "other",
+      waitlistedAt: recentEnd,
+      queueSequence: 1,
+    });
+
+    // Act
+    const first = service.recalculate("u", history, asOf).toNumber();
+    const afterTimePasses = service
+      .recalculate("u", history, new Date(asOf.getTime() + 365 * day))
+      .toNumber();
+    const duplicate = () =>
       service.recalculate(
         "u",
         [
@@ -115,24 +139,17 @@ describe("ReliabilityService", () => {
           firstEntry as (typeof history)[number],
         ],
         asOf,
-      ),
-    ).toThrow(RangeError);
-    expect(() =>
+      );
+    const foreign = () =>
       service.recalculate(
         "u",
-        [
-          {
-            participation: Participation.createWaitlisted({
-              participationId: "foreign",
-              userId: "other",
-              waitlistedAt: recentEnd,
-              queueSequence: 1,
-            }),
-            endAt: recentEnd,
-          },
-        ],
+        [{ participation: foreignParticipation, endAt: recentEnd }],
         asOf,
-      ),
-    ).toThrow(RangeError);
+      );
+
+    // Assert
+    expect(afterTimePasses).toBe(first);
+    expect(duplicate).toThrow(RangeError);
+    expect(foreign).toThrow(RangeError);
   });
 });
