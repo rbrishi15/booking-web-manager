@@ -1,4 +1,4 @@
-import { DomainError, requireDomain } from "../shared/errors";
+import { requireDomain } from "../shared/errors";
 import type { GroupStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import {

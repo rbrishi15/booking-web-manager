@@ -7,7 +7,6 @@ import {
 } from "@/domain";
 import { describe, expect, test } from "vitest";
 
-const now = () => new Date("2026-09-15T00:00:00Z");
 const newUser = () =>
   User.create({ userId: "owner", email: "owner@example.com" });
 const clearFacts = (): DeactivationFacts => ({

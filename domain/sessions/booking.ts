@@ -13,7 +13,7 @@ export interface BookingDetails {
 }
 
 /** Persistence representation of the immutable booking value. */
-export interface BookingSnapshot extends BookingDetails {}
+export type BookingSnapshot = BookingDetails;
 
 /** Venue details owned by a Session. The actual venue reservation is external. */
 export class Booking {
