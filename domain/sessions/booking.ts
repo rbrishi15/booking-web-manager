@@ -12,7 +12,10 @@ export interface BookingDetails {
   readonly totalCost: Money;
 }
 
-/** Venue details owned by a Session. The actual venue reservation is external. */
+/**
+ * Immutable value object owned by the Session aggregate root.
+ * Validates venue, time, and cost details; the actual venue reservation is external.
+ */
 export class Booking {
   readonly #venueName: string;
   readonly #region: Region;

@@ -26,7 +26,15 @@ export interface UserRegistration {
   readonly preferredRegions?: ReadonlySet<Region>;
 }
 
-/** User aggregate. Reliability is a derived read model; it is never writable here. */
+/**
+ * Aggregate root: User.
+ * Owns profile, preferences, account status, and the PayoutAccount child.
+ * Profile, deactivation, and payout-setup commands enter through this root;
+ * payout-setup transitions replace its immutable child.
+ * Booker and Participant are role views. Reliability and wallet balances are
+ * external, derived facts rather than state owned by this aggregate.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ */
 export class User {
   readonly #userId: UUID;
   #email: string | null;

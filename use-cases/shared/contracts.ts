@@ -11,7 +11,12 @@ import type {
   User,
 } from "@/domain";
 
-/** Repository ports are deliberately aggregate-oriented; adapters choose their persistence model. */
+/**
+ * Loads and saves an aggregate root: User, Session, RegularGroup, or Payout.
+ * Owned children are part of their root's state and have no independent command
+ * repository. Adapters choose the storage mapping and hydrate via constructors.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ */
 export interface Repository<T> {
   get(id: UUID): Promise<T | null>;
   save(aggregate: T): Promise<void>;
@@ -38,6 +43,7 @@ export interface DurablePayoutIntentPort {
 export type DurableIntentPort = DurablePayoutIntentPort;
 export type LedgerWriter = LedgerWritePort;
 
+/** Coordinates changes across aggregate roots, ledger effects, and durable intents. */
 export interface DomainTransaction {
   readonly users: Repository<User>;
   readonly sessions: Repository<Session>;

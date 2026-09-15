@@ -37,6 +37,7 @@ export interface SettlementCommand {
 /**
  * User's booker role. It supplies the booker's identity to Session commands,
  * keeping actor IDs and payout destinations out of application-facing flows.
+ * This is a role view over User, with no independently owned aggregate lifecycle.
  */
 export class Booker {
   readonly #user: User;

@@ -77,7 +77,16 @@ interface PayoutPending {
   readonly batch: SettlementBatch;
 }
 
-/** Session aggregate root. All roster and lifecycle mutations pass through this class. */
+/**
+ * Aggregate root: Session.
+ * Owns Booking, Participation children and their FundHold children, queue order,
+ * attendance, and session settlement state, including payout-attempt history.
+ * Roster and lifecycle commands enter through this root so capacity, admission,
+ * replacement, attendance, and settlement rules are checked together.
+ * Payout is a separate root; financial instructions describe effects for the
+ * application layer to coordinate with the ledger.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ */
 export class Session {
   readonly #sessionId: UUID;
   readonly #bookerId: UUID;

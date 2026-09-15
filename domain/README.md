@@ -6,7 +6,12 @@ boundary for future coordinators that will load authoritative state, invoke
 aggregate commands, and commit returned financial instructions in one unit of
 work.
 
-## Aggregates
+## Aggregate roots
+
+The four aggregate roots are `User`, `RegularGroup`, `Session`, and `Payout`.
+A root is the command entry point for changing its owned state and children.
+Class comments identify each root with `Aggregate root: <Name>.` and describe
+its boundary; child comments identify their owning root.
 
 - `Session` owns its immutable `Booking`, participation children, waitlist order,
   and each participation's `FundHold`. Admission, withdrawal, replacement,
@@ -20,8 +25,13 @@ work.
 - `RegularGroup` owns unique memberships and invitation lifecycle.
 - `Payout` freezes one settlement batch and external destination for one payout
   attempt. A failed attempt remains a fact; a retry gets a new attempt ID.
-- `Wallet`, the shared `HoldingAccount`, and `LedgerTransaction` represent
-  identities and immutable facts. Their balances are ledger projections.
+
+`Wallet`, the shared `HoldingAccount`, and `LedgerTransaction` represent
+identities and immutable facts rather than aggregate roots. Account balances
+are ledger projections. `Booker` and `Participant` are role views over `User`.
+
+See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
+for ownership, command routing, and coordination across roots.
 
 Public constructors accept valid domain state and validate its invariants.
 Nested arguments are domain objects, such as a `Booking` and `Participation`

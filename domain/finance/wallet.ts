@@ -6,7 +6,11 @@ export interface WalletDetails {
   readonly userId: UUID;
 }
 
-/** Wallet identity. Balances are projections of the append-only ledger. */
+/**
+ * Immutable wallet identity, not an aggregate root in the current model.
+ * Balances are projections of the append-only ledger; this object owns no
+ * balance or transaction collection.
+ */
 export class Wallet {
   readonly #walletId: UUID;
   readonly #userId: UUID;

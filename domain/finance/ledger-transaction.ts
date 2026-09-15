@@ -16,7 +16,11 @@ export interface LedgerTransactionDetails {
   readonly payoutId?: UUID;
 }
 
-/** Immutable financial fact. Append-only persistence is enforced by the server adapter. */
+/**
+ * Immutable financial fact, not an aggregate root in the current model.
+ * Validates a single ledger entry; append-only and cross-entry financial
+ * consistency are enforced by the server's ledger adapter.
+ */
 export class LedgerTransaction {
   readonly #transactionId: UUID;
   readonly #amount: Money;

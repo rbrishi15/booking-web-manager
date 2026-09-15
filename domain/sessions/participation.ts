@@ -31,7 +31,12 @@ export interface ReliabilityOutcome {
   readonly finalizedAt: Date;
 }
 
-/** Immutable child of Session. A Session is the only object that changes its lifecycle. */
+/**
+ * Immutable child entity of the Session aggregate root; owns an optional FundHold.
+ * Transition methods validate this child's state and return a replacement.
+ * Session commands decide when to apply that replacement to the roster and
+ * enforce rules involving other participants, capacity, or settlement.
+ */
 export class Participation {
   readonly #participationId: UUID;
   readonly #userId: UUID;

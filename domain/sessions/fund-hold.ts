@@ -16,7 +16,12 @@ export interface FundHoldDetails {
   readonly settledAt?: Date;
 }
 
-/** Child entity that protects the lifecycle of one participant's held share. */
+/**
+ * Immutable child entity owned by Participation within the Session aggregate.
+ * Protects the lifecycle of one participant's held share. Transitions return new
+ * holds; Session commands apply the resulting participation changes and return
+ * financial instructions for the application layer to coordinate.
+ */
 export class FundHold {
   readonly #holdId: UUID;
   readonly #participationId: UUID;

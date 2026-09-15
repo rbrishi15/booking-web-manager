@@ -5,7 +5,11 @@ export interface HoldingAccountDetails {
   readonly accountId: UUID;
 }
 
-/** Platform holding account identity, shared across sessions. Its balance is ledger-derived. */
+/**
+ * Immutable platform account identity shared across sessions, not an aggregate root.
+ * Its balance is ledger-derived. FundHold children belong to their Session
+ * aggregate through Participation, rather than to this account object.
+ */
 export class HoldingAccount {
   readonly #accountId: UUID;
   constructor(details: HoldingAccountDetails) {

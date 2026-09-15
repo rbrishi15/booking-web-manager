@@ -23,7 +23,14 @@ export interface GroupCreation {
 
 export type GroupJoinResult = "JOINED" | "ALREADY_MEMBER";
 
-/** Group aggregate; all membership and invitation changes go through the owner. */
+/**
+ * Aggregate root: RegularGroup.
+ * Owns GroupMembership children, group details, and invitation/archive state.
+ * Membership and invitation commands enter through this root so it can enforce
+ * unique membership, retain the owner, and check invitation or owner authority.
+ * Referenced users and sessions belong to separate aggregates.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ */
 export class RegularGroup {
   readonly #groupId: UUID;
   readonly #ownerId: UUID;

@@ -7,7 +7,11 @@ export interface GroupMembershipDetails {
   readonly joinedAt: Date;
 }
 
-/** Immutable membership owned by a RegularGroup aggregate. */
+/**
+ * Immutable child entity of the RegularGroup aggregate root.
+ * Membership is added or removed through RegularGroup commands, which enforce
+ * roster-wide rules such as uniqueness and retaining the group's owner.
+ */
 export class GroupMembership {
   readonly #userId: UUID;
   readonly #joinedAt: Date;

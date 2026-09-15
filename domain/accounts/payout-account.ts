@@ -10,7 +10,11 @@ export interface PayoutAccountDetails {
   readonly setupStatus: PayoutSetupStatus;
 }
 
-/** Immutable child containing the destination frozen for future settlements. */
+/**
+ * Immutable child entity of the User aggregate root.
+ * User commands apply payout-setup changes by replacing this child. Calling a
+ * child transition returns a new value without changing the owning User.
+ */
 export class PayoutAccount {
   readonly #payoutAccountId: UUID;
   readonly #userId: UUID;

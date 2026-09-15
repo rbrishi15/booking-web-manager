@@ -25,7 +25,15 @@ export interface PayoutDetails {
   readonly lines: readonly SettlementBatch["lines"][number][];
 }
 
-/** Aggregate representing one immutable settlement batch and its provider attempt. */
+/**
+ * Aggregate root: Payout.
+ * Owns one provider attempt's status and outcome, with fixed settlement lines,
+ * amount, destination, and idempotency key. Completion and failure commands enter
+ * through this root; terminal outcomes are retained and retries use a new root.
+ * The referenced Session owns the participations and holds. An application
+ * coordinator combines both roots' changes and the resulting ledger effects.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ */
 export class Payout {
   readonly #payoutId: UUID;
   readonly #sessionId: UUID;

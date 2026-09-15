@@ -38,6 +38,7 @@ export interface LeaveWaitlistCommand {
 /**
  * User's participant role. It supplies actor identity and current account
  * status while leaving wallet, reliability, and group facts to the caller.
+ * This is a role view over User, with no independently owned aggregate lifecycle.
  */
 export class Participant {
   readonly #user: User;
