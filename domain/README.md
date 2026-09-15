@@ -1,9 +1,10 @@
 # Domain model
 
 The domain is framework independent TypeScript. It imports no Next.js, database,
-HTTP, or payment SDK code. Application coordinators in `/application` load
-authoritative state, invoke aggregate commands, and commit their returned
-financial instructions in one unit of work.
+HTTP, or payment SDK code. Shared contracts in `/use-cases/shared` define the
+boundary for future coordinators that will load authoritative state, invoke
+aggregate commands, and commit returned financial instructions in one unit of
+work.
 
 ## Aggregates
 
@@ -62,9 +63,9 @@ normalization against the newest eligible session, cutoff checks, and a precise
 
 After all committed attendance is finalized, `Session.prepareSettlement` freezes
 hold IDs, amounts, release/forfeiture reasons, and the booker's payout
-destination. It returns no batch when there are no payable holds. Otherwise the
-application saves the session, `Payout`, and a durable payout intent in one
-transaction. A dispatcher calls the external provider later. Only a matching
+destination. It returns no batch when there are no payable holds. Otherwise a
+future use-case coordinator saves the session, `Payout`, and a durable payout
+intent in one transaction. A dispatcher calls the external provider later. Only a matching
 confirmed callback can complete that attempt; completion then settles holds and
 appends `RELEASE`/`FORFEIT` ledger instructions atomically. Failure keeps holds
 until a new attempt is requested; transport timeouts leave the attempt pending.
@@ -75,7 +76,8 @@ return zero. The server adapter enforces append-only entries, idempotency,
 nonnegative balances, and atomic participation/hold/ledger updates. Financial
 history remains after account anonymisation.
 
-See `domain/index.ts` and `application/index.ts` for the public API.
+See `domain/index.ts` and `use-cases/shared/contracts.ts` for the public
+contracts.
 
 ## Capability layout
 

@@ -71,13 +71,15 @@ A repeat key returns the original result without re-executing.
 ```
 /domain          Pure TypeScript. No framework imports, no DB, no HTTP.
                  Business rules, policy engines, interfaces.
+/use-cases       Shared ports and contracts for future use-case coordinators;
+                 use-case implementations are not present yet.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
 /components/ui   Shared design system. Request changes, don't add directly.
 /supabase        Migrations (numbered, serialised) and RLS policies.
 ```
 
-The dependency direction is one-way: `/app` → `/domain` → nothing.
+The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
 `/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
 
 ### Money states
