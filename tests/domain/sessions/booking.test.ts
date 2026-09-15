@@ -1,5 +1,6 @@
 import { Booking, Money } from "@/domain";
 import { describe, expect, it } from "vitest";
+
 const details = {
   venueName: "Court",
   region: "North",
