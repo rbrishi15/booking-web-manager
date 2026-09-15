@@ -1,0 +1,28 @@
+# Default owner for anything not covered by a more specific rule below
+# (root config, CI, docs, supabase/*, shared app files) — Rishi, CI owner.
+* @rbrishi15
+
+# Domain layer + payments integration — Rishi (rbrishi15)
+# Sole integration point with Stripe; see CLAUDE.md rule #3.
+/domain/ @rbrishi15
+/app/wallet/ @rbrishi15
+/app/payouts/ @rbrishi15
+/app/api/webhooks/ @rbrishi15
+
+# Wallet ledger and financial integrity — Harrison (harr008)
+/lib/money/ @harr008
+
+# Commitment, waitlist and settlement — Yajie (Wyjessie)
+/app/commit/ @Wyjessie
+
+# Session and venue domain — Neoh (liang799)
+/app/sessions/ @liang799
+/app/discover/ @liang799
+
+# Identity, groups and frontend platform — Joseph (Jolingoes)
+# Delegated review: Joseph's approval alone is sufficient here (no Rishi
+# co-sign required) — see CLAUDE.md "Directory ownership".
+/app/(auth)/ @Jolingoes
+/app/profile/ @Jolingoes
+/app/groups/ @Jolingoes
+/components/ui/ @Jolingoes
