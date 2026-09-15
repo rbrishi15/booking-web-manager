@@ -35,6 +35,13 @@ npm test
 npm run test:concurrency
 ```
 
+## Testing
+
+Automated tests are organised by use case in
+[tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
+`test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
+that folder's README for the convention.
+
 ## Contributing
 
 - `main` is protected: no direct pushes, no force pushes, PRs required.
