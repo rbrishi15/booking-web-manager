@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!lib/database.types.ts"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "domain/**"
+      instructions: >
+        Pure TypeScript only — no imports from next, @supabase/*, or stripe.
+        Flag any framework or I/O dependency creeping into this layer.
+    - path: "lib/money/**"
+      instructions: >
+        Money is integer cents everywhere. Flag any float/double arithmetic,
+        parseFloat, or division on a money value that isn't
+        Math.floor(cents / n). Ledger writes must be append-only; flag any
+        UPDATE/DELETE on existing ledger rows instead of a new entry. Flag
+        any external API call (Stripe, fetch, HTTP client) made while a DB
+        transaction is open.
+    - path: "app/wallet/**"
+      instructions: >
+        Stripe SDK calls are allowed here. Flag any wallet balance mutation
+        that isn't routed through the domain ledger interface, and any
+        client-supplied amount trusted without server-side recomputation.
+    - path: "app/payouts/**"
+      instructions: >
+        Stripe SDK calls are allowed here (Connect Express, payouts). Flag
+        eligibility checks that skip the standard-payout fallback path.
+    - path: "app/api/webhooks/**"
+      instructions: >
+        This is the only writer of inbound money. Flag any code path that
+        could credit a wallet without event-ID deduplication against
+        processed_events, or that trusts an unverified webhook signature.
+    - path: "app/commit/**"
+      instructions: >
+        Commitment and fund lock must be one transaction (SELECT ... FOR
+        UPDATE, balance check, ledger entry, commitment row). Flag any
+        commit/withdraw/verify path missing an idempotency key, and waitlist
+        code that isn't FIFO on joined_at with SKIP LOCKED. Withdrawal logic
+        must honour the 30h full-refund window and awaiting_replacement
+        state before forfeiture.
+    - path: "app/sessions/**"
+      instructions: >
+        Booking share computation must happen server-side in integer cents,
+        never trusting a client-supplied amount. Cancellation must go
+        through a soft Session.cancel(), never a hard delete.
+    - path: "app/(auth)/**"
+      instructions: >
+        Flag any credential or session-token handling that doesn't go
+        through Supabase Auth idiomatically.
+    - path: "app/profile/**"
+      instructions: >
+        Account deletion must anonymise the user record (soft delete),
+        never a hard DELETE, and must retain the record for audit.
+    - path: "supabase/migrations/**"
+      instructions: >
+        Flag a migration number that isn't the next one in sequence, and
+        any migration missing a corresponding down/rollback consideration.
+    - path: "tests/use-cases/**"
+      instructions: >
+        Each file should keep its UC ID in the top-level describe block.
+        Flag a UC test file whose assertions don't match the acceptance
+        criteria named in CLAUDE.md for that use case.
+  tools:
+    biome:
+      enabled: true
+
+chat:
+  auto_reply: true
