@@ -34,7 +34,10 @@
 
 begin;
 
-create extension if not exists "pgcrypto" with schema extensions;
+-- No extension is required. gen_random_uuid() has been in PostgreSQL core
+-- since version 13, so pgcrypto is unnecessary here, and requiring it would
+-- tie this migration to Supabase's `extensions` schema, which a plain
+-- PostgreSQL instance does not have.
 
 -- ---------------------------------------------------------------------------
 -- Enumerations

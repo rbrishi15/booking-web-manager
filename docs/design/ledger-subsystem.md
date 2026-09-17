@@ -439,7 +439,47 @@ than warning.
 
 It also needs the `pg` driver, which is not a dependency of this project — it is
 imported dynamically so that neither `tsc` nor CI has to resolve it. Install it
-alongside Postgres when running this suite.
+alongside Postgres when running this suite (`npm install --no-save pg`).
+
+### Verification record
+
+The migrations have been applied to **PostgreSQL 18.6** (plain) and to
+**PostgreSQL 17.6** (the Supabase local stack), and every invariant probed
+directly with SQL rather than inferred from a passing suite. What was confirmed
+to hold on both:
+
+| Invariant | Rejected by |
+| --- | --- |
+| A lock with insufficient funds | `wallet_balances_never_negative` |
+| `UPDATE` or `DELETE` on a ledger entry | append-only trigger |
+| `TRUNCATE` on ledger entries | append-only trigger, and separately the foreign key from `processed_events` |
+| A replayed idempotency key | `ledger_entries_idempotency_key_uidx` |
+| A second lock on one hold | `hold_balances_pkey` |
+| Settling an already-settled hold | apply trigger, `does not match an open hold` |
+| A `RELEASE` naming no payout | `ledger_entries_references_match_kind` |
+| A zero-amount movement | `ledger_entries_amount_positive` |
+
+A new wallet projects to 0 cents; a top-up credits and a lock debits; every
+posting leg sums to zero across the ledger; all nine reconciliation checks pass
+and `run_reconciliation()` records the result; row level security is enabled on
+all ten tables and every view carries `security_invoker`.
+
+The two conditional branches were confirmed to fire on Supabase, where their
+prerequisites exist, and to be skipped on plain PostgreSQL:
+
+| Branch | On Supabase | On plain PostgreSQL |
+| --- | --- | --- |
+| `wallets.user_id` → `auth.users` foreign key | created | skipped, `auth.users` absent |
+| `reconcile-ledger-hourly` pg_cron job | scheduled, `0 * * * *` | skipped, pg_cron absent |
+
+Running against Supabase is what exposed that the suite's own fixtures were
+wrong: they invented user IDs, which the foreign key correctly rejected. The
+fixtures now seed `auth.users` where the schema exists, so one suite covers both
+deployments.
+
+Full run, all three configurations: **222 tests pass** against Supabase, 222
+against a database without the auth schema, and 219 with 3 skipped when no
+database is configured, which is what CI sees.
 
 ---
 
@@ -460,12 +500,8 @@ Stated plainly so it is not mistaken for complete.
   that it could not run, rather than passing silently.
 - **Foreign keys are pending** on `user_id`, `session_id`, `participation_id`
   and `payout_id`, waiting on the tables that own them.
-- **The SQL has never been executed.** The TypeScript half is verified —
-  `npm run typecheck`, `npm run lint` and `npm test` all pass, including the
-  four concurrency tests. The three migrations are a different matter: no
-  Postgres has been available on the machine they were written on, so they have
-  never been applied, and `ledger-concurrency.db.test.ts` has never run. Until
-  someone with Docker runs `npx supabase start` and executes it, the schema is
-  reviewed but unproven, and the CHECK constraints and triggers in §4 are
-  claims rather than observations. This is the single largest piece of
-  remaining risk in the subsystem.
+- **The schema has only met an empty database.** Every migration applies to a
+  freshly dropped `public` schema. None has yet been applied *over* an existing
+  one alongside another member's migrations, which is where a numbering
+  collision or an ordering assumption would surface. That risk arrives with
+  migration 0004.

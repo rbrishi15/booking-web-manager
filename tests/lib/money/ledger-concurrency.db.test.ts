@@ -36,30 +36,56 @@ const DATABASE_URL = process.env.LEDGER_TEST_DATABASE_URL;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
+/** The port `npx supabase start` publishes its throwaway database on. */
+const SUPABASE_LOCAL_DB_PORT = 54322;
+
 /**
- * Refuses any database that is not on this machine.
+ * Refuses any database this suite must not be allowed to destroy.
  *
- * This suite runs `drop schema public cascade`. The hosted project's
- * connection string is one paste away in `supabase/README.md`, and a comment
- * asking people to be careful is not a safeguard against pasting it. Losing
- * the team's database the week before a demo is not a recoverable mistake, so
- * the check is a hard failure rather than a warning.
+ * This suite runs `drop schema public cascade`. Two things have to be true
+ * before that is acceptable, and both are checked rather than documented.
+ *
+ * The host must be this machine. The hosted project's connection string is one
+ * paste away in `supabase/README.md`, and a comment asking people to be careful
+ * is not a safeguard against pasting it.
+ *
+ * The database must be named as a test database. A developer running Postgres
+ * locally has real databases on the same loopback address, and `postgres` is
+ * the default that a half-remembered connection string lands on. Requiring
+ * "test" in the name means the destructive path can only be reached by someone
+ * who created a database for the purpose.
  */
-function requireLoopbackDatabase(url: string): string {
-  let hostname: string;
+function requireDisposableDatabase(url: string): string {
+  let parsed: URL;
   try {
-    hostname = new URL(url).hostname;
+    parsed = new URL(url);
   } catch {
+    throw new Error("LEDGER_TEST_DATABASE_URL is not a valid connection URL.");
+  }
+
+  if (!LOOPBACK_HOSTS.has(parsed.hostname)) {
     throw new Error(
-      "LEDGER_TEST_DATABASE_URL is not a valid connection URL.",
+      `LEDGER_TEST_DATABASE_URL points at ${parsed.hostname}, which is not this machine. ` +
+        "This suite runs 'drop schema public cascade' and would destroy every table in " +
+        "that database. Point it at 127.0.0.1 instead.",
     );
   }
 
-  if (!LOOPBACK_HOSTS.has(hostname)) {
+  const database = parsed.pathname.replace(/^\//, "");
+
+  // The Supabase CLI's local development database is disposable by definition:
+  // `supabase start` creates it and `supabase stop --no-backup` discards it. It
+  // is always named "postgres", so the naming rule alone would exclude the one
+  // stack this schema is actually deployed on. Its dedicated port on loopback
+  // is a narrower signal than the name, so it is accepted explicitly rather
+  // than by loosening the rule for everything else.
+  const isSupabaseLocal = parsed.port === String(SUPABASE_LOCAL_DB_PORT);
+
+  if (!isSupabaseLocal && !/test/i.test(database)) {
     throw new Error(
-      `LEDGER_TEST_DATABASE_URL points at ${hostname}, which is not this machine. ` +
-        "This suite runs 'drop schema public cascade' and would destroy every table in " +
-        "that database. Run 'npx supabase start' and point it at 127.0.0.1 instead.",
+      `LEDGER_TEST_DATABASE_URL names the database "${database}", which is not a test database. ` +
+        "This suite runs 'drop schema public cascade' and would destroy everything in it. " +
+        'Create a throwaway database with "test" in its name and point at that.',
     );
   }
 
@@ -120,7 +146,7 @@ describe.skipIf(!DATABASE_URL)("ledger concurrency against Postgres", () => {
   let unitOfWork: LedgerUnitOfWork;
 
   beforeAll(async () => {
-    const connectionString = requireLoopbackDatabase(DATABASE_URL as string);
+    const connectionString = requireDisposableDatabase(DATABASE_URL as string);
 
     const pg = (await import(DRIVER)) as PgModule;
     pool = new pg.Pool({ connectionString });
@@ -194,8 +220,14 @@ describe.skipIf(!DATABASE_URL)("ledger concurrency against Postgres", () => {
     );
     expect(held).toBe(String(CAPACITY * SHARE.toCents()));
 
-    const entries = await scalar(pool, "select count(*) from ledger_entries", []);
-    expect(entries).toBe(String(CAPACITY));
+    // Only the locks. Every participant was funded through a TOP_UP entry, so
+    // counting the whole table would count the seeding too.
+    const locks = await scalar(
+      pool,
+      "select count(*) from ledger_entries where kind = 'LOCK'",
+      [],
+    );
+    expect(locks).toBe(String(CAPACITY));
 
     // The real payoff: after twenty racing transactions, the ledger still
     // balances and every projection still matches the entries behind it.
@@ -303,7 +335,22 @@ async function seedParticipants(
     holdId: uuidFor("cccccccc", index),
   }));
 
+  // On Supabase, migration 0001 adds a real foreign key from wallets.user_id to
+  // auth.users, so a fabricated user ID is rejected. On plain PostgreSQL the
+  // auth schema does not exist and the constraint was never added. Seed the
+  // identity where it is required, so one suite covers both.
+  const hasAuthUsers =
+    (await pool.query("select to_regclass('auth.users') is not null as present"))
+      .rows[0]?.present === true;
+
   for (const person of participants) {
+    if (hasAuthUsers) {
+      await pool.query(
+        "insert into auth.users (id) values ($1) on conflict (id) do nothing",
+        [person.userId],
+      );
+    }
+
     await pool.query(
       "insert into wallets (wallet_id, user_id) values ($1, $2)",
       [person.walletId, person.userId],
@@ -325,6 +372,20 @@ async function seedParticipants(
         ],
       );
     }
+  }
+
+  if (startingCents > 0) {
+    // Record what the payment provider "received", which is exactly what was
+    // topped up. Without this, reconciliation has no external position to
+    // compare against and correctly reports that it could not verify the
+    // ledger rather than passing silently — so seeding it is what makes
+    // checks 8 and 9 meaningful instead of vacuous.
+    await pool.query(
+      `insert into provider_balance_snapshots
+         (gross_received_cents, fees_cents, payouts_paid_cents)
+       values ($1, 0, 0)`,
+      [startingCents * count],
+    );
   }
 
   return participants;

@@ -96,9 +96,13 @@ Only the DB-backed one proves the SQL — it applies the real migrations and
 exercises the real constraints. Both are needed; neither substitutes for the
 other.
 
-**Status:** the TypeScript half passes `typecheck`, `lint` and `test`. The
-migrations have never been applied to a Postgres, so the schema is reviewed but
-unproven — running the DB-backed suite is the outstanding job.
+**Status:** verified on both deployments. `typecheck`, `lint` and `test` pass,
+and the migrations have been applied to PostgreSQL 18.6 (plain) and 17.6 (the
+Supabase local stack), with every invariant probed directly — 222 tests pass
+against a database, 219 with 3 skipped without one. The `auth.users` foreign key
+and the pg_cron schedule were both observed taking effect on Supabase and being
+skipped safely without it. See the verification record in
+[`docs/design/ledger-subsystem.md`](../../docs/design/ledger-subsystem.md).
 
 The DB-backed suite drops and recreates the `public` schema, so it refuses any
 host that is not loopback. Do not point it at the hosted project.
