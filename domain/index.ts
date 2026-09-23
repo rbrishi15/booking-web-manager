@@ -59,7 +59,6 @@ export {
 export {
   Participant,
   type LeaveWaitlistCommand,
-  type ParticipantAdmissionFacts,
   type ParticipantJoinCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
@@ -73,9 +72,8 @@ export {
   type DomainErrorCode,
 } from "./shared/errors";
 export type {
-  AdmissionFacts,
   AdmissionResult,
-  DeactivationFacts,
+  DeactivationInput,
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,

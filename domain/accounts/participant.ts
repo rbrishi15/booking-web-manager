@@ -1,27 +1,10 @@
-import type { Money } from "../finance/money";
-import type { ReliabilityScore } from "../reliability/reliability-score";
-import type { JoinCommand, Session } from "../sessions/session";
-import { DomainError } from "../shared/errors";
-import type {
-  AdmissionFacts,
-  AdmissionResult,
-  WithdrawalResult,
-} from "../shared/operations";
-import type { UUID } from "../shared/types";
+import type { JoinCommand, Session } from "@/domain";
+import type { AdmissionResult, WithdrawalResult } from "@/domain";
+import type { UUID } from "@/domain";
 import type { User } from "./user";
 
-/** Authoritative facts needed to decide whether this user can commit funds. */
-export interface ParticipantAdmissionFacts {
-  readonly walletId: UUID;
-  readonly availableBalance: Money;
-  readonly memberGroupIds: readonly UUID[];
-  readonly score?: ReliabilityScore;
-  readonly reliabilityScore?: ReliabilityScore;
-}
-
-/** A participant command with identity and account status supplied by User. */
-export type ParticipantJoinCommand = Omit<JoinCommand, "facts"> &
-  ParticipantAdmissionFacts;
+/** Action details; the participant supplies its fully loaded User. */
+export type ParticipantJoinCommand = JoinCommand;
 
 export interface ParticipantWithdrawalCommand {
   readonly participationId: UUID;
@@ -36,8 +19,8 @@ export interface LeaveWaitlistCommand {
 }
 
 /**
- * User's participant role. It supplies actor identity and current account
- * status while leaving wallet, reliability, and group facts to the caller.
+ * User's participant role. It supplies the fully loaded User to session
+ * admission, including current account status and loaded related values.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  */
 export class Participant {
@@ -55,17 +38,8 @@ export class Participant {
     return this.#user.userId;
   }
 
-  join(session: Session, command: ParticipantJoinCommand): AdmissionResult;
-  join(session: Session, command: JoinCommand): AdmissionResult;
-  join(
-    session: Session,
-    command: ParticipantJoinCommand | JoinCommand,
-  ): AdmissionResult {
-    const facts = this.admissionFacts(command);
-    return session.join({
-      ...command,
-      facts,
-    });
+  join(session: Session, command: ParticipantJoinCommand): AdmissionResult {
+    return session.join(this.#user, command);
   }
 
   leaveWaitlist(session: Session, command: LeaveWaitlistCommand): void {
@@ -80,32 +54,5 @@ export class Participant {
       actorId: this.#user.userId,
       ...command,
     });
-  }
-
-  private admissionFacts(
-    command: ParticipantJoinCommand | JoinCommand,
-  ): AdmissionFacts {
-    if ("facts" in command) {
-      if (command.facts.userId !== this.#user.userId)
-        throw new DomainError(
-          "UNAUTHORIZED",
-          "Participant facts belong to another user",
-        );
-      if (command.facts.accountStatus !== this.#user.accountStatus)
-        throw new DomainError(
-          "INVALID_INPUT",
-          "Participant account status is stale",
-        );
-      return command.facts;
-    }
-    return {
-      userId: this.#user.userId,
-      walletId: command.walletId,
-      accountStatus: this.#user.accountStatus,
-      availableBalance: command.availableBalance,
-      memberGroupIds: [...command.memberGroupIds],
-      score: command.score,
-      reliabilityScore: command.reliabilityScore,
-    };
   }
 }

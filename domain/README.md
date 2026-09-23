@@ -17,11 +17,11 @@ its boundary; child comments identify their owning root.
   and each participation's `FundHold`. Admission, withdrawal, replacement,
   cancellation, attendance, and settlement transitions are commands on the
   aggregate root.
-- `User` owns profile/preferences and payout setup. Reliability is a derived
-  `UserReliability` read model and cannot be assigned to a user. `User` exposes
-  `asBooker()` and `asParticipant()` role views; those roles supply identity to
-  session commands while authoritative wallet, reliability, and group facts
-  remain application inputs.
+- `User` owns profile/preferences, account status, wallet association, and payout
+  setup. Every loaded user also exposes its wallet identity, ledger balance,
+  calculated reliability, and membership IDs as read-only values. This does not
+  transfer ownership of the ledger, participation history, or groups. `User`
+  exposes `asBooker()` and `asParticipant()` role views.
 - `RegularGroup` owns unique memberships and invitation lifecycle.
 - `Payout` freezes one settlement batch and external destination for one payout
   attempt. A failed attempt remains a fact; a retry gets a new attempt ID.
@@ -33,13 +33,30 @@ are ledger projections. `Booker` and `Participant` are role views over `User`.
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
 for ownership, command routing, and coordination across roots.
 
+The application enters session admission through
+`user.asParticipant().join(session, command)`. The repository loads a complete
+user, `Participant` delegates to `session.join(user, command)`, and `Session`
+enforces admission rules using that user's values. Commands contain action
+details only. Promotion likewise receives a loaded user directly. See
+[ADR-0004: Participant join and session admission](../docs/adr/0004-participant-join-and-session-admission.md)
+for the intended transaction flow, example, and references.
+
 Public constructors accept valid domain state and validate its invariants.
 Nested arguments are domain objects, such as a `Booking` and `Participation`
 children for a `Session`. Repository adapters construct these objects directly
 and own the mapping between storage values and domain properties.
 
+`UserDetails` requires a `Wallet`, `WalletBalance`, `UserReliability`, and
+membership IDs. User saves persist owned state and wallet association, not
+derived balances, scores, or memberships. Projections are fixed for the loaded
+instance; reload the user and obtain a new participant after ledger or group
+writes before another admission. Future transaction adapters must observe
+their writes and protect against concurrent overspending.
+
 Named creation factories remain where they apply business rules or defaults:
-`User.create(...)` registers an active user, and `Session.create(...)` checks
+`User.create({ userId, email, walletId, now })` registers an active user with a
+wallet identity, zero balance, empty memberships, and the empty-history
+reliability default. `Session.create(...)` checks
 booker eligibility and an upcoming booking. Simple identities and values such
 as `Wallet` and `Booking` use constructors directly. Hydrating existing state
 does not repeat creation workflows or reset lifecycle fields.

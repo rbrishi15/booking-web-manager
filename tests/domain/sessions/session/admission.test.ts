@@ -1,10 +1,15 @@
-import { Money, Session } from "@/domain";
+import {
+  createUserReliability,
+  Money,
+  ReliabilityScore,
+  Session,
+} from "@/domain";
 import { describe, expect, it } from "vitest";
 import {
   before,
   captureError,
   creationDetails,
-  facts,
+  loadedUser,
   join,
   session,
   sessionState,
@@ -12,6 +17,84 @@ import {
 } from "./session-fixtures";
 
 describe("Session admission and roster", () => {
+  it("uses the loaded user's memberships and reliability for private admission", () => {
+    const s = Session.create({
+      ...creationDetails(),
+      visibility: "PRIVATE",
+      invitedGroupId: "group",
+      minimumReliability: ReliabilityScore.from(80),
+    });
+    const command = { participationId: "p-u", holdId: "h-u", now: before };
+    const prior = sessionState(s);
+    const lowScore = loadedUser("u", {
+      memberGroupIds: ["group"],
+      reliability: createUserReliability(
+        "u",
+        ReliabilityScore.from(79),
+        before,
+      ),
+    });
+    const eligible = loadedUser("u", {
+      memberGroupIds: ["group"],
+      reliability: createUserReliability(
+        "u",
+        ReliabilityScore.from(80),
+        before,
+      ),
+    });
+
+    expect(() => s.join(loadedUser("u"), command)).toThrow(
+      expect.objectContaining({ code: "INVALID_ACCESS" }),
+    );
+    expect(() => lowScore.asParticipant().join(s, command)).toThrow(
+      expect.objectContaining({ code: "LOW_RELIABILITY" }),
+    );
+    expect(sessionState(s)).toEqual(prior);
+
+    const result = eligible.asParticipant().join(s, command);
+    expect(result.kind).toBe("COMMITTED");
+    expect(result.instructions[0]?.walletId).toBe(eligible.wallet.walletId);
+  });
+
+  it("checks the promotion user and uses a reloaded balance", () => {
+    const s = session();
+    join(s, "a");
+    join(s, "b");
+    const unfunded = loadedUser("c", {
+      walletBalance: { walletId: "w-c", availableBalance: Money.fromCents(0) },
+    });
+    expect(
+      s.join(unfunded, {
+        participationId: "p-c",
+        now: before,
+      }).kind,
+    ).toBe("WAITLISTED");
+    s.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: before,
+    });
+    const prior = sessionState(s);
+    const command = { holdId: "h-c", now: before };
+
+    expect(() => s.promoteNext(loadedUser("other"), command)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+    expect(sessionState(s)).toEqual(prior);
+
+    const reloaded = loadedUser("c", {
+      walletBalance: {
+        walletId: "w-c",
+        availableBalance: Money.fromCents(500),
+      },
+    });
+    const result = s.promoteNext(reloaded, command);
+    expect(result.kind).toBe("PROMOTED");
+    expect(result.instructions[0]?.walletId).toBe("w-c");
+    expect(unfunded.walletBalance.availableBalance.toCents()).toBe(0);
+    expect(reloaded.walletBalance.availableBalance.toCents()).toBe(500);
+  });
+
   it("offers all eight places including an ordinary place for the booker", () => {
     // Arrange
     const s = session(8);
@@ -67,17 +150,24 @@ describe("Session admission and roster", () => {
     const s = session();
     const rejectedAdmissions = [
       [{ accountStatus: "INACTIVE" }, "INACTIVE_ACCOUNT"],
-      [{ availableBalance: Money.fromCents(499) }, "INSUFFICIENT_FUNDS"],
+      [
+        {
+          walletBalance: {
+            walletId: "w-u",
+            availableBalance: Money.fromCents(499),
+          },
+        },
+        "INSUFFICIENT_FUNDS",
+      ],
     ] as const;
 
     // Act
     const rejectedResults = rejectedAdmissions.map(([patch, code]) => {
       const prior = sessionState(s);
       const operation = () =>
-        s.join({
+        s.join(loadedUser("u", patch), {
           participationId: "p",
           holdId: "h",
-          facts: facts("u", patch),
           now: before,
         });
       try {
@@ -93,10 +183,9 @@ describe("Session admission and roster", () => {
       now: before,
     });
     const privateJoin = () => join(s, "u");
-    const admitted = s.join({
+    const admitted = s.join(loadedUser("u"), {
       participationId: "p",
       holdId: "h",
-      facts: facts("u"),
       now: before,
       roomToken: "room",
     });
@@ -124,12 +213,19 @@ describe("Session admission and roster", () => {
     // Act
     join(s, "a");
     join(s, "b");
-    const wait = s.join({
-      participationId: "p-c",
-      holdId: "h-c",
-      facts: facts("c", { availableBalance: Money.fromCents(0) }),
-      now: before,
-    });
+    const wait = s.join(
+      loadedUser("c", {
+        walletBalance: {
+          walletId: "w-c",
+          availableBalance: Money.fromCents(0),
+        },
+      }),
+      {
+        participationId: "p-c",
+        holdId: "h-c",
+        now: before,
+      },
+    );
     join(s, "d");
     s.withdrawParticipant({
       actorId: "a",
@@ -137,15 +233,21 @@ describe("Session admission and roster", () => {
       now: before,
     });
     const fresh = join(s, "fresh");
-    const firstPromotion = s.promoteNext({
-      holdId: "h-c",
-      facts: facts("c", { availableBalance: Money.fromCents(0) }),
-      now: before,
-    });
+    const firstPromotion = s.promoteNext(
+      loadedUser("c", {
+        walletBalance: {
+          walletId: "w-c",
+          availableBalance: Money.fromCents(0),
+        },
+      }),
+      {
+        holdId: "h-c",
+        now: before,
+      },
+    );
     const nextWaiterAfterSkip = s.nextWaitlistedUserId;
-    const secondPromotion = s.promoteNext({
+    const secondPromotion = s.promoteNext(loadedUser("d"), {
       holdId: "h-d",
-      facts: facts("d"),
       now: before,
     });
 
@@ -172,10 +274,9 @@ describe("Session admission and roster", () => {
     // Act
     s.leaveWaitlist({ actorId: "c", participationId: "p-c", now: before });
     const differentId = () =>
-      s.join({
+      s.join(loadedUser("c"), {
         participationId: "different",
         holdId: "h-c",
-        facts: facts("c"),
         now: before,
       });
     const differentIdError = captureError(differentId);

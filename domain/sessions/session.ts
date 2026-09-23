@@ -1,8 +1,8 @@
+import type { User } from "../accounts/user";
 import { Money } from "../finance/money";
 import { ReliabilityScore } from "../reliability/reliability-score";
 import { DomainError, requireDomain } from "../shared/errors";
 import type {
-  AdmissionFacts,
   AdmissionResult,
   FinancialInstruction,
   FinancialResult,
@@ -60,7 +60,6 @@ export interface SessionCreation {
 export interface JoinCommand {
   readonly participationId: UUID;
   readonly holdId?: UUID;
-  readonly facts: AdmissionFacts;
   readonly now: Date;
   readonly roomToken?: string;
   readonly replacementToken?: string;
@@ -69,7 +68,6 @@ export interface JoinCommand {
 
 export interface PromotionCommand {
   readonly holdId: UUID;
-  readonly facts: AdmissionFacts;
   readonly now: Date;
 }
 
@@ -238,20 +236,13 @@ export class Session {
     return session;
   }
 
-  join(command: JoinCommand): AdmissionResult {
-    validateAdmissionFacts(command.facts);
+  join(user: User, command: JoinCommand): AdmissionResult {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     this.assertOpenBefore(command.now);
-    this.assertAccess(
-      command.facts,
-      command.roomToken,
-      command.replacementToken,
-    );
-    this.assertEligible(command.facts, false);
-    const existing = this.#participations.find(
-      (p) => p.userId === command.facts.userId,
-    );
+    this.assertAccess(user, command.roomToken, command.replacementToken);
+    this.assertEligible(user, false);
+    const existing = this.#participations.find((p) => p.userId === user.userId);
     if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
       throw new DomainError(
         existing.status === "WITHDRAWN" || existing.status === "REMOVED"
@@ -284,7 +275,7 @@ export class Session {
       );
       const queued = Participation.createWaitlisted({
         participationId: existing?.participationId ?? command.participationId,
-        userId: command.facts.userId,
+        userId: user.userId,
         waitlistedAt: command.now,
         queueSequence: sequence,
       });
@@ -299,15 +290,14 @@ export class Session {
         instructions: [],
       };
     }
-    this.assertEligible(command.facts, true);
-    return this.commitNew(command, existing);
+    this.assertEligible(user, true);
+    return this.commitNew(user, command, existing);
   }
 
-  promoteNext(command: PromotionCommand): PromotionResult {
+  promoteNext(user: User, command: PromotionCommand): PromotionResult {
     this.assertOpenBefore(command.now);
     const next = this.nextWaitlisted();
     if (next === undefined) return { kind: "NONE", instructions: [] };
-    validateAdmissionFacts(command.facts);
     requireId(command.holdId, "holdId");
     requireDomain(
       this.getAvailableSlots(command.now) > 0,
@@ -315,11 +305,11 @@ export class Session {
       "There is no available slot to promote",
     );
     requireDomain(
-      next.userId === command.facts.userId,
+      next.userId === user.userId,
       "INVALID_INPUT",
-      "Promotion facts belong to another user",
+      "Promotion input belongs to another user",
     );
-    const reason = this.ineligibilityReason(command.facts);
+    const reason = this.ineligibilityReason(user);
     if (reason !== undefined) {
       this.#participations = this.replace(
         next.participationId,
@@ -334,12 +324,7 @@ export class Session {
     }
     const replacement = this.oldestAwaiting();
     const committed = next.commit(
-      this.newHold(
-        next.participationId,
-        command.holdId,
-        command.facts,
-        command.now,
-      ),
+      this.newHold(next.participationId, command.holdId, user, command.now),
       command.now,
       replacement?.participationId,
     );
@@ -823,6 +808,7 @@ export class Session {
   }
 
   private commitNew(
+    user: User,
     command: JoinCommand,
     existing?: Participation,
   ): AdmissionResult {
@@ -835,13 +821,13 @@ export class Session {
     const hold = this.newHold(
       command.participationId,
       holdId,
-      command.facts,
+      user,
       command.now,
     );
     const replacement = this.oldestAwaiting();
     const committed = Participation.createCommitted({
       participationId: existing?.participationId ?? command.participationId,
-      userId: command.facts.userId,
+      userId: user.userId,
       committedAt: command.now,
       hold,
       replacementMode: command.replacementMode,
@@ -892,14 +878,14 @@ export class Session {
   private newHold(
     participationId: UUID,
     holdId: UUID,
-    facts: AdmissionFacts,
+    user: User,
     now: Date,
   ): FundHold {
     return FundHold.create({
       holdId,
       participationId,
       holdingAccountId: this.#holdingAccountId,
-      walletId: facts.walletId,
+      walletId: user.wallet.walletId,
       amount: this.bookingShare,
       createdAt: now,
     });
@@ -966,7 +952,7 @@ export class Session {
   }
 
   private assertAccess(
-    facts: AdmissionFacts,
+    user: User,
     roomToken?: string,
     replacementToken?: string,
   ): void {
@@ -974,7 +960,7 @@ export class Session {
     if (roomToken === this.#roomToken) return;
     if (
       this.#invitedGroupId !== undefined &&
-      facts.memberGroupIds.includes(this.#invitedGroupId)
+      user.memberGroupIds.includes(this.#invitedGroupId)
     )
       return;
     if (
@@ -993,8 +979,8 @@ export class Session {
     );
   }
 
-  private assertEligible(facts: AdmissionFacts, requireFunds: boolean): void {
-    const reason = this.ineligibilityReason(facts, requireFunds);
+  private assertEligible(user: User, requireFunds: boolean): void {
+    const reason = this.ineligibilityReason(user, requireFunds);
     if (reason === "INACTIVE_ACCOUNT")
       throw new DomainError(
         "INACTIVE_ACCOUNT",
@@ -1013,14 +999,16 @@ export class Session {
   }
 
   private ineligibilityReason(
-    facts: AdmissionFacts,
+    user: User,
     requireFunds = true,
   ): "INACTIVE_ACCOUNT" | "LOW_RELIABILITY" | "INSUFFICIENT_FUNDS" | undefined {
-    if (facts.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
-    const score = facts.score ?? facts.reliabilityScore;
-    if (score === undefined || !this.meetsReliabilityRequirement(score))
-      return "LOW_RELIABILITY";
-    if (requireFunds && facts.availableBalance.compareTo(this.bookingShare) < 0)
+    if (user.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
+    const score = user.reliability.reliabilityScore;
+    if (!this.meetsReliabilityRequirement(score)) return "LOW_RELIABILITY";
+    if (
+      requireFunds &&
+      user.walletBalance.availableBalance.compareTo(this.bookingShare) < 0
+    )
       return "INSUFFICIENT_FUNDS";
     return undefined;
   }
@@ -1303,40 +1291,6 @@ function cloneBatch(batch: SettlementBatch): SettlementBatch {
     destination: { ...batch.destination },
     lines: batch.lines.map((line) => ({ ...line })),
   };
-}
-
-function validateAdmissionFacts(facts: AdmissionFacts): void {
-  requireId(facts.userId, "userId");
-  requireId(facts.walletId, "walletId");
-  requireDomain(
-    facts.accountStatus === "ACTIVE" || facts.accountStatus === "INACTIVE",
-    "INVALID_INPUT",
-    "Unknown account status",
-  );
-  const score = facts.score ?? facts.reliabilityScore;
-  requireDomain(
-    score instanceof ReliabilityScore,
-    "INVALID_INPUT",
-    "Admission facts need a ReliabilityScore",
-  );
-  requireDomain(
-    facts.availableBalance instanceof Money,
-    "INVALID_INPUT",
-    "Admission facts need a Money balance",
-  );
-  requireDomain(
-    facts.availableBalance.toCents() >= 0,
-    "INVALID_INPUT",
-    "Available balance cannot be negative",
-  );
-  requireDomain(
-    Array.isArray(facts.memberGroupIds) &&
-      facts.memberGroupIds.every(
-        (groupId) => typeof groupId === "string" && groupId.trim() !== "",
-      ),
-    "INVALID_INPUT",
-    "Group memberships must contain valid IDs",
-  );
 }
 
 function validatePayoutDestination(destination: PayoutDestination): void {

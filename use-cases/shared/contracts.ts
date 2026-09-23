@@ -1,6 +1,5 @@
 import type {
-  AdmissionFacts,
-  DeactivationFacts,
+  DeactivationInput,
   FinancialInstruction,
   GroupJoinResult,
   Payout,
@@ -15,6 +14,11 @@ import type {
  * Loads and saves an aggregate root: User, Session, RegularGroup, or Payout.
  * Owned children are part of their root's state and have no independent command
  * repository. Adapters choose the storage mapping and hydrate via constructors.
+ * User reads include wallet identity, ledger balance, calculated reliability,
+ * and memberships from a consistent transaction view. Reload after related
+ * writes; adapters must observe transaction writes and protect concurrent funds.
+ * User saves persist owned state and wallet association, never loaded balance,
+ * score, or membership projections. These are contracts for future adapters.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
 export interface Repository<T> {
@@ -22,12 +26,8 @@ export interface Repository<T> {
   save(aggregate: T): Promise<void>;
 }
 
-export interface AdmissionFactsPort {
-  get(sessionId: UUID, userId: UUID): Promise<AdmissionFacts>;
-}
-
-export interface DeactivationFactsPort {
-  get(userId: UUID): Promise<DeactivationFacts>;
+export interface DeactivationInputPort {
+  get(userId: UUID): Promise<DeactivationInput>;
 }
 
 /** Appends validated instructions to the committed ledger in the current transaction. */
@@ -49,8 +49,7 @@ export interface DomainTransaction {
   readonly sessions: Repository<Session>;
   readonly groups: Repository<RegularGroup>;
   readonly payouts: Repository<Payout>;
-  readonly admissionFacts: AdmissionFactsPort;
-  readonly deactivationFacts: DeactivationFactsPort;
+  readonly deactivationInput: DeactivationInputPort;
   readonly ledger: LedgerWritePort;
   readonly payoutIntents: DurablePayoutIntentPort;
 }
@@ -70,4 +69,4 @@ export interface IdGenerator {
   next(): UUID;
 }
 
-export type { AdmissionFacts, DeactivationFacts, GroupJoinResult };
+export type { DeactivationInput, GroupJoinResult };

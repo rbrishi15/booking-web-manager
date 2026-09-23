@@ -1,12 +1,13 @@
+import { loadedUser } from "../../accounts/user-fixtures";
 import {
-  type AdmissionFacts,
   Booking,
   Money,
-  ReliabilityScore,
   Session,
   type SessionDetails,
   type SessionCreation,
 } from "@/domain";
+
+export { loadedUser };
 
 export const hour = 3_600_000;
 export const start = new Date("2026-10-10T10:00:00Z");
@@ -20,21 +21,6 @@ export const destination = {
   providerAccountReference: "provider",
   bankAccountReference: "bank",
 };
-
-export function facts(
-  userId: string,
-  patch: Partial<AdmissionFacts> = {},
-): AdmissionFacts {
-  return {
-    userId,
-    walletId: `w-${userId}`,
-    accountStatus: "ACTIVE",
-    availableBalance: Money.fromCents(10000),
-    score: ReliabilityScore.from(100),
-    memberGroupIds: [],
-    ...patch,
-  };
-}
 
 export function creationDetails(totalSlots = 2): SessionCreation {
   return {
@@ -64,10 +50,9 @@ export function session(totalSlots = 2) {
 }
 
 export function join(s: Session, id: string, now = before) {
-  return s.join({
+  return s.join(loadedUser(id), {
     participationId: `p-${id}`,
     holdId: `h-${id}`,
-    facts: facts(id),
     now,
   });
 }

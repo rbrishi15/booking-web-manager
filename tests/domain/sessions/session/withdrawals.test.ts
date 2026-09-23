@@ -5,7 +5,7 @@ import {
   captureError,
   destination,
   end,
-  facts,
+  loadedUser,
   hour,
   join,
   session,
@@ -62,10 +62,9 @@ describe("Session withdrawals and management", () => {
     });
 
     // Act
-    const replacement = s.join({
+    const replacement = s.join(loadedUser("c"), {
       participationId: "p-c",
       holdId: "h-c",
-      facts: facts("c"),
       replacementToken: "new",
       now: at(19),
     });

@@ -23,14 +23,28 @@ and [ADR-0002: Constructor-based domain hydration](./0002-constructor-based-doma
 
 An aggregate groups domain state whose rules must be checked together. Its root
 is the entry point for commands that change that state. The root owns its
-children's lifecycle and applies replacements returned by immutable children.
+children’s lifecycle and applies replacements returned by immutable children.
 
 | Aggregate root | Owned state and children | Rules enforced at the boundary |
 | --- | --- | --- |
-| `User` | Profile, preferences, account status, optional `PayoutAccount` | Active-account operations, payout-setup transitions, and deactivation using supplied obligation facts. |
+| `User` | Profile, preferences, account status, wallet association, optional `PayoutAccount` | Active-account operations, payout-setup transitions, valid ownership of loaded related data, and deactivation using supplied obligation facts. |
 | `RegularGroup` | Group details, invitation/archive state, `GroupMembership` children | Unique membership, retaining the owner, invitation access, owner-authorized administration, and archive eligibility. |
 | `Session` | `Booking`, `Participation` children and their `FundHold` children, queue order, attendance, pending settlement, payout-attempt history | Capacity and admission, waitlist ordering, withdrawal/replacement, attendance, cancellation, and session settlement. |
 | `Payout` | One provider attempt's fixed settlement lines, amount, destination and idempotency key, plus status and outcome | Matching/idempotent confirmations, conflicting callbacks, and terminal success or failure. A retry creates a new attempt. |
+
+One consistent domain model can contain several aggregates. A bounded context
+defines the scope of a model; an aggregate groups objects managed as a unit.
+These are distinct concepts; see Fowler's
+[Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) and
+[Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html) explanations.
+
+`User` also exposes its immutable `Wallet` identity and loaded, read-only
+`WalletBalance`, `UserReliability`, and membership IDs. Exposing those values
+does not give `User` ownership of ledger entries, participation history, or
+`RegularGroup` membership changes. Constructors validate their relationship to
+the user; the ledger, reliability calculation, and group remain authoritative
+for their respective data. Saving `User` must not write these projections back
+to their source records.
 
 Class-level JSDoc for each root starts with `Aggregate root: <Name>.` and states
 its owned state and command boundary. Child comments name their owning root.
@@ -57,8 +71,9 @@ independently of its root.
 
 ### Distinguish supporting domain types
 
-- `Booker` and `Participant` are role views over `User`; they supply identity and
-  delegate to session commands. They have no independently owned lifecycle.
+- `Booker` and `Participant` are role views over `User`. `Participant.join`
+  passes its fully loaded user directly to session admission. These roles have
+  no independently owned lifecycle.
 - `Booking`, `Money`, and `ReliabilityScore` are immutable value objects.
 - `Wallet` and `HoldingAccount` are immutable identities in the current model.
   They do not own a transaction collection or authoritative balance.
@@ -70,10 +85,13 @@ independently of its root.
 
 ### Coordinate across roots in the application layer
 
-Other roots are referenced by identity or supplied facts, rather than embedded
-as owned mutable children. A session references its booker and optional group;
-each hold references wallet/holding-account identities. Those references do not
-transfer ownership into the session aggregate.
+Other roots can be referenced by identity or passed temporarily to a domain
+command without becoming owned mutable children. `Session.join(user, command)`
+and `Session.promoteNext(user, command)` read the user's current account status
+and loaded related values; the session does not retain or mutate that user.
+A session stores its booker and optional group IDs, and each hold stores
+wallet/holding-account identities. Those references do not transfer ownership
+into the session aggregate.
 
 `Session` and `Payout` are separate roots because a session controls roster and
 held funds while a payout tracks one external attempt. Fixed settlement data in
@@ -83,6 +101,14 @@ The repository contracts load and save `User`, `RegularGroup`, `Session`, and
 `Payout`. Child entities have no independent command repository. Read-side
 queries may expose child information without granting independent mutation.
 Storage layout and row mapping remain adapter responsibilities.
+
+User repository reads must include its wallet, balance, calculated reliability,
+and memberships from a consistent transaction view. Related projections are
+fixed for that instance; reload the user and obtain a new participant after
+ledger or membership writes before another admission. Adapters must observe
+transaction writes and protect against concurrent overspending. These are
+contracts for future implementations, not guarantees supplied by object
+references. See [ADR-0004](./0004-participant-join-and-session-admission.md).
 
 The existing `UnitOfWork`/`DomainTransaction` contracts allow a coordinator to
 combine changes to multiple roots, ledger instructions, and durable payout

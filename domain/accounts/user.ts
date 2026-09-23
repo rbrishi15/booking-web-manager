@@ -1,7 +1,15 @@
 import { Money } from "../finance/money";
+import { Wallet } from "../finance/wallet";
+import type { WalletBalance } from "../finance/wallet-balance";
+import { ReliabilityScore } from "../reliability/reliability-score";
+import { ReliabilityService } from "../reliability/reliability-service";
+import {
+  createUserReliability,
+  type UserReliability,
+} from "../reliability/user-reliability";
 import { DomainError, requireDomain } from "../shared/errors";
 import type {
-  DeactivationFacts,
+  DeactivationInput,
   PayoutDestination,
 } from "../shared/operations";
 import type { AccountStatus } from "../shared/statuses";
@@ -17,11 +25,17 @@ export interface UserDetails {
   readonly preferredRegions: ReadonlySet<Region>;
   readonly accountStatus: AccountStatus;
   readonly payoutAccount?: PayoutAccount;
+  readonly wallet: Wallet;
+  readonly walletBalance: WalletBalance;
+  readonly reliability: UserReliability;
+  readonly memberGroupIds: readonly UUID[];
 }
 
 export interface UserRegistration {
   readonly userId: UUID;
   readonly email: string;
+  readonly walletId: UUID;
+  readonly now: Date;
   readonly preferredSports?: ReadonlySet<Sport>;
   readonly preferredRegions?: ReadonlySet<Region>;
 }
@@ -31,8 +45,9 @@ export interface UserRegistration {
  * Owns profile, preferences, account status, and the PayoutAccount child.
  * Profile, deactivation, and payout-setup commands enter through this root;
  * payout-setup transitions replace its immutable child.
- * Booker and Participant are role views. Reliability and wallet balances are
- * external, derived facts rather than state owned by this aggregate.
+ * Booker and Participant are role views. Exposes a wallet identity and loaded,
+ * read-only balance, reliability, and memberships without owning their source
+ * ledger, participation history, or groups. Reload after those sources change.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
 export class User {
@@ -42,8 +57,13 @@ export class User {
   #preferredRegions: Set<Region>;
   #accountStatus: AccountStatus;
   #payoutAccount?: PayoutAccount;
+  readonly #wallet: Wallet;
+  readonly #walletBalance: WalletBalance;
+  readonly #reliability: UserReliability;
+  readonly #memberGroupIds: readonly UUID[];
 
   constructor(details: UserDetails) {
+    validateRelatedData(details);
     requireDomain(
       details.preferredSports !== undefined &&
         details.preferredSports !== null &&
@@ -67,6 +87,17 @@ export class User {
     this.#preferredRegions = new Set(details.preferredRegions);
     this.#accountStatus = details.accountStatus;
     this.#payoutAccount = details.payoutAccount;
+    this.#wallet = details.wallet;
+    this.#walletBalance = Object.freeze({
+      walletId: details.walletBalance.walletId,
+      availableBalance: details.walletBalance.availableBalance,
+    });
+    this.#reliability = createUserReliability(
+      details.reliability.userId,
+      details.reliability.reliabilityScore,
+      details.reliability.calculatedAt,
+    );
+    this.#memberGroupIds = [...details.memberGroupIds];
     this.validate();
   }
 
@@ -77,6 +108,20 @@ export class User {
       preferredSports: details.preferredSports ?? new Set(),
       preferredRegions: details.preferredRegions ?? new Set(),
       accountStatus: "ACTIVE",
+      wallet: new Wallet({
+        walletId: details.walletId,
+        userId: details.userId,
+      }),
+      walletBalance: {
+        walletId: details.walletId,
+        availableBalance: Money.fromCents(0),
+      },
+      reliability: new ReliabilityService().readModel(
+        details.userId,
+        [],
+        details.now,
+      ),
+      memberGroupIds: [],
     });
   }
 
@@ -170,16 +215,16 @@ export class User {
     return Participant.for(this);
   }
 
-  deactivate(facts: DeactivationFacts): void {
+  deactivate(input: DeactivationInput): void {
     if (this.#accountStatus === "INACTIVE") return;
-    validateDeactivationFacts(facts);
+    validateDeactivationInput(input);
     requireDomain(
-      facts.availableBalance.toCents() === 0 &&
-        facts.heldBalance.toCents() === 0 &&
-        facts.activeCommitments === 0 &&
-        facts.unsettledOwnedSessions === 0 &&
-        facts.pendingPayouts === 0 &&
-        facts.activeOwnedGroups === 0,
+      input.availableBalance.toCents() === 0 &&
+        input.heldBalance.toCents() === 0 &&
+        input.activeCommitments === 0 &&
+        input.unsettledOwnedSessions === 0 &&
+        input.pendingPayouts === 0 &&
+        input.activeOwnedGroups === 0,
       "ACTIVE_OBLIGATIONS",
       "Outstanding obligations prevent deactivation",
     );
@@ -206,6 +251,18 @@ export class User {
   }
   get payoutAccount(): PayoutAccount | undefined {
     return this.#payoutAccount;
+  }
+  get wallet(): Wallet {
+    return this.#wallet;
+  }
+  get walletBalance(): WalletBalance {
+    return this.#walletBalance;
+  }
+  get reliability(): UserReliability {
+    return this.#reliability;
+  }
+  get memberGroupIds(): readonly UUID[] {
+    return [...this.#memberGroupIds];
   }
 
   private assertActive(): void {
@@ -248,6 +305,40 @@ export class User {
   }
 }
 
+function validateRelatedData(details: UserDetails): void {
+  requireDomain(
+    details.wallet instanceof Wallet &&
+      details.wallet.userId === details.userId,
+    "INVALID_INPUT",
+    "A user needs a wallet belonging to that user",
+  );
+  requireDomain(
+    details.walletBalance != null &&
+      details.walletBalance.walletId === details.wallet.walletId &&
+      details.walletBalance.availableBalance instanceof Money &&
+      details.walletBalance.availableBalance.toCents() >= 0,
+    "INVALID_INPUT",
+    "A user needs a nonnegative balance for their wallet",
+  );
+  requireDomain(
+    details.reliability != null &&
+      details.reliability.userId === details.userId &&
+      details.reliability.reliabilityScore instanceof ReliabilityScore &&
+      details.reliability.calculatedAt instanceof Date &&
+      Number.isFinite(details.reliability.calculatedAt.getTime()),
+    "INVALID_INPUT",
+    "A user needs calculated reliability belonging to that user",
+  );
+  requireDomain(
+    Array.isArray(details.memberGroupIds) &&
+      details.memberGroupIds.every(
+        (id) => typeof id === "string" && id.trim() !== "",
+      ),
+    "INVALID_INPUT",
+    "A user needs valid group membership IDs",
+  );
+}
+
 function validateId(value: string, name: string): void {
   requireDomain(
     typeof value === "string" && value.trim() !== "",
@@ -270,24 +361,24 @@ function validatePreferences(values: Iterable<string>, name: string): void {
       `${name} contains an empty value`,
     );
 }
-function validateDeactivationFacts(facts: DeactivationFacts): void {
-  for (const amount of [facts.availableBalance, facts.heldBalance])
+function validateDeactivationInput(input: DeactivationInput): void {
+  for (const amount of [input.availableBalance, input.heldBalance])
     requireDomain(
       amount instanceof Money,
       "INVALID_INPUT",
       "Balances must be Money values",
     );
-  for (const amount of [facts.availableBalance, facts.heldBalance])
+  for (const amount of [input.availableBalance, input.heldBalance])
     requireDomain(
       amount.toCents() >= 0,
       "INVALID_INPUT",
       "Balances cannot be negative",
     );
   for (const count of [
-    facts.activeCommitments,
-    facts.unsettledOwnedSessions,
-    facts.pendingPayouts,
-    facts.activeOwnedGroups,
+    input.activeCommitments,
+    input.unsettledOwnedSessions,
+    input.pendingPayouts,
+    input.activeOwnedGroups,
   ])
     requireDomain(
       Number.isSafeInteger(count) && count >= 0,
@@ -296,4 +387,4 @@ function validateDeactivationFacts(facts: DeactivationFacts): void {
     );
 }
 
-export type { DeactivationFacts } from "../shared/operations";
+export type { DeactivationInput } from "../shared/operations";

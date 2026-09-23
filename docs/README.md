@@ -10,3 +10,4 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0001: Use-case-driven development](./adr/0001-use-case-driven-development.md).
 - [ADR-0002: Constructor-based domain hydration](./adr/0002-constructor-based-domain-hydration.md).
 - [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md).
+- [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md).

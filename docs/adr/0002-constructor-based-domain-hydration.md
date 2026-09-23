@@ -60,8 +60,11 @@ sessions. Invalid state fails validation regardless of its source.
 
 Nested arguments are domain objects: a `Session` takes a `Booking` and
 `Participation` objects; a `Participation` takes a `FundHold`; a `User` takes an
-optional `PayoutAccount`. Constructor argument types describe domain values,
-not database rows or a parallel persistence representation.
+optional `PayoutAccount`, a required `Wallet`, and loaded balance, reliability,
+and membership values. Constructor argument types describe domain values,
+not database rows or a parallel persistence representation. A hydrated user is
+complete: missing related data is an error, not an empty balance or default
+score. Wallet/reliability ownership and wallet-balance identity must match.
 
 ```ts
 const wallet = new Wallet({ walletId, userId });
@@ -73,6 +76,10 @@ const existingUser = new User({
   preferredSports: new Set(),
   preferredRegions: new Set(),
   payoutAccount, // An already constructed PayoutAccount, if present.
+  wallet,
+  walletBalance, // Ledger projection for this wallet.
+  reliability, // UserReliability calculated from this user's history.
+  memberGroupIds, // Loaded memberships, not owned group entities.
 });
 ```
 
@@ -84,8 +91,13 @@ requires an eligible booker and an upcoming booking; payout creation calculates
 the settlement amount. Factories invoke validated constructors.
 
 ```ts
-const registeredUser = User.create({ userId, email });
+const registeredUser = User.create({ userId, email, walletId, now });
 ```
+
+Registration establishes the wallet identity, zero available balance, empty
+memberships, and the existing empty-history default from `ReliabilityService`.
+It creates domain state only; durable wallet provisioning belongs to the future
+registration adapter and transaction.
 
 Hydration calls constructors without repeating creation workflows, resetting
 lifecycle fields, generating replacement identities or timestamps, or producing
@@ -97,9 +109,19 @@ to express their units and meaning.
 ### Adapters own storage mapping
 
 Repository adapters map database column names, JSON, stored timestamps, and
-primitives to domain values. They assemble children before calling parent
-constructors. For writes, they map public domain properties to storage. These
-mappings and storage schemas stay outside the domain.
+primitives to domain values. They assemble children and required related values
+before calling parent constructors. User reads load wallet identity, balance,
+calculated reliability, and memberships consistently within the transaction.
+For writes, adapters map owned state to storage: saving `User` persists its
+owned state and wallet association, not its read-only balance, score, or
+membership projections. These mappings and storage schemas stay outside the
+domain.
+
+Loaded user projections remain fixed for that instance. After ledger or
+membership changes, reload the user and obtain a new participant before another
+admission. Future adapters must observe their transaction's writes and prevent
+concurrent overspending; object construction alone provides neither guarantee.
+See [ADR-0004](./0004-participant-join-and-session-admission.md).
 
 `Repository<T>` continues to load and save domain objects. Domain classes expose
 behavior and ordinary properties, with no persistence-specific `snapshot()`,

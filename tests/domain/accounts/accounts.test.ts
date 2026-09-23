@@ -1,5 +1,5 @@
 import {
-  type DeactivationFacts,
+  type DeactivationInput,
   DomainError,
   Money,
   PayoutAccount,
@@ -8,10 +8,16 @@ import {
   type PayoutAccountDetails,
 } from "@/domain";
 import { describe, expect, test } from "vitest";
+import { loadedUserDetails, userLoadedAt } from "./user-fixtures";
 
 const newUser = () =>
-  User.create({ userId: "owner", email: "owner@example.com" });
-const clearFacts = (): DeactivationFacts => ({
+  User.create({
+    userId: "owner",
+    email: "owner@example.com",
+    walletId: "w-owner",
+    now: userLoadedAt,
+  });
+const deactivationInput = (): DeactivationInput => ({
   availableBalance: Money.fromCents(0),
   heldBalance: Money.fromCents(0),
   activeCommitments: 0,
@@ -21,14 +27,7 @@ const clearFacts = (): DeactivationFacts => ({
 });
 
 function userDetails(overrides: Partial<UserDetails> = {}): UserDetails {
-  return {
-    userId: "owner",
-    email: "owner@example.com",
-    accountStatus: "ACTIVE",
-    preferredSports: new Set(),
-    preferredRegions: new Set(),
-    ...overrides,
-  };
+  return loadedUserDetails("owner", overrides);
 }
 function accountDetails(
   overrides: Partial<PayoutAccountDetails> = {},
@@ -91,6 +90,8 @@ describe("User aggregate", () => {
     const user = User.create({
       userId: "owner",
       email: "owner@example.com",
+      walletId: "w-owner",
+      now: userLoadedAt,
       preferredSports: sports,
     });
 
@@ -240,7 +241,10 @@ describe("User aggregate", () => {
 
       // Act
       const rejection = captureError(() =>
-        user.deactivate({ ...clearFacts(), [field]: Money.fromCents(1) }),
+        user.deactivate({
+          ...deactivationInput(),
+          [field]: Money.fromCents(1),
+        }),
       );
 
       // Assert
@@ -263,13 +267,13 @@ describe("User aggregate", () => {
 
     // Act
     const activeObligation = captureError(() =>
-      user.deactivate({ ...clearFacts(), [field]: 1 }),
+      user.deactivate({ ...deactivationInput(), [field]: 1 }),
     );
     const negativeValue = captureError(() =>
-      user.deactivate({ ...clearFacts(), [field]: -1 }),
+      user.deactivate({ ...deactivationInput(), [field]: -1 }),
     );
     const fractionalValue = captureError(() =>
-      user.deactivate({ ...clearFacts(), [field]: 0.5 }),
+      user.deactivate({ ...deactivationInput(), [field]: 0.5 }),
     );
 
     // Assert
@@ -299,8 +303,8 @@ describe("User aggregate", () => {
       providerAccountReference: "provider",
     });
     user.completePayoutSetup("bank");
-    user.deactivate(clearFacts());
-    user.deactivate(clearFacts());
+    user.deactivate(deactivationInput());
+    user.deactivate(deactivationInput());
 
     const constructed = new User(
       userDetails({
