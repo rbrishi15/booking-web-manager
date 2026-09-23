@@ -151,4 +151,51 @@ describe("ReliabilityScore.fromHistory", () => {
     expect(foreign).toThrow(RangeError);
   });
 
+  it("excludes unfinished, future-ended, and not-yet-finalized history", () => {
+    const future = new Date(asOf.getTime() + day);
+    const waiting = Participation.createWaitlisted({
+      participationId: "waiting",
+      userId: "u",
+      waitlistedAt: recentEnd,
+      queueSequence: 1,
+    });
+    const score = ReliabilityScore.fromHistory(
+      "u",
+      [
+        { participation: waiting, endAt: recentEnd },
+        { participation: absent("future-end", future), endAt: future },
+        {
+          participation: absent("future-finalization", future),
+          endAt: recentEnd,
+        },
+      ],
+      asOf,
+    );
+
+    expect(score.toNumber()).toBe(100);
+  });
+
+  it("includes an outcome finalized at the cutoff and returns an immutable score", () => {
+    const score = ReliabilityScore.fromHistory(
+      "u",
+      [{ participation: absent("at-cutoff", asOf), endAt: asOf }],
+      asOf,
+    );
+
+    expect(score.toNumber()).toBe(0);
+    expect(Object.isFrozen(score)).toBe(true);
+  });
+
+  it("rejects invalid calculation and session-end dates", () => {
+    expect(() => ReliabilityScore.fromHistory("u", [], new Date(NaN))).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      ReliabilityScore.fromHistory(
+        "u",
+        [{ participation: attended("a"), endAt: new Date(NaN) }],
+        asOf,
+      ),
+    ).toThrow(RangeError);
+  });
 });
