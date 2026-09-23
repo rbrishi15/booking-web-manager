@@ -1,7 +1,6 @@
 import {
   Money,
   ReliabilityScore,
-  ReliabilityService,
   User,
   type UserDetails,
   Wallet,
@@ -23,9 +22,7 @@ describe("User related data", () => {
     expect(user.walletBalance.walletId).toBe("new-wallet");
     expect(user.walletBalance.availableBalance.toCents()).toBe(0);
     expect(user.reliabilityScore.toNumber()).toBe(
-      new ReliabilityService()
-        .recalculate(user.userId, [], userLoadedAt)
-        .toNumber(),
+      ReliabilityScore.fromHistory(user.userId, [], userLoadedAt).toNumber(),
     );
     expect(user.memberGroupIds).toEqual([]);
   });

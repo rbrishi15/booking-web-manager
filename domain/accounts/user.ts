@@ -2,7 +2,6 @@ import { Money } from "../finance/money";
 import { Wallet } from "../finance/wallet";
 import type { WalletBalance } from "../finance/wallet-balance";
 import { ReliabilityScore } from "../reliability/reliability-score";
-import { ReliabilityService } from "../reliability/reliability-service";
 import { DomainError, requireDomain } from "../shared/errors";
 import type {
   DeactivationInput,
@@ -108,7 +107,7 @@ export class User {
         walletId: details.walletId,
         availableBalance: Money.fromCents(0),
       },
-      reliabilityScore: new ReliabilityService().recalculate(
+      reliabilityScore: ReliabilityScore.fromHistory(
         details.userId,
         [],
         details.now,

@@ -1,10 +1,9 @@
-import { FundHold, Money, Participation, ReliabilityService } from "@/domain";
+import { FundHold, Money, Participation, ReliabilityScore } from "@/domain";
 import { describe, expect, it } from "vitest";
 
 const day = 86_400_000;
 const asOf = new Date("2026-09-15T00:00:00Z");
 const recentEnd = new Date(asOf.getTime() - day);
-const service = new ReliabilityService();
 
 function attended(id: string, endAt = recentEnd): Participation {
   const hold = FundHold.create({
@@ -40,23 +39,25 @@ function absent(id: string, endAt = recentEnd): Participation {
   }).verify("ABSENT", "AUTOMATIC", endAt);
 }
 
-describe("ReliabilityService", () => {
+describe("ReliabilityScore.fromHistory", () => {
   it("defaults excluded history to 100 and weights an older absence at half life", () => {
     // Arrange
     const older = new Date(recentEnd.getTime() - 90 * day);
 
     // Act
-    const emptyHistoryScore = service.recalculate("u", [], asOf).toNumber();
-    const score = service
-      .recalculate(
-        "u",
-        [
-          { participation: attended("a"), endAt: recentEnd },
-          { participation: absent("b", older), endAt: older },
-        ],
-        asOf,
-      )
-      .toNumber();
+    const emptyHistoryScore = ReliabilityScore.fromHistory(
+      "u",
+      [],
+      asOf,
+    ).toNumber();
+    const score = ReliabilityScore.fromHistory(
+      "u",
+      [
+        { participation: attended("a"), endAt: recentEnd },
+        { participation: absent("b", older), endAt: older },
+      ],
+      asOf,
+    ).toNumber();
 
     // Assert
     expect(emptyHistoryScore).toBe(100);
@@ -91,9 +92,11 @@ describe("ReliabilityService", () => {
       .expireReplacement(end)
       .settleHold("FORFEIT", "payout", end);
     const outcome = finalized.reliabilityOutcome(asOf)?.value;
-    const score = service
-      .recalculate("u", [{ participation: finalized, endAt: end }], asOf)
-      .toNumber();
+    const score = ReliabilityScore.fromHistory(
+      "u",
+      [{ participation: finalized, endAt: end }],
+      asOf,
+    ).toNumber();
 
     // Assert
     expect(outcome).toBe(0);
@@ -120,12 +123,14 @@ describe("ReliabilityService", () => {
     });
 
     // Act
-    const first = service.recalculate("u", history, asOf).toNumber();
-    const afterTimePasses = service
-      .recalculate("u", history, new Date(asOf.getTime() + 365 * day))
-      .toNumber();
+    const first = ReliabilityScore.fromHistory("u", history, asOf).toNumber();
+    const afterTimePasses = ReliabilityScore.fromHistory(
+      "u",
+      history,
+      new Date(asOf.getTime() + 365 * day),
+    ).toNumber();
     const duplicate = () =>
-      service.recalculate(
+      ReliabilityScore.fromHistory(
         "u",
         [
           firstEntry as (typeof history)[number],
@@ -134,7 +139,7 @@ describe("ReliabilityService", () => {
         asOf,
       );
     const foreign = () =>
-      service.recalculate(
+      ReliabilityScore.fromHistory(
         "u",
         [{ participation: foreignParticipation, endAt: recentEnd }],
         asOf,
@@ -145,4 +150,5 @@ describe("ReliabilityService", () => {
     expect(duplicate).toThrow(RangeError);
     expect(foreign).toThrow(RangeError);
   });
+
 });

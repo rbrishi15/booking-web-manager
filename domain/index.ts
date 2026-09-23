@@ -86,10 +86,7 @@ export type {
 export type { LedgerReadPort } from "./finance/ledger-read-port";
 export type { HoldingAccountBalance } from "./finance/holding-account-balance";
 export type { WalletBalance } from "./finance/wallet-balance";
-export {
-  ReliabilityService,
-  type ParticipationHistoryEntry,
-} from "./reliability/reliability-service";
+export type { ParticipationHistoryEntry } from "./reliability/reliability-score";
 export type {
   AccountStatus,
   AttendanceStatus,
