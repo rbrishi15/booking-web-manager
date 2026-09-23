@@ -14,8 +14,9 @@ import type {
  * Loads and saves an aggregate root: User, Session, RegularGroup, or Payout.
  * Owned children are part of their root's state and have no independent command
  * repository. Adapters choose the storage mapping and hydrate via constructors.
- * User reads include wallet identity, ledger balance, calculated reliability,
- * and memberships from a consistent transaction view. Reload after related
+ * User reads include wallet identity, ledger balance, a ReliabilityScore
+ * calculated from that user's history, and memberships from a consistent
+ * transaction view. Reload after related
  * writes; adapters must observe transaction writes and protect concurrent funds.
  * User saves persist owned state and wallet association, never loaded balance,
  * score, or membership projections. These are contracts for future adapters.

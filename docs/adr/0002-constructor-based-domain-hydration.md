@@ -64,7 +64,9 @@ optional `PayoutAccount`, a required `Wallet`, and loaded balance, reliability,
 and membership values. Constructor argument types describe domain values,
 not database rows or a parallel persistence representation. A hydrated user is
 complete: missing related data is an error, not an empty balance or default
-score. Wallet/reliability ownership and wallet-balance identity must match.
+score. Wallet ownership and wallet-balance identity must match. The adapter
+supplies a `ReliabilityScore` calculated from this user's history;
+`ReliabilityScore.fromHistory` checks history ownership during calculation.
 
 ```ts
 const wallet = new Wallet({ walletId, userId });
@@ -78,7 +80,7 @@ const existingUser = new User({
   payoutAccount, // An already constructed PayoutAccount, if present.
   wallet,
   walletBalance, // Ledger projection for this wallet.
-  reliability, // UserReliability calculated from this user's history.
+  reliabilityScore, // ReliabilityScore calculated from this user's history.
   memberGroupIds, // Loaded memberships, not owned group entities.
 });
 ```
@@ -95,7 +97,7 @@ const registeredUser = User.create({ userId, email, walletId, now });
 ```
 
 Registration establishes the wallet identity, zero available balance, empty
-memberships, and the existing empty-history default from `ReliabilityService`.
+memberships, and the existing empty-history default from `ReliabilityScore.fromHistory`.
 It creates domain state only; durable wallet provisioning belongs to the future
 registration adapter and transaction.
 

@@ -39,10 +39,11 @@ These are distinct concepts; see Fowler's
 [Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html) explanations.
 
 `User` also exposes its immutable `Wallet` identity and loaded, read-only
-`WalletBalance`, `UserReliability`, and membership IDs. Exposing those values
+`WalletBalance`, `ReliabilityScore`, and membership IDs. Exposing those values
 does not give `User` ownership of ledger entries, participation history, or
-`RegularGroup` membership changes. Constructors validate their relationship to
-the user; the ledger, reliability calculation, and group remain authoritative
+`RegularGroup` membership changes. Constructors validate wallet ownership and
+balance identity. The repository supplies the score calculated from this user's
+history; the ledger, reliability calculation, and group remain authoritative
 for their respective data. Saving `User` must not write these projections back
 to their source records.
 
@@ -79,9 +80,10 @@ independently of its root.
   They do not own a transaction collection or authoritative balance.
 - `LedgerTransaction` is an immutable financial fact. Ledger-wide append-only,
   idempotency, and balance rules belong to the ledger adapter.
-- `UserReliability`, `WalletBalance`, and `HoldingAccountBalance` are derived
-  read models. `ReliabilityService` calculates policy across participation
-  history; it does not own that history as an aggregate.
+- `WalletBalance` and `HoldingAccountBalance` are derived read models.
+  `ReliabilityScore.fromHistory` calculates a `ReliabilityScore` across participation
+  history; it does not own that history as an aggregate. `User` exposes the
+  score directly, without a separate user identity or calculation-date wrapper.
 
 ### Coordinate across roots in the application layer
 

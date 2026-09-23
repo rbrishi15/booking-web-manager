@@ -46,7 +46,7 @@ Nested arguments are domain objects, such as a `Booking` and `Participation`
 children for a `Session`. Repository adapters construct these objects directly
 and own the mapping between storage values and domain properties.
 
-`UserDetails` requires a `Wallet`, `WalletBalance`, `UserReliability`, and
+`UserDetails` requires a `Wallet`, `WalletBalance`, `ReliabilityScore`, and
 membership IDs. User saves persist owned state and wallet association, not
 derived balances, scores, or memberships. Projections are fixed for the loaded
 instance; reload the user and obtain a new participant after ledger or group
@@ -93,10 +93,21 @@ unmatched replacement holds become `FORFEITURE_DUE`.
 `Participation.reliabilityOutcome(asOf)` derives at most one finalized outcome:
 verified attendance (manual or automatic) or a finalized late-withdrawal hold
 forfeiture. Waiting, unverified, pending, refunded, removed, and other
-nonterminal records are excluded. `ReliabilityService` performs only the
+nonterminal records are excluded. `ReliabilityScore.fromHistory` performs only the
 cross-session policy: 90-day exponential half-life, session-end dating,
 normalization against the newest eligible session, cutoff checks, and a precise
-0–100 score. The empty-history default is 100.
+0–100 score. The empty-history default is 100. `User.reliabilityScore` exposes
+that immutable value directly; the repository supplies the score calculated
+from that user's history when loading the user.
+
+```ts
+const reliabilityScore = ReliabilityScore.fromHistory(userId, history, asOf);
+```
+
+Each history entry pairs a `Participation` with its session's `endAt`, which
+determines its weight. The user ID rejects foreign history, and the explicit
+`asOf` cutoff makes the calculation reproducible. The factory returns a score
+without retaining the history.
 
 ## Settlement and ledger boundary
 
@@ -128,7 +139,7 @@ The source tree follows the business capabilities and aggregate boundaries:
 - `domain/accounts` contains `User` and payout-account setup.
 - `domain/finance` contains money, wallets, holding accounts, ledger facts,
   payouts, and derived balance read models.
-- `domain/reliability` contains the reliability value object, policy, and read
-  model.
+- `domain/reliability` contains the reliability value object and its history
+  calculation factory.
 - `domain/shared` contains cross-capability statuses, IDs, errors, operations,
   and date-copying primitives.

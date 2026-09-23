@@ -19,13 +19,16 @@ and [ADR-0002: Constructor-based domain hydration](./0002-constructor-based-doma
 ### Load the complete user
 
 `Repository<User>.get(userId)` returns a user with required `wallet`,
-`walletBalance`, `reliability`, and `memberGroupIds` values. Hydration validates
-their ownership, types, and valid values. Missing related data is an error.
-The constructor copies membership arrays and creates immutable copies of balance
-and reliability projections, including defensive access to the calculation date.
+`walletBalance`, `reliabilityScore`, and `memberGroupIds` values. Hydration
+validates wallet ownership, balance identity, types, and valid values. Missing
+related data is an error. The constructor copies membership arrays and the
+balance projection, and retains the immutable `ReliabilityScore` directly.
+The repository supplies the score calculated from this user's history by
+`ReliabilityScore.fromHistory(userId, history, asOf)`. No admission rule needs
+a calculation timestamp, so the score has no additional metadata wrapper.
 
 The user exposes this data without owning its source records. The ledger is
-authoritative for balances, `ReliabilityService` calculates scores from
+authoritative for balances, `ReliabilityScore.fromHistory` calculates scores from
 participation history, and `RegularGroup` owns membership changes. Saving a
 user persists its owned state and wallet association; it does not persist
 balance, score, or membership projections back to their sources.
@@ -39,8 +42,8 @@ objects managed as a unit.
 
 `User.create({ userId, email, walletId, now })` establishes the domain wallet
 identity, zero available balance, empty memberships, and the existing
-empty-history default calculated by `ReliabilityService`. Persisting that new
-wallet belongs to the future registration adapter and transaction.
+empty-history default calculated by `ReliabilityScore.fromHistory`. Persisting
+that new wallet belongs to the future registration adapter and transaction.
 
 ### Pass the user directly to admission
 
@@ -68,7 +71,7 @@ are `join(user: User, command: JoinCommand)` and
 and action-specific options; they contain no copied admission data.
 
 `Session` reads the user's identity, current account status, wallet identity,
-balance, memberships, and canonical `user.reliability.reliabilityScore`. It
+balance, memberships, and `user.reliabilityScore`. It
 enforces access, eligibility, capacity, and queue rules and returns financial
 instructions. It neither retains the user as an owned child nor changes the
 user's loaded projections. The former admission-input bundle, loading port,
