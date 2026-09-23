@@ -85,10 +85,6 @@ export type {
 } from "./shared/operations";
 export type { LedgerReadPort } from "./finance/ledger-read-port";
 export type { HoldingAccountBalance } from "./finance/holding-account-balance";
-export {
-  createUserReliability,
-  type UserReliability,
-} from "./reliability/user-reliability";
 export type { WalletBalance } from "./finance/wallet-balance";
 export {
   ReliabilityService,

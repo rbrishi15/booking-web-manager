@@ -2,10 +2,6 @@ import type { Participation } from "../sessions/participation";
 import { copyDate } from "../shared/date";
 import type { UUID } from "../shared/types";
 import { ReliabilityScore } from "./reliability-score";
-import {
-  type UserReliability,
-  createUserReliability,
-} from "./user-reliability";
 
 export interface ParticipationHistoryEntry {
   readonly participation: Participation;
@@ -25,18 +21,6 @@ interface Outcome {
 
 /** Calculates a score from one user's participation history, without IO. */
 export class ReliabilityService {
-  readModel(
-    userId: UUID,
-    history: readonly ParticipationHistoryEntry[],
-    asOf: Date,
-  ): UserReliability {
-    return createUserReliability(
-      userId,
-      this.recalculate(userId, history, asOf),
-      asOf,
-    );
-  }
-
   recalculate(
     userId: UUID,
     history: readonly ParticipationHistoryEntry[],

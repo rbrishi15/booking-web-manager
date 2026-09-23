@@ -1003,7 +1003,7 @@ export class Session {
     requireFunds = true,
   ): "INACTIVE_ACCOUNT" | "LOW_RELIABILITY" | "INSUFFICIENT_FUNDS" | undefined {
     if (user.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
-    const score = user.reliability.reliabilityScore;
+    const score = user.reliabilityScore;
     if (!this.meetsReliabilityRequirement(score)) return "LOW_RELIABILITY";
     if (
       requireFunds &&

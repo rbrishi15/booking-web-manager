@@ -1,9 +1,4 @@
-import {
-  createUserReliability,
-  Money,
-  ReliabilityScore,
-  Session,
-} from "@/domain";
+import { Money, ReliabilityScore, Session } from "@/domain";
 import { describe, expect, it } from "vitest";
 import {
   before,
@@ -28,19 +23,11 @@ describe("Session admission and roster", () => {
     const prior = sessionState(s);
     const lowScore = loadedUser("u", {
       memberGroupIds: ["group"],
-      reliability: createUserReliability(
-        "u",
-        ReliabilityScore.from(79),
-        before,
-      ),
+      reliabilityScore: ReliabilityScore.from(79),
     });
     const eligible = loadedUser("u", {
       memberGroupIds: ["group"],
-      reliability: createUserReliability(
-        "u",
-        ReliabilityScore.from(80),
-        before,
-      ),
+      reliabilityScore: ReliabilityScore.from(80),
     });
 
     expect(() => s.join(loadedUser("u"), command)).toThrow(

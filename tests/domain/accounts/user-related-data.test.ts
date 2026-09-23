@@ -11,27 +11,21 @@ import { loadedUserDetails, userLoadedAt } from "./user-fixtures";
 
 describe("User related data", () => {
   test("registration establishes a wallet and the empty-history defaults", () => {
-    const now = new Date(userLoadedAt);
     const user = User.create({
       userId: "new-user",
       email: "new@example.com",
       walletId: "new-wallet",
-      now,
+      now: userLoadedAt,
     });
-    now.setTime(0);
 
     expect(user.wallet.userId).toBe(user.userId);
     expect(user.wallet.walletId).toBe("new-wallet");
     expect(user.walletBalance.walletId).toBe("new-wallet");
     expect(user.walletBalance.availableBalance.toCents()).toBe(0);
-    expect(user.reliability.userId).toBe(user.userId);
-    expect(user.reliability.reliabilityScore.toNumber()).toBe(
+    expect(user.reliabilityScore.toNumber()).toBe(
       new ReliabilityService()
         .recalculate(user.userId, [], userLoadedAt)
         .toNumber(),
-    );
-    expect(user.reliability.calculatedAt.getTime()).toBe(
-      userLoadedAt.getTime(),
     );
     expect(user.memberGroupIds).toEqual([]);
   });
@@ -39,7 +33,7 @@ describe("User related data", () => {
   test.each([
     "wallet",
     "walletBalance",
-    "reliability",
+    "reliabilityScore",
     "memberGroupIds",
   ] as const)("requires %s when hydrating a user", (field) => {
     const details = loadedUserDetails("u");
@@ -81,22 +75,8 @@ describe("User related data", () => {
       "primitive balance",
       { walletBalance: { walletId: "w-u", availableBalance: 100 } },
     ],
-    [
-      "foreign reliability",
-      { reliability: { ...details.reliability, userId: "other" } },
-    ],
-    [
-      "primitive score",
-      { reliability: { ...details.reliability, reliabilityScore: 100 } },
-    ],
-    [
-      "missing calculation date",
-      { reliability: { ...details.reliability, calculatedAt: undefined } },
-    ],
-    [
-      "invalid calculation date",
-      { reliability: { ...details.reliability, calculatedAt: new Date(NaN) } },
-    ],
+    ["primitive score", { reliabilityScore: 100 }],
+    ["plain score object", { reliabilityScore: { value: 100 } }],
     ["empty membership ID", { memberGroupIds: [" "] }],
     ["non-string membership ID", { memberGroupIds: [123] }],
     ["non-array memberships", { memberGroupIds: new Set(["group"]) }],
@@ -111,43 +91,32 @@ describe("User related data", () => {
       walletId: "w-u",
       availableBalance: Money.fromCents(700),
     };
-    const calculatedAt = new Date(userLoadedAt);
-    const reliability = {
-      userId: "u",
-      reliabilityScore: ReliabilityScore.from(80),
-      calculatedAt,
-    };
+    const reliabilityScore = ReliabilityScore.from(80);
     const memberGroupIds = ["group"];
-    const user = new User(
-      loadedUserDetails("u", { walletBalance, reliability, memberGroupIds }),
-    );
+    const details = {
+      ...loadedUserDetails("u"),
+      walletBalance,
+      reliabilityScore,
+      memberGroupIds,
+    };
+    const user = new User(details);
 
     walletBalance.walletId = "other";
     walletBalance.availableBalance = Money.fromCents(0);
-    reliability.userId = "other";
-    reliability.reliabilityScore = ReliabilityScore.from(0);
-    calculatedAt.setTime(0);
+    details.reliabilityScore = ReliabilityScore.from(0);
     memberGroupIds.push("other");
     (user.memberGroupIds as string[]).push("injected");
-    user.reliability.calculatedAt.setTime(0);
 
     expect(
       Reflect.set(user.walletBalance, "availableBalance", Money.fromCents(0)),
     ).toBe(false);
     expect(
-      Reflect.set(
-        user.reliability,
-        "reliabilityScore",
-        ReliabilityScore.from(0),
-      ),
+      Reflect.set(user, "reliabilityScore", ReliabilityScore.from(0)),
     ).toBe(false);
     expect(user.walletBalance.walletId).toBe("w-u");
     expect(user.walletBalance.availableBalance.toCents()).toBe(700);
-    expect(user.reliability.userId).toBe("u");
-    expect(user.reliability.reliabilityScore.toNumber()).toBe(80);
-    expect(user.reliability.calculatedAt.getTime()).toBe(
-      userLoadedAt.getTime(),
-    );
+    expect(user.reliabilityScore).toBe(reliabilityScore);
+    expect(user.reliabilityScore.toNumber()).toBe(80);
     expect(user.memberGroupIds).toEqual(["group"]);
   });
 });

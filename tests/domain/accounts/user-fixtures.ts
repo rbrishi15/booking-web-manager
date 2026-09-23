@@ -1,5 +1,4 @@
 import {
-  createUserReliability,
   Money,
   ReliabilityScore,
   User,
@@ -26,11 +25,7 @@ export function loadedUserDetails(
       walletId: `w-${userId}`,
       availableBalance: Money.fromCents(10_000),
     },
-    reliability: createUserReliability(
-      userId,
-      ReliabilityScore.from(100),
-      userLoadedAt,
-    ),
+    reliabilityScore: ReliabilityScore.from(100),
     memberGroupIds: [],
     ...overrides,
   };

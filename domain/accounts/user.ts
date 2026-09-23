@@ -3,10 +3,6 @@ import { Wallet } from "../finance/wallet";
 import type { WalletBalance } from "../finance/wallet-balance";
 import { ReliabilityScore } from "../reliability/reliability-score";
 import { ReliabilityService } from "../reliability/reliability-service";
-import {
-  createUserReliability,
-  type UserReliability,
-} from "../reliability/user-reliability";
 import { DomainError, requireDomain } from "../shared/errors";
 import type {
   DeactivationInput,
@@ -27,7 +23,7 @@ export interface UserDetails {
   readonly payoutAccount?: PayoutAccount;
   readonly wallet: Wallet;
   readonly walletBalance: WalletBalance;
-  readonly reliability: UserReliability;
+  readonly reliabilityScore: ReliabilityScore;
   readonly memberGroupIds: readonly UUID[];
 }
 
@@ -59,7 +55,7 @@ export class User {
   #payoutAccount?: PayoutAccount;
   readonly #wallet: Wallet;
   readonly #walletBalance: WalletBalance;
-  readonly #reliability: UserReliability;
+  readonly #reliabilityScore: ReliabilityScore;
   readonly #memberGroupIds: readonly UUID[];
 
   constructor(details: UserDetails) {
@@ -92,11 +88,7 @@ export class User {
       walletId: details.walletBalance.walletId,
       availableBalance: details.walletBalance.availableBalance,
     });
-    this.#reliability = createUserReliability(
-      details.reliability.userId,
-      details.reliability.reliabilityScore,
-      details.reliability.calculatedAt,
-    );
+    this.#reliabilityScore = details.reliabilityScore;
     this.#memberGroupIds = [...details.memberGroupIds];
     this.validate();
   }
@@ -116,7 +108,7 @@ export class User {
         walletId: details.walletId,
         availableBalance: Money.fromCents(0),
       },
-      reliability: new ReliabilityService().readModel(
+      reliabilityScore: new ReliabilityService().recalculate(
         details.userId,
         [],
         details.now,
@@ -258,8 +250,8 @@ export class User {
   get walletBalance(): WalletBalance {
     return this.#walletBalance;
   }
-  get reliability(): UserReliability {
-    return this.#reliability;
+  get reliabilityScore(): ReliabilityScore {
+    return this.#reliabilityScore;
   }
   get memberGroupIds(): readonly UUID[] {
     return [...this.#memberGroupIds];
@@ -321,13 +313,9 @@ function validateRelatedData(details: UserDetails): void {
     "A user needs a nonnegative balance for their wallet",
   );
   requireDomain(
-    details.reliability != null &&
-      details.reliability.userId === details.userId &&
-      details.reliability.reliabilityScore instanceof ReliabilityScore &&
-      details.reliability.calculatedAt instanceof Date &&
-      Number.isFinite(details.reliability.calculatedAt.getTime()),
+    details.reliabilityScore instanceof ReliabilityScore,
     "INVALID_INPUT",
-    "A user needs calculated reliability belonging to that user",
+    "A user needs a ReliabilityScore",
   );
   requireDomain(
     Array.isArray(details.memberGroupIds) &&
