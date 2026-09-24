@@ -19,19 +19,23 @@ and [ADR-0002: Constructor-based domain hydration](./0002-constructor-based-doma
 ### Load the complete user
 
 `Repository<User>.get(userId)` returns a user with required `wallet`,
-`walletBalance`, `reliabilityScore`, and `memberGroupIds` values. Hydration
-validates wallet ownership, balance identity, types, and valid values. Missing
-related data is an error. The constructor copies membership arrays and the
-balance projection, and retains the immutable `ReliabilityScore` directly.
+`reliabilityScore`, and `memberGroupIds` values. The owned wallet holds complete
+committed transaction history and derives funds through `getFunds(): Money`.
+Hydration validates wallet ownership, transaction types and ownership, unique
+transaction IDs, and nonnegative derived funds within safe integer cents. Missing
+related data is an error; partial transaction histories must not hydrate wallets.
+Constructors copy membership and transaction arrays, retaining immutable
+`LedgerTransaction` and `ReliabilityScore` objects directly.
 The repository supplies the score calculated from this user's history by
 `ReliabilityScore.fromHistory(userId, history, asOf)`. No admission rule needs
 a calculation timestamp, so the score has no additional metadata wrapper.
 
-The user exposes this data without owning its source records. The ledger is
-authoritative for balances, `ReliabilityScore.fromHistory` calculates scores from
-participation history, and `RegularGroup` owns membership changes. Saving a
-user persists its owned state and wallet association; it does not persist
-balance, score, or membership projections back to their sources.
+The user owns its wallet; ledger writes remain external and committed entries
+are authoritative for funds. The wallet calculates funds locally,
+`ReliabilityScore.fromHistory` calculates scores from participation history,
+and `RegularGroup` owns membership changes. Saving a
+user persists its owned state and wallet identity; it never rewrites transaction
+history or persists derived funds, scores, or memberships back to their sources.
 
 A single domain model can contain several aggregates. Exposing related values
 through `User` does not merge them into one aggregate. Fowler's
@@ -41,7 +45,7 @@ the scope of a consistent model, while his
 objects managed as a unit.
 
 `User.create({ userId, email, walletId, now })` establishes the domain wallet
-identity, zero available balance, empty memberships, and the existing
+with empty transactions and zero funds, empty memberships, and the existing
 empty-history default calculated by `ReliabilityScore.fromHistory`. Persisting
 that new wallet belongs to the future registration adapter and transaction.
 

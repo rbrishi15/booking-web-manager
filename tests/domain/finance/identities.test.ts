@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 describe("Financial identity constructors", () => {
   it("validates identities and owns its values independently of caller input", () => {
-    const input = { walletId: "wallet", userId: "owner" };
+    const input = { walletId: "wallet", userId: "owner", transactions: [] };
     const wallet = new Wallet(input);
     input.walletId = "changed";
     input.userId = "changed";
@@ -20,12 +20,12 @@ describe("Financial identity constructors", () => {
     expect(new HoldingAccount({ accountId: "platform" }).accountId).toBe(
       "platform",
     );
-    expect(() => new Wallet({ walletId: " ", userId: "owner" })).toThrow(
-      DomainError,
-    );
-    expect(() => new Wallet({ walletId: "wallet", userId: " " })).toThrow(
-      DomainError,
-    );
+    expect(
+      () => new Wallet({ walletId: " ", userId: "owner", transactions: [] }),
+    ).toThrow(DomainError);
+    expect(
+      () => new Wallet({ walletId: "wallet", userId: " ", transactions: [] }),
+    ).toThrow(DomainError);
     expect(() => new HoldingAccount({ accountId: " " })).toThrow(DomainError);
   });
 });

@@ -1,5 +1,12 @@
-import { Money, ReliabilityScore, Session } from "@/domain";
+import {
+  LedgerTransaction,
+  Money,
+  ReliabilityScore,
+  Session,
+  Wallet,
+} from "@/domain";
 import { describe, expect, it } from "vitest";
+import { fundedWallet } from "../../accounts/user-fixtures";
 import {
   before,
   captureError,
@@ -12,6 +19,41 @@ import {
 } from "./session-fixtures";
 
 describe("Session admission and roster", () => {
+  it("admits exact funds and rejects another commitment after reloading its lock", () => {
+    const funded = loadedUser("u", { wallet: fundedWallet("u", 500) });
+    const command = { participationId: "p-u", holdId: "h-u", now: before };
+    const admitted = session().join(funded, command);
+    expect(admitted.kind).toBe("COMMITTED");
+    expect(admitted.instructions[0]?.amount.toCents()).toBe(500);
+
+    const reloaded = loadedUser("u", {
+      wallet: new Wallet({
+        walletId: funded.wallet.walletId,
+        userId: funded.userId,
+        transactions: [
+          ...funded.wallet.transactions,
+          new LedgerTransaction({
+            transactionId: "lock-u",
+            walletId: funded.wallet.walletId,
+            kind: "LOCK",
+            amount: Money.fromCents(500),
+            occurredAt: before,
+            idempotencyKey: "lock-u",
+            holdId: "h-u",
+          }),
+        ],
+      }),
+    });
+    expect(funded.wallet.getFunds().toCents()).toBe(500);
+    expect(reloaded.wallet.getFunds().toCents()).toBe(0);
+    const nextSession = session();
+    const prior = sessionState(nextSession);
+    expect(() => nextSession.join(reloaded, command)).toThrow(
+      expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }),
+    );
+    expect(sessionState(nextSession)).toEqual(prior);
+  });
+
   it("uses the loaded user's memberships and reliability for private admission", () => {
     const s = Session.create({
       ...creationDetails(),
@@ -48,7 +90,7 @@ describe("Session admission and roster", () => {
     join(s, "a");
     join(s, "b");
     const unfunded = loadedUser("c", {
-      walletBalance: { walletId: "w-c", availableBalance: Money.fromCents(0) },
+      wallet: fundedWallet("c", 0),
     });
     expect(
       s.join(unfunded, {
@@ -70,16 +112,13 @@ describe("Session admission and roster", () => {
     expect(sessionState(s)).toEqual(prior);
 
     const reloaded = loadedUser("c", {
-      walletBalance: {
-        walletId: "w-c",
-        availableBalance: Money.fromCents(500),
-      },
+      wallet: fundedWallet("c", 500),
     });
     const result = s.promoteNext(reloaded, command);
     expect(result.kind).toBe("PROMOTED");
     expect(result.instructions[0]?.walletId).toBe("w-c");
-    expect(unfunded.walletBalance.availableBalance.toCents()).toBe(0);
-    expect(reloaded.walletBalance.availableBalance.toCents()).toBe(500);
+    expect(unfunded.wallet.getFunds().toCents()).toBe(0);
+    expect(reloaded.wallet.getFunds().toCents()).toBe(500);
   });
 
   it("offers all eight places including an ordinary place for the booker", () => {
@@ -139,10 +178,7 @@ describe("Session admission and roster", () => {
       [{ accountStatus: "INACTIVE" }, "INACTIVE_ACCOUNT"],
       [
         {
-          walletBalance: {
-            walletId: "w-u",
-            availableBalance: Money.fromCents(499),
-          },
+          wallet: fundedWallet("u", 499),
         },
         "INSUFFICIENT_FUNDS",
       ],
@@ -202,10 +238,7 @@ describe("Session admission and roster", () => {
     join(s, "b");
     const wait = s.join(
       loadedUser("c", {
-        walletBalance: {
-          walletId: "w-c",
-          availableBalance: Money.fromCents(0),
-        },
+        wallet: fundedWallet("c", 0),
       }),
       {
         participationId: "p-c",
@@ -222,10 +255,7 @@ describe("Session admission and roster", () => {
     const fresh = join(s, "fresh");
     const firstPromotion = s.promoteNext(
       loadedUser("c", {
-        walletBalance: {
-          walletId: "w-c",
-          availableBalance: Money.fromCents(0),
-        },
+        wallet: fundedWallet("c", 0),
       }),
       {
         holdId: "h-c",

@@ -1,4 +1,5 @@
 import {
+  LedgerTransaction,
   Money,
   ReliabilityScore,
   User,
@@ -8,7 +9,29 @@ import {
 
 export const userLoadedAt = new Date("2026-10-08T10:00:00Z");
 
-/** Existing state loaded from storage, including a funded ledger projection. */
+/** A wallet funded by a committed top-up, or an empty wallet for zero funds. */
+export function fundedWallet(userId: string, cents = 10_000): Wallet {
+  const walletId = `w-${userId}`;
+  return new Wallet({
+    walletId,
+    userId,
+    transactions:
+      cents === 0
+        ? []
+        : [
+            new LedgerTransaction({
+              transactionId: `top-up-${userId}`,
+              walletId,
+              amount: Money.fromCents(cents),
+              kind: "TOP_UP",
+              occurredAt: userLoadedAt,
+              idempotencyKey: `top-up-${userId}`,
+            }),
+          ],
+  });
+}
+
+/** Existing state loaded from storage, including committed wallet transactions. */
 export function loadedUserDetails(
   userId: string,
   overrides: Partial<UserDetails> = {},
@@ -20,11 +43,7 @@ export function loadedUserDetails(
     accountStatus: "ACTIVE",
     preferredSports: new Set(),
     preferredRegions: new Set(),
-    wallet: new Wallet({ walletId: `w-${userId}`, userId }),
-    walletBalance: {
-      walletId: `w-${userId}`,
-      availableBalance: Money.fromCents(10_000),
-    },
+    wallet: fundedWallet(userId),
     reliabilityScore: ReliabilityScore.from(100),
     memberGroupIds: [],
     ...overrides,

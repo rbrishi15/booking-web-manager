@@ -14,12 +14,13 @@ import type {
  * Loads and saves an aggregate root: User, Session, RegularGroup, or Payout.
  * Owned children are part of their root's state and have no independent command
  * repository. Adapters choose the storage mapping and hydrate via constructors.
- * User reads include wallet identity, ledger balance, a ReliabilityScore
- * calculated from that user's history, and memberships from a consistent
- * transaction view. Reload after related
- * writes; adapters must observe transaction writes and protect concurrent funds.
- * User saves persist owned state and wallet association, never loaded balance,
- * score, or membership projections. These are contracts for future adapters.
+ * User reads include its Wallet with complete committed transaction history, a
+ * ReliabilityScore calculated from that user's history, and memberships from a
+ * consistent transaction view. Wallet.getFunds() derives spendable funds locally.
+ * Reload after related writes; adapters must observe transaction writes and
+ * protect concurrent funds. User saves persist owned state and wallet identity,
+ * never rewrite ledger history or persist derived funds, scores, or memberships.
+ * These are contracts for future adapters.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
 export interface Repository<T> {

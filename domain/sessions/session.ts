@@ -1007,7 +1007,7 @@ export class Session {
     if (!this.meetsReliabilityRequirement(score)) return "LOW_RELIABILITY";
     if (
       requireFunds &&
-      user.walletBalance.availableBalance.compareTo(this.bookingShare) < 0
+      user.wallet.getFunds().compareTo(this.bookingShare) < 0
     )
       return "INSUFFICIENT_FUNDS";
     return undefined;

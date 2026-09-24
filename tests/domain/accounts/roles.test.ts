@@ -1,6 +1,6 @@
 import { Booking, DomainError, Money, User } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { loadedUser } from "./user-fixtures";
+import { fundedWallet, loadedUser } from "./user-fixtures";
 
 const start = new Date("2026-10-10T10:00:00Z");
 const end = new Date("2026-10-10T12:00:00Z");
@@ -106,10 +106,7 @@ describe("User roles", () => {
     (roleCreated) => {
       // Arrange
       const participantUser = loadedUser("participant", {
-        walletBalance: {
-          walletId: "w-participant",
-          availableBalance: Money.fromCents(0),
-        },
+        wallet: fundedWallet("participant", 0),
       });
       const session = sessionOwnedBy(user("owner"));
       const existingRole =

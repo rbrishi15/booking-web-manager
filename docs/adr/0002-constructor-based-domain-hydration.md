@@ -60,16 +60,18 @@ sessions. Invalid state fails validation regardless of its source.
 
 Nested arguments are domain objects: a `Session` takes a `Booking` and
 `Participation` objects; a `Participation` takes a `FundHold`; a `User` takes an
-optional `PayoutAccount`, a required `Wallet`, and loaded balance, reliability,
-and membership values. Constructor argument types describe domain values,
+optional `PayoutAccount`, a required `Wallet` with complete committed transaction
+history, and loaded reliability and membership values. Constructor argument types describe domain values,
 not database rows or a parallel persistence representation. A hydrated user is
 complete: missing related data is an error, not an empty balance or default
-score. Wallet ownership and wallet-balance identity must match. The adapter
+score. Wallet ownership must match the user, and every transaction must belong
+to the wallet. The wallet validates entry types, unique transaction IDs, and
+nonnegative derived funds within safe integer cents. The adapter
 supplies a `ReliabilityScore` calculated from this user's history;
 `ReliabilityScore.fromHistory` checks history ownership during calculation.
 
 ```ts
-const wallet = new Wallet({ walletId, userId });
+const wallet = new Wallet({ walletId, userId, transactions });
 
 const existingUser = new User({
   userId,
@@ -79,7 +81,6 @@ const existingUser = new User({
   preferredRegions: new Set(),
   payoutAccount, // An already constructed PayoutAccount, if present.
   wallet,
-  walletBalance, // Ledger projection for this wallet.
   reliabilityScore, // ReliabilityScore calculated from this user's history.
   memberGroupIds, // Loaded memberships, not owned group entities.
 });
@@ -96,7 +97,7 @@ the settlement amount. Factories invoke validated constructors.
 const registeredUser = User.create({ userId, email, walletId, now });
 ```
 
-Registration establishes the wallet identity, zero available balance, empty
+Registration establishes the wallet with empty transactions and zero funds, empty
 memberships, and the existing empty-history default from `ReliabilityScore.fromHistory`.
 It creates domain state only; durable wallet provisioning belongs to the future
 registration adapter and transaction.
@@ -112,15 +113,17 @@ to express their units and meaning.
 
 Repository adapters map database column names, JSON, stored timestamps, and
 primitives to domain values. They assemble children and required related values
-before calling parent constructors. User reads load wallet identity, balance,
-calculated reliability, and memberships consistently within the transaction.
+before calling parent constructors. User reads load wallet identity, its complete
+committed transaction history, calculated reliability, and memberships consistently
+within the transaction. A partial history must not hydrate a wallet.
+`wallet.getFunds()` calculates spendable funds synchronously from those entries.
 For writes, adapters map owned state to storage: saving `User` persists its
-owned state and wallet association, not its read-only balance, score, or
-membership projections. These mappings and storage schemas stay outside the
+owned state and wallet identity, without rewriting ledger history or persisting
+derived funds, scores, or memberships. These mappings and storage schemas stay outside the
 domain.
 
-Loaded user projections remain fixed for that instance. After ledger or
-membership changes, reload the user and obtain a new participant before another
+Loaded wallet transactions and user projections remain fixed for that instance.
+After ledger or membership changes, reload the user and obtain a new participant before another
 admission. Future adapters must observe their transaction's writes and prevent
 concurrent overspending; object construction alone provides neither guarantee.
 See [ADR-0004](./0004-participant-join-and-session-admission.md).

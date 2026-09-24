@@ -17,18 +17,20 @@ its boundary; child comments identify their owning root.
   and each participation's `FundHold`. Admission, withdrawal, replacement,
   cancellation, attendance, and settlement transitions are commands on the
   aggregate root.
-- `User` owns profile/preferences, account status, wallet association, and payout
-  setup. Every loaded user also exposes its wallet identity, ledger balance,
-  calculated reliability, and membership IDs as read-only values. This does not
-  transfer ownership of the ledger, participation history, or groups. `User`
-  exposes `asBooker()` and `asParticipant()` role views.
+- `User` owns profile/preferences, account status, its `Wallet`, and payout
+  setup. The wallet holds its complete committed transaction history and derives
+  spendable funds through `getFunds(): Money`. Calculated reliability and
+  membership IDs are read-only related values. Ledger writes, participation
+  history, and groups remain external. `User` exposes `asBooker()` and
+  `asParticipant()` role views.
 - `RegularGroup` owns unique memberships and invitation lifecycle.
 - `Payout` freezes one settlement batch and external destination for one payout
   attempt. A failed attempt remains a fact; a retry gets a new attempt ID.
 
-`Wallet`, the shared `HoldingAccount`, and `LedgerTransaction` represent
-identities and immutable facts rather than aggregate roots. Account balances
-are ledger projections. `Booker` and `Participant` are role views over `User`.
+`Wallet` is an immutable child owned by `User`; the shared `HoldingAccount`
+and `LedgerTransaction` represent an identity and immutable facts rather than
+aggregate roots. Account funds are derived from committed ledger entries.
+`Booker` and `Participant` are role views over `User`.
 
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
 for ownership, command routing, and coordination across roots.
@@ -46,18 +48,23 @@ Nested arguments are domain objects, such as a `Booking` and `Participation`
 children for a `Session`. Repository adapters construct these objects directly
 and own the mapping between storage values and domain properties.
 
-`UserDetails` requires a `Wallet`, `WalletBalance`, `ReliabilityScore`, and
-membership IDs. User saves persist owned state and wallet association, not
-derived balances, scores, or memberships. Projections are fixed for the loaded
-instance; reload the user and obtain a new participant after ledger or group
-writes before another admission. Future transaction adapters must observe
+`UserDetails` requires a `Wallet`, `ReliabilityScore`, and membership IDs.
+`WalletDetails` requires wallet/user IDs and a complete array of committed
+`LedgerTransaction` objects. It validates entry types, matching wallet IDs,
+unique transaction IDs, and nonnegative derived funds within safe integer cents.
+History completeness is the repository's responsibility; a partial page must
+never hydrate a wallet. User saves persist owned state and wallet identity,
+never rewrite ledger history or persist derived funds, scores, or memberships.
+Loaded transactions and related values are fixed for that instance; reload the
+user and obtain a new participant after ledger or group writes before another
+admission. Future transaction adapters must observe
 their writes and protect against concurrent overspending.
 
 Named creation factories remain where they apply business rules or defaults:
 `User.create({ userId, email, walletId, now })` registers an active user with a
-wallet identity, zero balance, empty memberships, and the empty-history
-reliability default. `Session.create(...)` checks
-booker eligibility and an upcoming booking. Simple identities and values such
+wallet with empty transactions and zero funds, empty memberships, and the
+empty-history reliability default. `Session.create(...)` checks booker
+eligibility and an upcoming booking. Children and values such
 as `Wallet` and `Booking` use constructors directly. Hydrating existing state
 does not repeat creation workflows or reset lifecycle fields.
 
@@ -79,7 +86,12 @@ share. `Booking` is an immutable value object requiring a positive total cost an
 does not receive a reserved place.
 
 Financial operation amounts are positive and wallet balances are nonnegative at
-the server boundary. A `Wallet` never stores an authoritative balance.
+the server boundary. A `Wallet` stores no balance field. Its synchronous
+`getFunds()` sums integer cents exactly from transactions: `TOP_UP` and `REFUND`
+credit, `LOCK` and wallet-withdrawal `PAYOUT` debit, and `RELEASE`/`FORFEIT`
+leave spendable funds unchanged because those funds were already locked.
+The result is independent of entry order; an out-of-range result throws.
+Transaction collections are defensively copied, and entries are immutable.
 
 ## Participation and reliability
 
@@ -121,7 +133,8 @@ appends `RELEASE`/`FORFEIT` ledger instructions atomically. Failure keeps holds
 until a new attempt is requested; transport timeouts leave the attempt pending.
 
 `LedgerReadPort` exposes asynchronous, derived wallet and holding-account
-balances. Unknown accounts return `null`; existing accounts with no entries
+balances for independent queries; `WalletBalance` is not part of `User`
+hydration. Unknown accounts return `null`; existing accounts with no entries
 return zero. The server adapter enforces append-only entries, idempotency,
 nonnegative balances, and atomic participation/hold/ledger updates. Financial
 history remains after account anonymisation.

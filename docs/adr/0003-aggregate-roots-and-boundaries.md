@@ -27,7 +27,7 @@ children’s lifecycle and applies replacements returned by immutable children.
 
 | Aggregate root | Owned state and children | Rules enforced at the boundary |
 | --- | --- | --- |
-| `User` | Profile, preferences, account status, wallet association, optional `PayoutAccount` | Active-account operations, payout-setup transitions, valid ownership of loaded related data, and deactivation using supplied obligation facts. |
+| `User` | Profile, preferences, account status, `Wallet` child, optional `PayoutAccount` | Active-account operations, payout-setup transitions, valid ownership of loaded related data, and deactivation using supplied obligation facts. |
 | `RegularGroup` | Group details, invitation/archive state, `GroupMembership` children | Unique membership, retaining the owner, invitation access, owner-authorized administration, and archive eligibility. |
 | `Session` | `Booking`, `Participation` children and their `FundHold` children, queue order, attendance, pending settlement, payout-attempt history | Capacity and admission, waitlist ordering, withdrawal/replacement, attendance, cancellation, and session settlement. |
 | `Payout` | One provider attempt's fixed settlement lines, amount, destination and idempotency key, plus status and outcome | Matching/idempotent confirmations, conflicting callbacks, and terminal success or failure. A retry creates a new attempt. |
@@ -38,14 +38,15 @@ These are distinct concepts; see Fowler's
 [Bounded Context](https://martinfowler.com/bliki/BoundedContext.html) and
 [Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html) explanations.
 
-`User` also exposes its immutable `Wallet` identity and loaded, read-only
-`WalletBalance`, `ReliabilityScore`, and membership IDs. Exposing those values
-does not give `User` ownership of ledger entries, participation history, or
-`RegularGroup` membership changes. Constructors validate wallet ownership and
-balance identity. The repository supplies the score calculated from this user's
-history; the ledger, reliability calculation, and group remain authoritative
-for their respective data. Saving `User` must not write these projections back
-to their source records.
+`User` owns its immutable `Wallet` child, which holds complete committed
+transactions and derives spendable funds with `getFunds(): Money`. It also
+exposes a read-only `ReliabilityScore` and membership IDs. Constructors validate
+wallet ownership, transaction types and ownership, unique transaction IDs, and
+nonnegative derived funds within safe integer cents. Ledger writes, participation
+history, and `RegularGroup` membership changes remain external. The repository
+supplies the score calculated from this user's history. Saving `User` persists
+owned state and wallet identity, never rewrites ledger history, and never writes
+derived funds, scores, or memberships back to their sources.
 
 Class-level JSDoc for each root starts with `Aggregate root: <Name>.` and states
 its owned state and command boundary. Child comments name their owning root.
@@ -76,11 +77,13 @@ independently of its root.
   passes its fully loaded user directly to session admission. These roles have
   no independently owned lifecycle.
 - `Booking`, `Money`, and `ReliabilityScore` are immutable value objects.
-- `Wallet` and `HoldingAccount` are immutable identities in the current model.
-  They do not own a transaction collection or authoritative balance.
+- `Wallet` is an immutable child owned by `User`, with a transaction collection
+  and derived funds, without a stored balance or money-movement commands.
+  `HoldingAccount` remains an immutable identity with a ledger-derived balance.
 - `LedgerTransaction` is an immutable financial fact. Ledger-wide append-only,
   idempotency, and balance rules belong to the ledger adapter.
-- `WalletBalance` and `HoldingAccountBalance` are derived read models.
+- `WalletBalance` and `HoldingAccountBalance` remain derived read models for
+  independent ledger queries; neither supplies the owned wallet's state.
   `ReliabilityScore.fromHistory` calculates a `ReliabilityScore` across participation
   history; it does not own that history as an aggregate. `User` exposes the
   score directly, without a separate user identity or calculation-date wrapper.
@@ -104,9 +107,10 @@ The repository contracts load and save `User`, `RegularGroup`, `Session`, and
 queries may expose child information without granting independent mutation.
 Storage layout and row mapping remain adapter responsibilities.
 
-User repository reads must include its wallet, balance, calculated reliability,
-and memberships from a consistent transaction view. Related projections are
-fixed for that instance; reload the user and obtain a new participant after
+User repository reads must include its wallet and complete committed transaction
+history, calculated reliability, and memberships from a consistent transaction
+view. Partial transaction histories must not hydrate wallets. Transactions and
+related projections are fixed for that instance; reload the user and obtain a new participant after
 ledger or membership writes before another admission. Adapters must observe
 transaction writes and protect against concurrent overspending. These are
 contracts for future implementations, not guarantees supplied by object

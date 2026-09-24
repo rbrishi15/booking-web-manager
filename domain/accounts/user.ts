@@ -1,6 +1,5 @@
 import { Money } from "../finance/money";
 import { Wallet } from "../finance/wallet";
-import type { WalletBalance } from "../finance/wallet-balance";
 import { ReliabilityScore } from "../reliability/reliability-score";
 import { DomainError, requireDomain } from "../shared/errors";
 import type {
@@ -21,7 +20,6 @@ export interface UserDetails {
   readonly accountStatus: AccountStatus;
   readonly payoutAccount?: PayoutAccount;
   readonly wallet: Wallet;
-  readonly walletBalance: WalletBalance;
   readonly reliabilityScore: ReliabilityScore;
   readonly memberGroupIds: readonly UUID[];
 }
@@ -37,12 +35,13 @@ export interface UserRegistration {
 
 /**
  * Aggregate root: User.
- * Owns profile, preferences, account status, and the PayoutAccount child.
+ * Owns profile, preferences, account status, Wallet, and PayoutAccount children.
  * Profile, deactivation, and payout-setup commands enter through this root;
  * payout-setup transitions replace its immutable child.
- * Booker and Participant are role views. Exposes a wallet identity and loaded,
- * read-only balance, reliability, and memberships without owning their source
- * ledger, participation history, or groups. Reload after those sources change.
+ * Booker and Participant are role views. Wallet derives funds from its loaded
+ * transactions; reliability and memberships are read-only related values.
+ * Ledger writes, participation history, and groups remain external. Reload
+ * after those sources change.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
 export class User {
@@ -53,7 +52,6 @@ export class User {
   #accountStatus: AccountStatus;
   #payoutAccount?: PayoutAccount;
   readonly #wallet: Wallet;
-  readonly #walletBalance: WalletBalance;
   readonly #reliabilityScore: ReliabilityScore;
   readonly #memberGroupIds: readonly UUID[];
 
@@ -83,10 +81,6 @@ export class User {
     this.#accountStatus = details.accountStatus;
     this.#payoutAccount = details.payoutAccount;
     this.#wallet = details.wallet;
-    this.#walletBalance = Object.freeze({
-      walletId: details.walletBalance.walletId,
-      availableBalance: details.walletBalance.availableBalance,
-    });
     this.#reliabilityScore = details.reliabilityScore;
     this.#memberGroupIds = [...details.memberGroupIds];
     this.validate();
@@ -102,11 +96,8 @@ export class User {
       wallet: new Wallet({
         walletId: details.walletId,
         userId: details.userId,
+        transactions: [],
       }),
-      walletBalance: {
-        walletId: details.walletId,
-        availableBalance: Money.fromCents(0),
-      },
       reliabilityScore: ReliabilityScore.fromHistory(
         details.userId,
         [],
@@ -246,9 +237,6 @@ export class User {
   get wallet(): Wallet {
     return this.#wallet;
   }
-  get walletBalance(): WalletBalance {
-    return this.#walletBalance;
-  }
   get reliabilityScore(): ReliabilityScore {
     return this.#reliabilityScore;
   }
@@ -302,14 +290,6 @@ function validateRelatedData(details: UserDetails): void {
       details.wallet.userId === details.userId,
     "INVALID_INPUT",
     "A user needs a wallet belonging to that user",
-  );
-  requireDomain(
-    details.walletBalance != null &&
-      details.walletBalance.walletId === details.wallet.walletId &&
-      details.walletBalance.availableBalance instanceof Money &&
-      details.walletBalance.availableBalance.toCents() >= 0,
-    "INVALID_INPUT",
-    "A user needs a nonnegative balance for their wallet",
   );
   requireDomain(
     details.reliabilityScore instanceof ReliabilityScore,
