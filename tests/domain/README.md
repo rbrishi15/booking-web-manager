@@ -10,7 +10,13 @@ and [SpecialSkillTest](https://github.com/liang799/SC2002-Project/blob/main/src/
 ## Structure and naming
 
 - Use a file named after the entity or value object, with one top-level
-  `describe` and flat tests ordered by method.
+  `describe`. Keep smaller suites flat, with tests ordered by method.
+- Larger entities may use one additional level of `describe` groups for related
+  behaviors, such as construction, profile changes, payout setup, and
+  deactivation. Order tests by method within each group, include related getters,
+  and avoid deeper nesting or shared setup hooks.
+- Split files when responsibilities, fixtures, dependencies, or ownership warrant
+  it. Line count alone is not a reason to split a cohesive entity's tests.
 - Name each test `method_WhenCondition_ExpectedResult`. Use `constructor` for
   construction and the property name for a getter.
 - Give each test one coherent scenario. Several transitions can belong together
