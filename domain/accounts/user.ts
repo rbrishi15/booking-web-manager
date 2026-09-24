@@ -56,17 +56,7 @@ export class User {
   readonly #memberGroupIds: readonly UUID[];
 
   constructor(details: UserDetails) {
-    validateRelatedData(details);
-    const hasPreferenceSets =
-      details.preferredSports !== undefined &&
-      details.preferredSports !== null &&
-      details.preferredRegions !== undefined &&
-      details.preferredRegions !== null;
-    DomainError.require(
-      hasPreferenceSets,
-      "INVALID_INPUT",
-      "A user needs iterable preference sets",
-    );
+    validateUserConstruction(details);
 
     this.#userId = details.userId;
     this.#email = details.email;
@@ -77,6 +67,7 @@ export class User {
     this.#wallet = details.wallet;
     this.#reliabilityScore = details.reliabilityScore;
     this.#memberGroupIds = [...details.memberGroupIds];
+
     this.assertInvariants();
   }
 
@@ -192,19 +183,8 @@ export class User {
 
   deactivate(input: DeactivationInput): void {
     if (this.#accountStatus === "INACTIVE") return;
-    validateDeactivationInput(input);
-    const hasNoOutstandingObligations =
-      input.availableBalance.toCents() === 0 &&
-      input.heldBalance.toCents() === 0 &&
-      input.activeCommitments === 0 &&
-      input.unsettledOwnedSessions === 0 &&
-      input.pendingPayouts === 0 &&
-      input.activeOwnedGroups === 0;
-    DomainError.require(
-      hasNoOutstandingObligations,
-      "ACTIVE_OBLIGATIONS",
-      "Outstanding obligations prevent deactivation",
-    );
+    assertDeactivationAllowed(input);
+
     this.#accountStatus = "INACTIVE";
     this.#email = null;
     this.#preferredSports.clear();
@@ -277,7 +257,7 @@ export class User {
   }
 }
 
-function validateRelatedData(details: UserDetails): void {
+function validateUserConstruction(details: UserDetails): void {
   DomainError.require(
     details.wallet.userId === details.userId,
     "INVALID_INPUT",
@@ -288,6 +268,16 @@ function validateRelatedData(details: UserDetails): void {
       details.memberGroupIds.every((id) => id.trim() !== ""),
     "INVALID_INPUT",
     "A user needs valid group membership IDs",
+  );
+  const hasPreferenceSets =
+    details.preferredSports !== undefined &&
+    details.preferredSports !== null &&
+    details.preferredRegions !== undefined &&
+    details.preferredRegions !== null;
+  DomainError.require(
+    hasPreferenceSets,
+    "INVALID_INPUT",
+    "A user needs iterable preference sets",
   );
 }
 
@@ -306,7 +296,7 @@ function validatePreferences(values: Iterable<string>, name: string): void {
       `${name} contains an empty value`,
     );
 }
-function validateDeactivationInput(input: DeactivationInput): void {
+function assertDeactivationAllowed(input: DeactivationInput): void {
   for (const amount of [input.availableBalance, input.heldBalance])
     DomainError.require(
       amount.toCents() >= 0,
@@ -324,6 +314,18 @@ function validateDeactivationInput(input: DeactivationInput): void {
       "INVALID_INPUT",
       "Obligation counts must be nonnegative safe integers",
     );
+  const hasNoOutstandingObligations =
+    input.availableBalance.toCents() === 0 &&
+    input.heldBalance.toCents() === 0 &&
+    input.activeCommitments === 0 &&
+    input.unsettledOwnedSessions === 0 &&
+    input.pendingPayouts === 0 &&
+    input.activeOwnedGroups === 0;
+  DomainError.require(
+    hasNoOutstandingObligations,
+    "ACTIVE_OBLIGATIONS",
+    "Outstanding obligations prevent deactivation",
+  );
 }
 
 export type { DeactivationInput } from "../shared/operations";
