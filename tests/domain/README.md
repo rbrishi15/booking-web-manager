@@ -26,20 +26,28 @@ and [SpecialSkillTest](https://github.com/liang799/SC2002-Project/blob/main/src/
 
 ## Writing a scenario
 
-Separate setup, action, and assertions with blank lines. Add short
-Arrange/Act/Assert comments only when they help clarify a longer scenario.
+Use `// Arrange`, `// Act`, and `// Assert` comments in new and refactored tests,
+with blank lines between the phases:
+
+- **Arrange:** create the subject, inputs, and starting state for the scenario.
+- **Act:** perform the behavior under test and capture any result.
+- **Assert:** check the result and relevant observable state.
+
 Name observed results after what they represent, then assert concrete values.
 
 ```ts
 test("completeSetup_WhenSetupIsPending_ReturnsCompletedCopy", () => {
+  // Arrange
   const pendingAccount = PayoutAccount.create({
     payoutAccountId: "account",
     userId: "owner",
     providerAccountReference: "provider",
   });
 
+  // Act
   const completedAccount = pendingAccount.completeSetup("bank");
 
+  // Assert
   expect(pendingAccount.setupStatus).toBe("PENDING");
   expect(completedAccount).not.toBe(pendingAccount);
   expect(completedAccount.setupStatus).toBe("COMPLETE");
@@ -49,6 +57,8 @@ test("completeSetup_WhenSetupIsPending_ReturnsCompletedCopy", () => {
 
 Use fresh objects for independent scenarios. Assert rejections directly with
 `expect(() => action()).toThrow(expect.objectContaining({ code: "..." }))`.
+Label this combined phase `// Act & Assert`, since the assertion executes the
+action. Do not introduce error-capture helpers just to separate those phases.
 Run the assertion while the subject is in the state named by the test; do not
 save an action callback and invoke it after subsequent state changes. When
 atomicity matters, also assert that rejection leaves state unchanged.
@@ -60,6 +70,9 @@ Domain tests assume declared input types and exercise business constraints;
 external input parsing belongs in boundary tests.
 
 ## Examples and verification
+
+The rationale for this convention is recorded in
+[ADR-0005: Domain unit-test structure](../../docs/adr/0005-domain-unit-test-structure.md).
 
 The first files following this standard are
 [user.test.ts](./accounts/user.test.ts) and

@@ -9,6 +9,17 @@ is trust: making sure the person who took the financial risk is reimbursed.
 
 NTU SC2006 group project, Group 3.
 
+## Before planning or making changes
+
+Read the [ADR index](./docs/README.md), then read the relevant architecture
+decision records in [docs/adr](./docs/adr) in full before planning, reviewing,
+or changing code or tests. Follow links to related ADRs and implementation
+guides, including the domain testing guide for domain test work.
+
+Treat accepted ADRs as implementation constraints. If the requested change
+revises an accepted decision, record the new decision in an ADR, identify which
+earlier decision it supersedes, and update the index.
+
 ---
 
 ## Non-negotiable rules
@@ -178,6 +189,12 @@ creation and cannot be changed.
 ---
 
 ## Testing
+
+For domain unit tests, follow the
+[domain testing guide](./tests/domain/README.md). It defines scenario naming,
+Arrange/Act/Assert comments, grouping, fixtures, and error assertions. The
+rationale is recorded in
+[ADR-0005](./docs/adr/0005-domain-unit-test-structure.md).
 
 Priority test, and the one most likely to catch a real bug: fire twenty
 concurrent commits at an eight-slot session and assert exactly 8 succeed, 12
