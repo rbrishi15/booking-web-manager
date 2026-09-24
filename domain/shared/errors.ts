@@ -34,12 +34,12 @@ export class DomainError extends Error {
     super(message);
     this.name = "DomainError";
   }
-}
 
-export function requireDomain(
-  condition: unknown,
-  code: DomainErrorCode,
-  message: string,
-): asserts condition {
-  if (!condition) throw new DomainError(code, message);
+  static require(
+    condition: unknown,
+    code: DomainErrorCode,
+    message: string,
+  ): asserts condition {
+    if (!condition) throw new DomainError(code, message);
+  }
 }

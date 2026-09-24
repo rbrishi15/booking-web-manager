@@ -69,7 +69,6 @@ export {
 } from "./finance/wallet";
 export {
   DomainError,
-  requireDomain,
   type DomainErrorCode,
 } from "./shared/errors";
 export type {

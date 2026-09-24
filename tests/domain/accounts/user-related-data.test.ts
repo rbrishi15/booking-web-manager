@@ -22,7 +22,7 @@ describe("User related data", () => {
     expect(user.memberGroupIds).toEqual([]);
   });
 
-  test.each(["wallet", "reliabilityScore", "memberGroupIds"] as const)(
+  test.each(["memberGroupIds"] as const)(
     "requires %s when hydrating a user",
     (field) => {
       const details = loadedUserDetails("u");
@@ -52,11 +52,7 @@ describe("User related data", () => {
         }),
       },
     ],
-    ["plain wallet object", { wallet: { walletId: "w-u", userId: "u" } }],
-    ["primitive score", { reliabilityScore: 100 }],
-    ["plain score object", { reliabilityScore: { value: 100 } }],
     ["empty membership ID", { memberGroupIds: [" "] }],
-    ["non-string membership ID", { memberGroupIds: [123] }],
     ["non-array memberships", { memberGroupIds: new Set(["group"]) }],
   ])("rejects %s during hydration", (_name, patch) => {
     const details = loadedUserDetails("u");

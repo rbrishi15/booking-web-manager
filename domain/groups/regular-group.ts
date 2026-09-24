@@ -1,4 +1,4 @@
-import { requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { GroupStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { GroupMembership } from "./group-membership";
@@ -41,17 +41,12 @@ export class RegularGroup {
   #memberships: GroupMembership[];
 
   constructor(details: RegularGroupDetails) {
-    requireDomain(
+    DomainError.require(
       Array.isArray(details.memberships),
       "INVALID_INPUT",
       "A group needs a membership roster",
     );
 
-    requireDomain(
-      details.memberships.every((member) => member instanceof GroupMembership),
-      "INVALID_INPUT",
-      "Group members must be GroupMembership values",
-    );
     this.#groupId = details.groupId;
     this.#ownerId = details.ownerId;
     this.#name = details.name;
@@ -81,13 +76,13 @@ export class RegularGroup {
     readonly invitationToken: string;
     readonly now: Date;
   }): GroupJoinResult {
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE",
       "INVALID_STATE",
       "An archived group cannot accept members",
     );
     validateId(command.userId, "userId");
-    requireDomain(
+    DomainError.require(
       this.#invitationActive &&
         command.invitationToken === this.#invitationToken,
       "INVALID_INVITATION",
@@ -109,12 +104,12 @@ export class RegularGroup {
     readonly userId: UUID;
   }): void {
     this.assertOwner(command.actorId);
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE",
       "INVALID_STATE",
       "An archived group cannot change membership",
     );
-    requireDomain(
+    DomainError.require(
       command.userId !== this.#ownerId,
       "OWNER_REMOVAL",
       "The group owner cannot be removed",
@@ -122,7 +117,7 @@ export class RegularGroup {
     const index = this.#memberships.findIndex(
       (member) => member.userId === command.userId,
     );
-    requireDomain(index >= 0, "NOT_FOUND", "The group member was not found");
+    DomainError.require(index >= 0, "NOT_FOUND", "The group member was not found");
     this.#memberships = this.#memberships.filter(
       (member) => member.userId !== command.userId,
     );
@@ -130,7 +125,7 @@ export class RegularGroup {
 
   rename(command: { readonly actorId: UUID; readonly name: string }): void {
     this.assertOwner(command.actorId);
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE",
       "INVALID_STATE",
       "An archived group cannot be renamed",
@@ -144,7 +139,7 @@ export class RegularGroup {
     readonly invitationToken: string;
   }): void {
     this.assertOwner(command.actorId);
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE",
       "INVALID_STATE",
       "An archived group cannot rotate invitations",
@@ -156,7 +151,7 @@ export class RegularGroup {
 
   revokeInvitation(actorId: UUID): void {
     this.assertOwner(actorId);
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE",
       "INVALID_STATE",
       "An archived group cannot revoke invitations",
@@ -170,13 +165,13 @@ export class RegularGroup {
   }): void {
     this.assertOwner(command.actorId);
     if (this.#status === "ARCHIVED") return;
-    requireDomain(
+    DomainError.require(
       Number.isSafeInteger(command.unsettledLinkedSessions) &&
         command.unsettledLinkedSessions >= 0,
       "INVALID_INPUT",
       "Unsettled session count must be nonnegative",
     );
-    requireDomain(
+    DomainError.require(
       command.unsettledLinkedSessions === 0,
       "ACTIVE_OBLIGATIONS",
       "The group has unsettled linked sessions",
@@ -208,7 +203,7 @@ export class RegularGroup {
   }
 
   private assertOwner(actorId: UUID): void {
-    requireDomain(
+    DomainError.require(
       actorId === this.#ownerId,
       "UNAUTHORIZED",
       "Only the group owner may perform this action",
@@ -220,17 +215,12 @@ export class RegularGroup {
     validateId(this.#ownerId, "ownerId");
     validateName(this.#name);
     validateToken(this.#invitationToken);
-    requireDomain(
+    DomainError.require(
       this.#status === "ACTIVE" || this.#status === "ARCHIVED",
       "INVALID_INPUT",
       "Unknown group status",
     );
-    requireDomain(
-      typeof this.#invitationActive === "boolean",
-      "INVALID_INPUT",
-      "invitationActive must be boolean",
-    );
-    requireDomain(
+    DomainError.require(
       this.#memberships.length > 0,
       "INVALID_INPUT",
       "A group must retain at least one member",
@@ -238,18 +228,18 @@ export class RegularGroup {
     const ids = new Set(
       this.#memberships.map((membership) => membership.userId),
     );
-    requireDomain(
+    DomainError.require(
       ids.size === this.#memberships.length,
       "DUPLICATE_ID",
       "A user may only have one group membership",
     );
-    requireDomain(
+    DomainError.require(
       ids.has(this.#ownerId),
       "INVALID_INPUT",
       "The group owner must be a member",
     );
     if (this.#status === "ARCHIVED")
-      requireDomain(
+      DomainError.require(
         !this.#invitationActive,
         "INVALID_INPUT",
         "An archived group cannot have an active invitation",
@@ -258,22 +248,22 @@ export class RegularGroup {
 }
 
 function validateId(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );
 }
 function validateName(value: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     "A group name is required",
   );
 }
 function validateToken(value: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     "An invitation token is required",
   );

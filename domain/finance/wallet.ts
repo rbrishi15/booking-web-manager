@@ -1,4 +1,4 @@
-import { requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { UUID } from "../shared/types";
 import { LedgerTransaction } from "./ledger-transaction";
 import { Money } from "./money";
@@ -21,20 +21,19 @@ export class Wallet {
   constructor(details: WalletDetails) {
     validate(details.walletId, "walletId");
     validate(details.userId, "userId");
-    requireDomain(
+    DomainError.require(
       Array.isArray(details.transactions),
       "INVALID_INPUT",
       "A wallet needs its complete transaction history",
     );
     const transactionIds = new Set<UUID>();
     for (const transaction of details.transactions) {
-      requireDomain(
-        transaction instanceof LedgerTransaction &&
-          transaction.walletId === details.walletId,
+      DomainError.require(
+        transaction.walletId === details.walletId,
         "INVALID_INPUT",
         "Wallet transactions must be ledger entries belonging to this wallet",
       );
-      requireDomain(
+      DomainError.require(
         !transactionIds.has(transaction.transactionId),
         "INVALID_INPUT",
         "Wallet transaction IDs must be unique",
@@ -45,7 +44,7 @@ export class Wallet {
     this.#walletId = details.walletId;
     this.#userId = details.userId;
     this.#transactions = [...details.transactions];
-    requireDomain(
+    DomainError.require(
       this.getFunds().toCents() >= 0,
       "INVALID_INPUT",
       "Wallet funds cannot be negative",
@@ -90,8 +89,8 @@ export class Wallet {
   }
 }
 function validate(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );

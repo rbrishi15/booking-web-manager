@@ -27,12 +27,8 @@ describe("Email", () => {
     "owner@example.com\r\n",
     "owner@example.com\u2028",
     "owner@\u00a0example.com",
-    null,
-    undefined,
-    123,
-    { toString: () => "owner@example.com" },
-  ])("rejects invalid input %j", (value) => {
-    expect(() => new Email(value as string)).toThrow(
+  ])("rejects invalid address %j", (value) => {
+    expect(() => new Email(value)).toThrow(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );
   });
@@ -44,9 +40,6 @@ describe("Email", () => {
     expect(email.equals(new Email("owner@example.com"))).toBe(false);
     expect(email.equals(new Email("Owner@EXAMPLE.COM"))).toBe(false);
     expect(email.equals(new Email("other@example.com"))).toBe(false);
-    expect(() => email.equals("Owner@example.com" as unknown as Email)).toThrow(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
   });
 
   test("cannot be changed through its public surface", () => {

@@ -103,12 +103,6 @@ describe("Wallet funds", () => {
     ["missing history", undefined],
     ["null history", null],
     ["non-array history", new Set()],
-    [
-      "plain entry",
-      [{ walletId: "wallet", kind: "TOP_UP", amount: Money.fromCents(100) }],
-    ],
-    ["null entry", [null]],
-    ["sparse history", new Array(1)],
     ["foreign entry", [entry("foreign", "TOP_UP", 100, { walletId: "other" })]],
     [
       "unassigned entry",

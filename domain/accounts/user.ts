@@ -1,7 +1,6 @@
-import { Money } from "../finance/money";
 import { Wallet } from "../finance/wallet";
 import { ReliabilityScore } from "../reliability/reliability-score";
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type {
   DeactivationInput,
   PayoutDestination,
@@ -58,23 +57,17 @@ export class User {
 
   constructor(details: UserDetails) {
     validateRelatedData(details);
-    requireDomain(
+    const hasPreferenceSets =
       details.preferredSports !== undefined &&
-        details.preferredSports !== null &&
-        details.preferredRegions !== undefined &&
-        details.preferredRegions !== null &&
-        typeof details.preferredSports[Symbol.iterator] === "function" &&
-        typeof details.preferredRegions[Symbol.iterator] === "function",
+      details.preferredSports !== null &&
+      details.preferredRegions !== undefined &&
+      details.preferredRegions !== null;
+    DomainError.require(
+      hasPreferenceSets,
       "INVALID_INPUT",
       "A user needs iterable preference sets",
     );
 
-    requireDomain(
-      details.payoutAccount === undefined ||
-        details.payoutAccount instanceof PayoutAccount,
-      "INVALID_INPUT",
-      "A payout account must be a PayoutAccount",
-    );
     this.#userId = details.userId;
     this.#email = details.email;
     this.#preferredSports = new Set(details.preferredSports);
@@ -110,11 +103,6 @@ export class User {
 
   updateProfile(command: { readonly email: Email }): void {
     this.assertActive();
-    requireDomain(
-      command.email instanceof Email,
-      "INVALID_INPUT",
-      "A profile email must be an Email",
-    );
     this.#email = command.email;
   }
 
@@ -205,13 +193,15 @@ export class User {
   deactivate(input: DeactivationInput): void {
     if (this.#accountStatus === "INACTIVE") return;
     validateDeactivationInput(input);
-    requireDomain(
+    const hasNoOutstandingObligations =
       input.availableBalance.toCents() === 0 &&
-        input.heldBalance.toCents() === 0 &&
-        input.activeCommitments === 0 &&
-        input.unsettledOwnedSessions === 0 &&
-        input.pendingPayouts === 0 &&
-        input.activeOwnedGroups === 0,
+      input.heldBalance.toCents() === 0 &&
+      input.activeCommitments === 0 &&
+      input.unsettledOwnedSessions === 0 &&
+      input.pendingPayouts === 0 &&
+      input.activeOwnedGroups === 0;
+    DomainError.require(
+      hasNoOutstandingObligations,
       "ACTIVE_OBLIGATIONS",
       "Outstanding obligations prevent deactivation",
     );
@@ -250,7 +240,7 @@ export class User {
   }
 
   private assertActive(): void {
-    requireDomain(
+    DomainError.require(
       this.#accountStatus === "ACTIVE",
       "INACTIVE_ACCOUNT",
       "The account is inactive",
@@ -259,26 +249,26 @@ export class User {
 
   private assertInvariants(): void {
     validateId(this.#userId, "userId");
-    requireDomain(
+    DomainError.require(
       this.#accountStatus === "ACTIVE" || this.#accountStatus === "INACTIVE",
       "INVALID_INPUT",
       "Unknown account status",
     );
     if (this.#accountStatus === "ACTIVE")
-      requireDomain(
-        this.#email instanceof Email,
+      DomainError.require(
+        this.#email !== null,
         "INVALID_INPUT",
         "An active account needs an Email",
       );
     if (this.#accountStatus === "INACTIVE")
-      requireDomain(
+      DomainError.require(
         this.#email === null,
         "INVALID_INPUT",
         "An inactive account must be anonymised",
       );
     validatePreferences(this.#preferredSports, "preferredSports");
     validatePreferences(this.#preferredRegions, "preferredRegions");
-    requireDomain(
+    DomainError.require(
       this.#payoutAccount === undefined ||
         this.#payoutAccount.userId === this.#userId,
       "INVALID_INPUT",
@@ -288,51 +278,37 @@ export class User {
 }
 
 function validateRelatedData(details: UserDetails): void {
-  requireDomain(
-    details.wallet instanceof Wallet &&
-      details.wallet.userId === details.userId,
+  DomainError.require(
+    details.wallet.userId === details.userId,
     "INVALID_INPUT",
     "A user needs a wallet belonging to that user",
   );
-  requireDomain(
-    details.reliabilityScore instanceof ReliabilityScore,
-    "INVALID_INPUT",
-    "A user needs a ReliabilityScore",
-  );
-  requireDomain(
+  DomainError.require(
     Array.isArray(details.memberGroupIds) &&
-      details.memberGroupIds.every(
-        (id) => typeof id === "string" && id.trim() !== "",
-      ),
+      details.memberGroupIds.every((id) => id.trim() !== ""),
     "INVALID_INPUT",
     "A user needs valid group membership IDs",
   );
 }
 
 function validateId(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );
 }
 function validatePreferences(values: Iterable<string>, name: string): void {
   for (const value of values)
-    requireDomain(
-      typeof value === "string" && value.trim() !== "",
+    DomainError.require(
+      value.trim() !== "",
       "INVALID_INPUT",
       `${name} contains an empty value`,
     );
 }
 function validateDeactivationInput(input: DeactivationInput): void {
   for (const amount of [input.availableBalance, input.heldBalance])
-    requireDomain(
-      amount instanceof Money,
-      "INVALID_INPUT",
-      "Balances must be Money values",
-    );
-  for (const amount of [input.availableBalance, input.heldBalance])
-    requireDomain(
+    DomainError.require(
       amount.toCents() >= 0,
       "INVALID_INPUT",
       "Balances cannot be negative",
@@ -343,7 +319,7 @@ function validateDeactivationInput(input: DeactivationInput): void {
     input.pendingPayouts,
     input.activeOwnedGroups,
   ])
-    requireDomain(
+    DomainError.require(
       Number.isSafeInteger(count) && count >= 0,
       "INVALID_INPUT",
       "Obligation counts must be nonnegative safe integers",

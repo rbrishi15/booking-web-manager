@@ -74,31 +74,21 @@ describe("User aggregate", () => {
     expect(user.email?.toString()).toBe("Owner+bookings@Example.COM");
   });
 
-  test.each([
-    "owner@example.com",
-    { value: "owner@example.com" },
-    null,
-    undefined,
-  ])("rejects non-Email input %j at domain boundaries", (value) => {
-    const email = value as unknown as Email;
-    const user = newUser();
-    const before = profileOf(user);
-
+  test("requires an email for active accounts and no email for inactive accounts", () => {
+    expect(() => new User(userDetails({ email: null }))).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
     expect(() =>
-      User.create({
-        userId: "owner",
-        email,
-        walletId: "w-owner",
-        now: userLoadedAt,
-      }),
+      new User(
+        userDetails({
+          accountStatus: "INACTIVE",
+          email: new Email("owner@example.com"),
+        }),
+      ),
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
-    expect(() => new User(userDetails({ email }))).toThrow(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
-    expect(() => user.updateProfile({ email })).toThrow(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
-    expect(profileOf(user)).toEqual(before);
+    expect(
+      new User(userDetails({ accountStatus: "INACTIVE", email: null })).email,
+    ).toBeNull();
   });
 
   test("checks account status before accepting a profile email", () => {
@@ -107,7 +97,7 @@ describe("User aggregate", () => {
     const before = profileOf(user);
 
     expect(() =>
-      user.updateProfile({ email: "invalid" as unknown as Email }),
+      user.updateProfile({ email: new Email("new@example.com") }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
     expect(profileOf(user)).toEqual(before);
   });
@@ -156,15 +146,12 @@ describe("User aggregate", () => {
     expect([...constructed.preferredSports]).toEqual(["Tennis"]);
   });
 
-  test("rejects invalid profile and preference updates before changing state", () => {
+  test("rejects invalid preference updates before changing state", () => {
     // Arrange
     const user = newUser();
     const before = profileOf(user);
 
     // Act
-    const invalidProfile = captureError(() =>
-      user.updateProfile({ email: " " as unknown as Email }),
-    );
     const invalidPreferences = captureError(() =>
       user.updatePreferences({
         preferredSports: new Set(["Tennis"]),
@@ -173,9 +160,6 @@ describe("User aggregate", () => {
     );
 
     // Assert
-    expect(invalidProfile).toEqual(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
     expect(invalidPreferences).toEqual(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );

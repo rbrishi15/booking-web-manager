@@ -99,26 +99,16 @@ export class ReliabilityScore {
   }
 
   equals(other: ReliabilityScore): boolean {
-    assertScore(other);
     return this.#value === other.#value;
   }
 
   compareTo(other: ReliabilityScore): -1 | 0 | 1 {
-    assertScore(other);
     if (this.#value < other.#value) return -1;
     if (this.#value > other.#value) return 1;
     return 0;
   }
 
   meetsMinimum(minimum: ReliabilityScore): boolean {
-    assertScore(minimum);
     return this.compareTo(minimum) >= 0;
   }
-}
-
-function assertScore(
-  value: ReliabilityScore,
-): asserts value is ReliabilityScore {
-  if (!(value instanceof ReliabilityScore))
-    throw new RangeError("Reliability comparison requires another score");
 }

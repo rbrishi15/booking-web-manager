@@ -1,7 +1,7 @@
 import type { User } from "../accounts/user";
 import { Money } from "../finance/money";
 import { ReliabilityScore } from "../reliability/reliability-score";
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type {
   AdmissionResult,
   FinancialInstruction,
@@ -104,42 +104,26 @@ export class Session {
   #payoutIdempotencyKeys: Set<string>;
 
   constructor(details: SessionDetails) {
-    requireDomain(
-      details.booking instanceof Booking,
-      "INVALID_INPUT",
-      "A session needs a Booking value object",
-    );
     requireId(details.sessionId, "sessionId");
     requireId(details.bookerId, "bookerId");
     requireId(details.holdingAccountId, "holdingAccountId");
-    requireDomain(
-      typeof details.roomToken === "string" && details.roomToken.trim() !== "",
+    DomainError.require(
+      details.roomToken.trim() !== "",
       "INVALID_INPUT",
       "A session needs a room token",
     );
-    requireDomain(
+    DomainError.require(
       Array.isArray(details.participations),
       "INVALID_INPUT",
       "A session needs a participation roster",
     );
-    requireDomain(
-      details.participations.every((p) => p instanceof Participation),
-      "INVALID_INPUT",
-      "A roster needs Participation values",
-    );
     const participations = details.participations;
-    if (details.minimumReliability !== undefined)
-      requireDomain(
-        details.minimumReliability instanceof ReliabilityScore,
-        "INVALID_INPUT",
-        "minimumReliability must be a ReliabilityScore",
-      );
     if (details.invitedGroupId !== undefined)
       requireId(details.invitedGroupId, "invitedGroupId");
     if (details.pendingSettlement !== undefined)
       validateSettlementBatch(details.pendingSettlement);
     if (details.payoutAttemptIds !== undefined)
-      requireDomain(
+      DomainError.require(
         Array.isArray(details.payoutAttemptIds) &&
           new Set(details.payoutAttemptIds).size ===
             details.payoutAttemptIds.length,
@@ -147,7 +131,7 @@ export class Session {
         "Payout attempt IDs must be unique",
       );
     if (details.payoutIdempotencyKeys !== undefined)
-      requireDomain(
+      DomainError.require(
         Array.isArray(details.payoutIdempotencyKeys) &&
           new Set(details.payoutIdempotencyKeys).size ===
             details.payoutIdempotencyKeys.length,
@@ -158,7 +142,7 @@ export class Session {
       (max, p) => Math.max(max, p.queueSequence ?? 0),
       0,
     );
-    requireDomain(
+    DomainError.require(
       details.nextQueueSequence > maxSequence,
       "INVALID_INPUT",
       "Queue sequence must be ahead of the roster",
@@ -195,12 +179,12 @@ export class Session {
   }
 
   static create(details: SessionCreation): Session {
-    requireDomain(
+    DomainError.require(
       details.bookerStatus === "ACTIVE",
       "INACTIVE_ACCOUNT",
       "An inactive booker cannot create a session",
     );
-    requireDomain(
+    DomainError.require(
       details.payoutReady === true,
       "PAYOUT_ACCOUNT_NOT_READY",
       "A session needs a completed payout account",
@@ -223,12 +207,12 @@ export class Session {
       payoutAttemptIds: [],
       payoutIdempotencyKeys: [],
     });
-    requireDomain(
+    DomainError.require(
       !session.#booking.hasStarted(now),
       "SESSION_STARTED",
       "A new session must be upcoming",
     );
-    requireDomain(
+    DomainError.require(
       session.bookingShare.toCents() > 0,
       "INVALID_INPUT",
       "The booking share must be positive",
@@ -266,10 +250,12 @@ export class Session {
       this.nextWaitlistedUserId !== undefined
     ) {
       const sequence = this.#nextQueueSequence;
-      requireDomain(
+      const isValidQueueSequence =
         Number.isSafeInteger(sequence) &&
-          sequence > 0 &&
-          sequence < Number.MAX_SAFE_INTEGER,
+        sequence > 0 &&
+        sequence < Number.MAX_SAFE_INTEGER;
+      DomainError.require(
+        isValidQueueSequence,
         "INVALID_INPUT",
         "Queue sequence overflowed",
       );
@@ -299,12 +285,12 @@ export class Session {
     const next = this.nextWaitlisted();
     if (next === undefined) return { kind: "NONE", instructions: [] };
     requireId(command.holdId, "holdId");
-    requireDomain(
+    DomainError.require(
       this.getAvailableSlots(command.now) > 0,
       "CAPACITY_EXCEEDED",
       "There is no available slot to promote",
     );
-    requireDomain(
+    DomainError.require(
       next.userId === user.userId,
       "INVALID_INPUT",
       "Promotion input belongs to another user",
@@ -346,14 +332,14 @@ export class Session {
     readonly participationId: UUID;
     readonly now?: Date;
   }): void {
-    requireDomain(
+    DomainError.require(
       this.#status === "OPEN",
       "SESSION_CLOSED",
       "The session is not open",
     );
     if (command.now !== undefined) this.assertOpenBefore(command.now);
     const participation = this.requireParticipation(command.participationId);
-    requireDomain(
+    DomainError.require(
       participation.userId === command.actorId,
       "UNAUTHORIZED",
       "Only the participant can leave the waitlist",
@@ -372,7 +358,7 @@ export class Session {
     readonly replacementToken?: string;
   }): WithdrawalResult {
     if (command.replacementMode !== undefined)
-      requireDomain(
+      DomainError.require(
         command.replacementMode === "OPEN_SLOT" ||
           command.replacementMode === "INVITE_LINK",
         "INVALID_INPUT",
@@ -380,12 +366,12 @@ export class Session {
       );
     this.assertOpenBefore(command.now);
     const participation = this.requireParticipation(command.participationId);
-    requireDomain(
+    DomainError.require(
       participation.userId === command.actorId,
       "UNAUTHORIZED",
       "Only the participant can withdraw",
     );
-    requireDomain(
+    DomainError.require(
       participation.status === "COMMITTED" && participation.hold !== undefined,
       "INVALID_STATE",
       "Only a committed participant can withdraw",
@@ -415,7 +401,7 @@ export class Session {
     this.assertBooker(command.actorId);
     this.assertOpenBefore(command.now);
     const participation = this.requireParticipation(command.participationId);
-    requireDomain(
+    DomainError.require(
       participation.status === "COMMITTED" && participation.hold !== undefined,
       "INVALID_STATE",
       "Only a committed participant can be removed",
@@ -460,14 +446,14 @@ export class Session {
     readonly visibility: Visibility;
     readonly now: Date;
   }): void {
-    requireDomain(
+    DomainError.require(
       command.visibility === "PRIVATE" || command.visibility === "PUBLIC",
       "INVALID_INPUT",
       "Unknown session visibility",
     );
     this.assertBooker(command.actorId);
     this.assertOpenBefore(command.now);
-    requireDomain(
+    DomainError.require(
       this.getAvailableSlots(command.now) > 0,
       "CAPACITY_EXCEEDED",
       "Visibility cannot change after the session is full",
@@ -493,12 +479,12 @@ export class Session {
   }): void {
     validDate(command.now, "now");
     this.assertBooker(command.actorId);
-    requireDomain(
+    DomainError.require(
       this.#status === "OPEN",
       "INVALID_STATE",
       "Attendance can only be verified on an open session",
     );
-    requireDomain(
+    DomainError.require(
       this.#booking.hasEnded(command.now),
       "SESSION_NOT_ENDED",
       "Attendance verification requires the session to end",
@@ -506,7 +492,7 @@ export class Session {
     const markedIds = new Set<UUID>();
     let next = this.#participations;
     for (const mark of command.marks) {
-      requireDomain(
+      DomainError.require(
         !markedIds.has(mark.participationId),
         "DUPLICATE_ID",
         "A participation may be verified only once per command",
@@ -526,13 +512,13 @@ export class Session {
 
   autoVerifyAttendance(now: Date): void {
     validDate(now, "now");
-    requireDomain(
+    DomainError.require(
       this.#status === "OPEN",
       "INVALID_STATE",
       "Automatic verification can only run on an open session",
     );
     const end = this.#booking.endAt.getTime();
-    requireDomain(
+    DomainError.require(
       validDate(now, "now").getTime() >= end + 72 * 3_600_000,
       "AUTO_VERIFICATION_NOT_DUE",
       "Automatic verification is not due",
@@ -554,26 +540,25 @@ export class Session {
     readonly now: Date;
   }): SettlementBatch | undefined {
     requireId(command.payoutId, "payoutId");
-    requireDomain(
-      typeof command.idempotencyKey === "string" &&
-        command.idempotencyKey.trim() !== "",
+    DomainError.require(
+      command.idempotencyKey.trim() !== "",
       "INVALID_INPUT",
       "idempotencyKey is required",
     );
     validatePayoutDestination(command.destination);
     this.assertBooker(command.actorId);
     validDate(command.now, "now");
-    requireDomain(
+    DomainError.require(
       this.#status !== "PAYOUT_PENDING",
       "PAYOUT_IN_PROGRESS",
       "A payout is already pending",
     );
-    requireDomain(
+    DomainError.require(
       this.#status === "OPEN" || this.#status === "AWAITING_PAYOUT",
       "SESSION_CLOSED",
       "Only an unsettled session can be paid out",
     );
-    requireDomain(
+    DomainError.require(
       this.#booking.hasEnded(command.now),
       "SESSION_NOT_ENDED",
       "Settlement requires the session to end",
@@ -581,7 +566,7 @@ export class Session {
     const next = this.#participations.map((participation) =>
       participation.expireReplacement(command.now),
     );
-    requireDomain(
+    DomainError.require(
       next.every(
         (participation) =>
           participation.status !== "COMMITTED" ||
@@ -590,22 +575,22 @@ export class Session {
       "ATTENDANCE_INCOMPLETE",
       "All committed participants must be finalized before settlement",
     );
-    requireDomain(
+    DomainError.require(
       command.destination.userId === this.#bookerId,
       "INVALID_INPUT",
       "Payout destination must belong to the booker",
     );
-    requireDomain(
+    DomainError.require(
       this.#pendingSettlement === undefined,
       "PAYOUT_IN_PROGRESS",
       "A payout is already pending",
     );
-    requireDomain(
+    DomainError.require(
       !this.#payoutAttemptIds.has(command.payoutId),
       "DUPLICATE_ID",
       "A payout ID can only be used once for this session",
     );
-    requireDomain(
+    DomainError.require(
       !this.#payoutIdempotencyKeys.has(command.idempotencyKey),
       "DUPLICATE_ID",
       "A payout idempotency key can only be used once for this session",
@@ -622,7 +607,7 @@ export class Session {
         continue;
       const hold = participation.hold;
       if (["REFUNDED", "RELEASED", "FORFEITED"].includes(hold.state)) continue;
-      requireDomain(
+      DomainError.require(
         hold.state === "HELD" || hold.state === "FORFEITURE_DUE",
         "INVALID_STATE",
         "An unsettled commitment has an invalid hold",
@@ -672,12 +657,12 @@ export class Session {
     requireId(payoutId, "payoutId");
     validDate(at, "at");
     const pending = this.#pendingSettlement;
-    requireDomain(
+    DomainError.require(
       this.#status === "PAYOUT_PENDING" && pending !== undefined,
       "INVALID_STATE",
       "No payout is awaiting completion",
     );
-    requireDomain(
+    DomainError.require(
       pending.batch.payoutId === payoutId,
       "STALE_PAYOUT",
       "This payout attempt is no longer current",
@@ -686,7 +671,7 @@ export class Session {
     let next = this.#participations;
     for (const line of pending.batch.lines) {
       const participation = this.requireParticipation(line.participationId);
-      requireDomain(
+      DomainError.require(
         participation.hold?.holdId === line.holdId,
         "INVALID_STATE",
         "Settlement hold no longer matches the batch",
@@ -714,7 +699,7 @@ export class Session {
   failSettlement(payoutId: UUID, at: Date): void {
     requireId(payoutId, "payoutId");
     validDate(at, "at");
-    requireDomain(
+    DomainError.require(
       this.#status === "PAYOUT_PENDING" &&
         this.#pendingSettlement?.batch.payoutId === payoutId,
       "STALE_PAYOUT",
@@ -796,11 +781,6 @@ export class Session {
   }
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {
-    requireDomain(
-      score instanceof ReliabilityScore,
-      "INVALID_INPUT",
-      "A reliability requirement needs a ReliabilityScore",
-    );
     return (
       this.#minimumReliability === undefined ||
       score.meetsMinimum(this.#minimumReliability)
@@ -813,7 +793,7 @@ export class Session {
     existing?: Participation,
   ): AdmissionResult {
     const holdId = command.holdId;
-    requireDomain(
+    DomainError.require(
       holdId !== undefined,
       "INVALID_INPUT",
       "A commitment needs a hold ID",
@@ -931,12 +911,12 @@ export class Session {
 
   private assertOpenBefore(at: Date): void {
     validDate(at, "now");
-    requireDomain(
+    DomainError.require(
       this.#status === "OPEN",
       "SESSION_CLOSED",
       "The session is not open",
     );
-    requireDomain(
+    DomainError.require(
       !this.#booking.hasStarted(at),
       "SESSION_STARTED",
       "The session has started",
@@ -944,7 +924,7 @@ export class Session {
   }
 
   private assertBooker(actorId: UUID): void {
-    requireDomain(
+    DomainError.require(
       actorId === this.#bookerId,
       "UNAUTHORIZED",
       "Only the booker may perform this action",
@@ -1049,7 +1029,7 @@ export class Session {
   }
 
   private validateRoster(): void {
-    requireDomain(
+    DomainError.require(
       [
         "OPEN",
         "CANCELLED",
@@ -1060,39 +1040,37 @@ export class Session {
       "INVALID_INPUT",
       "Unknown session status",
     );
-    requireDomain(
+    DomainError.require(
       this.#visibility === "PRIVATE" || this.#visibility === "PUBLIC",
       "INVALID_INPUT",
       "Unknown session visibility",
     );
-    requireDomain(
+    const hasValidSlotCount =
       Number.isSafeInteger(this.#totalSlots) &&
-        this.#totalSlots > 0 &&
-        this.#totalSlots <= 8,
+      this.#totalSlots > 0 &&
+      this.#totalSlots <= 8;
+    DomainError.require(
+      hasValidSlotCount,
       "INVALID_INPUT",
       "totalSlots must be a safe integer from 1 to 8",
     );
-    requireDomain(
+    const hasValidMinimumHeadcount =
       Number.isSafeInteger(this.#minimumHeadcount) &&
-        this.#minimumHeadcount >= 2 &&
-        this.#minimumHeadcount <= this.#totalSlots,
+      this.#minimumHeadcount >= 2 &&
+      this.#minimumHeadcount <= this.#totalSlots;
+    DomainError.require(
+      hasValidMinimumHeadcount,
       "INVALID_INPUT",
       "minimumHeadcount must be between 2 and totalSlots",
     );
-    if (this.#minimumReliability !== undefined)
-      requireDomain(
-        this.#minimumReliability instanceof ReliabilityScore,
-        "INVALID_INPUT",
-        "minimumReliability must be a ReliabilityScore",
-      );
-    requireDomain(
+    DomainError.require(
       Number.isSafeInteger(this.#nextQueueSequence) &&
         this.#nextQueueSequence > 0,
       "INVALID_INPUT",
       "nextQueueSequence must be a positive safe integer",
     );
     const ids = new Set(this.#participations.map((p) => p.userId));
-    requireDomain(
+    DomainError.require(
       ids.size === this.#participations.length,
       "DUPLICATE_ID",
       "A user may participate only once in a session",
@@ -1100,7 +1078,7 @@ export class Session {
     const participationIds = new Set(
       this.#participations.map((p) => p.participationId),
     );
-    requireDomain(
+    DomainError.require(
       participationIds.size === this.#participations.length,
       "DUPLICATE_ID",
       "Participation IDs must be unique in a session",
@@ -1108,7 +1086,7 @@ export class Session {
     const queueSequences = this.#participations
       .map((participation) => participation.queueSequence)
       .filter((sequence): sequence is number => sequence !== undefined);
-    requireDomain(
+    DomainError.require(
       new Set(queueSequences).size === queueSequences.length,
       "DUPLICATE_ID",
       "Queue sequences must be unique in a session",
@@ -1117,66 +1095,66 @@ export class Session {
     for (const participation of this.#participations) {
       const hold = participation.hold;
       if (hold === undefined) continue;
-      requireDomain(
+      DomainError.require(
         hold.participationId === participation.participationId,
         "INVALID_INPUT",
         "A hold must belong to its participation",
       );
-      requireDomain(
+      DomainError.require(
         hold.holdingAccountId === this.#holdingAccountId,
         "INVALID_INPUT",
         "A session hold must use its holding account",
       );
-      requireDomain(
+      DomainError.require(
         !holdIds.has(hold.holdId),
         "DUPLICATE_ID",
         "Hold IDs must be unique in a session",
       );
       holdIds.add(hold.holdId);
     }
-    requireDomain(
+    DomainError.require(
       this.#participations.filter((p) => p.status === "COMMITTED").length <=
         this.#totalSlots,
       "CAPACITY_EXCEEDED",
       "Committed participations exceed session capacity",
     );
     if (this.#status === "PAYOUT_PENDING")
-      requireDomain(
+      DomainError.require(
         this.#pendingSettlement !== undefined,
         "INVALID_INPUT",
         "A pending payout needs a settlement batch",
       );
     if (this.#status !== "PAYOUT_PENDING")
-      requireDomain(
+      DomainError.require(
         this.#pendingSettlement === undefined,
         "INVALID_INPUT",
         "Only a payout-pending session may have a settlement batch",
       );
     for (const id of this.#payoutAttemptIds)
-      requireDomain(
-        typeof id === "string" && id.trim() !== "",
+      DomainError.require(
+        id.trim() !== "",
         "INVALID_INPUT",
         "Payout attempt IDs are required",
       );
     for (const key of this.#payoutIdempotencyKeys)
-      requireDomain(
-        typeof key === "string" && key.trim() !== "",
+      DomainError.require(
+        key.trim() !== "",
         "INVALID_INPUT",
         "Payout idempotency keys are required",
       );
     if (this.#pendingSettlement !== undefined) {
       validateSettlementBatch(this.#pendingSettlement.batch);
-      requireDomain(
+      DomainError.require(
         this.#pendingSettlement.batch.sessionId === this.#sessionId,
         "INVALID_INPUT",
         "Settlement batch belongs to another session",
       );
-      requireDomain(
+      DomainError.require(
         this.#payoutAttemptIds.has(this.#pendingSettlement.batch.payoutId),
         "INVALID_INPUT",
         "Pending payout ID was not recorded",
       );
-      requireDomain(
+      DomainError.require(
         this.#payoutIdempotencyKeys.has(
           this.#pendingSettlement.batch.idempotencyKey,
         ),
@@ -1191,64 +1169,72 @@ export class Session {
       );
       const lineIds = new Set<string>();
       for (const line of this.#pendingSettlement.batch.lines) {
-        requireDomain(
+        DomainError.require(
           !lineIds.has(line.holdId),
           "DUPLICATE_ID",
           "Settlement lines cannot repeat a hold",
         );
         lineIds.add(line.holdId);
         const hold = holdById.get(line.holdId);
-        requireDomain(
+        DomainError.require(
           hold !== undefined,
           "INVALID_INPUT",
           "Settlement line references an unknown hold",
         );
-        requireDomain(
+        const lineMatchesHold =
           hold.participationId === line.participationId &&
-            hold.amount.equals(line.amount) &&
-            hold.holdingAccountId === line.holdingAccountId &&
-            hold.walletId === line.walletId,
+          hold.amount.equals(line.amount) &&
+          hold.holdingAccountId === line.holdingAccountId &&
+          hold.walletId === line.walletId;
+        DomainError.require(
+          lineMatchesHold,
           "INVALID_INPUT",
           "Settlement line does not match its hold",
         );
-        requireDomain(
+        DomainError.require(
           hold.state === "HELD" || hold.state === "FORFEITURE_DUE",
           "INVALID_INPUT",
           "A pending settlement line must reference an unsettled hold",
         );
-        requireDomain(
+        const hasValidReleaseOutcome =
           line.kind === "RELEASE"
             ? hold.state === "HELD" &&
-                this.#participations.find(
-                  (p) => p.participationId === line.participationId,
-                )?.attendance === "ATTENDED"
-            : true,
+              this.#participations.find(
+                (p) => p.participationId === line.participationId,
+              )?.attendance === "ATTENDED"
+            : true;
+        DomainError.require(
+          hasValidReleaseOutcome,
           "INVALID_INPUT",
           "A release line must reference attended funds",
         );
         const participation = this.#participations.find(
           (candidate) => candidate.participationId === line.participationId,
         );
-        requireDomain(
+        const isPayableParticipation =
           participation !== undefined &&
-            (participation.status === "COMMITTED" ||
-              participation.status === "WITHDRAWN"),
+          (participation.status === "COMMITTED" ||
+            participation.status === "WITHDRAWN");
+        DomainError.require(
+          isPayableParticipation,
           "INVALID_INPUT",
           "A settlement line must reference a payable participation",
         );
-        requireDomain(
+        const hasValidForfeitOutcome =
           line.kind === "FORFEIT"
             ? participation.status === "WITHDRAWN" ||
-                participation.attendance === "ABSENT" ||
-                hold.state === "FORFEITURE_DUE"
-            : true,
+              participation.attendance === "ABSENT" ||
+              hold.state === "FORFEITURE_DUE"
+            : true;
+        DomainError.require(
+          hasValidForfeitOutcome,
           "INVALID_INPUT",
           "A forfeit line has an invalid outcome",
         );
       }
     }
     if (this.#status === "SETTLED" || this.#status === "CANCELLED")
-      requireDomain(
+      DomainError.require(
         this.#participations.every(
           (participation) =>
             participation.hold === undefined ||
@@ -1260,7 +1246,7 @@ export class Session {
         "A closed session cannot retain active funds",
       );
     if (this.#status === "CANCELLED")
-      requireDomain(
+      DomainError.require(
         this.#participations.every(
           (participation) => participation.status === "CANCELLED",
         ),
@@ -1271,14 +1257,14 @@ export class Session {
 }
 
 function validDate(value: Date, name: string): Date {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+  if (!Number.isFinite(value.getTime()))
     throw new DomainError("INVALID_INPUT", `${name} must be a valid Date`);
   return new Date(value.getTime());
 }
 
 function requireId(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );
@@ -1296,15 +1282,13 @@ function cloneBatch(batch: SettlementBatch): SettlementBatch {
 function validatePayoutDestination(destination: PayoutDestination): void {
   requireId(destination.payoutAccountId, "payoutAccountId");
   requireId(destination.userId, "userId");
-  requireDomain(
-    typeof destination.providerAccountReference === "string" &&
-      destination.providerAccountReference.trim() !== "",
+  DomainError.require(
+    destination.providerAccountReference.trim() !== "",
     "INVALID_INPUT",
     "providerAccountReference is required",
   );
-  requireDomain(
-    typeof destination.bankAccountReference === "string" &&
-      destination.bankAccountReference.trim() !== "",
+  DomainError.require(
+    destination.bankAccountReference.trim() !== "",
     "INVALID_INPUT",
     "bankAccountReference is required",
   );
@@ -1313,15 +1297,14 @@ function validatePayoutDestination(destination: PayoutDestination): void {
 function validateSettlementBatch(batch: SettlementBatch): void {
   requireId(batch.payoutId, "payoutId");
   requireId(batch.sessionId, "sessionId");
-  requireDomain(
-    typeof batch.idempotencyKey === "string" &&
-      batch.idempotencyKey.trim() !== "",
+  DomainError.require(
+    batch.idempotencyKey.trim() !== "",
     "INVALID_INPUT",
     "idempotencyKey is required",
   );
   validDate(batch.requestedAt, "requestedAt");
   validatePayoutDestination(batch.destination);
-  requireDomain(
+  DomainError.require(
     Array.isArray(batch.lines) && batch.lines.length > 0,
     "INVALID_INPUT",
     "A settlement batch needs at least one line",
@@ -1332,17 +1315,17 @@ function validateSettlementBatch(batch: SettlementBatch): void {
     requireId(line.participationId, "participationId");
     requireId(line.holdingAccountId, "holdingAccountId");
     requireId(line.walletId, "walletId");
-    requireDomain(
-      line.amount instanceof Money && line.amount.toCents() > 0,
+    DomainError.require(
+      line.amount.toCents() > 0,
       "INVALID_INPUT",
       "Settlement amounts must be positive Money values",
     );
-    requireDomain(
+    DomainError.require(
       line.kind === "RELEASE" || line.kind === "FORFEIT",
       "INVALID_INPUT",
       "Unknown settlement line kind",
     );
-    requireDomain(
+    DomainError.require(
       !lineIds.has(line.holdId),
       "DUPLICATE_ID",
       "Settlement lines cannot repeat a hold",

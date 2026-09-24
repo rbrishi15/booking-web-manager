@@ -1,6 +1,6 @@
 /** Copy a valid instant instead of retaining a caller's mutable Date. */
 export function copyDate(value: Date, name: string): Date {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+  if (!Number.isFinite(value.getTime())) {
     throw new RangeError(`${name} must be a valid Date`);
   }
   return new Date(value.getTime());
