@@ -1,3 +1,4 @@
+export { Email } from "./accounts/email";
 export {
   Booking,
   type BookingDetails,

@@ -44,7 +44,7 @@ the scope of a consistent model, while his
 [Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html) article describes
 objects managed as a unit.
 
-`User.create({ userId, email, walletId, now })` establishes the domain wallet
+`User.create({ userId, email: new Email(emailText), walletId, now })` establishes the domain wallet
 with empty transactions and zero funds, empty memberships, and the existing
 empty-history default calculated by `ReliabilityScore.fromHistory`. Persisting
 that new wallet belongs to the future registration adapter and transaction.

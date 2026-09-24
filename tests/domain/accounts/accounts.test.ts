@@ -1,6 +1,7 @@
 import {
   type DeactivationInput,
   DomainError,
+  Email,
   Money,
   PayoutAccount,
   User,
@@ -13,7 +14,7 @@ import { loadedUserDetails, userLoadedAt } from "./user-fixtures";
 const newUser = () =>
   User.create({
     userId: "owner",
-    email: "owner@example.com",
+    email: new Email("owner@example.com"),
     walletId: "w-owner",
     now: userLoadedAt,
   });
@@ -43,7 +44,7 @@ function accountDetails(
 // Observe the properties affected by profile, preference, and deactivation commands.
 function profileOf(user: User) {
   return {
-    email: user.email,
+    email: user.email?.toString() ?? null,
     accountStatus: user.accountStatus,
     preferredSports: [...user.preferredSports],
     preferredRegions: [...user.preferredRegions],
@@ -65,12 +66,58 @@ function captureError(run: () => unknown): unknown {
 }
 
 describe("User aggregate", () => {
+  test("hydrates and exposes an immutable Email value", () => {
+    const email = new Email("Owner+bookings@Example.COM");
+    const user = new User(userDetails({ email }));
+
+    expect(user.email).toBe(email);
+    expect(user.email?.toString()).toBe("Owner+bookings@Example.COM");
+  });
+
+  test.each([
+    "owner@example.com",
+    { value: "owner@example.com" },
+    null,
+    undefined,
+  ])("rejects non-Email input %j at domain boundaries", (value) => {
+    const email = value as unknown as Email;
+    const user = newUser();
+    const before = profileOf(user);
+
+    expect(() =>
+      User.create({
+        userId: "owner",
+        email,
+        walletId: "w-owner",
+        now: userLoadedAt,
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+    expect(() => new User(userDetails({ email }))).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+    expect(() => user.updateProfile({ email })).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+    expect(profileOf(user)).toEqual(before);
+  });
+
+  test("checks account status before accepting a profile email", () => {
+    const user = newUser();
+    user.deactivate(deactivationInput());
+    const before = profileOf(user);
+
+    expect(() =>
+      user.updateProfile({ email: "invalid" as unknown as Email }),
+    ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
+    expect(profileOf(user)).toEqual(before);
+  });
+
   test("creates an active account and changes profile and preferences", () => {
     // Arrange
     const user = newUser();
 
     // Act
-    user.updateProfile({ email: "new@example.com" });
+    user.updateProfile({ email: new Email("new@example.com") });
     user.updatePreferences({
       preferredSports: new Set(["Tennis"]),
       preferredRegions: new Set(["West"]),
@@ -79,7 +126,7 @@ describe("User aggregate", () => {
     // Assert
     expect(user.accountStatus).toBe("ACTIVE");
     expect(user.preferredSports.size).toBe(1);
-    expect(user.email).toBe("new@example.com");
+    expect(user.email?.toString()).toBe("new@example.com");
     expect([...user.preferredSports]).toEqual(["Tennis"]);
     expect([...user.preferredRegions]).toEqual(["West"]);
   });
@@ -89,7 +136,7 @@ describe("User aggregate", () => {
     const sports = new Set(["Tennis"]);
     const user = User.create({
       userId: "owner",
-      email: "owner@example.com",
+      email: new Email("owner@example.com"),
       walletId: "w-owner",
       now: userLoadedAt,
       preferredSports: sports,
@@ -116,7 +163,7 @@ describe("User aggregate", () => {
 
     // Act
     const invalidProfile = captureError(() =>
-      user.updateProfile({ email: " " }),
+      user.updateProfile({ email: " " as unknown as Email }),
     );
     const invalidPreferences = captureError(() =>
       user.updatePreferences({
@@ -314,7 +361,7 @@ describe("User aggregate", () => {
       }),
     );
     const updateInactiveProfile = () =>
-      user.updateProfile({ email: "new@example.com" });
+      user.updateProfile({ email: new Email("new@example.com") });
     const updateInactivePreferences = () =>
       user.updatePreferences({
         preferredSports: new Set(),

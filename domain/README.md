@@ -61,7 +61,7 @@ admission. Future transaction adapters must observe
 their writes and protect against concurrent overspending.
 
 Named creation factories remain where they apply business rules or defaults:
-`User.create({ userId, email, walletId, now })` registers an active user with a
+`User.create({ userId, email: new Email(emailText), walletId, now })` registers an active user with a
 wallet with empty transactions and zero funds, empty memberships, and the
 empty-history reliability default. `Session.create(...)` checks booker
 eligibility and an upcoming booking. Children and values such
@@ -73,6 +73,18 @@ defensively copy mutable dates, collections, and settlement data. Root commands
 validate a complete transition and prepare their results before applying state
 changes; rejected transitions leave state unchanged and throw `DomainError`
 with a stable code.
+
+`Email` is an immutable value object constructed with `new Email(text)`.
+It requires exactly one `@`, nonempty parts on both sides, and no whitespace.
+It preserves case and text; `equals()` compares exact text. A dotted domain is
+not required, and syntax validation does not establish deliverability or uniqueness.
+Invalid input throws `DomainError` with code `INVALID_INPUT`.
+Registration and profile updates accept `Email`; hydration and `user.email`
+use `Email | null`, with null reserved for inactive accounts. Application and
+repository adapters convert incoming strings with `new Email(text)` and extract
+storage/output strings with `user.email?.toString() ?? null`. Older addresses
+that violate these stricter rules fail validation when loaded; they are not
+silently trimmed or normalized.
 
 See [ADR-0002: Constructor-based domain hydration](../docs/adr/0002-constructor-based-domain-hydration.md)
 for construction, mapping, and encapsulation conventions.

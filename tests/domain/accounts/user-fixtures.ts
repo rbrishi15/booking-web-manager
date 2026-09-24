@@ -1,4 +1,5 @@
 import {
+  Email,
   LedgerTransaction,
   Money,
   ReliabilityScore,
@@ -39,7 +40,9 @@ export function loadedUserDetails(
   return {
     userId,
     email:
-      overrides.accountStatus === "INACTIVE" ? null : `${userId}@example.com`,
+      overrides.accountStatus === "INACTIVE"
+        ? null
+        : new Email(`${userId}@example.com`),
     accountStatus: "ACTIVE",
     preferredSports: new Set(),
     preferredRegions: new Set(),

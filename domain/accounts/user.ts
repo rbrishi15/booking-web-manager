@@ -9,12 +9,13 @@ import type {
 import type { AccountStatus } from "../shared/statuses";
 import type { Region, Sport, UUID } from "../shared/types";
 import { Booker } from "./booker";
+import { Email } from "./email";
 import { Participant } from "./participant";
 import { PayoutAccount } from "./payout-account";
 
 export interface UserDetails {
   readonly userId: UUID;
-  readonly email: string | null;
+  readonly email: Email | null;
   readonly preferredSports: ReadonlySet<Sport>;
   readonly preferredRegions: ReadonlySet<Region>;
   readonly accountStatus: AccountStatus;
@@ -26,7 +27,7 @@ export interface UserDetails {
 
 export interface UserRegistration {
   readonly userId: UUID;
-  readonly email: string;
+  readonly email: Email;
   readonly walletId: UUID;
   readonly now: Date;
   readonly preferredSports?: ReadonlySet<Sport>;
@@ -46,7 +47,7 @@ export interface UserRegistration {
  */
 export class User {
   readonly #userId: UUID;
-  #email: string | null;
+  #email: Email | null;
   #preferredSports: Set<Sport>;
   #preferredRegions: Set<Region>;
   #accountStatus: AccountStatus;
@@ -83,7 +84,7 @@ export class User {
     this.#wallet = details.wallet;
     this.#reliabilityScore = details.reliabilityScore;
     this.#memberGroupIds = [...details.memberGroupIds];
-    this.validate();
+    this.assertInvariants();
   }
 
   static create(details: UserRegistration): User {
@@ -107,9 +108,13 @@ export class User {
     });
   }
 
-  updateProfile(command: { readonly email: string }): void {
+  updateProfile(command: { readonly email: Email }): void {
     this.assertActive();
-    validateEmail(command.email);
+    requireDomain(
+      command.email instanceof Email,
+      "INVALID_INPUT",
+      "A profile email must be an Email",
+    );
     this.#email = command.email;
   }
 
@@ -219,7 +224,7 @@ export class User {
   get userId(): UUID {
     return this.#userId;
   }
-  get email(): string | null {
+  get email(): Email | null {
     return this.#email;
   }
   get preferredSports(): ReadonlySet<Sport> {
@@ -252,7 +257,7 @@ export class User {
     );
   }
 
-  private validate(): void {
+  private assertInvariants(): void {
     validateId(this.#userId, "userId");
     requireDomain(
       this.#accountStatus === "ACTIVE" || this.#accountStatus === "INACTIVE",
@@ -261,12 +266,10 @@ export class User {
     );
     if (this.#accountStatus === "ACTIVE")
       requireDomain(
-        this.#email !== null,
+        this.#email instanceof Email,
         "INVALID_INPUT",
-        "An active account needs an email",
+        "An active account needs an Email",
       );
-    if (this.#accountStatus === "ACTIVE" && this.#email !== null)
-      validateEmail(this.#email);
     if (this.#accountStatus === "INACTIVE")
       requireDomain(
         this.#email === null,
@@ -311,13 +314,6 @@ function validateId(value: string, name: string): void {
     typeof value === "string" && value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
-  );
-}
-function validateEmail(value: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "" && value.includes("@"),
-    "INVALID_INPUT",
-    "A valid email is required",
   );
 }
 function validatePreferences(values: Iterable<string>, name: string): void {

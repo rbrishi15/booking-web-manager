@@ -76,7 +76,7 @@ independently of its root.
 - `Booker` and `Participant` are role views over `User`. `Participant.join`
   passes its fully loaded user directly to session admission. These roles have
   no independently owned lifecycle.
-- `Booking`, `Money`, and `ReliabilityScore` are immutable value objects.
+- `Booking`, `Email`, `Money`, and `ReliabilityScore` are immutable value objects.
 - `Wallet` is an immutable child owned by `User`, with a transaction collection
   and derived funds, without a stored balance or money-movement commands.
   `HoldingAccount` remains an immutable identity with a ledger-derived balance.

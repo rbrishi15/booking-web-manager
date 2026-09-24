@@ -1,4 +1,4 @@
-import { ReliabilityScore, User, type UserDetails, Wallet } from "@/domain";
+import { Email, ReliabilityScore, User, type UserDetails, Wallet } from "@/domain";
 import { describe, expect, test } from "vitest";
 import { fundedWallet, loadedUserDetails, userLoadedAt } from "./user-fixtures";
 
@@ -6,12 +6,13 @@ describe("User related data", () => {
   test("registration establishes a wallet and the empty-history defaults", () => {
     const user = User.create({
       userId: "new-user",
-      email: "new@example.com",
+      email: new Email("new@example.com"),
       walletId: "new-wallet",
       now: userLoadedAt,
     });
 
     expect(user.wallet.userId).toBe(user.userId);
+    expect(user.email?.toString()).toBe("new@example.com");
     expect(user.wallet.walletId).toBe("new-wallet");
     expect(user.wallet.transactions).toEqual([]);
     expect(user.wallet.getFunds().toCents()).toBe(0);

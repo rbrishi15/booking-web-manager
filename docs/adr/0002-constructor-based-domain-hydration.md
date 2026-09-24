@@ -94,7 +94,12 @@ requires an eligible booker and an upcoming booking; payout creation calculates
 the settlement amount. Factories invoke validated constructors.
 
 ```ts
-const registeredUser = User.create({ userId, email, walletId, now });
+const registeredUser = User.create({
+  userId,
+  email: new Email(emailText),
+  walletId,
+  now,
+});
 ```
 
 Registration establishes the wallet with empty transactions and zero funds, empty
@@ -112,8 +117,11 @@ to express their units and meaning.
 ### Adapters own storage mapping
 
 Repository adapters map database column names, JSON, stored timestamps, and
-primitives to domain values. They assemble children and required related values
-before calling parent constructors. User reads load wallet identity, its complete
+primitives to domain values. They convert email strings to validated `Email`
+objects, preserving null for inactive users. On writes,
+`user.email?.toString() ?? null` supplies the storage value. They assemble children
+and required related values before calling parent constructors.
+User reads load wallet identity, its complete
 committed transaction history, calculated reliability, and memberships consistently
 within the transaction. A partial history must not hydrate a wallet.
 `wallet.getFunds()` calculates spendable funds synchronously from those entries.
