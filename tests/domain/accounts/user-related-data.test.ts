@@ -1,67 +1,85 @@
-import { Email, ReliabilityScore, User, type UserDetails, Wallet } from "@/domain";
+import {
+  Email,
+  ReliabilityScore,
+  User,
+  type UserDetails,
+  Wallet,
+} from "@/domain";
 import { describe, expect, test } from "vitest";
 import { fundedWallet, loadedUserDetails, userLoadedAt } from "./user-fixtures";
 
-describe("User related data", () => {
-  test("registration establishes a wallet and the empty-history defaults", () => {
-    const user = User.create({
-      userId: "new-user",
-      email: new Email("new@example.com"),
-      walletId: "new-wallet",
-      now: userLoadedAt,
-    });
+describe("User", () => {
+  test("constructor_WhenMembershipsAreMissing_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...loadedUserDetails("u"),
+      memberGroupIds: undefined,
+    } as unknown as UserDetails;
 
-    expect(user.wallet.userId).toBe(user.userId);
-    expect(user.email?.toString()).toBe("new@example.com");
-    expect(user.wallet.walletId).toBe("new-wallet");
-    expect(user.wallet.transactions).toEqual([]);
-    expect(user.wallet.getFunds().toCents()).toBe(0);
-    expect(user.reliabilityScore.toNumber()).toBe(
-      ReliabilityScore.fromHistory(user.userId, [], userLoadedAt).toNumber(),
-    );
-    expect(user.memberGroupIds).toEqual([]);
-  });
-
-  test.each(["memberGroupIds"] as const)(
-    "requires %s when hydrating a user",
-    (field) => {
-      const details = loadedUserDetails("u");
-      const missing = {
-        ...details,
-        [field]: undefined,
-      } as unknown as UserDetails;
-      const empty = { ...details, [field]: null } as unknown as UserDetails;
-
-      expect(() => new User(missing)).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-      expect(() => new User(empty)).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-    },
-  );
-
-  test.each<[string, Record<string, unknown>]>([
-    [
-      "foreign wallet",
-      {
-        wallet: new Wallet({
-          walletId: "w-u",
-          userId: "other",
-          transactions: [],
-        }),
-      },
-    ],
-    ["empty membership ID", { memberGroupIds: [" "] }],
-    ["non-array memberships", { memberGroupIds: new Set(["group"]) }],
-  ])("rejects %s during hydration", (_name, patch) => {
-    const details = loadedUserDetails("u");
-    expect(() => new User({ ...details, ...patch } as UserDetails)).toThrow(
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
       expect.objectContaining({ code: "INVALID_INPUT" }),
     );
   });
 
-  test("isolates loaded projections and memberships from mutations", () => {
+  test("constructor_WhenMembershipsAreNull_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...loadedUserDetails("u"),
+      memberGroupIds: null,
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenWalletBelongsToAnotherUser_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...loadedUserDetails("u"),
+      wallet: new Wallet({
+        walletId: "w-u",
+        userId: "other",
+        transactions: [],
+      }),
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenMembershipIdIsBlank_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...loadedUserDetails("u"),
+      memberGroupIds: [" "],
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenMembershipsAreNotAnArray_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...loadedUserDetails("u"),
+      memberGroupIds: new Set(["group"]),
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenLoadedDataIsMutated_PreservesProjectionsAndMemberships", () => {
+    // Arrange
     const wallet = fundedWallet("u", 700);
     const reliabilityScore = ReliabilityScore.from(80);
     const memberGroupIds = ["group"];
@@ -73,11 +91,13 @@ describe("User related data", () => {
     };
     const user = new User(details);
 
+    // Act
     details.wallet = fundedWallet("u", 0);
     details.reliabilityScore = ReliabilityScore.from(0);
     memberGroupIds.push("other");
     (user.memberGroupIds as string[]).push("injected");
 
+    // Assert
     expect(Reflect.set(user, "wallet", fundedWallet("u", 0))).toBe(false);
     expect(
       Reflect.set(user, "reliabilityScore", ReliabilityScore.from(0)),
@@ -87,5 +107,29 @@ describe("User related data", () => {
     expect(user.reliabilityScore).toBe(reliabilityScore);
     expect(user.reliabilityScore.toNumber()).toBe(80);
     expect(user.memberGroupIds).toEqual(["group"]);
+  });
+
+  test("create_WhenRegistering_EstablishesWalletAndEmptyHistory", () => {
+    // Arrange
+    const details = {
+      userId: "new-user",
+      email: new Email("new@example.com"),
+      walletId: "new-wallet",
+      now: userLoadedAt,
+    };
+
+    // Act
+    const user = User.create(details);
+
+    // Assert
+    expect(user.wallet.userId).toBe(user.userId);
+    expect(user.email?.toString()).toBe("new@example.com");
+    expect(user.wallet.walletId).toBe("new-wallet");
+    expect(user.wallet.transactions).toEqual([]);
+    expect(user.wallet.getFunds().toCents()).toBe(0);
+    expect(user.reliabilityScore.toNumber()).toBe(
+      ReliabilityScore.fromHistory(user.userId, [], userLoadedAt).toNumber(),
+    );
+    expect(user.memberGroupIds).toEqual([]);
   });
 });

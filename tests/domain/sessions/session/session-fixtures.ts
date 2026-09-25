@@ -123,12 +123,3 @@ export function sessionState(s: Session) {
     })),
   };
 }
-
-export function captureError(run: () => unknown): unknown {
-  try {
-    run();
-    return undefined;
-  } catch (error) {
-    return error;
-  }
-}

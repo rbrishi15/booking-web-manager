@@ -2,18 +2,51 @@ import { ReliabilityScore } from "@/domain";
 import { describe, expect, test } from "vitest";
 
 describe("ReliabilityScore", () => {
-  test.each([0, 100, 48, 66.66666666666667])("preserves score %s", (score) => {
+  test("from_WhenScoreIsZero_PreservesValue", () => {
     // Arrange
-    const expectedScore = score;
+    const value = 0;
 
     // Act
-    const reliability = ReliabilityScore.from(expectedScore);
+    const score = ReliabilityScore.from(value);
 
     // Assert
-    expect(reliability.toNumber()).toBe(expectedScore);
+    expect(score.toNumber()).toBe(value);
   });
 
-  test("normalizes negative zero", () => {
+  test("from_WhenScoreIsMaximum_PreservesValue", () => {
+    // Arrange
+    const value = 100;
+
+    // Act
+    const score = ReliabilityScore.from(value);
+
+    // Assert
+    expect(score.toNumber()).toBe(value);
+  });
+
+  test("from_WhenScoreIsWholeNumber_PreservesValue", () => {
+    // Arrange
+    const value = 48;
+
+    // Act
+    const score = ReliabilityScore.from(value);
+
+    // Assert
+    expect(score.toNumber()).toBe(value);
+  });
+
+  test("from_WhenScoreIsFraction_PreservesValue", () => {
+    // Arrange
+    const value = 66.66666666666667;
+
+    // Act
+    const score = ReliabilityScore.from(value);
+
+    // Assert
+    expect(score.toNumber()).toBe(value);
+  });
+
+  test("from_WhenScoreIsNegativeZero_NormalizesToZero", () => {
     // Arrange
     const score = -0;
 
@@ -24,70 +57,168 @@ describe("ReliabilityScore", () => {
     expect(reliability.toNumber()).toBe(0);
   });
 
-  test.each([
-    -0.001,
-    100.001,
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-    Number.NEGATIVE_INFINITY,
-  ])("rejects score %s outside the finite 0–100 scale", (score) => {
+  test("from_WhenScoreIsBelowZero_ThrowsRangeError", () => {
     // Arrange
-    const invalidScore = score;
+    const value = -0.001;
 
-    // Act
-    const create = () => ReliabilityScore.from(invalidScore);
-
-    // Assert
-    expect(create).toThrow(RangeError);
+    // Act & Assert
+    expect(() => ReliabilityScore.from(value)).toThrow(RangeError);
   });
 
-  test("compares scores by value", () => {
+  test("from_WhenScoreIsAboveMaximum_ThrowsRangeError", () => {
     // Arrange
-    const first = ReliabilityScore.from(75.5);
-    const equal = ReliabilityScore.from(75.5);
-    const greater = ReliabilityScore.from(80);
+    const value = 100.001;
 
-    // Act
-    const equalByValue = first.equals(equal);
-    const differentByValue = first.equals(greater);
-    const firstComparedWithEqual = first.compareTo(equal);
-    const firstComparedWithGreater = first.compareTo(greater);
-    const greaterComparedWithFirst = greater.compareTo(first);
-
-    // Assert
-    expect(first).not.toBe(equal);
-    expect(equalByValue).toBe(true);
-    expect(differentByValue).toBe(false);
-    expect(firstComparedWithEqual).toBe(0);
-    expect(firstComparedWithGreater).toBe(-1);
-    expect(greaterComparedWithFirst).toBe(1);
+    // Act & Assert
+    expect(() => ReliabilityScore.from(value)).toThrow(RangeError);
   });
 
-  test("treats the minimum threshold as inclusive", () => {
+  test("from_WhenScoreIsNaN_ThrowsRangeError", () => {
+    // Arrange
+    const value = Number.NaN;
+
+    // Act & Assert
+    expect(() => ReliabilityScore.from(value)).toThrow(RangeError);
+  });
+
+  test("from_WhenScoreIsPositiveInfinity_ThrowsRangeError", () => {
+    // Arrange
+    const value = Number.POSITIVE_INFINITY;
+
+    // Act & Assert
+    expect(() => ReliabilityScore.from(value)).toThrow(RangeError);
+  });
+
+  test("from_WhenScoreIsNegativeInfinity_ThrowsRangeError", () => {
+    // Arrange
+    const value = Number.NEGATIVE_INFINITY;
+
+    // Act & Assert
+    expect(() => ReliabilityScore.from(value)).toThrow(RangeError);
+  });
+
+  test("equals_WhenValuesAreEqual_ReturnsTrue", () => {
     // Arrange
     const score = ReliabilityScore.from(75.5);
-    const belowThreshold = ReliabilityScore.from(75);
-    const equalThreshold = ReliabilityScore.from(75.5);
-    const aboveThreshold = ReliabilityScore.from(75.5001);
-    const zero = ReliabilityScore.from(0);
-    const maximum = ReliabilityScore.from(100);
+    const other = ReliabilityScore.from(75.5);
 
     // Act
-    const meetsBelow = score.meetsMinimum(belowThreshold);
-    const meetsEqual = score.meetsMinimum(equalThreshold);
-    const meetsAbove = score.meetsMinimum(aboveThreshold);
-    const zeroMeetsZero = zero.meetsMinimum(zero);
-    const maximumMeetsMaximum = maximum.meetsMinimum(maximum);
+    const comparison = score.equals(other);
 
     // Assert
-    expect(meetsBelow).toBe(true);
-    expect(meetsEqual).toBe(true);
-    expect(meetsAbove).toBe(false);
-    expect(zeroMeetsZero).toBe(true);
-    expect(maximumMeetsMaximum).toBe(true);
+    expect(score).not.toBe(other);
+    expect(comparison).toBe(true);
   });
 
-  test("keeps the score immutable", () => {
+  test("equals_WhenValuesDiffer_ReturnsFalse", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const other = ReliabilityScore.from(80);
+
+    // Act
+    const comparison = score.equals(other);
+
+    // Assert
+    expect(comparison).toBe(false);
+  });
+
+  test("compareTo_WhenValuesAreEqual_ReturnsZero", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const other = ReliabilityScore.from(75.5);
+
+    // Act
+    const comparison = score.compareTo(other);
+
+    // Assert
+    expect(comparison).toBe(0);
+  });
+
+  test("compareTo_WhenValueIsSmaller_ReturnsNegativeOne", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const other = ReliabilityScore.from(80);
+
+    // Act
+    const comparison = score.compareTo(other);
+
+    // Assert
+    expect(comparison).toBe(-1);
+  });
+
+  test("compareTo_WhenValueIsGreater_ReturnsOne", () => {
+    // Arrange
+    const score = ReliabilityScore.from(80);
+    const other = ReliabilityScore.from(75.5);
+
+    // Act
+    const comparison = score.compareTo(other);
+
+    // Assert
+    expect(comparison).toBe(1);
+  });
+
+  test("meetsMinimum_WhenAboveThreshold_ReturnsTrue", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const threshold = ReliabilityScore.from(75);
+
+    // Act
+    const meetsThreshold = score.meetsMinimum(threshold);
+
+    // Assert
+    expect(meetsThreshold).toBe(true);
+  });
+
+  test("meetsMinimum_WhenAtThreshold_ReturnsTrue", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const threshold = ReliabilityScore.from(75.5);
+
+    // Act
+    const meetsThreshold = score.meetsMinimum(threshold);
+
+    // Assert
+    expect(meetsThreshold).toBe(true);
+  });
+
+  test("meetsMinimum_WhenBelowThreshold_ReturnsFalse", () => {
+    // Arrange
+    const score = ReliabilityScore.from(75.5);
+    const threshold = ReliabilityScore.from(75.5001);
+
+    // Act
+    const meetsThreshold = score.meetsMinimum(threshold);
+
+    // Assert
+    expect(meetsThreshold).toBe(false);
+  });
+
+  test("meetsMinimum_WhenBothZero_ReturnsTrue", () => {
+    // Arrange
+    const score = ReliabilityScore.from(0);
+    const threshold = ReliabilityScore.from(0);
+
+    // Act
+    const meetsThreshold = score.meetsMinimum(threshold);
+
+    // Assert
+    expect(meetsThreshold).toBe(true);
+  });
+
+  test("meetsMinimum_WhenBothMaximum_ReturnsTrue", () => {
+    // Arrange
+    const score = ReliabilityScore.from(100);
+    const threshold = ReliabilityScore.from(100);
+
+    // Act
+    const meetsThreshold = score.meetsMinimum(threshold);
+
+    // Assert
+    expect(meetsThreshold).toBe(true);
+  });
+
+  test("toNumber_WhenScoreIsFractional_PreservesImmutableValue", () => {
     // Arrange
     const score = ReliabilityScore.from(66.66666666666667);
 

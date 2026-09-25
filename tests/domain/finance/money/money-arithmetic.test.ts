@@ -2,102 +2,109 @@ import { Money } from "@/domain";
 import { describe, expect, test } from "vitest";
 
 describe("Money", () => {
-  describe("adds and subtracts signed values without changing either operand", () => {
-    describe("add", () => {
-      test("adds two money values", () => {
-        // Arrange
-        const first = Money.fromCents(500);
-        const second = Money.fromCents(700);
+  test("fromCents_WhenCreated_ReturnsFrozenInstance", () => {
+    // Arrange
+    const cents = 500;
 
-        // Act
-        const sum = first.add(second);
+    // Act
+    const money = Money.fromCents(cents);
 
-        // Assert
-        expect(sum.toCents()).toBe(1200);
-      });
+    // Assert
+    expect(Object.isFrozen(money)).toBe(true);
+  });
 
-      test("can be chained after subtraction", () => {
-        // Arrange
-        const first = Money.fromCents(500);
-        const second = Money.fromCents(700);
+  test("add_WhenBothAmountsArePositive_ReturnsTheirSum", () => {
+    // Arrange
+    const first = Money.fromCents(500);
+    const second = Money.fromCents(700);
 
-        // Act
-        const combined = first.subtract(second).add(first);
+    // Act
+    const sum = first.add(second);
 
-        // Assert
-        expect(combined.toCents()).toBe(300);
-      });
+    // Assert
+    expect(sum.toCents()).toBe(1200);
+  });
 
-      test("returns a new instance when adding zero", () => {
-        // Arrange
-        const money = Money.fromCents(500);
+  test("add_WhenChainedAfterSubtraction_ReturnsExactAmount", () => {
+    // Arrange
+    const first = Money.fromCents(500);
+    const second = Money.fromCents(700);
 
-        // Act
-        const result = money.add(Money.fromCents(0));
+    // Act
+    const combined = first.subtract(second).add(first);
 
-        // Assert
-        expect(result).not.toBe(money);
-      });
-    });
+    // Assert
+    expect(combined.toCents()).toBe(300);
+  });
 
-    describe("subtract", () => {
-      test("subtracts two money values", () => {
-        // Arrange
-        const first = Money.fromCents(500);
-        const second = Money.fromCents(700);
+  test("add_WhenAddingZero_ReturnsNewInstance", () => {
+    // Arrange
+    const money = Money.fromCents(500);
 
-        // Act
-        const difference = first.subtract(second);
+    // Act
+    const sum = money.add(Money.fromCents(0));
 
-        // Assert
-        expect(difference.toCents()).toBe(-200);
-      });
+    // Assert
+    expect(sum).not.toBe(money);
+  });
 
-      test("supports subtracting a negative value", () => {
-        // Arrange
-        const money = Money.fromCents(500);
+  test("add_WhenAppliedToOperands_PreservesBothValues", () => {
+    // Arrange
+    const first = Money.fromCents(500);
+    const second = Money.fromCents(700);
 
-        // Act
-        const result = money.subtract(Money.fromCents(-100));
+    // Act
+    first.add(second);
 
-        // Assert
-        expect(result.toCents()).toBe(600);
-      });
+    // Assert
+    expect(first.toCents()).toBe(500);
+    expect(second.toCents()).toBe(700);
+  });
 
-      test("returns a new instance when subtracting zero", () => {
-        // Arrange
-        const money = Money.fromCents(500);
+  test("subtract_WhenSecondAmountIsLarger_ReturnsNegativeDifference", () => {
+    // Arrange
+    const first = Money.fromCents(500);
+    const second = Money.fromCents(700);
 
-        // Act
-        const result = money.subtract(Money.fromCents(0));
+    // Act
+    const difference = first.subtract(second);
 
-        // Assert
-        expect(result).not.toBe(money);
-      });
-    });
+    // Assert
+    expect(difference.toCents()).toBe(-200);
+  });
 
-    describe("immutability", () => {
-      test("does not change either operand", () => {
-        // Arrange
-        const first = Money.fromCents(500);
-        const second = Money.fromCents(700);
+  test("subtract_WhenAmountIsNegative_IncreasesValue", () => {
+    // Arrange
+    const money = Money.fromCents(500);
 
-        // Act
-        first.add(second);
-        first.subtract(second);
+    // Act
+    const difference = money.subtract(Money.fromCents(-100));
 
-        // Assert
-        expect(first.toCents()).toBe(500);
-        expect(second.toCents()).toBe(700);
-      });
+    // Assert
+    expect(difference.toCents()).toBe(600);
+  });
 
-      test("freezes money instances", () => {
-        // Arrange
-        const money = Money.fromCents(500);
+  test("subtract_WhenSubtractingZero_ReturnsNewInstance", () => {
+    // Arrange
+    const money = Money.fromCents(500);
 
-        // Assert
-        expect(Object.isFrozen(money)).toBe(true);
-      });
-    });
+    // Act
+    const difference = money.subtract(Money.fromCents(0));
+
+    // Assert
+    expect(difference).not.toBe(money);
+  });
+
+  test("subtract_WhenAppliedToOperands_PreservesBothValues", () => {
+    // Arrange
+    const first = Money.fromCents(500);
+    const second = Money.fromCents(700);
+
+    // Act
+    first.subtract(second);
+
+    // Assert
+    expect(first.toCents()).toBe(500);
+    expect(second.toCents()).toBe(700);
   });
 });

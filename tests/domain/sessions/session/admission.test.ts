@@ -5,11 +5,10 @@ import {
   Session,
   Wallet,
 } from "@/domain";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { fundedWallet } from "../../accounts/user-fixtures";
 import {
   before,
-  captureError,
   creationDetails,
   loadedUser,
   join,
@@ -18,322 +17,488 @@ import {
   start,
 } from "./session-fixtures";
 
-describe("Session admission and roster", () => {
-  it("admits exact funds and rejects another commitment after reloading its lock", () => {
-    const funded = loadedUser("u", { wallet: fundedWallet("u", 500) });
-    const command = { participationId: "p-u", holdId: "h-u", now: before };
-    const admitted = session().join(funded, command);
-    expect(admitted.kind).toBe("COMMITTED");
-    expect(admitted.instructions[0]?.amount.toCents()).toBe(500);
+describe("Session", () => {
+  describe("Creation", () => {
+    test("create_WhenBookerIsInactive_ThrowsInactiveAccount", () => {
+      // Arrange
+      const details = creationDetails();
 
-    const reloaded = loadedUser("u", {
-      wallet: new Wallet({
-        walletId: funded.wallet.walletId,
-        userId: funded.userId,
-        transactions: [
-          ...funded.wallet.transactions,
-          new LedgerTransaction({
-            transactionId: "lock-u",
-            walletId: funded.wallet.walletId,
-            kind: "LOCK",
-            amount: Money.fromCents(500),
-            occurredAt: before,
-            idempotencyKey: "lock-u",
-            holdId: "h-u",
-          }),
-        ],
-      }),
+      // Act & Assert
+      expect(() =>
+        Session.create({ ...details, bookerStatus: "INACTIVE" }),
+      ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
     });
-    expect(funded.wallet.getFunds().toCents()).toBe(500);
-    expect(reloaded.wallet.getFunds().toCents()).toBe(0);
-    const nextSession = session();
-    const prior = sessionState(nextSession);
-    expect(() => nextSession.join(reloaded, command)).toThrow(
-      expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }),
-    );
-    expect(sessionState(nextSession)).toEqual(prior);
+
+    test("create_WhenPayoutAccountIsIncomplete_ThrowsPayoutAccountNotReady", () => {
+      // Arrange
+      const details = creationDetails();
+
+      // Act & Assert
+      expect(() => Session.create({ ...details, payoutReady: false })).toThrow(
+        expect.objectContaining({ code: "PAYOUT_ACCOUNT_NOT_READY" }),
+      );
+    });
+
+    test("create_WhenShareWouldBeZero_ThrowsInvalidInput", () => {
+      // Arrange
+      const details = creationDetails();
+
+      // Act & Assert
+      expect(() => Session.create({ ...details, totalSlots: 1001 })).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("create_WhenMinimumHeadcountIsOne_ThrowsInvalidInput", () => {
+      // Arrange
+      const details = creationDetails();
+
+      // Act & Assert
+      expect(() => Session.create({ ...details, minimumHeadcount: 1 })).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
   });
 
-  it("uses the loaded user's memberships and reliability for private admission", () => {
-    const s = Session.create({
-      ...creationDetails(),
-      visibility: "PRIVATE",
-      invitedGroupId: "group",
-      minimumReliability: ReliabilityScore.from(80),
-    });
-    const command = { participationId: "p-u", holdId: "h-u", now: before };
-    const prior = sessionState(s);
-    const lowScore = loadedUser("u", {
-      memberGroupIds: ["group"],
-      reliabilityScore: ReliabilityScore.from(79),
-    });
-    const eligible = loadedUser("u", {
-      memberGroupIds: ["group"],
-      reliabilityScore: ReliabilityScore.from(80),
-    });
+  describe("Admission and reentry", () => {
+    test("join_WhenFundsExactlyCoverShare_CommitsAndEmitsLock", () => {
+      // Arrange
+      const bookingSession = session();
+      const fundedUser = loadedUser("u", { wallet: fundedWallet("u", 500) });
 
-    expect(() => s.join(loadedUser("u"), command)).toThrow(
-      expect.objectContaining({ code: "INVALID_ACCESS" }),
-    );
-    expect(() => lowScore.asParticipant().join(s, command)).toThrow(
-      expect.objectContaining({ code: "LOW_RELIABILITY" }),
-    );
-    expect(sessionState(s)).toEqual(prior);
-
-    const result = eligible.asParticipant().join(s, command);
-    expect(result.kind).toBe("COMMITTED");
-    expect(result.instructions[0]?.walletId).toBe(eligible.wallet.walletId);
-  });
-
-  it("checks the promotion user and uses a reloaded balance", () => {
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    const unfunded = loadedUser("c", {
-      wallet: fundedWallet("c", 0),
-    });
-    expect(
-      s.join(unfunded, {
-        participationId: "p-c",
+      // Act
+      const admission = bookingSession.join(fundedUser, {
+        participationId: "p-u",
+        holdId: "h-u",
         now: before,
-      }).kind,
-    ).toBe("WAITLISTED");
-    s.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: before,
+      });
+
+      // Assert
+      expect(admission.kind).toBe("COMMITTED");
+      expect(admission.instructions[0]?.amount.toCents()).toBe(500);
     });
-    const prior = sessionState(s);
-    const command = { holdId: "h-c", now: before };
 
-    expect(() => s.promoteNext(loadedUser("other"), command)).toThrow(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
-    expect(sessionState(s)).toEqual(prior);
+    test("join_WhenReloadedWalletIncludesPriorLock_RejectsWithoutChangingState", () => {
+      // Arrange
+      const fundedUser = loadedUser("u", { wallet: fundedWallet("u", 500) });
+      const command = { participationId: "p-u", holdId: "h-u", now: before };
+      session().join(fundedUser, command);
+      const reloadedUser = loadedUser("u", {
+        wallet: new Wallet({
+          walletId: fundedUser.wallet.walletId,
+          userId: fundedUser.userId,
+          transactions: [
+            ...fundedUser.wallet.transactions,
+            new LedgerTransaction({
+              transactionId: "lock-u",
+              walletId: fundedUser.wallet.walletId,
+              kind: "LOCK",
+              amount: Money.fromCents(500),
+              occurredAt: before,
+              idempotencyKey: "lock-u",
+              holdId: "h-u",
+            }),
+          ],
+        }),
+      });
+      const nextSession = session();
+      const previousState = sessionState(nextSession);
 
-    const reloaded = loadedUser("c", {
-      wallet: fundedWallet("c", 500),
+      // Act & Assert
+      expect(() => nextSession.join(reloadedUser, command)).toThrow(
+        expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }),
+      );
+      expect(sessionState(nextSession)).toEqual(previousState);
+      expect(fundedUser.wallet.getFunds().toCents()).toBe(500);
+      expect(reloadedUser.wallet.getFunds().toCents()).toBe(0);
     });
-    const result = s.promoteNext(reloaded, command);
-    expect(result.kind).toBe("PROMOTED");
-    expect(result.instructions[0]?.walletId).toBe("w-c");
-    expect(unfunded.wallet.getFunds().toCents()).toBe(0);
-    expect(reloaded.wallet.getFunds().toCents()).toBe(500);
-  });
 
-  it("offers all eight places including an ordinary place for the booker", () => {
-    // Arrange
-    const s = session(8);
+    test("join_WhenUserIsNotInInvitedGroup_RejectsWithoutChangingState", () => {
+      // Arrange
+      const privateSession = Session.create({
+        ...creationDetails(),
+        visibility: "PRIVATE",
+        invitedGroupId: "group",
+        minimumReliability: ReliabilityScore.from(80),
+      });
+      const command = { participationId: "p-u", holdId: "h-u", now: before };
+      const applicant = loadedUser("u");
+      const previousState = sessionState(privateSession);
 
-    // Act
-    const commitments = ["booker", "a", "b", "c", "d", "e", "f", "g"].map(
-      (id) => join(s, id).kind,
-    );
-    const availableSlots = s.getAvailableSlots(before);
-    const waitingKind = join(s, "waiting").kind;
+      // Act & Assert
+      expect(() => privateSession.join(applicant, command)).toThrow(
+        expect.objectContaining({ code: "INVALID_ACCESS" }),
+      );
+      expect(sessionState(privateSession)).toEqual(previousState);
+    });
 
-    // Assert
-    expect(commitments).toEqual([
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-      "COMMITTED",
-    ]);
-    expect(availableSlots).toBe(0);
-    expect(waitingKind).toBe("WAITLISTED");
-  });
+    test("join_WhenMemberIsBelowReliabilityThreshold_RejectsWithoutChangingState", () => {
+      // Arrange
+      const privateSession = Session.create({
+        ...creationDetails(),
+        visibility: "PRIVATE",
+        invitedGroupId: "group",
+        minimumReliability: ReliabilityScore.from(80),
+      });
+      const command = { participationId: "p-u", holdId: "h-u", now: before };
+      const applicant = loadedUser("u", {
+        memberGroupIds: ["group"],
+        reliabilityScore: ReliabilityScore.from(79),
+      });
+      const previousState = sessionState(privateSession);
 
-  it("validates creation and a positive per-slot share", () => {
-    // Arrange
-    const create = creationDetails();
+      // Act & Assert
+      expect(() =>
+        applicant.asParticipant().join(privateSession, command),
+      ).toThrow(expect.objectContaining({ code: "LOW_RELIABILITY" }));
+      expect(sessionState(privateSession)).toEqual(previousState);
+    });
 
-    // Act
-    const inactiveBooker = () =>
-      Session.create({ ...create, bookerStatus: "INACTIVE" });
-    const incompletePayout = () =>
-      Session.create({ ...create, payoutReady: false });
-    const tooManySlots = () => Session.create({ ...create, totalSlots: 1001 });
-    const invalidHeadcount = () =>
-      Session.create({ ...create, minimumHeadcount: 1 });
+    test("join_WhenInvitedMemberMeetsReliabilityThreshold_CommitsFromLoadedWallet", () => {
+      // Arrange
+      const privateSession = Session.create({
+        ...creationDetails(),
+        visibility: "PRIVATE",
+        invitedGroupId: "group",
+        minimumReliability: ReliabilityScore.from(80),
+      });
+      const eligibleUser = loadedUser("u", {
+        memberGroupIds: ["group"],
+        reliabilityScore: ReliabilityScore.from(80),
+      });
 
-    // Assert
-    expect(inactiveBooker).toThrow(
-      expect.objectContaining({ code: "INACTIVE_ACCOUNT" }),
-    );
-    expect(incompletePayout).toThrow(
-      expect.objectContaining({ code: "PAYOUT_ACCOUNT_NOT_READY" }),
-    );
-    expect(tooManySlots).toThrow();
-    expect(invalidHeadcount).toThrow();
-  });
+      // Act
+      const admission = eligibleUser.asParticipant().join(privateSession, {
+        participationId: "p-u",
+        holdId: "h-u",
+        now: before,
+      });
 
-  it("checks eligibility, access and balance before committing without changing state", () => {
-    // Arrange
-    const s = session();
-    const rejectedAdmissions = [
-      [{ accountStatus: "INACTIVE" }, "INACTIVE_ACCOUNT"],
-      [
-        {
-          wallet: fundedWallet("u", 499),
-        },
-        "INSUFFICIENT_FUNDS",
-      ],
-    ] as const;
+      // Assert
+      expect(admission.kind).toBe("COMMITTED");
+      expect(admission.instructions[0]?.walletId).toBe(
+        eligibleUser.wallet.walletId,
+      );
+    });
 
-    // Act
-    const rejectedResults = rejectedAdmissions.map(([patch, code]) => {
-      const prior = sessionState(s);
-      const operation = () =>
-        s.join(loadedUser("u", patch), {
+    test("join_WhenEightSlotsFillIncludingBooker_WaitlistsNextApplicant", () => {
+      // Arrange
+      const bookingSession = session(8);
+
+      // Act
+      const commitments = ["booker", "a", "b", "c", "d", "e", "f", "g"].map(
+        (id) => join(bookingSession, id).kind,
+      );
+      const availableSlots = bookingSession.getAvailableSlots(before);
+      const waitingKind = join(bookingSession, "waiting").kind;
+
+      // Assert
+      expect(commitments).toEqual([
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+        "COMMITTED",
+      ]);
+      expect(availableSlots).toBe(0);
+      expect(waitingKind).toBe("WAITLISTED");
+    });
+
+    test("join_WhenUserIsInactive_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      const applicant = loadedUser("u", { accountStatus: "INACTIVE" });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() =>
+        bookingSession.join(applicant, {
           participationId: "p",
           holdId: "h",
           now: before,
-        });
-      try {
-        operation();
-        return { code, error: undefined, prior, after: sessionState(s) };
-      } catch (error) {
-        return { code, error, prior, after: sessionState(s) };
-      }
-    });
-    s.changeVisibility({
-      actorId: "booker",
-      visibility: "PRIVATE",
-      now: before,
-    });
-    const privateJoin = () => join(s, "u");
-    const admitted = s.join(loadedUser("u"), {
-      participationId: "p",
-      holdId: "h",
-      now: before,
-      roomToken: "room",
+        }),
+      ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
     });
 
-    // Assert
-    expect(rejectedResults).toHaveLength(2);
-    expect(rejectedResults[0]?.error).toEqual(
-      expect.objectContaining({ code: "INACTIVE_ACCOUNT" }),
-    );
-    expect(rejectedResults[1]?.error).toEqual(
-      expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }),
-    );
-    expect(rejectedResults[0]?.after).toEqual(rejectedResults[0]?.prior);
-    expect(rejectedResults[1]?.after).toEqual(rejectedResults[1]?.prior);
-    expect(privateJoin).toThrow(
-      expect.objectContaining({ code: "INVALID_ACCESS" }),
-    );
-    expect(admitted.kind).toBe("COMMITTED");
-  });
+    test("join_WhenFundsAreOneCentBelowShare_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      const applicant = loadedUser("u", { wallet: fundedWallet("u", 499) });
+      const previousState = sessionState(bookingSession);
 
-  it("queues without locking money, preserves tie order, and gives existing waiters priority", () => {
-    // Arrange
-    const s = session();
+      // Act & Assert
+      expect(() =>
+        bookingSession.join(applicant, {
+          participationId: "p",
+          holdId: "h",
+          now: before,
+        }),
+      ).toThrow(expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
 
-    // Act
-    join(s, "a");
-    join(s, "b");
-    const wait = s.join(
-      loadedUser("c", {
-        wallet: fundedWallet("c", 0),
-      }),
-      {
+    test("join_WhenPrivateRoomTokenIsMissing_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      bookingSession.changeVisibility({
+        actorId: "booker",
+        visibility: "PRIVATE",
+        now: before,
+      });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => join(bookingSession, "u")).toThrow(
+        expect.objectContaining({ code: "INVALID_ACCESS" }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("join_WhenPrivateRoomTokenMatches_CommitsApplicant", () => {
+      // Arrange
+      const bookingSession = session();
+      bookingSession.changeVisibility({
+        actorId: "booker",
+        visibility: "PRIVATE",
+        now: before,
+      });
+
+      // Act
+      const admission = bookingSession.join(loadedUser("u"), {
+        participationId: "p",
+        holdId: "h",
+        now: before,
+        roomToken: "room",
+      });
+
+      // Assert
+      expect(admission.kind).toBe("COMMITTED");
+    });
+
+    test("join_WhenReturningWaiterUsesDifferentId_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      join(bookingSession, "c");
+      join(bookingSession, "d");
+      bookingSession.leaveWaitlist({
+        actorId: "c",
         participationId: "p-c",
-        holdId: "h-c",
         now: before,
-      },
-    );
-    join(s, "d");
-    s.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: before,
-    });
-    const fresh = join(s, "fresh");
-    const firstPromotion = s.promoteNext(
-      loadedUser("c", {
-        wallet: fundedWallet("c", 0),
-      }),
-      {
-        holdId: "h-c",
-        now: before,
-      },
-    );
-    const nextWaiterAfterSkip = s.nextWaitlistedUserId;
-    const secondPromotion = s.promoteNext(loadedUser("d"), {
-      holdId: "h-d",
-      now: before,
+      });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() =>
+        bookingSession.join(loadedUser("c"), {
+          participationId: "different",
+          holdId: "h-c",
+          now: before,
+        }),
+      ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
     });
 
-    // Assert
-    expect(wait).toMatchObject({ kind: "WAITLISTED", instructions: [] });
-    expect(fresh.kind).toBe("WAITLISTED");
-    expect(firstPromotion).toMatchObject({
-      kind: "SKIPPED",
-      reason: "INSUFFICIENT_FUNDS",
+    test("join_WhenReturningWaiterReusesId_AssignsFreshQueuePosition", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      join(bookingSession, "c");
+      join(bookingSession, "d");
+      bookingSession.leaveWaitlist({
+        actorId: "c",
+        participationId: "p-c",
+        now: before,
+      });
+
+      // Act
+      const reentry = join(bookingSession, "c");
+
+      // Assert
+      expect(reentry.kind).toBe("WAITLISTED");
+      expect(bookingSession.nextWaitlistedUserId).toBe("d");
+      expect(
+        bookingSession.participations.filter(
+          (participation) => participation.userId === "c",
+        ),
+      ).toHaveLength(1);
     });
-    expect(nextWaiterAfterSkip).toBe("d");
-    expect(secondPromotion.kind).toBe("PROMOTED");
-    expect(s.nextWaitlistedUserId).toBe("fresh");
+
+    test("join_WhenUserIsAlreadyCommitted_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => join(bookingSession, "a")).toThrow(
+        expect.objectContaining({ code: "ALREADY_PARTICIPATING" }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("join_WhenUserPreviouslyWithdrew_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: before,
+      });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => join(bookingSession, "a")).toThrow(
+        expect.objectContaining({ code: "REJOIN_NOT_ALLOWED" }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("join_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => join(bookingSession, "b", start)).toThrow(
+        expect.objectContaining({ code: "SESSION_STARTED" }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
   });
 
-  it("allows waitlist re-entry with the same ID and a fresh queue position", () => {
-    // Arrange
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    join(s, "c");
-    join(s, "d");
+  describe("Queue promotion", () => {
+    test("promoteNext_WhenLoadedUserDoesNotMatchNextWaiter_RejectsWithoutChangingState", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      const unfundedUser = loadedUser("c", { wallet: fundedWallet("c", 0) });
+      bookingSession.join(unfundedUser, {
+        participationId: "p-c",
+        now: before,
+      });
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: before,
+      });
+      const previousState = sessionState(bookingSession);
 
-    // Act
-    s.leaveWaitlist({ actorId: "c", participationId: "p-c", now: before });
-    const differentId = () =>
-      s.join(loadedUser("c"), {
-        participationId: "different",
+      // Act & Assert
+      expect(() =>
+        bookingSession.promoteNext(loadedUser("other"), {
+          holdId: "h-c",
+          now: before,
+        }),
+      ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("promoteNext_WhenReloadedWaiterHasFunds_PromotesFromUpdatedWallet", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      const unfundedUser = loadedUser("c", { wallet: fundedWallet("c", 0) });
+      const waitlistAdmission = bookingSession.join(unfundedUser, {
+        participationId: "p-c",
+        now: before,
+      });
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: before,
+      });
+      const reloadedUser = loadedUser("c", { wallet: fundedWallet("c", 500) });
+
+      // Act
+      const promotion = bookingSession.promoteNext(reloadedUser, {
         holdId: "h-c",
         now: before,
       });
-    const differentIdError = captureError(differentId);
-    const reentry = join(s, "c");
 
-    // Assert
-    expect(differentIdError).toEqual(
-      expect.objectContaining({ code: "DUPLICATE_ID" }),
-    );
-    expect(reentry.kind).toBe("WAITLISTED");
-    expect(s.nextWaitlistedUserId).toBe("d");
-    expect(s.participations.filter((p) => p.userId === "c")).toHaveLength(1);
+      // Assert
+      expect(waitlistAdmission.kind).toBe("WAITLISTED");
+      expect(promotion.kind).toBe("PROMOTED");
+      expect(promotion.instructions[0]?.walletId).toBe("w-c");
+      expect(unfundedUser.wallet.getFunds().toCents()).toBe(0);
+      expect(reloadedUser.wallet.getFunds().toCents()).toBe(500);
+    });
+
+    test("promoteNext_WhenWaitersTieAndFirstCannotPay_PreservesQueuePriority", () => {
+      // Arrange
+      const bookingSession = session();
+
+      // Act
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      const waitlistAdmission = bookingSession.join(
+        loadedUser("c", {
+          wallet: fundedWallet("c", 0),
+        }),
+        {
+          participationId: "p-c",
+          holdId: "h-c",
+          now: before,
+        },
+      );
+      join(bookingSession, "d");
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: before,
+      });
+      const freshAdmission = join(bookingSession, "fresh");
+      const firstPromotion = bookingSession.promoteNext(
+        loadedUser("c", {
+          wallet: fundedWallet("c", 0),
+        }),
+        {
+          holdId: "h-c",
+          now: before,
+        },
+      );
+      const nextWaiterAfterSkip = bookingSession.nextWaitlistedUserId;
+      const secondPromotion = bookingSession.promoteNext(loadedUser("d"), {
+        holdId: "h-d",
+        now: before,
+      });
+
+      // Assert
+      expect(waitlistAdmission).toMatchObject({
+        kind: "WAITLISTED",
+        instructions: [],
+      });
+      expect(freshAdmission.kind).toBe("WAITLISTED");
+      expect(firstPromotion).toMatchObject({
+        kind: "SKIPPED",
+        reason: "INSUFFICIENT_FUNDS",
+      });
+      expect(nextWaiterAfterSkip).toBe("d");
+      expect(secondPromotion.kind).toBe("PROMOTED");
+      expect(bookingSession.nextWaitlistedUserId).toBe("fresh");
+    });
   });
 
-  it("rejects duplicates, rejoining after withdrawal, and joins at session start", () => {
-    // Arrange
-    const s = session();
-    join(s, "a");
+  describe("Availability", () => {
+    test("getAvailableSlots_WhenSessionStartsNow_ReturnsZero", () => {
+      // Arrange
+      const bookingSession = session();
 
-    // Act
-    const duplicate = captureError(() => join(s, "a"));
-    s.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: before,
+      // Act
+      const availableSlots = bookingSession.getAvailableSlots(start);
+
+      // Assert
+      expect(availableSlots).toBe(0);
     });
-    const rejoinAfterWithdrawal = () => join(s, "a");
-    const joinAtStart = () => join(s, "b", start);
-    const availableAtStart = s.getAvailableSlots(start);
-
-    // Assert
-    expect(duplicate).toEqual(
-      expect.objectContaining({ code: "ALREADY_PARTICIPATING" }),
-    );
-    expect(rejoinAfterWithdrawal).toThrow(
-      expect.objectContaining({ code: "REJOIN_NOT_ALLOWED" }),
-    );
-    expect(joinAtStart).toThrow(
-      expect.objectContaining({ code: "SESSION_STARTED" }),
-    );
-    expect(availableAtStart).toBe(0);
   });
 });

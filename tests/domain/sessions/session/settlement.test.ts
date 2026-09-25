@@ -1,112 +1,228 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   at,
-  captureError,
   destination,
   end,
   join,
   session,
+  sessionState,
 } from "./session-fixtures";
 
-describe("Session external settlement", () => {
-  it("keeps money held during payout, retries failure with new identity, and finalizes externally", () => {
+describe("Session", () => {
+  test("prepareSettlement_WhenHoldsNeedReleaseAndForfeiture_KeepsFundsPending", () => {
     // Arrange
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    s.withdrawParticipant({ actorId: "a", participationId: "p-a", now: at(2) });
-    s.verifyAttendance({
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: at(2),
+    });
+    bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
       now: end,
     });
 
     // Act
-    const batch = s.prepareSettlement({
+    const batch = bookingSession.prepareSettlement({
       actorId: "booker",
       payoutId: "out",
       idempotencyKey: "key",
       destination,
       now: end,
     });
-    const pendingStatus = s.status;
-    const pendingKinds = batch?.lines.map((line) => line.kind);
-    const pendingHoldStates = s.participations.map((p) => p.hold?.state);
-    const inProgress = captureError(() =>
-      s.prepareSettlement({
+
+    // Assert
+    expect(bookingSession.status).toBe("PAYOUT_PENDING");
+    expect(batch?.lines.map((line) => line.kind)).toEqual([
+      "FORFEIT",
+      "RELEASE",
+    ]);
+    expect(
+      bookingSession.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["FORFEITURE_DUE", "HELD"]);
+  });
+
+  test("prepareSettlement_WhenAnotherPayoutIsPending_RejectsWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: at(2),
+    });
+    bookingSession.verifyAttendance({
+      actorId: "booker",
+      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      now: end,
+    });
+    bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "out",
+      idempotencyKey: "key",
+      destination,
+      now: end,
+    });
+
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.prepareSettlement({
         actorId: "booker",
         payoutId: "another",
         idempotencyKey: "key2",
         destination,
         now: end,
       }),
-    );
-    const staleCompletion = captureError(() =>
-      s.completeSettlement("stale", end),
-    );
-    s.failSettlement("out", end);
-    const afterFailure = s.status;
-    const duplicatePayout = captureError(() =>
-      s.prepareSettlement({
+    ).toThrow(expect.objectContaining({ code: "PAYOUT_IN_PROGRESS" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("prepareSettlement_WhenFailedPayoutIdIsReused_RejectsWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: at(2),
+    });
+    bookingSession.verifyAttendance({
+      actorId: "booker",
+      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      now: end,
+    });
+    bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "out",
+      idempotencyKey: "key",
+      destination,
+      now: end,
+    });
+    bookingSession.failSettlement("out", end);
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.prepareSettlement({
         actorId: "booker",
         payoutId: "out",
         idempotencyKey: "new",
         destination,
         now: end,
       }),
-    );
-    const retryBatch = s.prepareSettlement({
-      actorId: "booker",
-      payoutId: "retry",
-      idempotencyKey: "retry-key",
-      destination,
-      now: end,
-    });
-    const completed = s.completeSettlement("retry", end);
-    const finalStatus = s.status;
-    const finalHoldStates = s.participations.map((p) => p.hold?.state);
-    const reliabilityOutcome =
-      s.participations[0]?.reliabilityOutcome(end)?.value;
-
-    // Assert
-    expect(pendingStatus).toBe("PAYOUT_PENDING");
-    expect(pendingKinds).toEqual(["FORFEIT", "RELEASE"]);
-    expect(pendingHoldStates).toEqual(["FORFEITURE_DUE", "HELD"]);
-    expect(inProgress).toEqual(
-      expect.objectContaining({ code: "PAYOUT_IN_PROGRESS" }),
-    );
-    expect(staleCompletion).toEqual(
-      expect.objectContaining({ code: "STALE_PAYOUT" }),
-    );
-    expect(afterFailure).toBe("AWAITING_PAYOUT");
-    expect(duplicatePayout).toEqual(
-      expect.objectContaining({ code: "DUPLICATE_ID" }),
-    );
-    expect(retryBatch?.payoutId).toBe("retry");
-    expect(
-      completed.instructions.map((instruction) => instruction.kind),
-    ).toEqual(["FORFEIT", "RELEASE"]);
-    expect(finalStatus).toBe("SETTLED");
-    expect(finalHoldStates).toEqual(["FORFEITED", "RELEASED"]);
-    expect(reliabilityOutcome).toBe(0);
+    ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  it("settles empty sessions without a zero-value payout", () => {
+  test("prepareSettlement_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
-    const s = session();
+    const bookingSession = session();
 
     // Act
-    const batch = s.prepareSettlement({
+    const batch = bookingSession.prepareSettlement({
       actorId: "booker",
       payoutId: "unused",
       idempotencyKey: "unused",
       destination,
       now: end,
     });
-    const status = s.status;
+    const status = bookingSession.status;
 
     // Assert
     expect(batch).toBeUndefined();
     expect(status).toBe("SETTLED");
+  });
+
+  test("completeSettlement_WhenCallbackIsStale_RejectsWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: at(2),
+    });
+    bookingSession.verifyAttendance({
+      actorId: "booker",
+      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      now: end,
+    });
+    bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "out",
+      idempotencyKey: "key",
+      destination,
+      now: end,
+    });
+
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => bookingSession.completeSettlement("stale", end)).toThrow(
+      expect.objectContaining({ code: "STALE_PAYOUT" }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("completeSettlement_WhenFailedAttemptIsRetriedWithNewIdentity_FinalizesHolds", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.withdrawParticipant({
+      actorId: "a",
+      participationId: "p-a",
+      now: at(2),
+    });
+    bookingSession.verifyAttendance({
+      actorId: "booker",
+      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      now: end,
+    });
+    bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "out",
+      idempotencyKey: "key",
+      destination,
+      now: end,
+    });
+
+    // Act
+    bookingSession.failSettlement("out", end);
+    const statusAfterFailure = bookingSession.status;
+    const retryBatch = bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "retry",
+      idempotencyKey: "retry-key",
+      destination,
+      now: end,
+    });
+    const completion = bookingSession.completeSettlement("retry", end);
+
+    // Assert
+    expect(statusAfterFailure).toBe("AWAITING_PAYOUT");
+    expect(retryBatch?.payoutId).toBe("retry");
+    expect(
+      completion.instructions.map((instruction) => instruction.kind),
+    ).toEqual(["FORFEIT", "RELEASE"]);
+    expect(bookingSession.status).toBe("SETTLED");
+    expect(
+      bookingSession.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["FORFEITED", "RELEASED"]);
+    expect(
+      bookingSession.participations[0]?.reliabilityOutcome(end)?.value,
+    ).toBe(0);
   });
 });

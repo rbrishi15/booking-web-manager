@@ -11,6 +11,10 @@ and [SpecialSkillTest](https://github.com/liang799/SC2002-Project/blob/main/src/
 
 - Use a file named after the entity or value object, with one top-level
   `describe`. Keep smaller suites flat, with tests ordered by method.
+- Focused behavior files for the same entity may remain separate, such as
+  Money arithmetic, Session admission, reliability history, and User related
+  data. Each file still tests one entity and names its top-level `describe`
+  after that entity. Separate suites that mix different entities.
 - Larger entities may use one additional level of `describe` groups for related
   behaviors, such as construction, profile changes, payout setup, and
   deactivation. Order tests by method within each group, include related getters,
@@ -18,7 +22,7 @@ and [SpecialSkillTest](https://github.com/liang799/SC2002-Project/blob/main/src/
 - Split files when responsibilities, fixtures, dependencies, or ownership warrant
   it. Line count alone is not a reason to split a cohesive entity's tests.
 - Name each test `method_WhenCondition_ExpectedResult`. Use `constructor` for
-  construction and the property name for a getter.
+  construction and the property name for a getter. Use `test` consistently.
 - Give each test one coherent scenario. Several transitions can belong together
   when they demonstrate a single lifecycle behavior.
 - Prefer explicitly named tests over field-driven tables so each business rule
@@ -74,10 +78,9 @@ external input parsing belongs in boundary tests.
 The rationale for this convention is recorded in
 [ADR-0005: Domain unit-test structure](../../docs/adr/0005-domain-unit-test-structure.md).
 
-The first files following this standard are
+Examples following this standard are
 [user.test.ts](./accounts/user.test.ts) and
-[payout-account.test.ts](./accounts/payout-account.test.ts). Other existing
-domain files can adopt it when they are next refactored.
+[payout-account.test.ts](./accounts/payout-account.test.ts).
 
 When restructuring tests, preserve distinct behaviors, error codes, immutability
 checks, and unchanged-state assertions. Fix scenarios whose setup does not match
