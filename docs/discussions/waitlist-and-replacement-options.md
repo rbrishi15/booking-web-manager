@@ -38,9 +38,19 @@ two hours before start, nobody replaces him, and the session will still go
 ahead. The booker cannot waive Ben's charge individually under the first-release
 proposal. Ben remains awaiting replacement; his share is refunded if a
 replacement successfully joins or the booker cancels the session, and is
-forfeited if no replacement is found before start. This does not change the
-diagram's refund when the booker removes a still-joined participant. The user
-selected this limit for product-owner review; approval remains pending.
+forfeited if he remains withdrawn without a replacement at start. This does not
+change the diagram's refund when the booker removes a still-joined participant.
+The user selected this limit for product-owner review; approval remains pending.
+
+**Proposed return after a late withdrawal (26 September 2026):** Ben withdraws
+two hours before start and his $10 remains held. Nobody replaces him. Thirty
+minutes before start, he can attend again and a place is still available. Let
+Ben rejoin using his existing held $10, without charging him again. This choice
+applies before the session starts while his original share remains held and he
+has not been replaced; it does not decide rejoining after a refund or a completed
+replacement. The user selected this outcome for product-owner review; approval
+remains pending. The current code rejects this return, and the supplied diagram
+does not show it.
 
 ## 1. Confirmed baseline: the supplied state diagram
 
@@ -151,6 +161,7 @@ waitlist is a valid outcome of the discussion.
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
 | Can the booker waive one participant's charge after that participant has already withdrawn late, while the session still goes ahead? | User proposes no individual exception in the first release; product-owner answer pending. | Pending |
+| Can a late-withdrawing participant return before start when nobody has replaced them, a place remains available, and their original share is still held? | User proposes rejoining with the existing held share and no additional charge; product-owner answer pending. | Pending |
 | Who receives the refund when several participants await replacement? | Pending | Pending |
 | If personal links exist, do they reserve capacity and outrank waiting people? | Pending | Pending |
 | If Option 3 is chosen, which rows in section 4 are approved or changed? | Pending | Pending |
@@ -167,6 +178,11 @@ a finished replacement feature.
 Reserved capacity, refunding the personal-link owner, direct acceptance by an
 already-waitlisted invitee, and the inclusive 30-hour correction remain
 unimplemented. Existing passing tests do not settle product decisions.
+
+The proposed return after a late withdrawal also remains unimplemented. Current
+admission rejects rejoining after withdrawal, including when the original share
+is still held. Supporting this return would be a separate business change, not
+part of preserving behavior during the internal restructuring.
 
 The separate [Session restructuring plan](../plans/session-domain-coordinator.md)
 tracks technical cleanup and the current changes. Keep that cleanup separate

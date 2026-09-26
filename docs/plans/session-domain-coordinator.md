@@ -128,6 +128,7 @@ mechanism is needed.
 | `Session.offerReplacementToWaitlist` and corresponding immutable child transition | Implemented. Clears the token, preserves the hold and withdrawal time, and returns no financial instructions. | New proposed product capability; awaiting product-owner review. |
 | Offer-to-waitlist lifecycle, rejection, and original-withdrawal-order tests | Five tests added and passing. | Examples of discussion assumptions, not accepted product requirements. |
 | Reserved capacity, refunding the personal-link owner, direct personal acceptance by a waitlisted invitee | Not implemented. | Product proposals awaiting review. |
+| Rejoining before start after a late withdrawal, with an available place, no replacement, and the original share still held | Not implemented; current admission rejects withdrawn participants. | Proposed return with the existing hold and no additional charge; awaiting product-owner review. |
 | Immediate refund at exactly 30 hours | Not implemented; code still uses the old boundary. | Difference from the confirmed diagram, separate from waitlist choices. |
 | Internal module extraction | Not started. | Technical cleanup remains separate from adopting product proposals. |
 
