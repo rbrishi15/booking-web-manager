@@ -1,3 +1,7 @@
+import {
+  prepareSettlementRoster,
+  buildSettlementBatch,
+} from "./session-settlement";
 import { calculateJoin, calculatePromotion } from "./session-admission";
 import { availableSlots } from "./session-roster";
 import { meetsReliabilityRequirement } from "./session-admission";
@@ -35,7 +39,6 @@ import type {
   PayoutDestination,
   PromotionResult,
   SettlementBatch,
-  SettlementLine,
   WithdrawalResult,
 } from "../shared/operations";
 import type {
@@ -440,22 +443,11 @@ export class Session {
       "SESSION_NOT_ENDED",
       "Settlement requires the session to end",
     );
-    const next = this.#participations.map((participation) =>
-      participation.expireReplacement(command.now),
-    );
-    DomainError.require(
-      next.every(
-        (participation) =>
-          participation.status !== "COMMITTED" ||
-          participation.attendance !== "UNVERIFIED",
-      ),
-      "ATTENDANCE_INCOMPLETE",
-      "All committed participants must be finalized before settlement",
-    );
-    DomainError.require(
-      command.destination.userId === this.#bookerId,
-      "INVALID_INPUT",
-      "Payout destination must belong to the booker",
+    const next = prepareSettlementRoster(
+      this.#participations,
+      this.#bookerId,
+      command.destination,
+      command.now,
     );
     DomainError.require(
       this.#pendingSettlement === undefined,
@@ -472,50 +464,12 @@ export class Session {
       "DUPLICATE_ID",
       "A payout idempotency key can only be used once for this session",
     );
-    const lines: SettlementLine[] = [];
-    for (const participation of next) {
-      if (
-        !(
-          participation.status === "COMMITTED" ||
-          participation.status === "WITHDRAWN"
-        ) ||
-        participation.hold === undefined
-      )
-        continue;
-      const hold = participation.hold;
-      if (["REFUNDED", "RELEASED", "FORFEITED"].includes(hold.state)) continue;
-      DomainError.require(
-        hold.state === "HELD" || hold.state === "FORFEITURE_DUE",
-        "INVALID_STATE",
-        "An unsettled commitment has an invalid hold",
-      );
-      lines.push({
-        holdId: hold.holdId,
-        participationId: participation.participationId,
-        holdingAccountId: hold.holdingAccountId,
-        walletId: hold.walletId,
-        amount: hold.amount,
-        kind:
-          participation.status === "WITHDRAWN" ||
-          participation.attendance === "ABSENT" ||
-          hold.state === "FORFEITURE_DUE"
-            ? "FORFEIT"
-            : "RELEASE",
-      });
-    }
-    if (lines.length === 0) {
+    const batch = buildSettlementBatch(this.#sessionId, next, command);
+    if (batch === undefined) {
       this.#participations = next;
       this.#status = "SETTLED";
       return undefined;
     }
-    const batch: SettlementBatch = {
-      payoutId: command.payoutId,
-      sessionId: this.#sessionId,
-      idempotencyKey: command.idempotencyKey,
-      requestedAt: validDate(command.now, "now"),
-      destination: command.destination,
-      lines,
-    };
     const pending = { batch: cloneBatch(batch) };
     const result = cloneBatch(batch);
     const attemptIds = new Set(this.#payoutAttemptIds).add(command.payoutId);
