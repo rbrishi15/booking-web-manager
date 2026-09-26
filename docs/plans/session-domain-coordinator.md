@@ -13,8 +13,8 @@ maintained record of those proposals, simpler alternatives, and pending answers.
 
 The user's current first-release proposal is to defer the joining waitlist,
 pending product-owner review. Replacement acceptance and allocation still need
-decisions. This proposal does not authorize removing existing queue behavior
-as part of the structural cleanup.
+product-owner decisions. This proposal does not authorize removing existing
+queue behavior as part of the structural cleanup.
 
 The diagram establishes immediate refunds at least 30 hours before start,
 replacement-dependent refunds for later withdrawal, forfeiture without a

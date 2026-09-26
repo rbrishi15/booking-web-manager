@@ -13,10 +13,10 @@ what promise the product should make before adding its exceptions and workflow.
 **Current proposal for the first release (26 September 2026): defer the joining
 waitlist.** The user selected this direction for product-owner discussion. Focus
 on the replacement process in the confirmed diagram without maintaining a queue
-of interested people. Product-owner approval remains pending. This choice does
-not settle how replacements are accepted, matched to refunds, or given a place;
-it does not approve personal links or reservations. Keep the richer waitlist
-options below as deferred discussion material.
+of interested people. Product-owner approval remains pending for this direction
+and the proposed rules for accepting replacements and matching refunds. Personal
+links and reservations also remain unapproved. Keep the richer waitlist options
+below as deferred discussion material.
 
 **Proposed definition of a successful replacement (26 September 2026):** the
 replacement must successfully join with their full booking share held before
@@ -154,18 +154,18 @@ waitlist is a valid outcome of the discussion.
 
 ## 6. Decisions to record with the product owner
 
-| Decision | Product-owner answer | Approval/date |
+| Decision | Current discussion position | Product-owner approval/date |
 | --- | --- | --- |
 | Is an automatic waitlist needed for the first release? | User proposes deferring the joining waitlist; product-owner answer pending. | Pending |
-| Which allocation approach, or alternative, should the product use? | Pending | Pending |
+| Which allocation approach, or alternative, should the product use? | Joining waitlist deferred in the user's first-release proposal; the replacement allocation approach still needs product-owner review. | Pending |
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
 | Can the booker waive one participant's charge after that participant has already withdrawn late, while the session still goes ahead? | User proposes no individual exception in the first release; product-owner answer pending. | Pending |
 | Can a late-withdrawing participant return before start when nobody has replaced them, a place remains available, and their original share is still held? | User proposes rejoining with the existing held share and no additional charge; product-owner answer pending. | Pending |
-| Who receives the refund when several participants await replacement? | Pending | Pending |
-| If personal links exist, do they reserve capacity and outrank waiting people? | Pending | Pending |
-| If Option 3 is chosen, which rows in section 4 are approved or changed? | Pending | Pending |
-| Should the completion example show $20 or $30 available? | Pending | Pending |
+| Who receives the refund when several participants await replacement? | Earlier user proposal: a personal replacement refunds the participant they replace; an ordinary entrant refunds the oldest eligible open-slot withdrawal. | Pending |
+| If personal links exist, do they reserve capacity and outrank waiting people? | Earlier user proposal: personal replacements have priority over the joining waitlist. Queue priority is now deferred with the waitlist; personal reservations remain for review. | Pending |
+| If Option 3 is chosen, which rows in section 4 are approved or changed? | Deferred from the first-release proposal; the scenarios are retained for later discussion. | Pending |
+| Should the completion example show $20 or $30 available? | User proposes $20 available and $0 held after paying the $10 share. The original diagram shows $30; reconcile with the product owner. | Pending |
 
 ## 7. Existing implementation is not product approval
 
