@@ -1,4 +1,10 @@
 import {
+  assertAccess,
+  assertEligible,
+  ineligibilityReason,
+  meetsReliabilityRequirement,
+} from "./session-admission";
+import {
   leaveWaitlist,
   withdrawParticipant,
   offerReplacementToWaitlist,
@@ -220,8 +226,26 @@ export class Session {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     this.assertOpenBefore(command.now);
-    this.assertAccess(user, command.roomToken, command.replacementToken);
-    this.assertEligible(user, false);
+    assertAccess(
+      {
+        participations: this.#participations,
+        visibility: this.#visibility,
+        roomToken: this.#roomToken,
+        invitedGroupId: this.#invitedGroupId,
+      },
+      user,
+      command.roomToken,
+      command.replacementToken,
+    );
+    assertEligible(
+      {
+        minimumReliability: this.#minimumReliability,
+        totalCost: this.#booking.totalCost,
+        totalSlots: this.#totalSlots,
+      },
+      user,
+      false,
+    );
     const existing = this.#participations.find((p) => p.userId === user.userId);
     if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
       throw new DomainError(
@@ -276,7 +300,15 @@ export class Session {
         instructions: [],
       };
     }
-    this.assertEligible(user, true);
+    assertEligible(
+      {
+        minimumReliability: this.#minimumReliability,
+        totalCost: this.#booking.totalCost,
+        totalSlots: this.#totalSlots,
+      },
+      user,
+      true,
+    );
     return this.commitNew(user, command, existing);
   }
 
@@ -295,7 +327,14 @@ export class Session {
       "INVALID_INPUT",
       "Promotion input belongs to another user",
     );
-    const reason = this.ineligibilityReason(user);
+    const reason = ineligibilityReason(
+      {
+        minimumReliability: this.#minimumReliability,
+        totalCost: this.#booking.totalCost,
+        totalSlots: this.#totalSlots,
+      },
+      user,
+    );
     if (reason !== undefined) {
       this.#participations = replaceParticipation(
         this.#participations,
@@ -733,10 +772,7 @@ export class Session {
   }
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {
-    return (
-      this.#minimumReliability === undefined ||
-      score.meetsMinimum(this.#minimumReliability)
-    );
+    return meetsReliabilityRequirement(score, this.#minimumReliability);
   }
 
   private commitNew(
@@ -839,67 +875,5 @@ export class Session {
       "UNAUTHORIZED",
       "Only the booker may perform this action",
     );
-  }
-
-  private assertAccess(
-    user: User,
-    roomToken?: string,
-    replacementToken?: string,
-  ): void {
-    if (replacementToken !== undefined) {
-      DomainError.require(
-        this.#participations.some(
-          (p) =>
-            p.status === "WITHDRAWN" &&
-            p.hold?.state === "AWAITING_REPLACEMENT" &&
-            p.replacementToken === replacementToken,
-        ),
-        "INVALID_ACCESS",
-        "The replacement link is invalid or no longer available",
-      );
-      return;
-    }
-    if (this.#visibility === "PUBLIC") return;
-    if (roomToken === this.#roomToken) return;
-    if (
-      this.#invitedGroupId !== undefined &&
-      user.memberGroupIds.includes(this.#invitedGroupId)
-    )
-      return;
-    throw new DomainError(
-      "INVALID_ACCESS",
-      "The user does not have access to this private session",
-    );
-  }
-
-  private assertEligible(user: User, requireFunds: boolean): void {
-    const reason = this.ineligibilityReason(user, requireFunds);
-    if (reason === "INACTIVE_ACCOUNT")
-      throw new DomainError(
-        "INACTIVE_ACCOUNT",
-        "An inactive account cannot participate",
-      );
-    if (reason === "LOW_RELIABILITY")
-      throw new DomainError(
-        "LOW_RELIABILITY",
-        "The user's reliability is below the session requirement",
-      );
-    if (reason === "INSUFFICIENT_FUNDS")
-      throw new DomainError(
-        "INSUFFICIENT_FUNDS",
-        "The wallet cannot fund this commitment",
-      );
-  }
-
-  private ineligibilityReason(
-    user: User,
-    requireFunds = true,
-  ): "INACTIVE_ACCOUNT" | "LOW_RELIABILITY" | "INSUFFICIENT_FUNDS" | undefined {
-    if (user.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
-    const score = user.reliabilityScore;
-    if (!this.meetsReliabilityRequirement(score)) return "LOW_RELIABILITY";
-    if (requireFunds && user.wallet.getFunds().compareTo(this.bookingShare) < 0)
-      return "INSUFFICIENT_FUNDS";
-    return undefined;
   }
 }
