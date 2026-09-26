@@ -1,13 +1,13 @@
-import { DomainError } from "../shared/errors";
+import { DomainError } from "../../shared/errors";
 import type {
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,
   SettlementBatch,
   SettlementLine,
-} from "../shared/operations";
-import type { UUID } from "../shared/types";
-import type { Participation } from "./participation";
+} from "../../shared/operations";
+import type { UUID } from "../../shared/types";
+import type { Participation } from "../participation";
 import type { Session } from "./session";
 import {
   expireReplacements,

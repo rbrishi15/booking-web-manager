@@ -1,16 +1,16 @@
-import type { User } from "../accounts/user";
-import type { Money } from "../finance/money";
-import type { ReliabilityScore } from "../reliability/reliability-score";
-import { DomainError } from "../shared/errors";
+import type { User } from "../../accounts/user";
+import type { Money } from "../../finance/money";
+import type { ReliabilityScore } from "../../reliability/reliability-score";
+import { DomainError } from "../../shared/errors";
 import type {
   AdmissionResult,
   FinancialInstruction,
   PromotionResult,
-} from "../shared/operations";
-import type { Visibility } from "../shared/statuses";
-import type { UUID } from "../shared/types";
-import { FundHold } from "./fund-hold";
-import { Participation } from "./participation";
+} from "../../shared/operations";
+import type { Visibility } from "../../shared/statuses";
+import type { UUID } from "../../shared/types";
+import { FundHold } from "../fund-hold";
+import { Participation } from "../participation";
 import type { JoinCommand, PromotionCommand } from "./session";
 import {
   availableSlots,

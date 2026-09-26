@@ -1,7 +1,7 @@
-import type { User } from "../accounts/user";
-import type { Money } from "../finance/money";
-import type { ReliabilityScore } from "../reliability/reliability-score";
-import { DomainError } from "../shared/errors";
+import type { User } from "../../accounts/user";
+import type { Money } from "../../finance/money";
+import type { ReliabilityScore } from "../../reliability/reliability-score";
+import { DomainError } from "../../shared/errors";
 import type {
   AdmissionResult,
   FinancialResult,
@@ -9,15 +9,15 @@ import type {
   PromotionResult,
   SettlementBatch,
   WithdrawalResult,
-} from "../shared/operations";
+} from "../../shared/operations";
 import type {
   AccountStatus,
   SessionStatus,
   Visibility,
-} from "../shared/statuses";
-import type { UUID } from "../shared/types";
-import type { Booking } from "./booking";
-import type { Participation } from "./participation";
+} from "../../shared/statuses";
+import type { UUID } from "../../shared/types";
+import type { Booking } from "../booking";
+import type { Participation } from "../participation";
 import {
   calculateJoin,
   calculatePromotion,

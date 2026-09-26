@@ -5,7 +5,9 @@ Status: implemented. Product-policy proposals remain awaiting product-owner revi
 ## Implemented scope
 
 `Session` remains the public command entry point and owner of its state. Detailed
-calculations now live in four internal modules alongside it. Public methods,
+calculations now live alongside it in `domain/sessions/session/`. The folder
+entry point preserves existing imports and exports only Session and its public
+command/construction types. Public methods,
 argument shapes, return types, getters, exports, and import paths are preserved.
 `Participation` and `FundHold` continue enforcing their local rules.
 
@@ -27,10 +29,10 @@ copying conventions from [ADR-0002](../adr/0002-constructor-based-domain-hydrati
 
 | Module | Responsibility |
 | --- | --- |
-| `session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
-| `session-roster.ts` | Shared roster operations, waitlist departure, withdrawals, offering replacements to the waitlist, removal, cancellation, replacement expiry, and attendance. |
-| `session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, hold creation, and replacement-refund calculations. |
-| `session-settlement.ts` | Settlement preparation, batch construction, completed holds, and financial instructions. |
+| `session/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
+| `session/session-roster.ts` | Shared roster operations, waitlist departure, withdrawals, offering replacements to the waitlist, removal, cancellation, replacement expiry, and attendance. |
+| `session/session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, hold creation, and replacement-refund calculations. |
+| `session/session-settlement.ts` | Settlement preparation, batch construction, completed holds, and financial instructions. |
 
 `Session` retains construction, getters, shared lifecycle and booker checks,
 payout-attempt history, final state assignments, and short commands such as

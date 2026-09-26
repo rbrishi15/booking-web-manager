@@ -1,7 +1,7 @@
-import { DomainError } from "../shared/errors";
-import type { PayoutDestination, SettlementBatch } from "../shared/operations";
-import type { UUID } from "../shared/types";
-import type { FundHold } from "./fund-hold";
+import { DomainError } from "../../shared/errors";
+import type { PayoutDestination, SettlementBatch } from "../../shared/operations";
+import type { UUID } from "../../shared/types";
+import type { FundHold } from "../fund-hold";
 import type { SessionDetails } from "./session";
 
 export function validateSessionDetails(details: SessionDetails): void {

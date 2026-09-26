@@ -93,14 +93,16 @@ for construction, mapping, and encapsulation conventions.
 
 `Session` remains the public command entry point and owns all session state.
 It keeps construction, getters, shared lifecycle and booker checks, payout-attempt
-history, and final assignments. Detailed rules live in four internal modules:
+history, and final assignments. Detailed rules live in four internal modules in `sessions/session/`, alongside
+the root implementation. The folder entry point preserves the existing
+`sessions/session` import path:
 
 | Module | Responsibility |
 | --- | --- |
-| `sessions/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
-| `sessions/session-roster.ts` | Withdrawal, removal, cancellation, attendance, replacement expiry, waitlist departure, and shared roster operations. |
-| `sessions/session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, and replacement refunds. |
-| `sessions/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
+| `sessions/session/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
+| `sessions/session/session-roster.ts` | Withdrawal, removal, cancellation, attendance, replacement expiry, waitlist departure, and shared roster operations. |
+| `sessions/session/session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, and replacement refunds. |
+| `sessions/session/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
 
 These functions read operation-specific values and immutable children, then
 return complete candidate changes and results. They never mutate `Session`.
