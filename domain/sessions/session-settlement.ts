@@ -1,5 +1,7 @@
 import { DomainError } from "../shared/errors";
 import type {
+  FinancialInstruction,
+  FinancialResult,
   PayoutDestination,
   SettlementBatch,
   SettlementLine,
@@ -7,7 +9,11 @@ import type {
 import type { UUID } from "../shared/types";
 import type { Participation } from "./participation";
 import type { Session } from "./session";
-import { expireReplacements } from "./session-roster";
+import {
+  expireReplacements,
+  requireParticipation,
+  replaceParticipation,
+} from "./session-roster";
 import { validDate } from "./session-validation";
 
 export function prepareSettlementRoster(
@@ -80,4 +86,43 @@ export function buildSettlementBatch(
     lines,
   };
   return batch;
+}
+
+export function completeSettlement(
+  sessionId: UUID,
+  participations: readonly Participation[],
+  batch: SettlementBatch,
+  payoutId: UUID,
+  at: Date,
+): {
+  readonly participations: Participation[];
+  readonly result: FinancialResult;
+} {
+  const instructions: FinancialInstruction[] = [];
+  let next = [...participations];
+  for (const line of batch.lines) {
+    const participation = requireParticipation(
+      participations,
+      line.participationId,
+    );
+    DomainError.require(
+      participation.hold?.holdId === line.holdId,
+      "INVALID_STATE",
+      "Settlement hold no longer matches the batch",
+    );
+    const updated = participation.settleHold(line.kind, payoutId, at);
+    next = replaceParticipation(next, participation.participationId, updated);
+    instructions.push({
+      kind: line.kind,
+      sessionId: sessionId,
+      participationId: line.participationId,
+      holdId: line.holdId,
+      holdingAccountId: line.holdingAccountId,
+      walletId: line.walletId,
+      amount: line.amount,
+      occurredAt: validDate(at, "at"),
+      payoutId,
+    });
+  }
+  return { participations: next, result: { instructions } };
 }

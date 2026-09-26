@@ -1,6 +1,7 @@
 import {
   prepareSettlementRoster,
   buildSettlementBatch,
+  completeSettlement,
 } from "./session-settlement";
 import { calculateJoin, calculatePromotion } from "./session-admission";
 import { availableSlots } from "./session-roster";
@@ -15,11 +16,7 @@ import {
   verifyAttendance,
   autoVerifyAttendance,
 } from "./session-roster";
-import {
-  requireParticipation,
-  nextWaitlisted,
-  replaceParticipation,
-} from "./session-roster";
+import { nextWaitlisted } from "./session-roster";
 import {
   cloneBatch,
   requireId,
@@ -34,7 +31,6 @@ import { ReliabilityScore } from "../reliability/reliability-score";
 import { DomainError } from "../shared/errors";
 import type {
   AdmissionResult,
-  FinancialInstruction,
   FinancialResult,
   PayoutDestination,
   PromotionResult,
@@ -498,36 +494,17 @@ export class Session {
       "STALE_PAYOUT",
       "This payout attempt is no longer current",
     );
-    const instructions: FinancialInstruction[] = [];
-    let next = this.#participations;
-    for (const line of pending.batch.lines) {
-      const participation = requireParticipation(
-        this.#participations,
-        line.participationId,
-      );
-      DomainError.require(
-        participation.hold?.holdId === line.holdId,
-        "INVALID_STATE",
-        "Settlement hold no longer matches the batch",
-      );
-      const updated = participation.settleHold(line.kind, payoutId, at);
-      next = replaceParticipation(next, participation.participationId, updated);
-      instructions.push({
-        kind: line.kind,
-        sessionId: this.#sessionId,
-        participationId: line.participationId,
-        holdId: line.holdId,
-        holdingAccountId: line.holdingAccountId,
-        walletId: line.walletId,
-        amount: line.amount,
-        occurredAt: validDate(at, "at"),
-        payoutId,
-      });
-    }
-    this.#participations = next;
+    const change = completeSettlement(
+      this.#sessionId,
+      this.#participations,
+      pending.batch,
+      payoutId,
+      at,
+    );
+    this.#participations = change.participations;
     this.#pendingSettlement = undefined;
     this.#status = "SETTLED";
-    return { instructions };
+    return change.result;
   }
 
   failSettlement(payoutId: UUID, at: Date): void {
