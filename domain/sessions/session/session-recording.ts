@@ -1,12 +1,7 @@
 import { DomainError } from "../../shared/errors";
 import type { Participation } from "../participation";
 import type { SessionSettlementPreparation } from "./session";
-import {
-  availableSlots,
-  nextWaitlisted,
-  oldestAwaiting,
-  requireParticipation,
-} from "./session-roster";
+import type { ParticipantList, ParticipantListView } from "./participant-list";
 
 function sameDate(a: Date | undefined, b: Date | undefined): boolean {
   return a?.getTime() === b?.getTime();
@@ -100,11 +95,11 @@ function assertRefund(
 }
 
 function assertFullRoster(
-  before: readonly Participation[],
+  before: ParticipantListView,
   after: readonly Participation[],
 ): void {
   DomainError.require(
-    before.length === after.length,
+    before.participations.length === after.length,
     "INVALID_INPUT",
     "The complete owned roster is required",
   );
@@ -114,16 +109,15 @@ function assertFullRoster(
     "A roster cannot repeat a participation",
   );
   for (const next of after)
-    assertIdentity(requireParticipation(before, next.participationId), next);
+    assertIdentity(before.requireParticipation(next.participationId), next);
 }
 
 /** Checks a prepared enrollment and its coupled refund without constructing either. */
 export function validateAdmission(
-  roster: readonly Participation[],
+  roster: ParticipantList,
   admission: Participation,
   refunded: Participation | undefined,
   totalSlots: number,
-  nextQueueSequence: number,
   now: Date,
 ): void {
   DomainError.require(
@@ -131,8 +125,8 @@ export function validateAdmission(
     "INVALID_STATE",
     "Admission requires a waiting or committed participation",
   );
-  const existing = roster.find((p) => p.userId === admission.userId);
-  const waiter = nextWaitlisted(roster);
+  const existing = roster.findByUserId(admission.userId);
+  const waiter = roster.nextWaitlisted();
   if (existing !== undefined) {
     DomainError.require(
       existing.participationId === admission.participationId,
@@ -156,12 +150,9 @@ export function validateAdmission(
         "Promotion must retain the waitlist position",
       );
   }
+  const matchingId = roster.findParticipation(admission.participationId);
   DomainError.require(
-    !roster.some(
-      (p) =>
-        p.participationId === admission.participationId &&
-        p.userId !== admission.userId,
-    ),
+    matchingId === undefined || matchingId.userId === admission.userId,
     "DUPLICATE_ID",
     "Participation IDs must be unique",
   );
@@ -172,14 +163,15 @@ export function validateAdmission(
   );
   if (admission.status === "WAITLISTED") {
     DomainError.require(
-      availableSlots(roster, totalSlots) === 0 || waiter !== undefined,
+      Math.max(0, totalSlots - roster.committedCount) === 0 ||
+        waiter !== undefined,
       "INVALID_STATE",
       "An available place without a queue requires a commitment",
     );
     DomainError.require(
-      Number.isSafeInteger(nextQueueSequence) &&
-        nextQueueSequence < Number.MAX_SAFE_INTEGER &&
-        admission.queueSequence === nextQueueSequence,
+      Number.isSafeInteger(roster.nextQueueSequence) &&
+        roster.nextQueueSequence < Number.MAX_SAFE_INTEGER &&
+        admission.queueSequence === roster.nextQueueSequence,
       "INVALID_INPUT",
       "A waitlist entry must use the next queue sequence",
     );
@@ -199,7 +191,7 @@ export function validateAdmission(
     return;
   }
   DomainError.require(
-    availableSlots(roster, totalSlots) > 0,
+    Math.max(0, totalSlots - roster.committedCount) > 0,
     "CAPACITY_EXCEEDED",
     "There is no available slot",
   );
@@ -222,7 +214,7 @@ export function validateAdmission(
       "INVALID_INPUT",
       "A direct commitment cannot carry a queue position",
     );
-  const awaiting = oldestAwaiting(roster);
+  const awaiting = roster.oldestAwaitingReplacement();
   DomainError.require(
     admission.replacesParticipationId === awaiting?.participationId,
     "INVALID_STATE",
@@ -310,13 +302,13 @@ export function validateParticipationTransition(
 }
 
 export function validateCancellation(
-  roster: readonly Participation[],
+  roster: ParticipantListView,
   cancelled: readonly Participation[],
   now: Date,
 ): void {
   assertFullRoster(roster, cancelled);
   for (const next of cancelled) {
-    const previous = requireParticipation(roster, next.participationId);
+    const previous = roster.requireParticipation(next.participationId);
     assertEnrollmentUnchanged(previous, next);
     assertAttendanceUnchanged(previous, next);
     assertHoldIdentity(previous, next);
@@ -344,7 +336,7 @@ export function validateCancellation(
 }
 
 export function validateAttendanceChanges(
-  roster: readonly Participation[],
+  roster: ParticipantListView,
   verified: readonly Participation[],
   now: Date,
 ): void {
@@ -356,7 +348,7 @@ export function validateAttendanceChanges(
       "A participation may be verified only once per command",
     );
     ids.add(next.participationId);
-    const previous = requireParticipation(roster, next.participationId);
+    const previous = roster.requireParticipation(next.participationId);
     assertEnrollmentUnchanged(previous, next);
     assertReplacementUnchanged(previous, next);
     DomainError.require(
@@ -381,17 +373,13 @@ export function validateAttendanceChanges(
   }
 }
 
-export function validateSettlementPreparation(
-  roster: readonly Participation[],
-  preparation: SessionSettlementPreparation,
-  bookerId: string,
-  sessionId: string,
-  now: Date,
+export function validateSettlementParticipations(
+  roster: ParticipantListView,
+  next: readonly Participation[],
 ): void {
-  const next = preparation.participations;
   assertFullRoster(roster, next);
   for (const candidate of next) {
-    const previous = requireParticipation(roster, candidate.participationId);
+    const previous = roster.requireParticipation(candidate.participationId);
     assertEnrollmentUnchanged(previous, candidate);
     assertAttendanceUnchanged(previous, candidate);
     assertReplacementUnchanged(previous, candidate);
@@ -424,6 +412,15 @@ export function validateSettlementPreparation(
     "ATTENDANCE_INCOMPLETE",
     "All committed participants must be finalized before settlement",
   );
+}
+
+export function validateSettlementBatchPreparation(
+  next: readonly Participation[],
+  preparation: SessionSettlementPreparation,
+  bookerId: string,
+  sessionId: string,
+  now: Date,
+): void {
   const payable = next.filter(
     (p) =>
       (p.status === "COMMITTED" || p.status === "WITHDRAWN") &&

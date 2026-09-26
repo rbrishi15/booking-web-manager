@@ -94,6 +94,20 @@ Keep actual `Participant.join` calls visible when testing admission, capacity,
 queue changes, or financial instructions, and keep timing-dependent transitions
 explicit. Use `sessionDetails` for special hydration scenarios.
 
+Read roster facts through `bookingSession.participantList`: use its readonly
+`participations`, `nextQueueSequence`, and `committedCount` values or its lookup
+queries. For example, `bookingSession.participantList.nextWaitlisted()?.userId`
+identifies the next waiter. Session hydration still takes arrays through
+`sessionDetails`.
+
+```ts
+const aliceParticipation = bookingSession.participantList.requireParticipation("p-alice");
+expect(aliceParticipation.status).toBe("COMMITTED");
+```
+
+Test collection query/immutability behavior separately from role workflows;
+failed Session recording must preserve both roster and queue state.
+
 Avoid generic error-capture helpers and setup hooks that hide the scenario.
 Domain tests assume declared input types and exercise business constraints;
 external input parsing belongs in boundary tests.

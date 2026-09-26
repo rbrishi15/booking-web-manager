@@ -24,7 +24,10 @@ describe("Participant", () => {
 
     // Assert
     expect(withdrawal.kind).toBe("REFUNDED");
-    expect(bookingSession.participations[0]?.hold?.state).toBe("REFUNDED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("REFUNDED");
   });
 
   test("withdraw_WhenExactlyAtRefundCutoff_AwaitsReplacement", () => {
@@ -38,9 +41,10 @@ describe("Participant", () => {
 
     // Assert
     expect(withdrawal.kind).toBe("AWAITING_REPLACEMENT");
-    expect(bookingSession.participations[0]?.hold?.state).toBe(
-      "AWAITING_REPLACEMENT",
-    );
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("AWAITING_REPLACEMENT");
   });
 
   test("withdraw_WhenOneHourBeforeStart_AwaitsReplacement", () => {
@@ -54,9 +58,10 @@ describe("Participant", () => {
 
     // Assert
     expect(withdrawal.kind).toBe("AWAITING_REPLACEMENT");
-    expect(bookingSession.participations[0]?.hold?.state).toBe(
-      "AWAITING_REPLACEMENT",
-    );
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("AWAITING_REPLACEMENT");
   });
 
   test("withdraw_WhenActorDoesNotOwnParticipation_RejectsWithoutChangingState", () => {

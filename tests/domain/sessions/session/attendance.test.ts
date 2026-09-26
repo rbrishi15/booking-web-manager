@@ -43,7 +43,7 @@ describe("Session", () => {
 
     // Assert
     expect(
-      bookingSession.participations.map((participation) => [
+      bookingSession.participantList.participations.map((participation) => [
         participation.attendance,
         participation.verificationMethod,
       ]),

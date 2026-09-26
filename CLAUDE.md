@@ -95,8 +95,11 @@ The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → n
 
 Actor-driven session workflows enter through `User`'s Participant or Booker
 role, which performs actor authorization and prepares the complete change.
-Session validates and records prepared state through bounded operations; see
+Session guards lifecycle and records prepared state through bounded operations; see
 [ADR-0009](./docs/adr/0009-role-workflows-and-session-recording.md).
+Read participation state through `session.participantList`; its query-only view
+and the internal list's collection validation are defined in
+[ADR-0010](./docs/adr/0010-session-participant-list.md).
 
 ### Money states
 

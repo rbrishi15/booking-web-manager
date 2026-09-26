@@ -24,7 +24,9 @@ describe("Booker", () => {
     });
 
     // Assert
-    expect(bookingSession.participations[0]?.attendance).toBe("ATTENDED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").attendance,
+    ).toBe("ATTENDED");
     expect(bookingSession.status).toBe("AWAITING_PAYOUT");
   });
 

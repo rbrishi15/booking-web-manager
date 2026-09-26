@@ -36,9 +36,8 @@ describe("Participant", () => {
         .asParticipant()
         .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
       const previousState = sessionState(bookingSession);
-      const awaiting = bookingSession.participations.find(
-        (p) => p.participationId === "p-alice",
-      )!;
+      const awaiting =
+        bookingSession.participantList.requireParticipation("p-alice");
       const failure = new DomainError(
         "INVALID_STATE",
         "Replacement refund failed",
@@ -332,6 +331,8 @@ describe("Participant", () => {
           participationId: "p-cara",
           now: before,
         });
+      const previousList = bookingSession.participantList;
+      const departedCara = previousList.requireParticipation("p-cara");
 
       // Act
       const reentry = createTestUser({ userId: "cara" })
@@ -344,12 +345,30 @@ describe("Participant", () => {
 
       // Assert
       expect(reentry.kind).toBe("WAITLISTED");
-      expect(bookingSession.nextWaitlistedUserId).toBe("dana");
+      expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+        "dana",
+      );
       expect(
-        bookingSession.participations.filter(
+        bookingSession.participantList.participations.filter(
           (participation) => participation.userId === "cara",
         ),
       ).toHaveLength(1);
+      expect(
+        bookingSession.participantList.participations.map(
+          (participation) => participation.userId,
+        ),
+      ).toEqual(["alice", "ben", "cara", "dana"]);
+      expect(bookingSession.participantList.nextQueueSequence).toBe(4);
+      expect(
+        bookingSession.participantList.requireParticipation("p-cara")
+          .queueSequence,
+      ).toBe(3);
+      expect(bookingSession.participantList).not.toBe(previousList);
+      expect(previousList.findByUserId("cara")).toBe(departedCara);
+      expect(departedCara.status).toBe("LEFT_WAITLIST");
+      expect(departedCara.queueSequence).toBe(1);
+      expect(previousList.nextQueueSequence).toBe(3);
+      expect(previousList.committedCount).toBe(2);
     });
 
     test("join_WhenUserIsAlreadyCommitted_RejectsWithoutChangingState", () => {
@@ -452,8 +471,7 @@ describe("Participant", () => {
         "REFUND",
       ]);
       expect(
-        bookingSession.participations.find((p) => p.userId === "ben")?.hold
-          ?.state,
+        bookingSession.participantList.findByUserId("ben")?.hold?.state,
       ).toBe("AWAITING_REPLACEMENT");
     });
 

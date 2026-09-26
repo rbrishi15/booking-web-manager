@@ -20,6 +20,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0007: Participant behavior and the Session roster](./adr/0007-participant-behavior-and-session-roster.md) — callback routing superseded by ADR-0009.
 - [ADR-0008: Booker behavior and the Session lifecycle](./adr/0008-booker-behavior-and-session-lifecycle.md) — callback routing superseded by ADR-0009.
 - [ADR-0009: Role workflows and Session recording](./adr/0009-role-workflows-and-session-recording.md).
+- [ADR-0010: Session's participant list](./adr/0010-session-participant-list.md).
 
 Product discussions awaiting approval:
 

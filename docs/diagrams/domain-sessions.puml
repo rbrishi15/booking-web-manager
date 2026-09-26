@@ -16,6 +16,7 @@ skinparam classBackgroundColor #FFFFFF
 skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
 skinparam classBackgroundColor<<ValueObject>> #DCFCE7
 skinparam classBackgroundColor<<RoleView>> #F3E8FF
+skinparam classBackgroundColor<<ImmutableCollection>> #FEF3C7
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
 skinparam nodesep 35
@@ -30,6 +31,7 @@ class Session <<AggregateRoot>> {
   +visibility : Visibility
   +totalSlots : number
   +minimumReliability : ReliabilityScore [0..1]
+  +participantList : ParticipantListView
   +pendingSettlement : SettlementBatch [0..1]
   --
   +recordAdmission(...) : void
@@ -77,6 +79,17 @@ class Booking <<ValueObject>> {
   +hasEnded(...) : boolean
 }
 
+class ParticipantList <<ImmutableCollection>> {
+  +participations : readonly Participation[]
+  +nextQueueSequence : number
+  +committedCount : number
+  --
+  +requireParticipation(id) : Participation
+  +findByUserId(id) : Participation [0..1]
+  +nextWaitlisted() : Participation [0..1]
+  +oldestAwaitingReplacement() : Participation [0..1]
+}
+
 class Participation <<ImmutableChild>> {
   +participationId : UUID
   +userId : UUID
@@ -116,11 +129,12 @@ class ReliabilityScore <<ValueObject>> {
 Session "1" *-down- "1" Booking : booking
 Participant .down.> Session : records prepared children
 Booker .down.> Session : creates; records prepared changes
-Session "1" *-down- "0..*" Participation : participations
+Session "1" *-down- "1" ParticipantList : participantList
+ParticipantList "1" *-down- "0..*" Participation : participations
 Participation "1" *-down- "0..1" FundHold : hold
 ReliabilityScore .up.> Participation : finalized outcomes
-Booking -[hidden]right- Participation
+Booking -[hidden]right- ParticipantList
 FundHold -[hidden]right- ReliabilityScore
 
-caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session validates shared invariants and records complete changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session atomically records prepared children through its internal list.\nThe participantList getter exposes only ParticipantListView queries.
 @enduml

@@ -27,8 +27,12 @@ describe("Participant", () => {
     // Assert
     expect(admission.kind).toBe("COMMITTED");
     expect(withdrawal.kind).toBe("REFUNDED");
-    expect(session.participations[0]?.userId).toBe(participant.userId);
-    expect(session.participations[0]?.status).toBe("WITHDRAWN");
+    expect(
+      session.participantList.requireParticipation("participation").userId,
+    ).toBe(participant.userId);
+    expect(
+      session.participantList.requireParticipation("participation").status,
+    ).toBe("WITHDRAWN");
   });
 
   test("join_WhenUserHasFunds_LocksShareFromLoadedWallet", () => {
@@ -45,7 +49,9 @@ describe("Participant", () => {
 
     // Assert
     expect(admission.kind).toBe("COMMITTED");
-    expect(session.participations[0]?.userId).toBe(participantUser.userId);
+    expect(
+      session.participantList.requireParticipation("participation").userId,
+    ).toBe(participantUser.userId);
     expect(admission.instructions).toEqual([
       expect.objectContaining({
         kind: "LOCK",
@@ -82,7 +88,7 @@ describe("Participant", () => {
         now: before,
       }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
-    expect(session.participations).toEqual([]);
+    expect(session.participantList.participations).toEqual([]);
   });
 
   test("join_WhenRoleWasCreatedAfterDeactivation_ThrowsInactiveAccount", () => {
@@ -111,7 +117,7 @@ describe("Participant", () => {
         now: before,
       }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
-    expect(session.participations).toEqual([]);
+    expect(session.participantList.participations).toEqual([]);
   });
 });
 

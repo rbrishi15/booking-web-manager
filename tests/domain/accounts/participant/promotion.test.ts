@@ -60,9 +60,8 @@ describe("Participant", () => {
       .asParticipant()
       .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     const previousState = sessionState(bookingSession);
-    const awaiting = bookingSession.participations.find(
-      (p) => p.participationId === "p-alice",
-    )!;
+    const awaiting =
+      bookingSession.participantList.requireParticipation("p-alice");
     const failure = new DomainError(
       "INVALID_STATE",
       "Replacement refund failed",
@@ -85,7 +84,9 @@ describe("Participant", () => {
       ).toThrow(failure);
       expect(refund).toHaveBeenCalledOnce();
       expect(sessionState(bookingSession)).toEqual(previousState);
-      expect(bookingSession.nextWaitlistedUserId).toBe("first-waiter");
+      expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+        "first-waiter",
+      );
     } finally {
       refund.mockRestore();
     }
@@ -194,7 +195,8 @@ describe("Participant", () => {
         holdId: "h-cara",
         now: before,
       });
-    const nextWaiterAfterSkip = bookingSession.nextWaitlistedUserId;
+    const nextWaiterAfterSkip =
+      bookingSession.participantList.nextWaitlisted()?.userId;
     const secondPromotion = createTestUser({ userId: "dana" })
       .asParticipant()
       .promoteFromWaitlist(bookingSession, {
@@ -214,6 +216,8 @@ describe("Participant", () => {
     });
     expect(nextWaiterAfterSkip).toBe("dana");
     expect(secondPromotion.kind).toBe("PROMOTED");
-    expect(bookingSession.nextWaitlistedUserId).toBe("fresh");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "fresh",
+    );
   });
 });

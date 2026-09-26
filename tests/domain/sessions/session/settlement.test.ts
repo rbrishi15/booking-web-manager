@@ -1,3 +1,4 @@
+import { Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   at,
@@ -5,10 +6,56 @@ import {
   end,
   readyBooker,
   createTestSession,
+  sessionDetails,
   sessionState,
 } from "./session-fixtures";
 
 describe("Session", () => {
+  test("completeSettlement_WhenRestoredBatchOmitsPayableHold_LeavesAllFundsAndHistoryPending", () => {
+    // Arrange
+    const source = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    readyBooker().verifyAttendance(source, {
+      marks: [
+        { participationId: "p-alice", attendance: "ATTENDED" },
+        { participationId: "p-ben", attendance: "ATTENDED" },
+      ],
+      now: end,
+    });
+    const batch = readyBooker().prepareSettlement(source, {
+      payoutId: "out",
+      idempotencyKey: "key",
+      now: end,
+    })!;
+    const bookingSession = new Session(
+      sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: { ...batch, lines: batch.lines.slice(0, 1) },
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      }),
+    );
+    const previousList = bookingSession.participantList;
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(bookingSession.status).toBe("PAYOUT_PENDING");
+    expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
+    expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
+    expect(
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["HELD", "HELD"]);
+  });
+
   test("completeSettlement_WhenCallbackIsStale_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({
@@ -73,12 +120,14 @@ describe("Session", () => {
     ).toEqual(["FORFEIT", "RELEASE"]);
     expect(bookingSession.status).toBe("SETTLED");
     expect(
-      bookingSession.participations.map(
+      bookingSession.participantList.participations.map(
         (participation) => participation.hold?.state,
       ),
     ).toEqual(["FORFEITED", "RELEASED"]);
     expect(
-      bookingSession.participations[0]?.reliabilityOutcome(end)?.value,
+      bookingSession.participantList
+        .requireParticipation("p-alice")
+        .reliabilityOutcome(end)?.value,
     ).toBe(0);
   });
 });

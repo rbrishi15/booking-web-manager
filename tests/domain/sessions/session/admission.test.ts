@@ -30,7 +30,7 @@ describe("Session", () => {
           before,
         );
       }
-      const commitments = bookingSession.participations.map(
+      const commitments = bookingSession.participantList.participations.map(
         (entry) => entry.status,
       );
       const availableSlots = bookingSession.getAvailableSlots(before);
@@ -39,12 +39,13 @@ describe("Session", () => {
           participationId: "p-waiting",
           userId: "waiting",
           waitlistedAt: before,
-          queueSequence: bookingSession.nextQueueSequence,
+          queueSequence: bookingSession.participantList.nextQueueSequence,
         }),
         undefined,
         before,
       );
-      const waitingStatus = bookingSession.participations.at(-1)?.status;
+      const waitingStatus =
+        bookingSession.participantList.participations.at(-1)?.status;
 
       // Assert
       expect(commitments).toEqual([

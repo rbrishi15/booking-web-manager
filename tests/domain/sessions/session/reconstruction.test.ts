@@ -1,4 +1,4 @@
-import { DomainError, Participation, Session } from "@/domain";
+import { DomainError, FundHold, Participation, Session } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
 import {
   before,
@@ -15,7 +15,7 @@ describe("Session", () => {
     test("constructor_WhenInputsAndGettersAreMutated_PreservesRosterAndHistory", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
-      const participations = [...source.participations];
+      const participations = [...source.participantList.participations];
       const attemptIds = ["earlier"];
       const keys = ["earlier-key"];
       const constructed = new Session(
@@ -31,7 +31,7 @@ describe("Session", () => {
       participations.pop();
       attemptIds.push("leak");
       keys.push("leak");
-      (constructed.participations as Participation[]).pop();
+      (constructed.participantList.participations as Participation[]).pop();
       (constructed.payoutAttemptIds as string[]).pop();
       (constructed.payoutIdempotencyKeys as string[]).pop();
       constructed.booking.startAt.setFullYear(2000);
@@ -39,14 +39,16 @@ describe("Session", () => {
       child.hold?.createdAt.setFullYear(2000);
 
       // Assert
-      expect(constructed.participations).toHaveLength(1);
-      expect(constructed.participations[0]).toBe(child);
+      expect(constructed.participantList.participations).toHaveLength(1);
+      expect(constructed.participantList.requireParticipation("p-alice")).toBe(
+        child,
+      );
       expect(constructed.booking.startAt).toEqual(start);
       expect(child.committedAt).toEqual(before);
       expect(child.hold?.createdAt).toEqual(before);
       expect(constructed.payoutAttemptIds).toEqual(["earlier"]);
       expect(constructed.payoutIdempotencyKeys).toEqual(["earlier-key"]);
-      expect(constructed.nextQueueSequence).toBe(1);
+      expect(constructed.participantList.nextQueueSequence).toBe(1);
     });
 
     test("constructor_WhenBothHistoriesAreOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
@@ -108,7 +110,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: undefined,
@@ -136,7 +138,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: ["earlier-key", "key"],
@@ -164,7 +166,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: ["earlier", "out"],
         payoutIdempotencyKeys: undefined,
@@ -193,13 +195,113 @@ describe("Session", () => {
     test("constructor_WhenRosterIsDuplicated_ThrowsDomainError", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
-      const roster = source.participations;
+      const roster = source.participantList.participations;
       const details = sessionDetails({
         participations: [...roster, ...roster],
       });
 
       // Act & Assert
       expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenDifferentUsersShareParticipationId_ThrowsDuplicateId", () => {
+      // Arrange
+      const alice = Participation.createWaitlisted({
+        participationId: "p-shared",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const ben = Participation.createWaitlisted({
+        participationId: "p-shared",
+        userId: "ben",
+        waitlistedAt: before,
+        queueSequence: 2,
+      });
+      const details = sessionDetails({
+        participations: [alice, ben],
+        nextQueueSequence: 3,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenDifferentParticipationsShareUserId_ThrowsDuplicateId", () => {
+      // Arrange
+      const firstEntry = Participation.createWaitlisted({
+        participationId: "p-alice-first",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const secondEntry = Participation.createWaitlisted({
+        participationId: "p-alice-second",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 2,
+      });
+      const details = sessionDetails({
+        participations: [firstEntry, secondEntry],
+        nextQueueSequence: 3,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenDifferentParticipationsShareHoldId_ThrowsDuplicateId", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const alice = source.participantList.requireParticipation("p-alice");
+      const ben = Participation.createCommitted({
+        participationId: "p-ben",
+        userId: "ben",
+        committedAt: before,
+        hold: FundHold.create({
+          holdId: "h-alice",
+          participationId: "p-ben",
+          holdingAccountId: source.holdingAccountId,
+          walletId: "w-ben",
+          amount: source.bookingShare,
+          createdAt: before,
+        }),
+      });
+      const details = sessionDetails({ participations: [alice, ben] });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenWaiterReusesHistoricalQueueSequence_ThrowsDuplicateId", () => {
+      // Arrange
+      const departedAlice = Participation.createWaitlisted({
+        participationId: "p-alice",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      }).leaveWaitlist();
+      const ben = Participation.createWaitlisted({
+        participationId: "p-ben",
+        userId: "ben",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const details = sessionDetails({
+        participations: [departedAlice, ben],
+        nextQueueSequence: 2,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
     });
 
     test("constructor_WhenPendingPayoutHasNoBatch_ThrowsDomainError", () => {
@@ -231,7 +333,7 @@ describe("Session", () => {
     test("constructor_WhenSettledRosterStillHasHeldFunds_ThrowsDomainError", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
-      const roster = source.participations;
+      const roster = source.participantList.participations;
       const details = sessionDetails({
         participations: roster,
         status: "SETTLED",
@@ -244,7 +346,7 @@ describe("Session", () => {
     test("constructor_WhenHoldUsesForeignAccount_ThrowsDomainError", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
-      const roster = source.participations;
+      const roster = source.participantList.participations;
       const details = sessionDetails({
         participations: roster,
         holdingAccountId: "foreign",
@@ -291,7 +393,9 @@ describe("Session", () => {
       const restoredSession = new Session(details);
 
       // Assert
-      expect(restoredSession.nextWaitlistedUserId).toBe("queued-user");
+      expect(restoredSession.participantList.nextWaitlisted()?.userId).toBe(
+        "queued-user",
+      );
     });
 
     test("constructor_WhenPendingBatchBelongsToAnotherSession_ThrowsDomainError", () => {
@@ -308,7 +412,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -338,7 +442,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -371,7 +475,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -397,7 +501,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -423,7 +527,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -472,7 +576,7 @@ describe("Session", () => {
       })!;
       const details = sessionDetails({
         status: "PAYOUT_PENDING",
-        participations: source.participations,
+        participations: source.participantList.participations,
         pendingSettlement: batch,
         payoutAttemptIds: source.payoutAttemptIds,
         payoutIdempotencyKeys: source.payoutIdempotencyKeys,
@@ -488,7 +592,9 @@ describe("Session", () => {
       ]);
       expect(restoredSession.status).toBe("SETTLED");
       expect(source.status).toBe("PAYOUT_PENDING");
-      expect(source.participations[0]?.hold?.state).toBe("HELD");
+      expect(
+        source.participantList.requireParticipation("p-alice").hold?.state,
+      ).toBe("HELD");
     });
 
     test("completeSettlement_WhenCallbackIsStale_LeavesAllHoldsPending", () => {
@@ -562,7 +668,10 @@ describe("Session", () => {
       });
       const previousState = sessionState(bookingSession);
       const failure = vi
-        .spyOn(bookingSession.participations[1]!, "settleHold")
+        .spyOn(
+          bookingSession.participantList.requireParticipation("p-ben"),
+          "settleHold",
+        )
         .mockImplementationOnce(() => {
           throw new DomainError("INVALID_STATE", "Second line rejected");
         });
@@ -586,7 +695,7 @@ describe("Session", () => {
       // Assert
       expect(completion.instructions).toHaveLength(2);
       expect(
-        bookingSession.participations.map(
+        bookingSession.participantList.participations.map(
           (participation) => participation.hold?.state,
         ),
       ).toEqual(["RELEASED", "RELEASED"]);

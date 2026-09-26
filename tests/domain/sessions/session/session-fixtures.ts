@@ -132,7 +132,7 @@ export function sessionState(s: Session) {
     status: s.status,
     visibility: s.visibility,
     invitedGroupId: s.invitedGroupId,
-    nextQueueSequence: s.nextQueueSequence,
+    nextQueueSequence: s.participantList.nextQueueSequence,
     payoutAttemptIds: s.payoutAttemptIds,
     payoutIdempotencyKeys: s.payoutIdempotencyKeys,
     pendingSettlement: batch && {
@@ -142,7 +142,7 @@ export function sessionState(s: Session) {
         amount: line.amount.toCents(),
       })),
     },
-    participations: s.participations.map((p) => ({
+    participations: s.participantList.participations.map((p) => ({
       participationId: p.participationId,
       userId: p.userId,
       status: p.status,

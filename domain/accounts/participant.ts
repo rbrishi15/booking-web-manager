@@ -12,12 +12,6 @@ import {
   assertOpen,
   assertOpenBefore,
 } from "../sessions/session/session-guards";
-import {
-  availableSlots,
-  nextWaitlisted,
-  oldestAwaiting,
-  requireParticipation,
-} from "../sessions/session/session-roster";
 import { requireId, validDate } from "../sessions/session/session-validation";
 import { DomainError } from "../shared/errors";
 import type {
@@ -100,14 +94,14 @@ export class Participant {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     assertOpenBefore(session.status, session.booking, command.now);
-    const participations = session.participations;
-    this.assertAccess(session, participations, command);
+    const participantList = session.participantList;
+    this.assertAccess(session, command);
     const terms = {
       minimumReliability: session.minimumReliability,
       share: session.bookingShare,
     };
     this.assertEligibleFor(terms, false);
-    const existing = participations.find((p) => p.userId === this.userId);
+    const existing = participantList.findByUserId(this.userId);
     if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
       throw new DomainError(
         existing.status === "WITHDRAWN" || existing.status === "REMOVED"
@@ -128,10 +122,10 @@ export class Participant {
 
     validDate(command.now, "now");
     if (
-      availableSlots(participations, session.totalSlots) === 0 ||
-      nextWaitlisted(participations) !== undefined
+      session.getAvailableSlots() === 0 ||
+      participantList.nextWaitlisted() !== undefined
     ) {
-      const sequence = session.nextQueueSequence;
+      const sequence = participantList.nextQueueSequence;
       DomainError.require(
         Number.isSafeInteger(sequence) &&
           sequence > 0 &&
@@ -168,7 +162,7 @@ export class Participant {
       share: terms.share,
       now: command.now,
     });
-    const replacement = oldestAwaiting(participations);
+    const replacement = participantList.oldestAwaitingReplacement();
     const committed = Participation.createCommitted({
       participationId: existing?.participationId ?? command.participationId,
       userId: this.userId,
@@ -200,13 +194,13 @@ export class Participant {
     command: PromotionCommand,
   ): PromotionResult {
     assertOpenBefore(session.status, session.booking, command.now);
-    const participations = session.participations;
-    const next = nextWaitlisted(participations);
+    const participantList = session.participantList;
+    const next = participantList.nextWaitlisted();
     if (next === undefined) return { kind: "NONE", instructions: [] };
     requireId(command.holdId, "holdId");
     validDate(command.now, "now");
     DomainError.require(
-      availableSlots(participations, session.totalSlots) > 0,
+      session.getAvailableSlots() > 0,
       "CAPACITY_EXCEEDED",
       "There is no available slot to promote",
     );
@@ -231,7 +225,7 @@ export class Participant {
       session.recordParticipationTransition(next, departed, command.now);
       return result;
     }
-    const replacement = oldestAwaiting(participations);
+    const replacement = participantList.oldestAwaitingReplacement();
     const committed = next.commit(
       this.createAdmissionHold({
         participationId: next.participationId,
@@ -265,8 +259,7 @@ export class Participant {
     assertOpen(session.status);
     if (command.now !== undefined)
       assertOpenBefore(session.status, session.booking, command.now);
-    const existing = requireParticipation(
-      session.participations,
+    const existing = session.participantList.requireParticipation(
       command.participationId,
     );
     const departed = this.prepareWaitlistDeparture(existing);
@@ -279,8 +272,7 @@ export class Participant {
   ): WithdrawalResult {
     this.validateWithdrawal(command);
     assertOpenBefore(session.status, session.booking, command.now);
-    const existing = requireParticipation(
-      session.participations,
+    const existing = session.participantList.requireParticipation(
       command.participationId,
     );
     const change = this.prepareWithdrawal(
@@ -302,8 +294,7 @@ export class Participant {
     command: ParticipantReplacementOfferCommand,
   ): FinancialResult {
     assertOpenBefore(session.status, session.booking, command.now);
-    const existing = requireParticipation(
-      session.participations,
+    const existing = session.participantList.requireParticipation(
       command.participationId,
     );
     const change = this.prepareReplacementOffer(existing);
@@ -317,12 +308,11 @@ export class Participant {
 
   private assertAccess(
     session: Session,
-    participations: readonly Participation[],
     command: ParticipantJoinCommand,
   ): void {
     if (command.replacementToken !== undefined) {
       DomainError.require(
-        participations.some(
+        session.participantList.participations.some(
           (p) =>
             p.status === "WITHDRAWN" &&
             p.hold?.state === "AWAITING_REPLACEMENT" &&
@@ -408,7 +398,7 @@ export class Participant {
       );
   }
 
-  /** Prepares the entire withdrawal before Session changes its roster. */
+  /** Prepares the entire withdrawal before Session changes its participant list. */
   private prepareWithdrawal(
     participation: Participation,
     booking: Booking,

@@ -22,12 +22,14 @@ describe("Participant", () => {
     });
 
     // Assert
-    expect(bookingSession.participations.map((entry) => entry.status)).toEqual([
-      "COMMITTED",
-      "COMMITTED",
-      "LEFT_WAITLIST",
-    ]);
-    expect(bookingSession.nextWaitlistedUserId).toBeUndefined();
+    expect(
+      bookingSession.participantList.participations.map(
+        (entry) => entry.status,
+      ),
+    ).toEqual(["COMMITTED", "COMMITTED", "LEFT_WAITLIST"]);
+    expect(
+      bookingSession.participantList.nextWaitlisted()?.userId,
+    ).toBeUndefined();
     expect(bookingSession.getAvailableSlots(before)).toBe(0);
   });
 

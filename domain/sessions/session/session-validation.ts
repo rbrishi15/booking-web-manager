@@ -1,8 +1,13 @@
 import { DomainError } from "../../shared/errors";
-import type { PayoutDestination, SettlementBatch } from "../../shared/operations";
+import type {
+  PayoutDestination,
+  SettlementBatch,
+} from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { FundHold } from "../fund-hold";
 import type { SessionDetails } from "./session";
+import type { ParticipantListView } from "./participant-list";
+import { validateNextQueueSequence } from "./participant-list-validation";
 
 export function validateSessionDetails(details: SessionDetails): void {
   requireId(details.sessionId, "sessionId");
@@ -39,34 +44,17 @@ export function validateSessionDetails(details: SessionDetails): void {
       "DUPLICATE_ID",
       "Payout idempotency keys must be unique",
     );
-  const maxSequence = participations.reduce(
-    (max, p) => Math.max(max, p.queueSequence ?? 0),
-    0,
-  );
-  DomainError.require(
-    details.nextQueueSequence > maxSequence,
-    "INVALID_INPUT",
-    "Queue sequence must be ahead of the roster",
-  );
+  validateNextQueueSequence(participations, details.nextQueueSequence);
 }
 
-type RosterValidation = Pick<
+type SessionConfiguration = Pick<
   SessionDetails,
-  | "status"
-  | "visibility"
-  | "totalSlots"
-  | "minimumHeadcount"
-  | "nextQueueSequence"
-  | "participations"
-  | "holdingAccountId"
-  | "pendingSettlement"
-  | "sessionId"
-> & {
-  readonly payoutAttemptIds: ReadonlySet<UUID>;
-  readonly payoutIdempotencyKeys: ReadonlySet<string>;
-};
+  "status" | "visibility" | "totalSlots" | "minimumHeadcount"
+>;
 
-export function validateSessionRoster(input: RosterValidation): void {
+export function validateSessionConfiguration(
+  input: SessionConfiguration,
+): void {
   DomainError.require(
     [
       "OPEN",
@@ -101,61 +89,19 @@ export function validateSessionRoster(input: RosterValidation): void {
     "INVALID_INPUT",
     "minimumHeadcount must be between 2 and totalSlots",
   );
-  DomainError.require(
-    Number.isSafeInteger(input.nextQueueSequence) &&
-      input.nextQueueSequence > 0,
-    "INVALID_INPUT",
-    "nextQueueSequence must be a positive safe integer",
-  );
-  const ids = new Set(input.participations.map((p) => p.userId));
-  DomainError.require(
-    ids.size === input.participations.length,
-    "DUPLICATE_ID",
-    "A user may participate only once in a session",
-  );
-  const participationIds = new Set(
-    input.participations.map((p) => p.participationId),
-  );
-  DomainError.require(
-    participationIds.size === input.participations.length,
-    "DUPLICATE_ID",
-    "Participation IDs must be unique in a session",
-  );
-  const queueSequences = input.participations
-    .map((participation) => participation.queueSequence)
-    .filter((sequence): sequence is number => sequence !== undefined);
-  DomainError.require(
-    new Set(queueSequences).size === queueSequences.length,
-    "DUPLICATE_ID",
-    "Queue sequences must be unique in a session",
-  );
-  const holdIds = new Set<string>();
-  for (const participation of input.participations) {
-    const hold = participation.hold;
-    if (hold === undefined) continue;
-    DomainError.require(
-      hold.participationId === participation.participationId,
-      "INVALID_INPUT",
-      "A hold must belong to its participation",
-    );
-    DomainError.require(
-      hold.holdingAccountId === input.holdingAccountId,
-      "INVALID_INPUT",
-      "A session hold must use its holding account",
-    );
-    DomainError.require(
-      !holdIds.has(hold.holdId),
-      "DUPLICATE_ID",
-      "Hold IDs must be unique in a session",
-    );
-    holdIds.add(hold.holdId);
-  }
-  DomainError.require(
-    input.participations.filter((p) => p.status === "COMMITTED").length <=
-      input.totalSlots,
-    "CAPACITY_EXCEEDED",
-    "Committed participations exceed session capacity",
-  );
+}
+
+type SessionStateValidation = Pick<
+  SessionDetails,
+  "status" | "pendingSettlement" | "sessionId"
+> & {
+  readonly participantList: ParticipantListView;
+  readonly payoutAttemptIds: ReadonlySet<UUID>;
+  readonly payoutIdempotencyKeys: ReadonlySet<string>;
+};
+
+/** Checks lifecycle and payout state after the participant list is validated. */
+export function validateSessionState(input: SessionStateValidation): void {
   if (input.status === "PAYOUT_PENDING")
     DomainError.require(
       input.pendingSettlement !== undefined,
@@ -198,7 +144,7 @@ export function validateSessionRoster(input: RosterValidation): void {
       "Pending payout key was not recorded",
     );
     const holdById = new Map(
-      input.participations
+      input.participantList.participations
         .map((participation) => participation.hold)
         .filter((hold): hold is FundHold => hold !== undefined)
         .map((hold) => [hold.holdId, hold]),
@@ -235,17 +181,16 @@ export function validateSessionRoster(input: RosterValidation): void {
       const hasValidReleaseOutcome =
         line.kind === "RELEASE"
           ? hold.state === "HELD" &&
-            input.participations.find(
-              (p) => p.participationId === line.participationId,
-            )?.attendance === "ATTENDED"
+            input.participantList.requireParticipation(line.participationId)
+              .attendance === "ATTENDED"
           : true;
       DomainError.require(
         hasValidReleaseOutcome,
         "INVALID_INPUT",
         "A release line must reference attended funds",
       );
-      const participation = input.participations.find(
-        (candidate) => candidate.participationId === line.participationId,
+      const participation = input.participantList.requireParticipation(
+        line.participationId,
       );
       const isPayableParticipation =
         participation !== undefined &&
@@ -271,7 +216,7 @@ export function validateSessionRoster(input: RosterValidation): void {
   }
   if (input.status === "SETTLED" || input.status === "CANCELLED")
     DomainError.require(
-      input.participations.every(
+      input.participantList.participations.every(
         (participation) =>
           participation.hold === undefined ||
           ["REFUNDED", "RELEASED", "FORFEITED"].includes(
@@ -283,7 +228,7 @@ export function validateSessionRoster(input: RosterValidation): void {
     );
   if (input.status === "CANCELLED")
     DomainError.require(
-      input.participations.every(
+      input.participantList.participations.every(
         (participation) => participation.status === "CANCELLED",
       ),
       "INVALID_INPUT",

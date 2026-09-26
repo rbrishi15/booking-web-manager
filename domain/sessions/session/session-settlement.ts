@@ -8,11 +8,7 @@ import type {
 } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Participation } from "../participation";
-import {
-  expireReplacements,
-  replaceParticipation,
-  requireParticipation,
-} from "./session-roster";
+import type { ParticipantList } from "./participant-list";
 import { validDate } from "./session-validation";
 
 export function prepareSettlementRoster(
@@ -21,7 +17,9 @@ export function prepareSettlementRoster(
   destination: PayoutDestination,
   now: Date,
 ): Participation[] {
-  const next = expireReplacements(participations, now);
+  const next = participations.map((participation) =>
+    participation.expireReplacement(now),
+  );
   DomainError.require(
     next.every(
       (participation) =>
@@ -94,39 +92,29 @@ export function buildSettlementBatch(
 
 export function completeSettlement(
   sessionId: UUID,
-  participations: readonly Participation[],
+  participantList: ParticipantList,
   batch: SettlementBatch,
   payoutId: UUID,
   at: Date,
 ): {
-  readonly participations: Participation[];
+  readonly participantList: ParticipantList;
   readonly result: FinancialResult;
 } {
-  const instructions: FinancialInstruction[] = [];
-  let next = [...participations];
-  for (const line of batch.lines) {
-    const participation = requireParticipation(
-      participations,
-      line.participationId,
-    );
-    DomainError.require(
-      participation.hold?.holdId === line.holdId,
-      "INVALID_STATE",
-      "Settlement hold no longer matches the batch",
-    );
-    const updated = participation.settleHold(line.kind, payoutId, at);
-    next = replaceParticipation(next, participation.participationId, updated);
-    instructions.push({
-      kind: line.kind,
-      sessionId,
-      participationId: line.participationId,
-      holdId: line.holdId,
-      holdingAccountId: line.holdingAccountId,
-      walletId: line.walletId,
-      amount: line.amount,
-      occurredAt: validDate(at, "at"),
-      payoutId,
-    });
-  }
-  return { participations: next, result: { instructions } };
+  const next = participantList.withCompletedSettlement(
+    batch.lines,
+    payoutId,
+    at,
+  );
+  const instructions: FinancialInstruction[] = batch.lines.map((line) => ({
+    kind: line.kind,
+    sessionId,
+    participationId: line.participationId,
+    holdId: line.holdId,
+    holdingAccountId: line.holdingAccountId,
+    walletId: line.walletId,
+    amount: line.amount,
+    occurredAt: validDate(at, "at"),
+    payoutId,
+  }));
+  return { participantList: next, result: { instructions } };
 }

@@ -47,8 +47,8 @@ describe("Booker", () => {
     expect(bookingSession.bookerId).toBe(booker.userId);
     expect(bookingSession.visibility).toBe("PRIVATE");
     expect(bookingSession.status).toBe("OPEN");
-    expect(bookingSession.participations).toEqual([]);
-    expect(bookingSession.nextQueueSequence).toBe(1);
+    expect(bookingSession.participantList.participations).toEqual([]);
+    expect(bookingSession.participantList.nextQueueSequence).toBe(1);
     expect(bookingSession.payoutAttemptIds).toEqual([]);
     expect(bookingSession.payoutIdempotencyKeys).toEqual([]);
     expect(bookingSession.pendingSettlement).toBeUndefined();

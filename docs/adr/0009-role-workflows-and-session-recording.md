@@ -6,6 +6,11 @@
   [ADR-0007](./0007-participant-behavior-and-session-roster.md) and
   [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md).
 
+[ADR-0010](./0010-session-participant-list.md) refines the collection
+implementation and query interface with an internal immutable ParticipantList.
+The role workflows, authorization boundary, and recording decisions here remain
+accepted.
+
 ## Context
 
 The earlier refactors moved individual decisions into Participant and Booker,

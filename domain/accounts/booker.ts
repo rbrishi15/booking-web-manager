@@ -9,7 +9,6 @@ import {
   assertSettlementOpen,
   validatePayoutAttempt,
 } from "../sessions/session/session-guards";
-import { requireParticipation } from "../sessions/session/session-roster";
 import {
   buildSettlementBatch,
   prepareSettlementRoster,
@@ -135,7 +134,7 @@ export class Booker {
     assertOpenBefore(session.status, session.booking, now);
     const cancelled: Participation[] = [];
     const instructions: FinancialInstruction[] = [];
-    for (const participation of session.participations) {
+    for (const participation of session.participantList.participations) {
       const change = this.prepareCancellation(
         participation,
         session.sessionId,
@@ -176,10 +175,8 @@ export class Booker {
   ): FinancialResult {
     this.assertOwnsSession(session.bookerId);
     assertOpenBefore(session.status, session.booking, now);
-    const existing = requireParticipation(
-      session.participations,
-      participationId,
-    );
+    const existing =
+      session.participantList.requireParticipation(participationId);
     const change = this.prepareRemoval(existing, session.sessionId, now);
     session.recordParticipationTransition(existing, change.participation, now);
     return change.result;
@@ -189,7 +186,7 @@ export class Booker {
     validDate(command.now, "now");
     this.assertOwnsSession(session.bookerId);
     assertAttendanceOpen(session.status, session.booking, command.now);
-    const participations = session.participations;
+    const participantList = session.participantList;
     const markedIds = new Set<UUID>();
     const verified: Participation[] = [];
     for (const mark of command.marks) {
@@ -199,8 +196,7 @@ export class Booker {
         "A participation may be verified only once per command",
       );
       markedIds.add(mark.participationId);
-      const participation = requireParticipation(
-        participations,
+      const participation = participantList.requireParticipation(
         mark.participationId,
       );
       verified.push(
@@ -225,7 +221,7 @@ export class Booker {
     this.assertOwnsSession(session.bookerId);
     assertSettlementOpen(session.status, session.booking, command.now);
     const next = prepareSettlementRoster(
-      session.participations,
+      session.participantList.participations,
       session.bookerId,
       destination,
       command.now,
@@ -265,7 +261,7 @@ export class Booker {
     );
   }
 
-  /** Prepares one cancellation; Session installs the complete roster together. */
+  /** Prepares one cancellation; Session installs the complete list together. */
   private prepareCancellation(
     participation: Participation,
     sessionId: UUID,
@@ -309,7 +305,7 @@ export class Booker {
     };
   }
 
-  /** Marks a single participation manually without changing the session roster. */
+  /** Marks a participation without changing the session's participant list. */
   private prepareAttendance(
     participation: Participation,
     attendance: "ATTENDED" | "ABSENT",

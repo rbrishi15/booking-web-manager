@@ -20,6 +20,7 @@ skinparam classBorderColor #94A3B8
 skinparam classBackgroundColor #FFFFFF
 skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
 skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classBackgroundColor<<ImmutableCollection>> #FEF3C7
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
 skinparam nodesep 90
@@ -70,6 +71,10 @@ class Participation <<ImmutableChild>> {
   +status : ParticipationStatus
   +attendance : AttendanceStatus
 }
+class ParticipantList <<ImmutableCollection>> {
+  +nextQueueSequence : number
+  +committedCount : number
+}
 class FundHold <<ImmutableChild>> {
   +holdId : UUID
   +walletId : UUID
@@ -87,11 +92,13 @@ User "1" *-down- "1" Wallet
 User "1" *-down- "0..1" PayoutAccount
 RegularGroup "1" *-left- "1..*" GroupMembership
 Session "1" *-down- "1" Booking
-Session "1" *-down- "0..*" Participation
+Session "1" *-down- "1" ParticipantList
+ParticipantList "1" *-down- "0..*" Participation
 Participation "1" *-down- "0..1" FundHold
 
 legend bottom left
   <back:#DBEAFE> Aggregate root </back>   <back:#DCFCE7> Value object </back>
+  <back:#FEF3C7> Internal immutable collection </back>
   Filled diamond: ownership · Arrow: ID reference
   Supporting types and operations appear in the focused diagrams.
 endlegend

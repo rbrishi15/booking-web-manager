@@ -6,6 +6,14 @@ proposals in the [product discussion](docs/discussions/waitlist-and-replacement-
 
 ## Language
 
+**Booking Room**:
+The shared coordination space for a session at an already-booked venue,
+bringing together its booker and participants.
+
+**Participant list**:
+The participation records associated with one booking room, including people
+who have joined and past changes to their participation.
+
 **Booker**:
 The person who books the venue for a session and takes the initial booking risk.
 

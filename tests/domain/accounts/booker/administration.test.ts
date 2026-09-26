@@ -24,7 +24,10 @@ describe("Booker", () => {
       "Second cancellation failed",
     );
     const cancellation = vi
-      .spyOn(bookingSession.participations[1]!, "cancel")
+      .spyOn(
+        bookingSession.participantList.requireParticipation("p-ben"),
+        "cancel",
+      )
       .mockImplementationOnce(() => {
         throw failure;
       });
@@ -48,7 +51,7 @@ describe("Booker", () => {
     ]);
     expect(bookingSession.status).toBe("CANCELLED");
     expect(
-      bookingSession.participations.every(
+      bookingSession.participantList.participations.every(
         (participation) => participation.status === "CANCELLED",
       ),
     ).toBe(true);
@@ -111,8 +114,13 @@ describe("Booker", () => {
     const result = booker.removeParticipant(bookingSession, "p-alice", before);
 
     // Assert
-    expect(bookingSession.participations[0]?.status).toBe("REMOVED");
-    expect(bookingSession.participations[0]?.hold?.state).toBe("REFUNDED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").status,
+    ).toBe("REMOVED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("REFUNDED");
     expect(result.instructions[0]?.kind).toBe("REFUND");
   });
 
@@ -174,9 +182,11 @@ describe("Booker", () => {
       true,
     );
     expect(bookingSession.status).toBe("CANCELLED");
-    expect(bookingSession.nextWaitlistedUserId).toBeUndefined();
     expect(
-      bookingSession.participations.every(
+      bookingSession.participantList.nextWaitlisted()?.userId,
+    ).toBeUndefined();
+    expect(
+      bookingSession.participantList.participations.every(
         (p) => !p.hold || p.hold.state === "REFUNDED",
       ),
     ).toBe(true);

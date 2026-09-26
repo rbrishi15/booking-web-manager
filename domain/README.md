@@ -9,13 +9,16 @@ work.
 ## Aggregate roots
 
 The four aggregate roots are `User`, `RegularGroup`, `Session`, and `Payout`.
+The business term Booking Room is represented by the existing Session class.
 A root controls changes to its owned state and children. Actor-facing role
 workflows can prepare changes for the root to validate and record.
 Class comments identify each root with `Aggregate root: <Name>.` and describe
 its boundary; child comments identify their owning root.
 
-- `Session` owns its immutable `Booking`, participation children, waitlist order,
-  and each participation's `FundHold`. It checks shared roster rules and installs
+- `Session` owns its immutable `Booking` and internal immutable `ParticipantList`,
+  which holds participation children and queue state. Each participation owns its
+  `FundHold`. ParticipantList checks capacity, queue, identity, and collection
+  transitions; Session checks lifecycle and payout conditions and installs
   complete prepared changes through bounded recording operations. It does not
   authorize actors or call role methods. Automatic verification, replacement
   expiry, and payout callbacks remain operations on the root.
@@ -42,7 +45,8 @@ boundary for those actions.
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
 for ownership and coordination across roots, and
 [ADR-0009: Role workflows and Session recording](../docs/adr/0009-role-workflows-and-session-recording.md)
-for current role responsibility routing.
+for current role responsibility routing. The collection and its public query view
+are defined by [ADR-0010: Session's participant list](../docs/adr/0010-session-participant-list.md).
 
 The application enters session admission through
 `user.asParticipant().join(session, command)`. The repository loads a complete
@@ -114,6 +118,33 @@ silently trimmed or normalized.
 See [ADR-0002: Constructor-based domain hydration](../docs/adr/0002-constructor-based-domain-hydration.md)
 for construction, mapping, and encapsulation conventions.
 
+## Participant list queries
+
+Read participation state through `session.participantList`, a public
+`ParticipantListView`. Its readonly `participations`, `nextQueueSequence`, and
+`committedCount` properties describe the current collection. Use
+`requireParticipation(id)` for a required record, `findByUserId(id)` for an
+optional user lookup, `nextWaitlisted()` for the first waiter, and
+`oldestAwaitingReplacement()` for the existing refund-priority selection.
+The next waiter's identity is `session.participantList.nextWaitlisted()?.userId`.
+`Session.getAvailableSlots(now)` retains the session's timing rules.
+A captured view retains that list state; read the getter again after a successful
+recording operation to obtain the new state.
+
+The concrete ParticipantList is internal to the session package and is not an
+aggregate root. Its private maps index participation and user IDs while retaining
+roster order. The list owns capacity, FIFO, identity, hold/queue consistency, and
+collection-transition validation. Callers receive immutable children through a
+query-only view, with no mutable map or collection alias. For a recording
+operation, the list builds a checked candidate; Session applies its lifecycle
+and payout cross-checks before installing that candidate. Previous lists and
+unchanged children remain intact.
+
+`SessionDetails.participations` and `SessionDetails.nextQueueSequence` remain the
+hydration contract; adapters supply arrays and persisted queue state. They do not
+construct or save ParticipantList independently. No persistence schema changes
+or compatibility getters are introduced.
+
 ## Session command calculations
 
 Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, `leaveWaitlist`,
@@ -144,10 +175,11 @@ all returning `void`:
 | `changeVisibility(visibility, now)` | The requested visibility. |
 | `recordSettlementPreparation(preparation, now)` | `SessionSettlementPreparation`: payout ID, idempotency key, candidate participations, and optional batch. |
 
-The root validates lifecycle/timing, identity and transition compatibility,
-capacity and queue order, hold consistency, operation coverage, and settlement
-history as applicable. It makes defensive copies before atomically assigning
-roster, queue sequence, status, or payout state. A failed calculation or recording
+ParticipantList validates capacity, FIFO, identity, hold/queue consistency, and
+collection transitions, including cancellation coverage and attendance subsets.
+Session keeps lifecycle/time guards, booking-share calculation, and payout/batch
+cross-checks. It installs the candidate list with status or payout state only
+after every check and defensive copy succeeds. A failed calculation or recording
 leaves existing state unchanged. These operations accept no role or actor and
 perform no actor authorization: a valid child change does not establish the
 caller's authority. Application actor flows therefore enter through the roles.
@@ -255,7 +287,8 @@ contracts.
 The source tree follows the business capabilities and aggregate boundaries:
 
 - `domain/sessions` contains `Session`, `Participation`, `FundHold`, and the
-  `Booking` value object they own.
+  `Booking` value object they own. Session's ParticipantList implementation stays
+  internal; `ParticipantListView` is the exported query contract.
 - `domain/groups` contains `RegularGroup` and `GroupMembership`.
 - `domain/accounts` contains `User`, its Booker and Participant roles, and
   payout-account setup.

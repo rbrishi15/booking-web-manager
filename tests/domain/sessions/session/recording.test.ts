@@ -1,4 +1,4 @@
-import { Participation, Session } from "@/domain";
+import { FundHold, Participation, Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   at,
@@ -14,6 +14,63 @@ import {
 } from "./session-fixtures";
 
 describe("Session", () => {
+  test("recordAdmission_WhenHoldIdIsDuplicated_PreservesListAndAllowsValidRetry", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const previousList = bookingSession.participantList;
+    const alice = previousList.requireParticipation("p-alice");
+    const previousState = sessionState(bookingSession);
+    const invalidAdmission = Participation.createCommitted({
+      participationId: "p-ben",
+      userId: "ben",
+      committedAt: before,
+      hold: FundHold.create({
+        holdId: "h-alice",
+        participationId: "p-ben",
+        holdingAccountId: bookingSession.holdingAccountId,
+        walletId: "w-ben",
+        amount: bookingSession.bookingShare,
+        createdAt: before,
+      }),
+    });
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordAdmission(invalidAdmission, undefined, before),
+    ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(previousList.requireParticipation("p-alice")).toBe(alice);
+    expect(previousList.findByUserId("alice")).toBe(alice);
+    expect(previousList.findByUserId("ben")).toBeUndefined();
+    expect(() => previousList.requireParticipation("p-ben")).toThrow(
+      expect.objectContaining({ code: "NOT_FOUND" }),
+    );
+    expect(previousList.committedCount).toBe(1);
+    expect(previousList.nextQueueSequence).toBe(1);
+    expect(previousList.nextWaitlisted()).toBeUndefined();
+    expect(previousList.oldestAwaitingReplacement()).toBeUndefined();
+
+    // Act
+    const validAdmission = committedParticipation(bookingSession, "ben");
+    bookingSession.recordAdmission(validAdmission, undefined, before);
+
+    // Assert
+    expect(bookingSession.participantList).not.toBe(previousList);
+    expect(bookingSession.participantList.requireParticipation("p-ben")).toBe(
+      validAdmission,
+    );
+    expect(bookingSession.participantList.findByUserId("ben")).toBe(
+      validAdmission,
+    );
+    expect(bookingSession.participantList.committedCount).toBe(2);
+    expect(previousList.participations).toEqual([alice]);
+    expect(previousList.requireParticipation("p-alice")).toBe(alice);
+    expect(previousList.findByUserId("ben")).toBeUndefined();
+    expect(previousList.committedCount).toBe(1);
+    expect(previousList.nextQueueSequence).toBe(1);
+  });
+
   test("recordAdmission_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession();
@@ -62,7 +119,9 @@ describe("Session", () => {
       bookingSession.recordAdmission(admission, undefined, before),
     ).toThrow(expect.objectContaining({ code: "WAITLIST_NOT_HEAD" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
-    expect(bookingSession.nextWaitlistedUserId).toBe("waiting");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "waiting",
+    );
   });
 
   test("recordAdmission_WhenReturningWaiterChangesParticipationId_RejectsWithoutChangingState", () => {
@@ -81,7 +140,7 @@ describe("Session", () => {
       participationId: "p-new-waiting",
       userId: "waiting",
       waitlistedAt: before,
-      queueSequence: bookingSession.nextQueueSequence,
+      queueSequence: bookingSession.participantList.nextQueueSequence,
     });
     const previousState = sessionState(bookingSession);
 
@@ -139,7 +198,7 @@ describe("Session", () => {
         participationId: "p-ben",
         now: at(9),
       });
-    const newer = bookingSession.participations[1]!;
+    const newer = bookingSession.participantList.requireParticipation("p-ben");
     const candidate = committedParticipation(
       bookingSession,
       "replacement",
@@ -165,7 +224,8 @@ describe("Session", () => {
   test("recordParticipationTransition_WhenSourceIsStale_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
-    const existing = bookingSession.participations[0]!;
+    const existing =
+      bookingSession.participantList.requireParticipation("p-alice");
     const removal = existing.remove(existing.hold!.refund(before));
     createTestUser({ userId: "alice" })
       .asParticipant()
@@ -185,7 +245,8 @@ describe("Session", () => {
   test("recordParticipationTransition_WhenReplacementChangesIdentity_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
-    const existing = bookingSession.participations[0]!;
+    const existing =
+      bookingSession.participantList.requireParticipation("p-alice");
     const foreign = committedParticipation(bookingSession, "other");
     const replacement = foreign.remove(foreign.hold!.refund(before));
     const previousState = sessionState(bookingSession);
@@ -207,7 +268,8 @@ describe("Session", () => {
       committedUserIds: ["alice", "ben"],
       waitlistedUserIds: ["waiting"],
     });
-    const existing = bookingSession.participations[2]!;
+    const existing =
+      bookingSession.participantList.requireParticipation("p-waiting");
     const departed = existing.leaveWaitlist();
     readyBooker().cancel(bookingSession, before);
     const previousState = sessionState(bookingSession);
@@ -224,7 +286,8 @@ describe("Session", () => {
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
-    const first = bookingSession.participations[0]!;
+    const first =
+      bookingSession.participantList.requireParticipation("p-alice");
     const cancelled = first.cancel(first.hold!.refund(before));
     const previousState = sessionState(bookingSession);
 
@@ -238,7 +301,8 @@ describe("Session", () => {
   test("recordCancellation_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
-    const existing = bookingSession.participations[0]!;
+    const existing =
+      bookingSession.participantList.requireParticipation("p-alice");
     const cancelled = existing.cancel(existing.hold!.refund(start));
     const previousState = sessionState(bookingSession);
 
@@ -252,11 +316,9 @@ describe("Session", () => {
   test("recordAttendance_WhenCandidateContainsDuplicateMarks_LeavesRosterAndStatusUnchanged", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
-    const verified = bookingSession.participations[0]!.verify(
-      "ATTENDED",
-      "BOOKER",
-      end,
-    );
+    const verified = bookingSession.participantList
+      .requireParticipation("p-alice")
+      .verify("ATTENDED", "BOOKER", end);
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -269,11 +331,9 @@ describe("Session", () => {
   test("recordAttendance_WhenSessionHasNotEnded_LeavesRosterAndStatusUnchanged", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
-    const verified = bookingSession.participations[0]!.verify(
-      "ATTENDED",
-      "BOOKER",
-      before,
-    );
+    const verified = bookingSession.participantList
+      .requireParticipation("p-alice")
+      .verify("ATTENDED", "BOOKER", before);
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -292,12 +352,11 @@ describe("Session", () => {
       marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
       now: end,
     });
-    const alreadyVerified = bookingSession.participations[0]!;
-    const newMark = bookingSession.participations[1]!.verify(
-      "ATTENDED",
-      "BOOKER",
-      end,
-    );
+    const alreadyVerified =
+      bookingSession.participantList.requireParticipation("p-alice");
+    const newMark = bookingSession.participantList
+      .requireParticipation("p-ben")
+      .verify("ATTENDED", "BOOKER", end);
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -305,7 +364,9 @@ describe("Session", () => {
       bookingSession.recordAttendance([newMark, alreadyVerified], end),
     ).toThrow(expect.objectContaining({ code: "ATTENDANCE_CONFLICT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
-    expect(bookingSession.participations[1]?.attendance).toBe("UNVERIFIED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-ben").attendance,
+    ).toBe("UNVERIFIED");
   });
 
   test("recordSettlementPreparation_WhenSessionHasNotEnded_RejectsWithoutChangingState", () => {
@@ -342,7 +403,7 @@ describe("Session", () => {
         {
           payoutId: "out",
           idempotencyKey: "key",
-          participations: bookingSession.participations,
+          participations: bookingSession.participantList.participations,
         },
         end,
       ),
@@ -363,7 +424,7 @@ describe("Session", () => {
     const bookingSession = new Session(
       sessionDetails({
         status: source.status,
-        participations: source.participations,
+        participations: source.participantList.participations,
       }),
     );
     const batch = readyBooker().prepareSettlement(source, {
@@ -379,7 +440,7 @@ describe("Session", () => {
         {
           payoutId: "out",
           idempotencyKey: "key",
-          participations: bookingSession.participations,
+          participations: bookingSession.participantList.participations,
           batch: { ...batch, lines: batch.lines.slice(0, 1) },
         },
         end,

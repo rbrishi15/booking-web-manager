@@ -2,7 +2,8 @@
 
 These diagrams describe the current TypeScript domain in [`domain/`](../domain),
 following [ADR-0003](./adr/0003-aggregate-roots-and-boundaries.md) and
-[ADR-0009](./adr/0009-role-workflows-and-session-recording.md). They document the
+[ADR-0009](./adr/0009-role-workflows-and-session-recording.md), with the collection
+refinement in [ADR-0010](./adr/0010-session-participant-list.md). They document the
 implementation; they do not introduce new domain behavior.
 
 - [Editable PlantUML source](./domain-class-diagram.puml)
@@ -19,7 +20,7 @@ their connections can be read without lines crossing the entire domain.
 | View | Covers | Diagram | Editable source |
 | --- | --- | --- | --- |
 | Accounts and groups | User, owned account objects, role views, and memberships | [SVG](./assets/domain-accounts.svg) | [PlantUML](./diagrams/domain-accounts.puml) |
-| Sessions | Booking, participation, holds, and reliability | [SVG](./assets/domain-sessions.svg) | [PlantUML](./diagrams/domain-sessions.puml) |
+| Sessions | Booking, participant list, participation, holds, and reliability | [SVG](./assets/domain-sessions.svg) | [PlantUML](./diagrams/domain-sessions.puml) |
 | Settlement | Payout attempts and frozen settlement data | [SVG](./assets/domain-settlement.svg) | [PlantUML](./diagrams/domain-settlement.puml) |
 | Ledger | Committed transactions, money, and balance queries | [SVG](./assets/domain-ledger.svg) | [PlantUML](./diagrams/domain-ledger.puml) |
 
@@ -42,9 +43,18 @@ abbreviated.
   does not import roles, call back into them, or reauthorize actors; applications
   enter actor workflows through the roles. Recording methods are not arbitrary
   roster setters.
-- `Session` owns all participation records, so its roster multiplicity is `0..*`.
+- The Booking Room is represented by Session. It owns an internal immutable
+  ParticipantList, which contains `0..*` participation records and queue state.
+  `session.participantList` exposes only ParticipantListView queries; the focused
+  diagram shows those selected queries on the implementation and omits the
+  separate view interface. Private maps and candidate-building methods are omitted.
   Only active commitments are limited by `totalSlots` (at most eight).
   Waitlisted participation has no hold; a commitment requires one.
+- ParticipantList is not another aggregate root. Session records a fully checked
+  candidate list together with its status or settlement changes. The list owns
+  capacity, FIFO, identity, and collection-transition validation; Session retains
+  lifecycle/time guards and payout/batch cross-checks. Hydration still
+  supplies participation arrays and a queue sequence through SessionDetails.
 - `RegularGroup` retains at least one membership, including its owner.
 - `User` owns its wallet, but ledger history is external. `Wallet.getFunds()`
   derives spendable funds from the complete committed transaction collection.

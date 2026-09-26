@@ -43,6 +43,7 @@ export {
   type SessionDetails,
   type SessionSettlementPreparation,
 } from "./sessions/session";
+export type { ParticipantListView } from "./sessions/session/participant-list";
 export {
   User,
   type UserRegistration,

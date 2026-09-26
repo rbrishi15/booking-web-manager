@@ -92,7 +92,7 @@ describe("Booker", () => {
       "RELEASE",
     ]);
     expect(
-      bookingSession.participations.map(
+      bookingSession.participantList.participations.map(
         (participation) => participation.hold?.state,
       ),
     ).toEqual(["FORFEITURE_DUE", "HELD"]);
@@ -230,9 +230,10 @@ describe("Booker", () => {
     });
 
     // Assert
-    expect(bookingSession.participations[0]?.hold?.state).toBe(
-      "FORFEITURE_DUE",
-    );
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("FORFEITURE_DUE");
     expect(batch?.lines).toMatchObject([{ kind: "FORFEIT" }]);
   });
 
@@ -256,9 +257,10 @@ describe("Booker", () => {
       readyBooker().prepareSettlement(bookingSession, command),
     ).toThrow(expect.objectContaining({ code: "ATTENDANCE_INCOMPLETE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
-    expect(bookingSession.participations[0]?.hold?.state).toBe(
-      "AWAITING_REPLACEMENT",
-    );
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("AWAITING_REPLACEMENT");
   });
 
   test("prepareSettlement_WhenBookerIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
@@ -324,9 +326,10 @@ describe("Booker", () => {
       "FORFEIT",
       "RELEASE",
     ]);
-    expect(bookingSession.participations[0]?.hold?.state).toBe(
-      "FORFEITURE_DUE",
-    );
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold
+        ?.state,
+    ).toBe("FORFEITURE_DUE");
     expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
     expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
   });
