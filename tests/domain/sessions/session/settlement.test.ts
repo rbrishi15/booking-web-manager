@@ -123,6 +123,47 @@ describe("Session", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
+  test("prepareSettlement_WhenFailedPayoutKeyIsReusedWithNewPayoutId_RejectsWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "a");
+    join(bookingSession, "b");
+    bookingSession.verifyAttendance({
+      actorId: "booker",
+      marks: [
+        { participationId: "p-a", attendance: "ATTENDED" },
+        { participationId: "p-b", attendance: "ATTENDED" },
+      ],
+      now: end,
+    });
+    bookingSession.prepareSettlement({
+      actorId: "booker",
+      payoutId: "out",
+      idempotencyKey: "key",
+      destination,
+      now: end,
+    });
+    bookingSession.failSettlement("out", end);
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.prepareSettlement({
+        actorId: "booker",
+        payoutId: "retry",
+        idempotencyKey: "key",
+        destination,
+        now: end,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DUPLICATE_ID",
+        message: "A payout idempotency key can only be used once for this session",
+      }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
   test("prepareSettlement_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
     const bookingSession = session();
@@ -212,6 +253,7 @@ describe("Session", () => {
     // Assert
     expect(statusAfterFailure).toBe("AWAITING_PAYOUT");
     expect(retryBatch?.payoutId).toBe("retry");
+    expect(retryBatch?.idempotencyKey).toBe("retry-key");
     expect(
       completion.instructions.map((instruction) => instruction.kind),
     ).toEqual(["FORFEIT", "RELEASE"]);
