@@ -89,6 +89,34 @@ silently trimmed or normalized.
 See [ADR-0002: Constructor-based domain hydration](../docs/adr/0002-constructor-based-domain-hydration.md)
 for construction, mapping, and encapsulation conventions.
 
+## Session command calculations
+
+`Session` remains the public command entry point and owns all session state.
+It keeps construction, getters, shared lifecycle and booker checks, payout-attempt
+history, and final assignments. Detailed rules live in four internal modules:
+
+| Module | Responsibility |
+| --- | --- |
+| `sessions/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
+| `sessions/session-roster.ts` | Withdrawal, removal, cancellation, attendance, replacement expiry, waitlist departure, and shared roster operations. |
+| `sessions/session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, and replacement refunds. |
+| `sessions/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
+
+These functions read operation-specific values and immutable children, then
+return complete candidate changes and results. They never mutate `Session`.
+The root installs those changes only after calculations and result construction
+succeed, including both the new commitment and any replacement refund. Ordered
+checks can stay between calculation stages, so extraction preserves which error
+a rejected command reports. The modules are not exported from the public domain
+entry point, and aggregate ownership is unchanged.
+
+A future use case loads `Session` and any required complete `User` through its
+transaction repositories, invokes the public session command (directly or via
+the participant role), then saves the root and applies its financial instructions
+in the same unit of work. It does not call these helpers or save individual child
+changes. Payout dispatch calls the provider outside that transaction. This split
+adds no use-case, database, or payment-provider implementation.
+
 ## Money and booking
 
 `Money` is an immutable signed SGD-cent value object. It uses safe integer cents,
