@@ -1,25 +1,24 @@
 import { describe, expect, test } from "vitest";
 import {
   at,
+  createTestUser,
   end,
-  join,
-  loadedUser,
   readyBooker,
-  session,
+  createTestSession,
   sessionState,
 } from "./session-fixtures";
 
 describe("Session", () => {
   test("completeSettlement_WhenCallbackIsStale_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     readyBooker().prepareSettlement(bookingSession, {
@@ -39,14 +38,14 @@ describe("Session", () => {
 
   test("completeSettlement_WhenFailedAttemptIsRetriedWithNewIdentity_FinalizesHolds", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     readyBooker().prepareSettlement(bookingSession, {

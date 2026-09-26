@@ -2,21 +2,21 @@ import { Money } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   at,
+  createTestUser,
   destination,
   end,
-  join,
-  loadedUser,
   readyBooker,
-  session,
+  createTestSession,
   sessionState,
 } from "../../sessions/session/session-fixtures";
-import { fundedWallet, readyBookerUser } from "../user-fixtures";
+import { readyBookerUser } from "../user-fixtures";
 
 describe("Booker", () => {
   test("prepareSettlement_WhenRoleWasCreatedBeforeDeactivation_RejectsWithoutChangingState", () => {
     // Arrange
-    const owner = loadedUser("booker", {
-      wallet: fundedWallet("booker", 0),
+    const owner = createTestUser({
+      userId: "booker",
+      availableFundsCents: 0,
       payoutAccount: readyBookerUser().payoutAccount,
     });
     const booker = owner.asBooker();
@@ -28,7 +28,7 @@ describe("Booker", () => {
       pendingPayouts: 0,
       activeOwnedGroups: 0,
     });
-    const bookingSession = session();
+    const bookingSession = createTestSession();
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -44,11 +44,11 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenAttendanceIsIncomplete_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
       now: end,
     });
     const previousState = sessionState(bookingSession);
@@ -66,14 +66,14 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenHoldsNeedReleaseAndForfeiture_KeepsFundsPending", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
 
@@ -100,14 +100,14 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenAnotherPayoutIsPending_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     readyBooker().prepareSettlement(bookingSession, {
@@ -131,14 +131,14 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenFailedPayoutIdIsReused_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     readyBooker().prepareSettlement(bookingSession, {
@@ -162,13 +162,13 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenFailedPayoutKeyIsReusedWithNewPayoutId_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [
-        { participationId: "p-a", attendance: "ATTENDED" },
-        { participationId: "p-b", attendance: "ATTENDED" },
+        { participationId: "p-alice", attendance: "ATTENDED" },
+        { participationId: "p-ben", attendance: "ATTENDED" },
       ],
       now: end,
     });
@@ -199,7 +199,7 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
-    const bookingSession = session();
+    const bookingSession = createTestSession();
 
     // Act
     const batch = readyBooker().prepareSettlement(bookingSession, {
@@ -216,11 +216,10 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenReplacementSweepWasMissed_ExpiresOutstandingReplacement", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    loadedUser("a")
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
 
     // Act
     bookingSession.expireReplacements(at(1));
@@ -239,12 +238,12 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenAttendanceIsIncomplete_LeavesExpiryUnapplied", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     const command = {
       payoutId: "out",
       idempotencyKey: "key",
@@ -264,14 +263,14 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenBookerIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     const command = {
@@ -292,14 +291,14 @@ describe("Booker", () => {
 
   test("prepareSettlement_WhenOwningBookerRetriesAfterForeignBooker_AppliesExpiryAndRecordsAttempt", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
     const command = {

@@ -1,9 +1,4 @@
-import type { Booker, VerifyAttendanceCommand } from "../../accounts/booker";
 import { DomainError } from "../../shared/errors";
-import type {
-  FinancialInstruction,
-  FinancialResult,
-} from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import type { Participation } from "../participation";
@@ -51,31 +46,6 @@ export function replaceParticipation(
   );
 }
 
-interface RosterChange<Result> {
-  readonly participations: Participation[];
-  readonly result: Result;
-}
-
-export function cancelRoster(
-  booker: Booker,
-  sessionId: UUID,
-  participations: readonly Participation[],
-  now: Date,
-): RosterChange<FinancialResult> {
-  const instructions: FinancialInstruction[] = [];
-  let next = [...participations];
-  for (const participation of participations) {
-    const change = booker.prepareCancellation(participation, sessionId, now);
-    instructions.push(...change.result.instructions);
-    next = replaceParticipation(
-      next,
-      participation.participationId,
-      change.participation,
-    );
-  }
-  return { participations: next, result: { instructions } };
-}
-
 export function expireReplacements(
   participations: readonly Participation[],
   now: Date,
@@ -83,34 +53,6 @@ export function expireReplacements(
   return participations.map((participation) =>
     participation.expireReplacement(now),
   );
-}
-
-export function verifyAttendance(
-  participations: readonly Participation[],
-  booker: Booker,
-  command: VerifyAttendanceCommand,
-): AttendanceChange {
-  const markedIds = new Set<UUID>();
-  let next = [...participations];
-  for (const mark of command.marks) {
-    DomainError.require(
-      !markedIds.has(mark.participationId),
-      "DUPLICATE_ID",
-      "A participation may be verified only once per command",
-    );
-    markedIds.add(mark.participationId);
-    const participation = requireParticipation(
-      participations,
-      mark.participationId,
-    );
-    const verified = booker.prepareAttendance(
-      participation,
-      mark.attendance,
-      command.now,
-    );
-    next = replaceParticipation(next, participation.participationId, verified);
-  }
-  return { participations: next, status: attendanceStatus(next) };
 }
 
 export function autoVerifyAttendance(
@@ -138,7 +80,7 @@ interface AttendanceChange {
   readonly status: "OPEN" | "AWAITING_PAYOUT";
 }
 
-function attendanceStatus(
+export function attendanceStatus(
   participations: readonly Participation[],
 ): AttendanceChange["status"] {
   const committed = participations.filter((p) => p.status === "COMMITTED");

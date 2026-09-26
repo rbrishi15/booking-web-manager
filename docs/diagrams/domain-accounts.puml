@@ -36,6 +36,7 @@ class Participant <<RoleView>> {
   +userId : UUID
   --
   +join(...) : AdmissionResult
+  +promoteFromWaitlist(...) : PromotionResult
   +leaveWaitlist(...) : void
   +withdraw(...) : WithdrawalResult
   +offerReplacementToWaitlist(...) : FinancialResult
@@ -108,5 +109,5 @@ User -[hidden]right- RegularGroup
 Wallet -[hidden]right- Email
 Email -[hidden]right- PayoutAccount
 
-caption Selected public members; (...) abbreviates parameters.\nBooker and Participant own role decisions; Session owns its lifecycle and roster.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize actors and run workflows; Session validates and records prepared changes.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
 @enduml

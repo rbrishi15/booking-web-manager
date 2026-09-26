@@ -32,17 +32,14 @@ class Session <<AggregateRoot>> {
   +minimumReliability : ReliabilityScore [0..1]
   +pendingSettlement : SettlementBatch [0..1]
   --
-  +admitParticipant(participant, ...) : AdmissionResult
-  +promoteNext(participant, ...) : PromotionResult
-  +applyParticipantWithdrawal(participant, ...) : WithdrawalResult
-  +removeWaitlistedParticipant(participant, ...) : void
-  +releaseParticipantReplacement(participant, ...) : FinancialResult
-  +applyBookerCancellation(booker, ...) : FinancialResult
-  +applyBookerVisibilityChange(booker, ...) : void
-  +applyBookerRemoval(booker, ...) : FinancialResult
-  +applyBookerAttendance(booker, ...) : void
-  +prepareBookerSettlement(booker, ...) : SettlementBatch [0..1]
+  +recordAdmission(...) : void
+  +recordParticipationTransition(...) : void
+  +recordCancellation(...) : void
+  +recordAttendance(...) : void
+  +changeVisibility(...) : void
+  +recordSettlementPreparation(...) : void
   +autoVerifyAttendance(...) : void
+  +expireReplacements(...) : void
   +completeSettlement(...) : FinancialResult
   +failSettlement(...) : void
 }
@@ -51,6 +48,7 @@ class Participant <<RoleView>> {
   +userId : UUID
   --
   +join(session, ...) : AdmissionResult
+  +promoteFromWaitlist(session, ...) : PromotionResult
   +withdraw(session, ...) : WithdrawalResult
   +leaveWaitlist(session, ...) : void
   +offerReplacementToWaitlist(session, ...) : FinancialResult
@@ -116,13 +114,13 @@ class ReliabilityScore <<ValueObject>> {
 }
 
 Session "1" *-down- "1" Booking : booking
-Participant .down.> Session : requests guarded roster change
-Booker .down.> Session : creates and administers
+Participant .down.> Session : records prepared children
+Booker .down.> Session : creates; records prepared changes
 Session "1" *-down- "0..*" Participation : participations
 Participation "1" *-down- "0..1" FundHold : hold
 ReliabilityScore .up.> Participation : finalized outcomes
 Booking -[hidden]right- Participation
 FundHold -[hidden]right- ReliabilityScore
 
-caption Selected public members; (...) abbreviates parameters.\nSession invokes role decisions, checks shared conditions, and applies complete changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session validates shared invariants and records complete changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
 @enduml

@@ -3,9 +3,26 @@ import type { Booking } from "../sessions/booking";
 import type { Participation } from "../sessions/participation";
 import { refundInstruction } from "../sessions/participation-instructions";
 import { Session } from "../sessions/session";
-import { validDate } from "../sessions/session/session-validation";
+import {
+  assertAttendanceOpen,
+  assertOpenBefore,
+  assertSettlementOpen,
+  validatePayoutAttempt,
+} from "../sessions/session/session-guards";
+import { requireParticipation } from "../sessions/session/session-roster";
+import {
+  buildSettlementBatch,
+  prepareSettlementRoster,
+} from "../sessions/session/session-settlement";
+import {
+  cloneBatch,
+  requireId,
+  validDate,
+  validatePayoutDestination,
+} from "../sessions/session/session-validation";
 import { DomainError } from "../shared/errors";
 import type {
+  FinancialInstruction,
   FinancialResult,
   PayoutDestination,
   SettlementBatch,
@@ -50,10 +67,11 @@ export interface SettlementCommand {
 }
 
 /**
- * User's booker role. Owns session creation, owner authorization, cancellation
- * and removal preparation, manual attendance marks, and payout destination access.
+ * User's booker role. Coordinates session creation, authorized administration,
+ * cancellation, attendance verification, and settlement preparation.
  * This is a role view over User, with no independently owned aggregate lifecycle.
- * Session guards its lifecycle and atomically installs prepared roster changes.
+ * Each workflow prepares its complete result before Session records the state;
+ * Session never calls back into the role or obtains actor-supplied account facts.
  */
 export class Booker {
   readonly #user: User;
@@ -113,7 +131,22 @@ export class Booker {
   }
 
   cancel(session: Session, now: Date): FinancialResult {
-    return session.applyBookerCancellation(this, now);
+    this.assertOwnsSession(session.bookerId);
+    assertOpenBefore(session.status, session.booking, now);
+    const cancelled: Participation[] = [];
+    const instructions: FinancialInstruction[] = [];
+    for (const participation of session.participations) {
+      const change = this.prepareCancellation(
+        participation,
+        session.sessionId,
+        now,
+      );
+      cancelled.push(change.participation);
+      instructions.push(...change.result.instructions);
+    }
+    const result: FinancialResult = { instructions };
+    session.recordCancellation(cancelled, now);
+    return result;
   }
 
   changeVisibility(
@@ -121,7 +154,19 @@ export class Booker {
     visibility: "PRIVATE" | "PUBLIC",
     now: Date,
   ): void {
-    session.applyBookerVisibilityChange(this, visibility, now);
+    DomainError.require(
+      visibility === "PRIVATE" || visibility === "PUBLIC",
+      "INVALID_INPUT",
+      "Unknown session visibility",
+    );
+    this.assertOwnsSession(session.bookerId);
+    assertOpenBefore(session.status, session.booking, now);
+    DomainError.require(
+      session.getAvailableSlots(now) > 0,
+      "CAPACITY_EXCEEDED",
+      "Visibility cannot change after the session is full",
+    );
+    session.changeVisibility(visibility, now);
   }
 
   removeParticipant(
@@ -129,22 +174,90 @@ export class Booker {
     participationId: UUID,
     now: Date,
   ): FinancialResult {
-    return session.applyBookerRemoval(this, participationId, now);
+    this.assertOwnsSession(session.bookerId);
+    assertOpenBefore(session.status, session.booking, now);
+    const existing = requireParticipation(
+      session.participations,
+      participationId,
+    );
+    const change = this.prepareRemoval(existing, session.sessionId, now);
+    session.recordParticipationTransition(existing, change.participation, now);
+    return change.result;
   }
 
   verifyAttendance(session: Session, command: VerifyAttendanceCommand): void {
-    session.applyBookerAttendance(this, command);
+    validDate(command.now, "now");
+    this.assertOwnsSession(session.bookerId);
+    assertAttendanceOpen(session.status, session.booking, command.now);
+    const participations = session.participations;
+    const markedIds = new Set<UUID>();
+    const verified: Participation[] = [];
+    for (const mark of command.marks) {
+      DomainError.require(
+        !markedIds.has(mark.participationId),
+        "DUPLICATE_ID",
+        "A participation may be verified only once per command",
+      );
+      markedIds.add(mark.participationId);
+      const participation = requireParticipation(
+        participations,
+        mark.participationId,
+      );
+      verified.push(
+        this.prepareAttendance(participation, mark.attendance, command.now),
+      );
+    }
+    session.recordAttendance(verified, command.now);
   }
 
   prepareSettlement(
     session: Session,
     command: SettlementCommand,
   ): SettlementBatch | undefined {
-    return session.prepareBookerSettlement(this, command);
+    const destination = this.payoutDestination();
+    requireId(command.payoutId, "payoutId");
+    DomainError.require(
+      command.idempotencyKey.trim() !== "",
+      "INVALID_INPUT",
+      "idempotencyKey is required",
+    );
+    validatePayoutDestination(destination);
+    this.assertOwnsSession(session.bookerId);
+    assertSettlementOpen(session.status, session.booking, command.now);
+    const next = prepareSettlementRoster(
+      session.participations,
+      session.bookerId,
+      destination,
+      command.now,
+    );
+    validatePayoutAttempt(
+      session.pendingSettlement,
+      session.payoutAttemptIds,
+      session.payoutIdempotencyKeys,
+      command.payoutId,
+      command.idempotencyKey,
+    );
+    const batch = buildSettlementBatch(
+      session.sessionId,
+      next,
+      command,
+      destination,
+    );
+    const result = batch === undefined ? undefined : cloneBatch(batch);
+    session.recordSettlementPreparation(
+      {
+        payoutId: command.payoutId,
+        idempotencyKey: command.idempotencyKey,
+        participations: next,
+        batch,
+      },
+      command.now,
+    );
+    return result;
   }
 
-  /** Session invokes this guard before applying a booker's administration. */
-  assertOwnsSession(bookerId: UUID): void {
+  /** Role workflows authorize the actor before recording aggregate changes. */
+  private assertOwnsSession(bookerId: UUID): void {
     DomainError.require(
       this.userId === bookerId,
       "UNAUTHORIZED",
@@ -153,7 +266,7 @@ export class Booker {
   }
 
   /** Prepares one cancellation; Session installs the complete roster together. */
-  prepareCancellation(
+  private prepareCancellation(
     participation: Participation,
     sessionId: UUID,
     now: Date,
@@ -178,7 +291,7 @@ export class Booker {
   }
 
   /** A booker's removal always refunds the committed participant's share. */
-  prepareRemoval(
+  private prepareRemoval(
     participation: Participation,
     sessionId: UUID,
     now: Date,
@@ -197,7 +310,7 @@ export class Booker {
   }
 
   /** Marks a single participation manually without changing the session roster. */
-  prepareAttendance(
+  private prepareAttendance(
     participation: Participation,
     attendance: "ATTENDED" | "ABSENT",
     now: Date,
@@ -206,7 +319,7 @@ export class Booker {
   }
 
   /** Reads the current user's validated payout destination for settlement. */
-  payoutDestination(): PayoutDestination {
+  private payoutDestination(): PayoutDestination {
     return this.#user.payoutDestination();
   }
 }

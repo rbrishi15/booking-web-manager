@@ -33,11 +33,23 @@ export function fundedWallet(userId: string, cents = 10_000): Wallet {
   });
 }
 
-/** Existing state loaded from storage, including committed wallet transactions. */
-export function loadedUserDetails(
-  userId: string,
-  overrides: Partial<UserDetails> = {},
-): UserDetails {
+type TestUserOptions = Pick<UserDetails, "userId"> &
+  Partial<Omit<UserDetails, "userId" | "wallet">> &
+  (
+    | { availableFundsCents?: number; wallet?: never }
+    | { wallet: Wallet; availableFundsCents?: never }
+  );
+
+/**
+ * Test defaults: active account, 10_000 available cents, reliability 100, no groups.
+ * Supply a wallet instead of availableFundsCents when its history is the scenario.
+ */
+export function createTestUserDetails({
+  userId,
+  availableFundsCents = 10_000,
+  wallet = fundedWallet(userId, availableFundsCents),
+  ...overrides
+}: TestUserOptions): UserDetails {
   return {
     userId,
     email:
@@ -47,22 +59,21 @@ export function loadedUserDetails(
     accountStatus: "ACTIVE",
     preferredSports: new Set(),
     preferredRegions: new Set(),
-    wallet: fundedWallet(userId),
+    wallet,
     reliabilityScore: ReliabilityScore.from(100),
     memberGroupIds: [],
     ...overrides,
   };
 }
 
-export function loadedUser(
-  userId: string,
-  overrides: Partial<UserDetails> = {},
-): User {
-  return new User(loadedUserDetails(userId, overrides));
+/** Creates a real domain User with test data, without database or payment IO. */
+export function createTestUser(options: TestUserOptions): User {
+  return new User(createTestUserDetails(options));
 }
 
 export function readyBookerUser(userId = "booker"): User {
-  return loadedUser(userId, {
+  return createTestUser({
+    userId,
     payoutAccount: new PayoutAccount({
       payoutAccountId: "pa",
       userId,

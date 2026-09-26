@@ -1,18 +1,19 @@
 import { Money, PayoutAccount } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
+  createTestUser,
   creationDetails,
   end,
-  loadedUser,
   readyBooker,
 } from "../../sessions/session/session-fixtures";
-import { fundedWallet, readyBookerUser } from "../user-fixtures";
+import { readyBookerUser } from "../user-fixtures";
 
 describe("Booker", () => {
   test("createSession_WhenRoleWasCreatedBeforeDeactivation_ThrowsInactiveAccount", () => {
     // Arrange
-    const owner = loadedUser("booker", {
-      wallet: fundedWallet("booker", 0),
+    const owner = createTestUser({
+      userId: "booker",
+      availableFundsCents: 0,
       payoutAccount: readyBookerUser().payoutAccount,
     });
     const booker = owner.asBooker();
@@ -59,7 +60,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      loadedUser("booker", { accountStatus: "INACTIVE" })
+      createTestUser({ userId: "booker", accountStatus: "INACTIVE" })
         .asBooker()
         .createSession(details),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
@@ -71,7 +72,8 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      loadedUser("booker", {
+      createTestUser({
+        userId: "booker",
         payoutAccount: PayoutAccount.create({
           payoutAccountId: "pa",
           userId: "booker",

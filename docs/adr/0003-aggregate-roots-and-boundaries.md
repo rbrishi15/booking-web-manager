@@ -6,9 +6,10 @@
 Participant responsibility routing is superseded by
 [ADR-0007](./0007-participant-behavior-and-session-roster.md), and Booker routing
 by [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md). Aggregate ownership
-and persistence boundaries remain accepted. The original routing below is kept
-as decision history: role actions now contain their own rules and collaborate
-with guarded Session operations.
+and persistence boundaries remain accepted. Current routing is defined by
+[ADR-0009](./0009-role-workflows-and-session-recording.md): roles authorize and
+run actor workflows, while Session validates and records prepared child changes.
+The original routing below is retained as decision history.
 
 ## Context
 

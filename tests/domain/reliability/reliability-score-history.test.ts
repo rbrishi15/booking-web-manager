@@ -11,7 +11,7 @@ describe("ReliabilityScore", () => {
     const history: { participation: Participation; endAt: Date }[] = [];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBe(100);
@@ -26,7 +26,7 @@ describe("ReliabilityScore", () => {
     ];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBeCloseTo(100 / 1.5, 8);
@@ -45,7 +45,7 @@ describe("ReliabilityScore", () => {
     });
     const committed = Participation.createCommitted({
       participationId: "p",
-      userId: "u",
+      userId: "alice",
       committedAt: new Date(end.getTime() - 2 * day),
       hold,
     });
@@ -61,7 +61,7 @@ describe("ReliabilityScore", () => {
       .settleHold("FORFEIT", "payout", end);
     const outcome = finalized.reliabilityOutcome(asOf)?.value;
     const score = ReliabilityScore.fromHistory(
-      "u",
+      "alice",
       [{ participation: finalized, endAt: end }],
       asOf,
     ).toNumber();
@@ -78,11 +78,11 @@ describe("ReliabilityScore", () => {
       { participation: attended("a"), endAt: recentEnd },
       { participation: absent("b", olderEnd), endAt: olderEnd },
     ];
-    const originalScore = ReliabilityScore.fromHistory("u", history, asOf);
+    const originalScore = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Act
     const laterScore = ReliabilityScore.fromHistory(
-      "u",
+      "alice",
       history,
       new Date(asOf.getTime() + 365 * day),
     );
@@ -97,7 +97,7 @@ describe("ReliabilityScore", () => {
 
     // Act & Assert
     expect(() =>
-      ReliabilityScore.fromHistory("u", [entry, entry], asOf),
+      ReliabilityScore.fromHistory("alice", [entry, entry], asOf),
     ).toThrow(RangeError);
   });
 
@@ -105,7 +105,7 @@ describe("ReliabilityScore", () => {
     // Arrange
     const participation = Participation.createWaitlisted({
       participationId: "foreign",
-      userId: "other",
+      userId: "ben",
       waitlistedAt: recentEnd,
       queueSequence: 1,
     });
@@ -113,7 +113,7 @@ describe("ReliabilityScore", () => {
     // Act & Assert
     expect(() =>
       ReliabilityScore.fromHistory(
-        "u",
+        "alice",
         [{ participation, endAt: recentEnd }],
         asOf,
       ),
@@ -124,14 +124,14 @@ describe("ReliabilityScore", () => {
     // Arrange
     const participation = Participation.createWaitlisted({
       participationId: "waiting",
-      userId: "u",
+      userId: "alice",
       waitlistedAt: recentEnd,
       queueSequence: 1,
     });
     const history = [{ participation, endAt: recentEnd }];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBe(100);
@@ -145,7 +145,7 @@ describe("ReliabilityScore", () => {
     ];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBe(100);
@@ -162,7 +162,7 @@ describe("ReliabilityScore", () => {
     ];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBe(100);
@@ -173,7 +173,7 @@ describe("ReliabilityScore", () => {
     const history = [{ participation: absent("at-cutoff", asOf), endAt: asOf }];
 
     // Act
-    const score = ReliabilityScore.fromHistory("u", history, asOf);
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
     expect(score.toNumber()).toBe(0);
@@ -185,7 +185,7 @@ describe("ReliabilityScore", () => {
     const invalidDate = new Date(NaN);
 
     // Act & Assert
-    expect(() => ReliabilityScore.fromHistory("u", [], invalidDate)).toThrow(
+    expect(() => ReliabilityScore.fromHistory("alice", [], invalidDate)).toThrow(
       RangeError,
     );
   });
@@ -195,7 +195,7 @@ describe("ReliabilityScore", () => {
     const history = [{ participation: attended("a"), endAt: new Date(NaN) }];
 
     // Act & Assert
-    expect(() => ReliabilityScore.fromHistory("u", history, asOf)).toThrow(
+    expect(() => ReliabilityScore.fromHistory("alice", history, asOf)).toThrow(
       RangeError,
     );
   });
@@ -212,7 +212,7 @@ function attended(id: string, endAt = recentEnd): Participation {
   });
   return Participation.createCommitted({
     participationId: id,
-    userId: "u",
+    userId: "alice",
     committedAt: new Date(endAt.getTime() - day),
     hold,
   }).verify("ATTENDED", "BOOKER", endAt);
@@ -229,7 +229,7 @@ function absent(id: string, endAt = recentEnd): Participation {
   });
   return Participation.createCommitted({
     participationId: id,
-    userId: "u",
+    userId: "alice",
     committedAt: new Date(endAt.getTime() - day),
     hold,
   }).verify("ABSENT", "AUTOMATIC", endAt);

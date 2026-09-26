@@ -1,15 +1,19 @@
 # ADR-0007: Participant behavior and the Session roster
 
-- Status: Accepted
+- Status: Accepted; callback routing superseded by ADR-0009
 - Date: 2026-09-26
 - Supersedes: participant responsibility routing in
   [ADR-0003](./0003-aggregate-roots-and-boundaries.md) and admission routing in
   [ADR-0004](./0004-participant-join-and-session-admission.md).
 
 [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md) subsequently extends
-this collaboration to Booker. Participant behavior and the decisions in this
-record remain accepted; its references to unchanged Booker routing describe
+this collaboration to Booker. References to unchanged Booker routing describe
 the scope of this earlier refactor.
+
+[ADR-0009](./0009-role-workflows-and-session-recording.md) supersedes the
+Session-to-role callbacks and promotion routing below. Participant now runs its
+complete workflows, including promotion, and Session records prepared children
+without actor authorization. This record preserves the earlier decision history.
 
 ## Context
 

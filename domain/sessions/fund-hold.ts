@@ -19,8 +19,8 @@ export interface FundHoldDetails {
 /**
  * Immutable child entity owned by Participation within the Session aggregate.
  * Protects the lifecycle of one participant's held share. Transitions return new
- * holds; Session commands apply the resulting participation changes and return
- * financial instructions for the application layer to coordinate.
+ * holds; role workflows prepare financial instructions before Session records
+ * the resulting participation changes for the application layer to persist.
  */
 export class FundHold {
   readonly #holdId: UUID;

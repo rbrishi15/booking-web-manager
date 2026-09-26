@@ -1,54 +1,39 @@
-import type {
-  Booker,
-  SettlementCommand,
-  VerifyAttendanceCommand,
-} from "../../accounts/booker";
-import type {
-  LeaveWaitlistCommand,
-  Participant,
-  ParticipantJoinCommand,
-  ParticipantReplacementOfferCommand,
-  ParticipantWithdrawalCommand,
-} from "../../accounts/participant";
 import type { Money } from "../../finance/money";
 import type { ReliabilityScore } from "../../reliability/reliability-score";
 import { DomainError } from "../../shared/errors";
-import type {
-  AdmissionResult,
-  FinancialResult,
-  PromotionResult,
-  SettlementBatch,
-  WithdrawalResult,
-} from "../../shared/operations";
+import type { FinancialResult, SettlementBatch } from "../../shared/operations";
 import type { SessionStatus, Visibility } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import type { Participation } from "../participation";
 import {
-  calculateJoin,
-  calculatePromotion,
-  meetsReliabilityRequirement,
-} from "./session-admission";
-import {
+  attendanceStatus,
   autoVerifyAttendance,
   availableSlots,
-  cancelRoster,
   expireReplacements,
   nextWaitlisted,
   replaceParticipation,
   requireParticipation,
-  verifyAttendance,
 } from "./session-roster";
+import { completeSettlement } from "./session-settlement";
 import {
-  buildSettlementBatch,
-  completeSettlement,
-  prepareSettlementRoster,
-} from "./session-settlement";
+  assertAttendanceOpen,
+  assertOpen,
+  assertOpenBefore,
+  assertSettlementOpen,
+  validatePayoutAttempt,
+} from "./session-guards";
+import {
+  validateAdmission,
+  validateAttendanceChanges,
+  validateCancellation,
+  validateParticipationTransition,
+  validateSettlementPreparation,
+} from "./session-recording";
 import {
   cloneBatch,
   requireId,
   validDate,
-  validatePayoutDestination,
   validateSessionDetails,
   validateSessionRoster,
 } from "./session-validation";
@@ -72,9 +57,12 @@ export interface SessionDetails {
   readonly payoutIdempotencyKeys?: readonly string[];
 }
 
-export interface PromotionCommand {
-  readonly holdId: UUID;
-  readonly now: Date;
+/** Prepared settlement values recorded together; this is not an actor command. */
+export interface SessionSettlementPreparation {
+  readonly payoutId: UUID;
+  readonly idempotencyKey: string;
+  readonly participations: readonly Participation[];
+  readonly batch?: SettlementBatch;
 }
 
 interface PayoutPending {
@@ -83,17 +71,12 @@ interface PayoutPending {
 
 /**
  * Aggregate root: Session.
- * Owns Booking, Participation children and their FundHold children, queue order,
- * attendance, and session settlement state, including payout-attempt history.
- * Participant owns eligibility, funding, and voluntary departure decisions.
- * Guarded roster operations retain lifecycle, access, capacity, queue order,
- * cross-participant replacement refunds, and atomic installation of changes.
- * Booker owns creation, owner authorization, and individual administrative
- * transitions. This root guards and atomically installs their combined results.
- * Automated attendance and the settlement lifecycle remain root operations.
- * Payout is a separate root; financial instructions describe effects for the
- * application layer to coordinate with the ledger.
- * See docs/adr/0003-aggregate-roots-and-boundaries.md, ADR-0007, and ADR-0008.
+ * Owns Booking, Participation/FundHold children, the queue,
+ * attendance, and settlement history. Roles authorize and run user workflows;
+ * these bounded recording operations validate and atomically install their
+ * prepared children. They never invoke roles or reconstruct financial results.
+ * System attendance, replacement expiry, and payout callbacks remain here.
+ * See ADR-0003 and ADR-0009. Persistence/ledger atomicity belongs to use cases.
  */
 export class Session {
   readonly #sessionId: UUID;
@@ -158,167 +141,89 @@ export class Session {
     });
   }
 
-  admitParticipant(
-    participant: Participant,
-    command: ParticipantJoinCommand,
-  ): AdmissionResult {
-    requireId(command.participationId, "participationId");
-    if (command.holdId !== undefined) requireId(command.holdId, "holdId");
-    this.assertOpenBefore(command.now);
-    const change = calculateJoin(
-      {
-        sessionId: this.#sessionId,
-        holdingAccountId: this.#holdingAccountId,
-        participations: this.#participations,
-        nextQueueSequence: this.#nextQueueSequence,
-        totalSlots: this.#totalSlots,
-        totalCost: this.#booking.totalCost,
-        minimumReliability: this.#minimumReliability,
-        visibility: this.#visibility,
-        roomToken: this.#roomToken,
-        invitedGroupId: this.#invitedGroupId,
-      },
-      participant,
-      command,
-    );
-    this.#participations = change.participations;
-    this.#nextQueueSequence = change.nextQueueSequence;
-    return change.result;
-  }
-
-  promoteNext(
-    participant: Participant,
-    command: PromotionCommand,
-  ): PromotionResult {
-    this.assertOpenBefore(command.now);
-    const change = calculatePromotion(
-      {
-        sessionId: this.#sessionId,
-        holdingAccountId: this.#holdingAccountId,
-        participations: this.#participations,
-        nextQueueSequence: this.#nextQueueSequence,
-        totalSlots: this.#totalSlots,
-        totalCost: this.#booking.totalCost,
-        minimumReliability: this.#minimumReliability,
-      },
-      participant,
-      command,
-    );
-    this.#participations = change.participations;
-    this.#nextQueueSequence = change.nextQueueSequence;
-    return change.result;
-  }
-
-  removeWaitlistedParticipant(
-    participant: Participant,
-    command: LeaveWaitlistCommand,
-  ): void {
-    DomainError.require(
-      this.#status === "OPEN",
-      "SESSION_CLOSED",
-      "The session is not open",
-    );
-    if (command.now !== undefined) this.assertOpenBefore(command.now);
-    const existing = requireParticipation(
-      this.#participations,
-      command.participationId,
-    );
-    const departed = participant.prepareWaitlistDeparture(existing);
-    this.#participations = replaceParticipation(
-      this.#participations,
-      existing.participationId,
-      departed,
-    );
-  }
-
-  applyParticipantWithdrawal(
-    participant: Participant,
-    command: ParticipantWithdrawalCommand,
-  ): WithdrawalResult {
-    participant.validateWithdrawal(command);
-    this.assertOpenBefore(command.now);
-    const existing = requireParticipation(
-      this.#participations,
-      command.participationId,
-    );
-    const change = participant.prepareWithdrawal(
-      existing,
-      this.#booking,
-      command,
-      this.#sessionId,
-    );
-    this.#participations = replaceParticipation(
-      this.#participations,
-      existing.participationId,
-      change.participation,
-    );
-    return change.result;
-  }
-
-  releaseParticipantReplacement(
-    participant: Participant,
-    command: ParticipantReplacementOfferCommand,
-  ): FinancialResult {
-    this.assertOpenBefore(command.now);
-    const existing = requireParticipation(
-      this.#participations,
-      command.participationId,
-    );
-    const change = participant.prepareReplacementOffer(existing);
-    this.#participations = replaceParticipation(
-      this.#participations,
-      existing.participationId,
-      change.participation,
-    );
-    return change.result;
-  }
-
-  applyBookerRemoval(
-    booker: Booker,
-    participationId: UUID,
+  recordAdmission(
+    admission: Participation,
+    refundedReplacement: Participation | undefined,
     now: Date,
-  ): FinancialResult {
-    booker.assertOwnsSession(this.#bookerId);
-    this.assertOpenBefore(now);
-    const existing = requireParticipation(
+  ): void {
+    assertOpenBefore(this.#status, this.#booking, now);
+    validateAdmission(
       this.#participations,
-      participationId,
-    );
-    const change = booker.prepareRemoval(existing, this.#sessionId, now);
-    this.#participations = replaceParticipation(
-      this.#participations,
-      existing.participationId,
-      change.participation,
-    );
-    return change.result;
-  }
-
-  applyBookerCancellation(booker: Booker, now: Date): FinancialResult {
-    booker.assertOwnsSession(this.#bookerId);
-    this.assertOpenBefore(now);
-    const change = cancelRoster(
-      booker,
-      this.#sessionId,
-      this.#participations,
+      admission,
+      refundedReplacement,
+      this.#totalSlots,
+      this.#nextQueueSequence,
       now,
     );
-    this.#participations = change.participations;
-    this.#status = "CANCELLED";
-    return change.result;
+    if (admission.hold !== undefined)
+      DomainError.require(
+        admission.hold.amount.equals(this.bookingShare),
+        "INVALID_INPUT",
+        "An admission hold must match the booking share",
+      );
+    const existing = this.#participations.find(
+      (p) => p.userId === admission.userId,
+    );
+    let next =
+      existing === undefined
+        ? [...this.#participations, admission]
+        : replaceParticipation(
+            this.#participations,
+            existing.participationId,
+            admission,
+          );
+    if (refundedReplacement !== undefined)
+      next = replaceParticipation(
+        next,
+        refundedReplacement.participationId,
+        refundedReplacement,
+      );
+    const sequence =
+      this.#nextQueueSequence + (admission.status === "WAITLISTED" ? 1 : 0);
+    this.validateRoster(next, this.#status, sequence);
+    this.#participations = next;
+    this.#nextQueueSequence = sequence;
   }
 
-  applyBookerVisibilityChange(
-    booker: Booker,
-    visibility: Visibility,
-    now: Date,
+  recordParticipationTransition(
+    existing: Participation,
+    replacement: Participation,
+    now?: Date,
   ): void {
+    assertOpen(this.#status);
+    if (now !== undefined) assertOpenBefore(this.#status, this.#booking, now);
+    DomainError.require(
+      requireParticipation(this.#participations, existing.participationId) ===
+        existing,
+      "INVALID_STATE",
+      "The participation is not the current owned record",
+    );
+    validateParticipationTransition(existing, replacement, now);
+    const next = replaceParticipation(
+      this.#participations,
+      existing.participationId,
+      replacement,
+    );
+    this.validateRoster(next);
+    this.#participations = next;
+  }
+
+  recordCancellation(cancelled: readonly Participation[], now: Date): void {
+    assertOpenBefore(this.#status, this.#booking, now);
+    validateCancellation(this.#participations, cancelled, now);
+    const next = [...cancelled];
+    this.validateRoster(next, "CANCELLED");
+    this.#participations = next;
+    this.#status = "CANCELLED";
+  }
+
+  changeVisibility(visibility: Visibility, now: Date): void {
     DomainError.require(
       visibility === "PRIVATE" || visibility === "PUBLIC",
       "INVALID_INPUT",
       "Unknown session visibility",
     );
-    booker.assertOwnsSession(this.#bookerId);
-    this.assertOpenBefore(now);
+    assertOpenBefore(this.#status, this.#booking, now);
     DomainError.require(
       this.getAvailableSlots(now) > 0,
       "CAPACITY_EXCEEDED",
@@ -333,25 +238,20 @@ export class Session {
     this.#participations = expireReplacements(this.#participations, now);
   }
 
-  applyBookerAttendance(
-    booker: Booker,
-    command: VerifyAttendanceCommand,
-  ): void {
-    validDate(command.now, "now");
-    booker.assertOwnsSession(this.#bookerId);
-    DomainError.require(
-      this.#status === "OPEN",
-      "INVALID_STATE",
-      "Attendance can only be verified on an open session",
-    );
-    DomainError.require(
-      this.#booking.hasEnded(command.now),
-      "SESSION_NOT_ENDED",
-      "Attendance verification requires the session to end",
-    );
-    const change = verifyAttendance(this.#participations, booker, command);
-    this.#participations = change.participations;
-    this.#status = change.status;
+  recordAttendance(verified: readonly Participation[], now: Date): void {
+    assertAttendanceOpen(this.#status, this.#booking, now);
+    validateAttendanceChanges(this.#participations, verified, now);
+    let next = [...this.#participations];
+    for (const participation of verified)
+      next = replaceParticipation(
+        next,
+        participation.participationId,
+        participation,
+      );
+    const status = attendanceStatus(next);
+    this.validateRoster(next, status);
+    this.#participations = next;
+    this.#status = status;
   }
 
   autoVerifyAttendance(now: Date): void {
@@ -370,79 +270,59 @@ export class Session {
     this.#status = change.status;
   }
 
-  prepareBookerSettlement(
-    booker: Booker,
-    command: SettlementCommand,
-  ): SettlementBatch | undefined {
-    const destination = booker.payoutDestination();
-    requireId(command.payoutId, "payoutId");
+  recordSettlementPreparation(
+    preparation: SessionSettlementPreparation,
+    now: Date,
+  ): void {
+    requireId(preparation.payoutId, "payoutId");
     DomainError.require(
-      command.idempotencyKey.trim() !== "",
+      preparation.idempotencyKey.trim() !== "",
       "INVALID_INPUT",
       "idempotencyKey is required",
     );
-    validatePayoutDestination(destination);
-    booker.assertOwnsSession(this.#bookerId);
-    validDate(command.now, "now");
-    DomainError.require(
-      this.#status !== "PAYOUT_PENDING",
-      "PAYOUT_IN_PROGRESS",
-      "A payout is already pending",
-    );
-    DomainError.require(
-      this.#status === "OPEN" || this.#status === "AWAITING_PAYOUT",
-      "SESSION_CLOSED",
-      "Only an unsettled session can be paid out",
-    );
-    DomainError.require(
-      this.#booking.hasEnded(command.now),
-      "SESSION_NOT_ENDED",
-      "Settlement requires the session to end",
-    );
-    const next = prepareSettlementRoster(
+    assertSettlementOpen(this.#status, this.#booking, now);
+    validateSettlementPreparation(
       this.#participations,
+      preparation,
       this.#bookerId,
-      destination,
-      command.now,
-    );
-    DomainError.require(
-      this.#pendingSettlement === undefined,
-      "PAYOUT_IN_PROGRESS",
-      "A payout is already pending",
-    );
-    DomainError.require(
-      !this.#payoutAttemptIds.has(command.payoutId),
-      "DUPLICATE_ID",
-      "A payout ID can only be used once for this session",
-    );
-    DomainError.require(
-      !this.#payoutIdempotencyKeys.has(command.idempotencyKey),
-      "DUPLICATE_ID",
-      "A payout idempotency key can only be used once for this session",
-    );
-    const batch = buildSettlementBatch(
       this.#sessionId,
-      next,
-      command,
-      destination,
+      now,
     );
+    validatePayoutAttempt(
+      this.#pendingSettlement?.batch,
+      [...this.#payoutAttemptIds],
+      [...this.#payoutIdempotencyKeys],
+      preparation.payoutId,
+      preparation.idempotencyKey,
+    );
+    const next = [...preparation.participations];
+    const batch = preparation.batch;
     if (batch === undefined) {
+      this.validateRoster(next, "SETTLED");
       this.#participations = next;
       this.#status = "SETTLED";
-      return undefined;
+      return;
     }
     const pending = { batch: cloneBatch(batch) };
-    const result = cloneBatch(batch);
-    const attemptIds = new Set(this.#payoutAttemptIds).add(command.payoutId);
+    const attemptIds = new Set(this.#payoutAttemptIds).add(
+      preparation.payoutId,
+    );
     const idempotencyKeys = new Set(this.#payoutIdempotencyKeys).add(
-      command.idempotencyKey,
+      preparation.idempotencyKey,
+    );
+    this.validateRoster(
+      next,
+      "PAYOUT_PENDING",
+      this.#nextQueueSequence,
+      pending.batch,
+      attemptIds,
+      idempotencyKeys,
     );
     this.#participations = next;
     this.#payoutAttemptIds = attemptIds;
     this.#payoutIdempotencyKeys = idempotencyKeys;
     this.#pendingSettlement = pending;
     this.#status = "PAYOUT_PENDING";
-    return result;
   }
 
   completeSettlement(payoutId: UUID, at: Date): FinancialResult {
@@ -553,20 +433,32 @@ export class Session {
   }
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {
-    return meetsReliabilityRequirement(score, this.#minimumReliability);
+    return (
+      this.#minimumReliability === undefined ||
+      score.meetsMinimum(this.#minimumReliability)
+    );
   }
 
-  private assertOpenBefore(at: Date): void {
-    validDate(at, "now");
-    DomainError.require(
-      this.#status === "OPEN",
-      "SESSION_CLOSED",
-      "The session is not open",
-    );
-    DomainError.require(
-      !this.#booking.hasStarted(at),
-      "SESSION_STARTED",
-      "The session has started",
-    );
+  private validateRoster(
+    participations: readonly Participation[],
+    status: SessionStatus = this.#status,
+    nextQueueSequence = this.#nextQueueSequence,
+    pendingSettlement = this.#pendingSettlement?.batch,
+    payoutAttemptIds: ReadonlySet<UUID> = this.#payoutAttemptIds,
+    payoutIdempotencyKeys: ReadonlySet<string> = this.#payoutIdempotencyKeys,
+  ): void {
+    validateSessionRoster({
+      status,
+      visibility: this.#visibility,
+      totalSlots: this.#totalSlots,
+      minimumHeadcount: this.#minimumHeadcount,
+      nextQueueSequence,
+      participations,
+      holdingAccountId: this.#holdingAccountId,
+      pendingSettlement,
+      payoutAttemptIds,
+      payoutIdempotencyKeys,
+      sessionId: this.#sessionId,
+    });
   }
 }

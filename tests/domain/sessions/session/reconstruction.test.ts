@@ -3,9 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import {
   before,
   end,
-  join,
   readyBooker,
-  session,
+  createTestSession,
   sessionDetails,
   sessionState,
   start,
@@ -15,8 +14,7 @@ describe("Session", () => {
   describe("Construction and isolation", () => {
     test("constructor_WhenInputsAndGettersAreMutated_PreservesRosterAndHistory", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       const participations = [...source.participations];
       const attemptIds = ["earlier"];
       const keys = ["earlier-key"];
@@ -98,10 +96,9 @@ describe("Session", () => {
 
     test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -127,10 +124,9 @@ describe("Session", () => {
 
     test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -156,10 +152,9 @@ describe("Session", () => {
 
     test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -197,8 +192,7 @@ describe("Session", () => {
 
     test("constructor_WhenRosterIsDuplicated_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       const roster = source.participations;
       const details = sessionDetails({
         participations: [...roster, ...roster],
@@ -236,8 +230,7 @@ describe("Session", () => {
 
     test("constructor_WhenSettledRosterStillHasHeldFunds_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       const roster = source.participations;
       const details = sessionDetails({
         participations: roster,
@@ -250,8 +243,7 @@ describe("Session", () => {
 
     test("constructor_WhenHoldUsesForeignAccount_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       const roster = source.participations;
       const details = sessionDetails({
         participations: roster,
@@ -304,10 +296,9 @@ describe("Session", () => {
 
     test("constructor_WhenPendingBatchBelongsToAnotherSession_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -335,10 +326,9 @@ describe("Session", () => {
 
     test("constructor_WhenPendingLineUsesForeignWallet_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -369,10 +359,9 @@ describe("Session", () => {
 
     test("constructor_WhenPendingAttemptIsMissingFromHistory_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -396,10 +385,9 @@ describe("Session", () => {
 
     test("constructor_WhenPendingKeyIsMissingFromHistory_ThrowsDomainError", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -423,10 +411,9 @@ describe("Session", () => {
 
     test("pendingSettlement_WhenInputsAndOutputsAreMutated_PreservesBatchAndHistory", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -473,10 +460,9 @@ describe("Session", () => {
   describe("Settlement completion", () => {
     test("completeSettlement_WhenPendingSessionIsRestored_SettlesIndependentlyOfSource", () => {
       // Arrange
-      const source = session();
-      join(source, "a");
+      const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
       const batch = readyBooker().prepareSettlement(source, {
@@ -507,13 +493,13 @@ describe("Session", () => {
 
     test("completeSettlement_WhenCallbackIsStale_LeavesAllHoldsPending", () => {
       // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
       readyBooker().verifyAttendance(bookingSession, {
         marks: [
-          { participationId: "p-a", attendance: "ATTENDED" },
-          { participationId: "p-b", attendance: "ATTENDED" },
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
         ],
         now: end,
       });
@@ -533,13 +519,13 @@ describe("Session", () => {
 
     test("completeSettlement_WhenCompletionDateIsInvalid_LeavesAllHoldsPending", () => {
       // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
       readyBooker().verifyAttendance(bookingSession, {
         marks: [
-          { participationId: "p-a", attendance: "ATTENDED" },
-          { participationId: "p-b", attendance: "ATTENDED" },
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
         ],
         now: end,
       });
@@ -559,13 +545,13 @@ describe("Session", () => {
 
     test("completeSettlement_WhenSecondHoldFails_PreservesAllHoldsAndAllowsRetry", () => {
       // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
       readyBooker().verifyAttendance(bookingSession, {
         marks: [
-          { participationId: "p-a", attendance: "ATTENDED" },
-          { participationId: "p-b", attendance: "ATTENDED" },
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
         ],
         now: end,
       });

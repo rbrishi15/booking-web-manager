@@ -69,6 +69,31 @@ atomicity matters, also assert that rejection leaves state unchanged.
 
 Reuse fixtures for routine defaults, but keep scenario-specific inputs and
 transitions in the test. Put small local helper functions below the tests.
+Use descriptive names for people and pass relevant funds directly to the user
+fixture, keeping routine wallet construction inside the fixture:
+
+```ts
+const alice = createTestUser({ userId: "alice", availableFundsCents: 500 });
+```
+
+Keep explicit wallet and transaction-history setup when the history itself is
+part of the behavior under test, such as balance derivation or hydration.
+
+Use `createTestSession` for routine starting state; it builds that state through
+validated constructors:
+
+```ts
+const bookingSession = createTestSession({
+  totalSlots: 2,
+  committedUserIds: ["alice", "ben"],
+  waitlistedUserIds: ["cara"],
+});
+```
+
+Keep actual `Participant.join` calls visible when testing admission, capacity,
+queue changes, or financial instructions, and keep timing-dependent transitions
+explicit. Use `sessionDetails` for special hydration scenarios.
+
 Avoid generic error-capture helpers and setup hooks that hide the scenario.
 Domain tests assume declared input types and exercise business constraints;
 external input parsing belongs in boundary tests.

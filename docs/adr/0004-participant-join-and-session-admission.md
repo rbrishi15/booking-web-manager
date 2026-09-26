@@ -4,10 +4,11 @@
 - Date: 2026-09-16
 
 Admission routing is superseded by
-[ADR-0007](./0007-participant-behavior-and-session-roster.md). The complete-user
+[ADR-0007](./0007-participant-behavior-and-session-roster.md) and
+[ADR-0009](./0009-role-workflows-and-session-recording.md). The complete-user
 hydration, refresh, and unit-of-work contracts remain accepted. The original
-delegation code and sequence diagram below are decision history; Session now
-collaborates with Participant instead of receiving User directly.
+delegation code and sequence diagram below are decision history; Participant now
+runs admission and supplies prepared immutable children to Session for recording.
 
 ## Context
 

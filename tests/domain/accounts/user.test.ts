@@ -6,14 +6,14 @@ import {
   User,
 } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { loadedUserDetails, userLoadedAt } from "./user-fixtures";
+import { createTestUserDetails, userLoadedAt } from "./user-fixtures";
 
 describe("User", () => {
   describe("Construction and registration", () => {
     test("constructor_WhenEmailIsProvided_PreservesTheEmailValue", () => {
       // Arrange
       const email = new Email("Owner+bookings@Example.COM");
-      const details = loadedUserDetails("owner", { email });
+      const details = createTestUserDetails({ userId: "owner", email });
 
       // Act
       const user = new User(details);
@@ -25,7 +25,7 @@ describe("User", () => {
 
     test("constructor_WhenActiveAccountHasNoEmail_ThrowsInvalidInput", () => {
       // Arrange
-      const details = loadedUserDetails("owner", { email: null });
+      const details = createTestUserDetails({ userId: "owner", email: null });
 
       // Act & Assert
       expect(() => new User(details)).toThrow(
@@ -35,7 +35,8 @@ describe("User", () => {
 
     test("constructor_WhenInactiveAccountHasEmail_ThrowsInvalidInput", () => {
       // Arrange
-      const details = loadedUserDetails("owner", {
+      const details = createTestUserDetails({
+        userId: "owner",
         accountStatus: "INACTIVE",
         email: new Email("owner@example.com"),
       });
@@ -55,7 +56,8 @@ describe("User", () => {
       });
       original.completePayoutSetup("bank");
       original.deactivate(deactivationWithoutObligations());
-      const details = loadedUserDetails("owner", {
+      const details = createTestUserDetails({
+        userId: "owner",
         accountStatus: "INACTIVE",
         email: null,
         payoutAccount: original.payoutAccount,
@@ -77,7 +79,7 @@ describe("User", () => {
         userId: "other-user",
         providerAccountReference: "provider",
       });
-      const details = loadedUserDetails("owner", { payoutAccount });
+      const details = createTestUserDetails({ userId: "owner", payoutAccount });
 
       // Act & Assert
       expect(() => new User(details)).toThrow(
@@ -90,7 +92,8 @@ describe("User", () => {
       const sports = new Set(["Tennis"]);
       const regions = new Set(["West"]);
       const user = new User(
-        loadedUserDetails("owner", {
+        createTestUserDetails({
+          userId: "owner",
           preferredSports: sports,
           preferredRegions: regions,
         }),
@@ -221,7 +224,10 @@ describe("User", () => {
     test("preferredSports_WhenReturnedSetChanges_PreservesStoredPreferences", () => {
       // Arrange
       const user = new User(
-        loadedUserDetails("owner", { preferredSports: new Set(["Tennis"]) }),
+        createTestUserDetails({
+          userId: "owner",
+          preferredSports: new Set(["Tennis"]),
+        }),
       );
       const exposedSports = user.preferredSports as Set<string>;
 
@@ -235,7 +241,10 @@ describe("User", () => {
     test("preferredRegions_WhenReturnedSetChanges_PreservesStoredPreferences", () => {
       // Arrange
       const user = new User(
-        loadedUserDetails("owner", { preferredRegions: new Set(["West"]) }),
+        createTestUserDetails({
+          userId: "owner",
+          preferredRegions: new Set(["West"]),
+        }),
       );
       const exposedRegions = user.preferredRegions as Set<string>;
 
@@ -501,7 +510,10 @@ describe("User", () => {
     test("deactivate_WhenActiveCommitmentsExist_ThrowsActiveObligations", () => {
       // Arrange
       const user = createActiveUser();
-      const input = { ...deactivationWithoutObligations(), activeCommitments: 1 };
+      const input = {
+        ...deactivationWithoutObligations(),
+        activeCommitments: 1,
+      };
       const before = accountStateOf(user);
 
       // Act & Assert
@@ -620,7 +632,10 @@ describe("User", () => {
     test("deactivate_WhenPendingPayoutsAreFractional_ThrowsInvalidInput", () => {
       // Arrange
       const user = createActiveUser();
-      const input = { ...deactivationWithoutObligations(), pendingPayouts: 0.5 };
+      const input = {
+        ...deactivationWithoutObligations(),
+        pendingPayouts: 0.5,
+      };
       const before = accountStateOf(user);
 
       // Act & Assert
@@ -633,7 +648,10 @@ describe("User", () => {
     test("deactivate_WhenActiveOwnedGroupsExist_ThrowsActiveObligations", () => {
       // Arrange
       const user = createActiveUser();
-      const input = { ...deactivationWithoutObligations(), activeOwnedGroups: 1 };
+      const input = {
+        ...deactivationWithoutObligations(),
+        activeOwnedGroups: 1,
+      };
       const before = accountStateOf(user);
 
       // Act & Assert

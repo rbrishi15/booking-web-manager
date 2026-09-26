@@ -34,8 +34,8 @@ export interface ReliabilityOutcome {
 /**
  * Immutable child entity of the Session aggregate root; owns an optional FundHold.
  * Transition methods validate this child's state and return a replacement.
- * Participant prepares voluntary transitions; Booker prepares administrative
- * transitions. Session applies replacements and enforces capacity, queue,
+ * Participant runs voluntary workflows; Booker runs administrative workflows.
+ * Session records their prepared replacements and enforces capacity, queue,
  * cross-participant, and settlement rules.
  */
 export class Participation {

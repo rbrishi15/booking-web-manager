@@ -1,4 +1,3 @@
-import type { SettlementCommand } from "../../accounts/booker";
 import { DomainError } from "../../shared/errors";
 import type {
   FinancialInstruction,
@@ -43,7 +42,11 @@ export function prepareSettlementRoster(
 export function buildSettlementBatch(
   sessionId: UUID,
   participations: readonly Participation[],
-  command: SettlementCommand,
+  command: {
+    readonly payoutId: UUID;
+    readonly idempotencyKey: string;
+    readonly now: Date;
+  },
   destination: PayoutDestination,
 ): SettlementBatch | undefined {
   const lines: SettlementLine[] = [];

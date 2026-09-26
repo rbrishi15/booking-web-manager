@@ -2,8 +2,7 @@
 
 These diagrams describe the current TypeScript domain in [`domain/`](../domain),
 following [ADR-0003](./adr/0003-aggregate-roots-and-boundaries.md) and
-[ADR-0007](./adr/0007-participant-behavior-and-session-roster.md), extended by
-[ADR-0008](./adr/0008-booker-behavior-and-session-lifecycle.md). They document the
+[ADR-0009](./adr/0009-role-workflows-and-session-recording.md). They document the
 implementation; they do not introduce new domain behavior.
 
 - [Editable PlantUML source](./domain-class-diagram.puml)
@@ -35,14 +34,14 @@ getters on classes and readonly fields on interfaces. Parameter types are
 abbreviated.
 
 - `Booker` and `Participant` wrap a `User`; they are role views, not subclasses.
-- Booker owns creation, session ownership authorization, cancellation/removal
-  refunds, manual attendance, and payout-destination acquisition. Its actions
-  create a Session or invoke guarded Session operations; the root keeps lifecycle,
-  shared roster, and atomic state-update responsibilities.
-- Participant actions own eligibility, funding, record ownership checks, and
-  voluntary-departure decisions. Session's guarded operations enforce session
-  conditions and apply complete roster changes; promotion receives a Participant.
-  The participant role does not own participation records or holds.
+- Booker owns complete creation, cancellation, visibility, removal, manual
+  attendance, and settlement-preparation workflows. Participant owns joining,
+  promotion, and voluntary-departure workflows, including eligibility and funding.
+- Roles authorize actors and prepare immutable children and financial results.
+  Session validates shared invariants and records those changes atomically. It
+  does not import roles, call back into them, or reauthorize actors; applications
+  enter actor workflows through the roles. Recording methods are not arbitrary
+  roster setters.
 - `Session` owns all participation records, so its roster multiplicity is `0..*`.
   Only active commitments are limited by `totalSlots` (at most eight).
   Waitlisted participation has no hold; a commitment requires one.
@@ -54,8 +53,7 @@ abbreviated.
 - Reliability and group membership IDs are loaded related values. Calculating
   reliability reads participation outcomes and session end times without
   retaining that history. Participant reads its fully loaded User's values;
-  Session admission collaborates with Participant without retaining it or
-  reading wallet/account state.
+  Session receives prepared immutable children and reads no wallet/account state.
 - `Payout` owns frozen settlement lines and a destination copy; it does not own
   live holds. The session retains its own pending batch. Failed attempts remain
   recorded, and each retry has a new payout ID. Frozen account references may

@@ -9,15 +9,16 @@ work.
 ## Aggregate roots
 
 The four aggregate roots are `User`, `RegularGroup`, `Session`, and `Payout`.
-A root is the command entry point for changing its owned state and children.
+A root controls changes to its owned state and children. Actor-facing role
+workflows can prepare changes for the root to validate and record.
 Class comments identify each root with `Aggregate root: <Name>.` and describe
 its boundary; child comments identify their owning root.
 
 - `Session` owns its immutable `Booking`, participation children, waitlist order,
   and each participation's `FundHold`. It checks shared roster rules and installs
-  complete changes from Participant and Booker actions through guarded operations.
-  Automatic verification, replacement expiry, promotion, and payout callbacks
-  remain operations on the root.
+  complete prepared changes through bounded recording operations. It does not
+  authorize actors or call role methods. Automatic verification, replacement
+  expiry, and payout callbacks remain operations on the root.
 - `User` owns profile/preferences, account status, its `Wallet`, and payout
   setup. The wallet holds its complete committed transaction history and derives
   spendable funds through `getFunds(): Money`. Calculated reliability and
@@ -33,26 +34,27 @@ and `LedgerTransaction` represent an identity and immutable facts rather than
 aggregate roots. Account funds are derived from committed ledger entries.
 `Booker` and `Participant` are role views over `User`, with no independent
 repository or persisted lifecycle. Participant owns its eligibility, funding,
-authorization over its records, and voluntary-departure decisions. Booker owns
-session creation, ownership authorization, cancellation/removal refund decisions,
-manual attendance transitions, and payout-destination acquisition.
+authorization over its records, promotion, and voluntary-departure workflows.
+Booker owns complete creation, cancellation, visibility, removal, manual attendance,
+and settlement-preparation workflows. The roles are the sole actor-authorization
+boundary for those actions.
 
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
 for ownership and coordination across roots, and
-[ADR-0007: Participant behavior and the Session roster](../docs/adr/0007-participant-behavior-and-session-roster.md)
-and [ADR-0008: Booker behavior and the Session lifecycle](../docs/adr/0008-booker-behavior-and-session-lifecycle.md)
+[ADR-0009: Role workflows and Session recording](../docs/adr/0009-role-workflows-and-session-recording.md)
 for current role responsibility routing.
 
 The application enters session admission through
 `user.asParticipant().join(session, command)`. The repository loads a complete
-user; Participant checks its live account status, loaded reliability and funds,
-and creates the hold from its wallet. Session checks access, capacity, duplicate
-enrollment and queue order, then applies the complete change. Promotion receives
-a Participant and uses the same eligibility and hold-creation behavior.
+user; Participant checks its live account status, access, loaded reliability and
+funds, and creates the hold from its wallet. It prepares the admission and any
+replacement refund, then asks Session to validate the shared invariants and
+record both. `participant.promoteFromWaitlist(session, command)` uses the same
+eligibility and hold-creation behavior and preserves FIFO and skipped outcomes.
 `ParticipantJoinCommand` is declared beside Participant and contains action
 details only. The complete-user loading and unit-of-work contracts remain in
 [ADR-0004](../docs/adr/0004-participant-join-and-session-admission.md); its earlier
-admission routing is superseded by ADR-0007.
+admission routing is superseded by ADR-0007 and ADR-0009.
 
 ```ts
 const admission = user.asParticipant().join(session, {
@@ -87,15 +89,15 @@ the session creation workflow: booker eligibility, payout readiness, an upcoming
 booking, a positive share, and initial defaults. `BookerSessionCreation` contains
 the caller-supplied creation details; the role supplies identity and current
 account/payout facts. `new Session(details)` validates existing state for hydration.
-Children and values such
-as `Wallet` and `Booking` use constructors directly. Hydrating existing state
+Children and values such as `Wallet` and `Booking` use constructors directly. Hydrating existing state
 does not repeat creation workflows or reset lifecycle fields.
 
 Child state is immutable and can be shared directly. Constructors and getters
-defensively copy mutable dates, collections, and settlement data. Root commands
-validate a complete transition and prepare their results before applying state
-changes; rejected transitions leave state unchanged and throw `DomainError`
-with a stable code.
+defensively copy mutable dates, collections, and settlement data. Role workflows
+prepare complete transitions and financial results before recording. Root
+operations validate and copy the candidate before applying state changes;
+rejected transitions leave state unchanged and throw `DomainError` with a stable
+code.
 
 `Email` is an immutable value object constructed with `new Email(text)`.
 It requires exactly one `@`, nonempty parts on both sides, and no whitespace.
@@ -114,73 +116,57 @@ for construction, mapping, and encapsulation conventions.
 
 ## Session command calculations
 
-Participant actions are `join`, `withdraw`, `leaveWaitlist`, and
-`offerReplacementToWaitlist`. They collaborate with Session through
-`admitParticipant`, `applyParticipantWithdrawal`, `removeWaitlistedParticipant`,
-and `releaseParticipantReplacement`, respectively. These guarded operations
-check session conditions, find relevant owned records, invoke Participant's
-calculations, and apply the result. Direct calls still enforce ownership and
-lifecycle checks. `promoteNext` remains a Session operation and verifies that its
-Participant owns the front waiting record before attempting promotion.
-
-Participant checks record ownership and prepares immutable withdrawal,
-waitlist-exit, and replacement-offer transitions. It determines whether a
-withdrawal receives an immediate refund or awaits replacement. Session admission
-does not read User or wallet state; Session retains private access and link
-validity, capacity, FIFO and re-entry rules, and the selection and refund of
-another participant's awaiting withdrawal.
+Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, `leaveWaitlist`,
+and `offerReplacementToWaitlist`. Each action performs the workflow: authorize,
+read session facts, calculate immutable child changes and financial instructions,
+record the complete change, then return the result. Joining and promotion prepare
+the entrant and any replacement refund together. Promotion preserves `NONE`,
+`SKIPPED`, and `PROMOTED`; there is no Session promotion command.
 
 Booker actions are `createSession`, `cancel`, `changeVisibility`,
-`removeParticipant`, `verifyAttendance`, and `prepareSettlement`. Creation is
-implemented in Booker and constructs Session directly. The other actions call
-`applyBookerCancellation`, `applyBookerVisibilityChange`, `applyBookerRemoval`,
-`applyBookerAttendance`, and `prepareBookerSettlement`, respectively. Session
-invokes Booker's ownership check, finds owned records, and obtains cancellation,
-removal, and manual-attendance transitions from the role. Booker supplies the
-trusted payout destination through User; commands accept no raw actor ID or
-destination. The existing Booker action signatures remain unchanged.
+`removeParticipant`, `verifyAttendance`, and `prepareSettlement`. Booker
+authorizes ownership and prepares the whole cancellation, attendance, or
+settlement operation before recording any state. It gets the trusted payout
+destination through User; application commands contain action details rather
+than raw actor or payout facts. Creation and payout-destination acquisition
+retain their active-account requirements; cancellation, visibility, removal,
+and manual attendance add no new active-account restriction.
 
-Session owns lifecycle and timing conditions, visibility/capacity rules,
-roster iteration, duplicate attendance marks, aggregate status, payout history,
-and complete settlement batches. It gathers all cancellation refunds and
-attendance updates before installing any roster or status change. Creation and
-payout-destination acquisition retain their current active-account requirements;
-cancellation, visibility changes, removal, and manual attendance add no new
-active-account restriction.
+Session accepts prepared immutable children through these bounded operations,
+all returning `void`:
 
-`Session` owns all session state and keeps validated construction, getters, shared
-lifecycle checks, payout-attempt history, and final assignments. Shared session
-calculations live in four internal modules in `sessions/session/`, alongside the
-root implementation. The folder entry point preserves the `sessions/session`
-import path:
-
-| Module | Responsibility |
+| Operation | Prepared input |
 | --- | --- |
-| `sessions/session/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
-| `sessions/session/session-roster.ts` | Shared roster operations, cancellation/manual-attendance iteration through Booker, automatic verification, attendance-derived status, and replacement expiry. |
-| `sessions/session/session-admission.ts` | Access, capacity, duplicate enrollment, FIFO promotion, waitlist re-entry, replacement refunds, and collaboration with Participant eligibility and hold creation. |
-| `sessions/session/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
+| `recordAdmission(admission, refundedReplacement, now)` | New, re-entering, or promoted participation and optional replacement refund. |
+| `recordParticipationTransition(existing, replacement, now?)` | An existing participation and its permitted successor. |
+| `recordCancellation(cancelled, now)` | The complete cancelled roster. |
+| `recordAttendance(verifiedSubset, now)` | The subset of manually verified participations. |
+| `changeVisibility(visibility, now)` | The requested visibility. |
+| `recordSettlementPreparation(preparation, now)` | `SessionSettlementPreparation`: payout ID, idempotency key, candidate participations, and optional batch. |
 
-`sessions/participation-instructions.ts` supplies shared lock/refund instruction
-construction to Participant, Booker, and the session calculations. It is an internal
-helper, not a public domain export.
+The root validates lifecycle/timing, identity and transition compatibility,
+capacity and queue order, hold consistency, operation coverage, and settlement
+history as applicable. It makes defensive copies before atomically assigning
+roster, queue sequence, status, or payout state. A failed calculation or recording
+leaves existing state unchanged. These operations accept no role or actor and
+perform no actor authorization: a valid child change does not establish the
+caller's authority. Application actor flows therefore enter through the roles.
 
-Calculations use operation-specific values and immutable children. They never
-mutate `Session`; the root installs the change only after all calculations and
-result construction succeed, including both a new commitment and any replacement
-refund. A failed calculation leaves roster, queue sequence, and holds unchanged.
-There are no public roster setters, arbitrary mutation callbacks, or independently
-applicable change plans. The session modules are not exported from the public
-domain entry point, and aggregate ownership is unchanged.
+The Session implementation and its internal helpers live in `sessions/session/`.
+They have no Participant or Booker imports and never call role methods. Shared
+lock/refund instruction construction remains in the internal
+`sessions/participation-instructions.ts` helper. There are no arbitrary roster
+setters, callback-based mutations, revision mechanism, or public workflow plans;
+aggregate ownership is unchanged.
 
-A future use case loads `Session` and any required complete `User` through its
-transaction repositories, obtains the appropriate Participant or Booker role,
-then saves the session and applies its financial instructions in the same unit of
-work. It does not call internal helpers or save individual child changes.
-Automatic operations and payout callbacks invoke Session directly. Payout dispatch
-calls the provider outside the transaction.
-This split adds no use-case, database, or payment-provider implementation; domain
-atomicity tests do not establish database concurrency guarantees.
+A future use case loads Session and the complete User through its transaction
+repositories, invokes the appropriate Participant or Booker action, then saves
+the session and applies its returned financial instructions in the same unit of
+work. It does not call internal helpers or save child changes independently.
+Automatic verification, replacement expiry, and payout callbacks invoke Session
+directly. Payout dispatch calls the provider outside the transaction. This split
+adds no use-case, database, or payment-provider implementation; domain atomicity
+tests do not establish database concurrency guarantees.
 
 ## Money and booking
 
@@ -244,10 +230,10 @@ without retaining the history.
 
 After all committed attendance is finalized,
 `booker.prepareSettlement(session, command)` obtains the trusted destination
-through the role and asks Session to freeze hold IDs, amounts,
-release/forfeiture reasons, and that destination. Session guards payout-attempt
-history and prepares the complete batch before updating state. It returns no
-batch when there are no payable holds. Otherwise a
+through User and prepares the candidate participations and frozen batch of hold
+IDs, amounts, release/forfeiture reasons, and that destination. Session validates
+the prepared state and payout-attempt history before recording it. The role
+returns no batch when there are no payable holds. Otherwise a
 future use-case coordinator saves the session, `Payout`, and a durable payout
 intent in one transaction. A dispatcher calls the external provider later. Only a matching
 confirmed callback can complete that attempt; completion then settles holds and

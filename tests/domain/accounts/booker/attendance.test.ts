@@ -1,26 +1,25 @@
 import { describe, expect, test } from "vitest";
 import {
   at,
+  createTestUser,
   end,
-  join,
-  loadedUser,
   readyBooker,
-  session,
+  createTestSession,
   sessionState,
 } from "../../sessions/session/session-fixtures";
 
 describe("Booker", () => {
   test("verifyAttendance_WhenOwnerIsInactive_StillFinalizesAttendance", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    const booker = loadedUser("booker", {
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const booker = createTestUser({
+      userId: "booker",
       accountStatus: "INACTIVE",
     }).asBooker();
 
     // Act
     booker.verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
       now: end,
     });
 
@@ -31,16 +30,16 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenSessionHasNotEnded_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
 
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
       readyBooker().verifyAttendance(bookingSession, {
-        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: at(-1),
       }),
     ).toThrow(expect.objectContaining({ code: "SESSION_NOT_ENDED" }));
@@ -49,11 +48,11 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenLaterMarkConflicts_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
       now: end,
     });
     const previousState = sessionState(bookingSession);
@@ -62,8 +61,8 @@ describe("Booker", () => {
     expect(() =>
       readyBooker().verifyAttendance(bookingSession, {
         marks: [
-          { participationId: "p-b", attendance: "ATTENDED" },
-          { participationId: "p-a", attendance: "ABSENT" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
+          { participationId: "p-alice", attendance: "ABSENT" },
         ],
         now: end,
       }),
@@ -73,17 +72,17 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenFinalParticipantIsMarked_AwaitsPayout", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+      marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
       now: end,
     });
 
     // Act
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-b", attendance: "ABSENT" }],
+      marks: [{ participationId: "p-ben", attendance: "ABSENT" }],
       now: end,
     });
 

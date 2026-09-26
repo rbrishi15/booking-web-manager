@@ -1,13 +1,15 @@
 import {
   Booking,
+  FundHold,
   Money,
+  Participation,
   Session,
   type BookerSessionCreation,
   type SessionDetails,
 } from "@/domain";
-import { loadedUser, readyBookerUser } from "../../accounts/user-fixtures";
+import { readyBookerUser } from "../../accounts/user-fixtures";
 
-export { loadedUser };
+export { createTestUser } from "../../accounts/user-fixtures";
 
 export const hour = 3_600_000;
 export const start = new Date("2026-10-10T10:00:00Z");
@@ -46,18 +48,60 @@ export function readyBooker(userId = "booker") {
   return readyBookerUser(userId).asBooker();
 }
 
-export function session(totalSlots = 2) {
-  return readyBooker().createSession(creationDetails(totalSlots));
+interface TestSessionOptions {
+  readonly totalSlots?: number;
+  readonly committedUserIds?: readonly string[];
+  readonly waitlistedUserIds?: readonly string[];
 }
 
-export function join(s: Session, id: string, now = before) {
-  return loadedUser(id)
-    .asParticipant()
-    .join(s, {
-      participationId: `p-${id}`,
-      holdId: `h-${id}`,
-      now,
-    });
+/** Constructs the declared starting roster; admission workflows stay in the test. */
+export function createTestSession({
+  totalSlots = 2,
+  committedUserIds = [],
+  waitlistedUserIds = [],
+}: TestSessionOptions = {}): Session {
+  const details = sessionDetails({ totalSlots });
+  const terms = {
+    holdingAccountId: details.holdingAccountId,
+    bookingShare: details.booking.totalCost.divideFloor(totalSlots),
+  };
+  return new Session({
+    ...details,
+    participations: [
+      ...committedUserIds.map((userId) =>
+        committedParticipation(terms, userId),
+      ),
+      ...waitlistedUserIds.map((userId, index) =>
+        Participation.createWaitlisted({
+          participationId: `p-${userId}`,
+          userId,
+          waitlistedAt: before,
+          queueSequence: index + 1,
+        }),
+      ),
+    ],
+    nextQueueSequence: waitlistedUserIds.length + 1,
+  });
+}
+
+export function committedParticipation(
+  session: Pick<Session, "holdingAccountId" | "bookingShare">,
+  userId: string,
+  now = before,
+) {
+  return Participation.createCommitted({
+    participationId: `p-${userId}`,
+    userId,
+    committedAt: now,
+    hold: FundHold.create({
+      holdId: `h-${userId}`,
+      participationId: `p-${userId}`,
+      holdingAccountId: session.holdingAccountId,
+      walletId: `w-${userId}`,
+      amount: session.bookingShare,
+      createdAt: now,
+    }),
+  });
 }
 
 export function sessionDetails(

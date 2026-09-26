@@ -93,6 +93,11 @@ A repeat key returns the original result without re-executing.
 The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
 `/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
 
+Actor-driven session workflows enter through `User`'s Participant or Booker
+role, which performs actor authorization and prepares the complete change.
+Session validates and records prepared state through bounded operations; see
+[ADR-0009](./docs/adr/0009-role-workflows-and-session-recording.md).
+
 ### Money states
 
 `available` → `held` → (`released` | `refunded` | `forfeited`)

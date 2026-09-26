@@ -6,13 +6,17 @@ import {
   Wallet,
 } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { fundedWallet, loadedUserDetails, userLoadedAt } from "./user-fixtures";
+import {
+  fundedWallet,
+  createTestUserDetails,
+  userLoadedAt,
+} from "./user-fixtures";
 
 describe("User", () => {
   test("constructor_WhenMembershipsAreMissing_ThrowsInvalidInput", () => {
     // Arrange
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       memberGroupIds: undefined,
     } as unknown as UserDetails;
 
@@ -25,7 +29,7 @@ describe("User", () => {
   test("constructor_WhenMembershipsAreNull_ThrowsInvalidInput", () => {
     // Arrange
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       memberGroupIds: null,
     } as unknown as UserDetails;
 
@@ -38,9 +42,9 @@ describe("User", () => {
   test("constructor_WhenWalletBelongsToAnotherUser_ThrowsInvalidInput", () => {
     // Arrange
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       wallet: new Wallet({
-        walletId: "w-u",
+        walletId: "w-alice",
         userId: "other",
         transactions: [],
       }),
@@ -55,7 +59,7 @@ describe("User", () => {
   test("constructor_WhenMembershipIdIsBlank_ThrowsInvalidInput", () => {
     // Arrange
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       memberGroupIds: [" "],
     } as unknown as UserDetails;
 
@@ -68,7 +72,7 @@ describe("User", () => {
   test("constructor_WhenMembershipsAreNotAnArray_ThrowsInvalidInput", () => {
     // Arrange
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       memberGroupIds: new Set(["group"]),
     } as unknown as UserDetails;
 
@@ -80,11 +84,11 @@ describe("User", () => {
 
   test("constructor_WhenLoadedDataIsMutated_PreservesProjectionsAndMemberships", () => {
     // Arrange
-    const wallet = fundedWallet("u", 700);
+    const wallet = fundedWallet("alice", 700);
     const reliabilityScore = ReliabilityScore.from(80);
     const memberGroupIds = ["group"];
     const details = {
-      ...loadedUserDetails("u"),
+      ...createTestUserDetails({ userId: "alice" }),
       wallet,
       reliabilityScore,
       memberGroupIds,
@@ -92,17 +96,17 @@ describe("User", () => {
     const user = new User(details);
 
     // Act
-    details.wallet = fundedWallet("u", 0);
+    details.wallet = fundedWallet("alice", 0);
     details.reliabilityScore = ReliabilityScore.from(0);
     memberGroupIds.push("other");
     (user.memberGroupIds as string[]).push("injected");
 
     // Assert
-    expect(Reflect.set(user, "wallet", fundedWallet("u", 0))).toBe(false);
+    expect(Reflect.set(user, "wallet", fundedWallet("alice", 0))).toBe(false);
     expect(
       Reflect.set(user, "reliabilityScore", ReliabilityScore.from(0)),
     ).toBe(false);
-    expect(user.wallet.walletId).toBe("w-u");
+    expect(user.wallet.walletId).toBe("w-alice");
     expect(user.wallet.getFunds().toCents()).toBe(700);
     expect(user.reliabilityScore).toBe(reliabilityScore);
     expect(user.reliabilityScore.toNumber()).toBe(80);

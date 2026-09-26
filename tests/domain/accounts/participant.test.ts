@@ -1,6 +1,6 @@
 import { Booking, Money, User } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { fundedWallet, loadedUser } from "./user-fixtures";
+import { createTestUser } from "./user-fixtures";
 
 const start = new Date("2026-10-10T10:00:00Z");
 const end = new Date("2026-10-10T12:00:00Z");
@@ -9,8 +9,8 @@ const before = new Date("2026-10-08T10:00:00Z");
 describe("Participant", () => {
   test("withdraw_WhenCommittedBeforeRefundCutoff_RefundsParticipant", () => {
     // Arrange
-    const owner = loadedUser("owner");
-    const participant = loadedUser("participant");
+    const owner = createTestUser({ userId: "owner" });
+    const participant = createTestUser({ userId: "participant" });
     const session = sessionOwnedBy(owner);
 
     // Act
@@ -33,8 +33,8 @@ describe("Participant", () => {
 
   test("join_WhenUserHasFunds_LocksShareFromLoadedWallet", () => {
     // Arrange
-    const participantUser = loadedUser("participant");
-    const session = sessionOwnedBy(loadedUser("owner"));
+    const participantUser = createTestUser({ userId: "participant" });
+    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
 
     // Act
     const admission = participantUser.asParticipant().join(session, {
@@ -59,10 +59,11 @@ describe("Participant", () => {
 
   test("join_WhenRoleWasCreatedBeforeDeactivation_ThrowsInactiveAccount", () => {
     // Arrange
-    const participantUser = loadedUser("participant", {
-      wallet: fundedWallet("participant", 0),
+    const participantUser = createTestUser({
+      userId: "participant",
+      availableFundsCents: 0,
     });
-    const session = sessionOwnedBy(loadedUser("owner"));
+    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
     const participant = participantUser.asParticipant();
     participantUser.deactivate({
       availableBalance: Money.fromCents(0),
@@ -86,10 +87,11 @@ describe("Participant", () => {
 
   test("join_WhenRoleWasCreatedAfterDeactivation_ThrowsInactiveAccount", () => {
     // Arrange
-    const participantUser = loadedUser("participant", {
-      wallet: fundedWallet("participant", 0),
+    const participantUser = createTestUser({
+      userId: "participant",
+      availableFundsCents: 0,
     });
-    const session = sessionOwnedBy(loadedUser("owner"));
+    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
 
     participantUser.deactivate({
       availableBalance: Money.fromCents(0),

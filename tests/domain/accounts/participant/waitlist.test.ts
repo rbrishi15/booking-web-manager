@@ -1,20 +1,19 @@
 import { describe, expect, test } from "vitest";
 import {
   before,
-  join,
-  loadedUser,
-  session,
+  createTestUser,
+  createTestSession,
   sessionState,
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
   test("leaveWaitlist_WhenParticipantOwnsWaitingEntry_LeavesWithoutChangingCommitments", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    join(bookingSession, "waiting");
-    const participant = loadedUser("waiting").asParticipant();
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["waiting"],
+    });
+    const participant = createTestUser({ userId: "waiting" }).asParticipant();
 
     // Act
     participant.leaveWaitlist(bookingSession, {
@@ -34,11 +33,11 @@ describe("Participant", () => {
 
   test("leaveWaitlist_WhenEntryBelongsToAnotherParticipant_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    join(bookingSession, "waiting");
-    const participant = loadedUser("other").asParticipant();
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["waiting"],
+    });
+    const participant = createTestUser({ userId: "other" }).asParticipant();
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -53,15 +52,15 @@ describe("Participant", () => {
 
   test("leaveWaitlist_WhenParticipantIsCommitted_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    const participant = loadedUser("a").asParticipant();
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+
+    const participant = createTestUser({ userId: "alice" }).asParticipant();
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
       participant.leaveWaitlist(bookingSession, {
-        participationId: "p-a",
+        participationId: "p-alice",
         now: before,
       }),
     ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));

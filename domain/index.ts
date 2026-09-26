@@ -40,8 +40,8 @@ export {
 } from "./groups/regular-group";
 export {
   Session,
-  type PromotionCommand,
   type SessionDetails,
+  type SessionSettlementPreparation,
 } from "./sessions/session";
 export {
   User,
@@ -57,6 +57,7 @@ export {
 } from "./accounts/booker";
 export {
   Participant,
+  type PromotionCommand,
   type LeaveWaitlistCommand,
   type ParticipantJoinCommand,
   type ParticipantReplacementOfferCommand,

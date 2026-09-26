@@ -2,20 +2,19 @@ import { describe, expect, test } from "vitest";
 import {
   end,
   hour,
-  join,
   readyBooker,
-  session,
+  createTestSession,
   sessionState,
 } from "./session-fixtures";
 
 describe("Session", () => {
   test("autoVerifyAttendance_WhenOneMillisecondBeforeDue_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ABSENT" }],
+      marks: [{ participationId: "p-alice", attendance: "ABSENT" }],
       now: end,
     });
     const previousState = sessionState(bookingSession);
@@ -31,11 +30,11 @@ describe("Session", () => {
 
   test("autoVerifyAttendance_WhenExactlySeventyTwoHoursAfterEnd_VerifiesOnlyRemainingParticipants", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-a", attendance: "ABSENT" }],
+      marks: [{ participationId: "p-alice", attendance: "ABSENT" }],
       now: end,
     });
 

@@ -1,5 +1,5 @@
 export {
   Session,
-  type PromotionCommand,
+  type SessionSettlementPreparation,
   type SessionDetails,
 } from "./session";

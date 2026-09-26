@@ -1,12 +1,18 @@
 # ADR-0008: Booker behavior and the Session lifecycle
 
-- Status: Accepted
+- Status: Accepted; callback routing superseded by ADR-0009
 - Date: 2026-09-26
 - Supersedes: Booker responsibility routing in
   [ADR-0003](./0003-aggregate-roots-and-boundaries.md).
 - Extends: the role-and-root collaboration in
   [ADR-0007](./0007-participant-behavior-and-session-roster.md), without changing
   Participant behavior.
+
+[ADR-0009](./0009-role-workflows-and-session-recording.md) supersedes the
+Session-to-Booker callbacks and authorization placement below. Booker now runs
+complete workflows and Session records prepared children. Creation ownership,
+aggregate boundaries, and business behavior remain accepted; this record
+preserves the earlier routing as decision history.
 
 ## Context
 

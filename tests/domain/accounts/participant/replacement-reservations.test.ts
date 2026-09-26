@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   at,
-  join,
-  loadedUser,
-  session,
+  createTestUser,
+  createTestSession,
   sessionState,
   start,
 } from "../../sessions/session/session-fixtures";
@@ -11,12 +10,11 @@ import {
 describe("Participant", () => {
   test("offerReplacementToWaitlist_WhenOwnerReleasesPersonalPlace_RefundsOnlyAfterFundedPromotion", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "ben");
-    join(bookingSession, "alex");
-    join(bookingSession, "dana");
-    join(bookingSession, "evan");
-    loadedUser("ben")
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+      waitlistedUserIds: ["dana", "evan"],
+    });
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-ben",
@@ -28,7 +26,7 @@ describe("Participant", () => {
     const queueSequence = bookingSession.nextQueueSequence;
 
     // Act
-    const offer = loadedUser("ben")
+    const offer = createTestUser({ userId: "ben" })
       .asParticipant()
       .offerReplacementToWaitlist(bookingSession, {
         participationId: "p-ben",
@@ -49,7 +47,7 @@ describe("Participant", () => {
     // Act & Assert: the old personal link cannot admit or queue another person.
     const releasedState = sessionState(bookingSession);
     expect(() =>
-      loadedUser("cara")
+      createTestUser({ userId: "cara" })
         .asParticipant()
         .join(bookingSession, {
           participationId: "p-cara",
@@ -61,13 +59,12 @@ describe("Participant", () => {
     expect(sessionState(bookingSession)).toEqual(releasedState);
 
     // Act: the first waiter successfully funds the replacement.
-    const promotion = bookingSession.promoteNext(
-      loadedUser("dana").asParticipant(),
-      {
+    const promotion = createTestUser({ userId: "dana" })
+      .asParticipant()
+      .promoteFromWaitlist(bookingSession, {
         holdId: "h-dana",
         now: at(8),
-      },
-    );
+      });
 
     // Assert
     expect(promotion).toMatchObject({
@@ -86,11 +83,11 @@ describe("Participant", () => {
 
   test("offerReplacementToWaitlist_WhenOwnerWithdrewBeforeOpenSlotParticipant_PreservesOriginalRefundPriority", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "alice");
-    join(bookingSession, "ben");
-    join(bookingSession, "dana");
-    loadedUser("ben")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana"],
+    });
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-ben",
@@ -98,7 +95,7 @@ describe("Participant", () => {
         replacementMode: "INVITE_LINK",
         replacementToken: "ben-replacement",
       });
-    loadedUser("alice")
+    createTestUser({ userId: "alice" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-alice",
@@ -107,19 +104,18 @@ describe("Participant", () => {
       });
 
     // Act
-    loadedUser("ben")
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .offerReplacementToWaitlist(bookingSession, {
         participationId: "p-ben",
         now: at(8),
       });
-    const promotion = bookingSession.promoteNext(
-      loadedUser("dana").asParticipant(),
-      {
+    const promotion = createTestUser({ userId: "dana" })
+      .asParticipant()
+      .promoteFromWaitlist(bookingSession, {
         holdId: "h-dana",
         now: at(7),
-      },
-    );
+      });
 
     // Assert
     expect(promotion).toMatchObject({
@@ -144,9 +140,9 @@ describe("Participant", () => {
 
   test("offerReplacementToWaitlist_WhenActorIsNotOwner_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "ben");
-    loadedUser("ben")
+    const bookingSession = createTestSession({ committedUserIds: ["ben"] });
+
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-ben",
@@ -158,7 +154,7 @@ describe("Participant", () => {
 
     // Act & Assert
     expect(() =>
-      loadedUser("booker")
+      createTestUser({ userId: "booker" })
         .asParticipant()
         .offerReplacementToWaitlist(bookingSession, {
           participationId: "p-ben",
@@ -170,9 +166,9 @@ describe("Participant", () => {
 
   test("offerReplacementToWaitlist_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "ben");
-    loadedUser("ben")
+    const bookingSession = createTestSession({ committedUserIds: ["ben"] });
+
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-ben",
@@ -184,7 +180,7 @@ describe("Participant", () => {
 
     // Act & Assert
     expect(() =>
-      loadedUser("ben")
+      createTestUser({ userId: "ben" })
         .asParticipant()
         .offerReplacementToWaitlist(bookingSession, {
           participationId: "p-ben",
@@ -196,9 +192,9 @@ describe("Participant", () => {
 
   test("offerReplacementToWaitlist_WhenPersonalReplacementAlreadyJoined_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "ben");
-    loadedUser("ben")
+    const bookingSession = createTestSession({ committedUserIds: ["ben"] });
+
+    createTestUser({ userId: "ben" })
       .asParticipant()
       .withdraw(bookingSession, {
         participationId: "p-ben",
@@ -206,7 +202,7 @@ describe("Participant", () => {
         replacementMode: "INVITE_LINK",
         replacementToken: "ben-replacement",
       });
-    loadedUser("cara")
+    createTestUser({ userId: "cara" })
       .asParticipant()
       .join(bookingSession, {
         participationId: "p-cara",
@@ -218,7 +214,7 @@ describe("Participant", () => {
 
     // Act & Assert
     expect(() =>
-      loadedUser("ben")
+      createTestUser({ userId: "ben" })
         .asParticipant()
         .offerReplacementToWaitlist(bookingSession, {
           participationId: "p-ben",

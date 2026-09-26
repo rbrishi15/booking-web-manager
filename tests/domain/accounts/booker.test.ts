@@ -1,6 +1,6 @@
 import { Booking, Money, User } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { loadedUser } from "./user-fixtures";
+import { createTestUser } from "./user-fixtures";
 
 const start = new Date("2026-10-10T10:00:00Z");
 const end = new Date("2026-10-10T12:00:00Z");
@@ -9,7 +9,7 @@ const before = new Date("2026-10-08T10:00:00Z");
 describe("Booker", () => {
   test("cancel_WhenOwnerCancelsEmptySession_ReturnsNoInstructions", () => {
     // Arrange
-    const owner = loadedUser("owner");
+    const owner = createTestUser({ userId: "owner" });
     const session = sessionOwnedBy(owner);
 
     // Act

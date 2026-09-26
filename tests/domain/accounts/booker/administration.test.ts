@@ -3,10 +3,9 @@ import { describe, expect, test, vi } from "vitest";
 import {
   at,
   before,
-  join,
-  loadedUser,
+  createTestUser,
   readyBooker,
-  session,
+  createTestSession,
   sessionState,
   start,
 } from "../../sessions/session/session-fixtures";
@@ -14,11 +13,11 @@ import {
 describe("Booker", () => {
   test("cancel_WhenSecondChildFails_PreservesRosterHoldsAndStatusAndAllowsRetry", () => {
     // Arrange
-    const bookingSession = session();
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["waiting"],
+    });
     const booker = readyBooker();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    join(bookingSession, "waiting");
     const previousState = sessionState(bookingSession);
     const failure = new DomainError(
       "INVALID_STATE",
@@ -57,9 +56,9 @@ describe("Booker", () => {
 
   test("cancel_WhenOwnerIsInactive_StillCancelsAndRefunds", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    const booker = loadedUser("booker", {
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const booker = createTestUser({
+      userId: "booker",
       accountStatus: "INACTIVE",
     }).asBooker();
 
@@ -73,8 +72,9 @@ describe("Booker", () => {
 
   test("changeVisibility_WhenOwnerIsInactive_StillChangesVisibility", () => {
     // Arrange
-    const bookingSession = session();
-    const booker = loadedUser("booker", {
+    const bookingSession = createTestSession();
+    const booker = createTestUser({
+      userId: "booker",
       accountStatus: "INACTIVE",
     }).asBooker();
 
@@ -87,9 +87,9 @@ describe("Booker", () => {
 
   test("changeVisibility_WhenSessionIsFull_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -101,14 +101,14 @@ describe("Booker", () => {
 
   test("removeParticipant_WhenOwnerIsInactive_StillRemovesAndRefunds", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    const booker = loadedUser("booker", {
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const booker = createTestUser({
+      userId: "booker",
       accountStatus: "INACTIVE",
     }).asBooker();
 
     // Act
-    const result = booker.removeParticipant(bookingSession, "p-a", before);
+    const result = booker.removeParticipant(bookingSession, "p-alice", before);
 
     // Assert
     expect(bookingSession.participations[0]?.status).toBe("REMOVED");
@@ -118,26 +118,24 @@ describe("Booker", () => {
 
   test("removeParticipant_WhenActorIsNotBooker_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      readyBooker("other").removeParticipant(bookingSession, "p-a", before),
+      readyBooker("other").removeParticipant(bookingSession, "p-alice", before),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
   test("removeParticipant_WhenBookerRemovesParticipant_RefundsHold", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
 
     // Act
     const removal = readyBooker().removeParticipant(
       bookingSession,
-      "p-a",
+      "p-alice",
       before,
     );
 
@@ -147,8 +145,7 @@ describe("Booker", () => {
 
   test("cancel_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -160,13 +157,13 @@ describe("Booker", () => {
 
   test("cancel_WhenRosterIncludesActiveWithdrawnAndWaitingParticipants_RefundsHoldsAndClearsQueue", () => {
     // Arrange
-    const bookingSession = session();
-    join(bookingSession, "a");
-    join(bookingSession, "b");
-    join(bookingSession, "c");
-    loadedUser("a")
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["cara"],
+    });
+    createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
 
     // Act
     const cancellation = readyBooker().cancel(bookingSession, at(1));

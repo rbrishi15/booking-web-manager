@@ -2,9 +2,23 @@ import type { Money } from "../finance/money";
 import type { ReliabilityScore } from "../reliability/reliability-score";
 import type { Booking } from "../sessions/booking";
 import { FundHold } from "../sessions/fund-hold";
-import type { Participation } from "../sessions/participation";
-import { refundInstruction } from "../sessions/participation-instructions";
+import { Participation } from "../sessions/participation";
+import {
+  lockInstruction,
+  refundInstruction,
+} from "../sessions/participation-instructions";
 import type { Session } from "../sessions/session";
+import {
+  assertOpen,
+  assertOpenBefore,
+} from "../sessions/session/session-guards";
+import {
+  availableSlots,
+  nextWaitlisted,
+  oldestAwaiting,
+  requireParticipation,
+} from "../sessions/session/session-roster";
+import { requireId, validDate } from "../sessions/session/session-validation";
 import { DomainError } from "../shared/errors";
 import type {
   AdmissionResult,
@@ -42,6 +56,11 @@ export interface ParticipantReplacementOfferCommand {
   readonly now: Date;
 }
 
+export interface PromotionCommand {
+  readonly holdId: UUID;
+  readonly now: Date;
+}
+
 interface AdmissionTerms {
   readonly minimumReliability?: ReliabilityScore;
   readonly share: Money;
@@ -56,10 +75,11 @@ interface CommitmentTerms {
 }
 
 /**
- * User's participant role. Owns participant eligibility, funding preparation,
- * and the rules for withdrawing or leaving a waitlist and offering replacements.
+ * User's participant role. Coordinates admission, promotion, withdrawal,
+ * waitlist departure, and replacement offers using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
- * Session guards its roster and installs the immutable changes prepared here.
+ * Each workflow prepares its result and immutable child changes before asking
+ * Session to record them together. Session never calls back into this role.
  */
 export class Participant {
   readonly #user: User;
@@ -77,34 +97,260 @@ export class Participant {
   }
 
   join(session: Session, command: ParticipantJoinCommand): AdmissionResult {
-    return session.admitParticipant(this, command);
+    requireId(command.participationId, "participationId");
+    if (command.holdId !== undefined) requireId(command.holdId, "holdId");
+    assertOpenBefore(session.status, session.booking, command.now);
+    const participations = session.participations;
+    this.assertAccess(session, participations, command);
+    const terms = {
+      minimumReliability: session.minimumReliability,
+      share: session.bookingShare,
+    };
+    this.assertEligibleFor(terms, false);
+    const existing = participations.find((p) => p.userId === this.userId);
+    if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
+      throw new DomainError(
+        existing.status === "WITHDRAWN" || existing.status === "REMOVED"
+          ? "REJOIN_NOT_ALLOWED"
+          : "ALREADY_PARTICIPATING",
+        "This user already has a participation",
+      );
+    }
+    if (
+      existing !== undefined &&
+      command.participationId !== existing.participationId
+    ) {
+      throw new DomainError(
+        "DUPLICATE_ID",
+        "Waitlist re-entry must reuse the existing participation ID",
+      );
+    }
+
+    validDate(command.now, "now");
+    if (
+      availableSlots(participations, session.totalSlots) === 0 ||
+      nextWaitlisted(participations) !== undefined
+    ) {
+      const sequence = session.nextQueueSequence;
+      DomainError.require(
+        Number.isSafeInteger(sequence) &&
+          sequence > 0 &&
+          sequence < Number.MAX_SAFE_INTEGER,
+        "INVALID_INPUT",
+        "Queue sequence overflowed",
+      );
+      const queued = Participation.createWaitlisted({
+        participationId: existing?.participationId ?? command.participationId,
+        userId: this.userId,
+        waitlistedAt: command.now,
+        queueSequence: sequence,
+      });
+      const result: AdmissionResult = {
+        kind: "WAITLISTED",
+        participationId: queued.participationId,
+        instructions: [],
+      };
+      session.recordAdmission(queued, undefined, command.now);
+      return result;
+    }
+
+    this.assertEligibleFor(terms, true);
+    const holdId = command.holdId;
+    DomainError.require(
+      holdId !== undefined,
+      "INVALID_INPUT",
+      "A commitment needs a hold ID",
+    );
+    const hold = this.createAdmissionHold({
+      participationId: command.participationId,
+      holdId,
+      holdingAccountId: session.holdingAccountId,
+      share: terms.share,
+      now: command.now,
+    });
+    const replacement = oldestAwaiting(participations);
+    const committed = Participation.createCommitted({
+      participationId: existing?.participationId ?? command.participationId,
+      userId: this.userId,
+      committedAt: command.now,
+      hold,
+      replacementMode: command.replacementMode,
+      replacesParticipationId: replacement?.participationId,
+    });
+    const refunded = replacement?.refundReplacement(command.now);
+    const refund =
+      refunded === undefined
+        ? undefined
+        : refundInstruction(session.sessionId, refunded, command.now);
+    const result: AdmissionResult = {
+      kind: "COMMITTED",
+      participationId: committed.participationId,
+      refundedParticipationId: refunded?.participationId,
+      instructions: [
+        lockInstruction(session.sessionId, committed, command.now),
+        ...(refund === undefined ? [] : [refund]),
+      ],
+    };
+    session.recordAdmission(committed, refunded, command.now);
+    return result;
+  }
+
+  promoteFromWaitlist(
+    session: Session,
+    command: PromotionCommand,
+  ): PromotionResult {
+    assertOpenBefore(session.status, session.booking, command.now);
+    const participations = session.participations;
+    const next = nextWaitlisted(participations);
+    if (next === undefined) return { kind: "NONE", instructions: [] };
+    requireId(command.holdId, "holdId");
+    validDate(command.now, "now");
+    DomainError.require(
+      availableSlots(participations, session.totalSlots) > 0,
+      "CAPACITY_EXCEEDED",
+      "There is no available slot to promote",
+    );
+    DomainError.require(
+      next.userId === this.userId,
+      "INVALID_INPUT",
+      "Promotion input belongs to another user",
+    );
+    const terms = {
+      minimumReliability: session.minimumReliability,
+      share: session.bookingShare,
+    };
+    const reason = this.admissionIneligibility(terms);
+    if (reason !== undefined) {
+      const departed = next.leaveWaitlist();
+      const result: PromotionResult = {
+        kind: "SKIPPED",
+        participationId: next.participationId,
+        reason,
+        instructions: [],
+      };
+      session.recordParticipationTransition(next, departed, command.now);
+      return result;
+    }
+    const replacement = oldestAwaiting(participations);
+    const committed = next.commit(
+      this.createAdmissionHold({
+        participationId: next.participationId,
+        holdId: command.holdId,
+        holdingAccountId: session.holdingAccountId,
+        share: terms.share,
+        now: command.now,
+      }),
+      command.now,
+      replacement?.participationId,
+    );
+    const refunded = replacement?.refundReplacement(command.now);
+    const refund =
+      refunded === undefined
+        ? undefined
+        : refundInstruction(session.sessionId, refunded, command.now);
+    const result: PromotionResult = {
+      kind: "PROMOTED",
+      participationId: committed.participationId,
+      refundedParticipationId: refunded?.participationId,
+      instructions: [
+        lockInstruction(session.sessionId, committed, command.now),
+        ...(refund === undefined ? [] : [refund]),
+      ],
+    };
+    session.recordAdmission(committed, refunded, command.now);
+    return result;
   }
 
   leaveWaitlist(session: Session, command: LeaveWaitlistCommand): void {
-    session.removeWaitlistedParticipant(this, command);
+    assertOpen(session.status);
+    if (command.now !== undefined)
+      assertOpenBefore(session.status, session.booking, command.now);
+    const existing = requireParticipation(
+      session.participations,
+      command.participationId,
+    );
+    const departed = this.prepareWaitlistDeparture(existing);
+    session.recordParticipationTransition(existing, departed, command.now);
   }
 
   withdraw(
     session: Session,
     command: ParticipantWithdrawalCommand,
   ): WithdrawalResult {
-    return session.applyParticipantWithdrawal(this, command);
+    this.validateWithdrawal(command);
+    assertOpenBefore(session.status, session.booking, command.now);
+    const existing = requireParticipation(
+      session.participations,
+      command.participationId,
+    );
+    const change = this.prepareWithdrawal(
+      existing,
+      session.booking,
+      command,
+      session.sessionId,
+    );
+    session.recordParticipationTransition(
+      existing,
+      change.participation,
+      command.now,
+    );
+    return change.result;
   }
 
   offerReplacementToWaitlist(
     session: Session,
     command: ParticipantReplacementOfferCommand,
   ): FinancialResult {
-    return session.releaseParticipantReplacement(this, command);
+    assertOpenBefore(session.status, session.booking, command.now);
+    const existing = requireParticipation(
+      session.participations,
+      command.participationId,
+    );
+    const change = this.prepareReplacementOffer(existing);
+    session.recordParticipationTransition(
+      existing,
+      change.participation,
+      command.now,
+    );
+    return change.result;
   }
 
-  /** Supplies membership facts to Session's access policy. */
-  isMemberOf(groupId: UUID): boolean {
-    return this.#user.memberGroupIds.includes(groupId);
+  private assertAccess(
+    session: Session,
+    participations: readonly Participation[],
+    command: ParticipantJoinCommand,
+  ): void {
+    if (command.replacementToken !== undefined) {
+      DomainError.require(
+        participations.some(
+          (p) =>
+            p.status === "WITHDRAWN" &&
+            p.hold?.state === "AWAITING_REPLACEMENT" &&
+            p.replacementToken === command.replacementToken,
+        ),
+        "INVALID_ACCESS",
+        "The replacement link is invalid or no longer available",
+      );
+      return;
+    }
+    if (session.visibility === "PUBLIC") return;
+    if (command.roomToken === session.roomToken) return;
+    if (
+      session.invitedGroupId !== undefined &&
+      this.#user.memberGroupIds.includes(session.invitedGroupId)
+    )
+      return;
+    throw new DomainError(
+      "INVALID_ACCESS",
+      "The user does not have access to this private session",
+    );
   }
 
   /** Checks actor eligibility without changing either aggregate. */
-  assertEligibleFor(terms: AdmissionTerms, requireFunds: boolean): void {
+  private assertEligibleFor(
+    terms: AdmissionTerms,
+    requireFunds: boolean,
+  ): void {
     const reason = this.admissionIneligibility(terms, requireFunds);
     if (reason === "INACTIVE_ACCOUNT")
       throw new DomainError(
@@ -124,7 +370,7 @@ export class Participant {
   }
 
   /** Promotion uses the same policy but reports a skipped participant. */
-  admissionIneligibility(
+  private admissionIneligibility(
     terms: AdmissionTerms,
     requireFunds = true,
   ): PromotionResult["reason"] {
@@ -140,7 +386,7 @@ export class Participant {
   }
 
   /** Prepares a hold after eligibility succeeds; ledger writes remain external. */
-  createAdmissionHold(terms: CommitmentTerms): FundHold {
+  private createAdmissionHold(terms: CommitmentTerms): FundHold {
     return FundHold.create({
       holdId: terms.holdId,
       participationId: terms.participationId,
@@ -151,8 +397,8 @@ export class Participant {
     });
   }
 
-  /** Session checks these action details before its lifecycle guards. */
-  validateWithdrawal(command: ParticipantWithdrawalCommand): void {
+  /** Invalid action details retain precedence over session lifecycle errors. */
+  private validateWithdrawal(command: ParticipantWithdrawalCommand): void {
     if (command.replacementMode !== undefined)
       DomainError.require(
         command.replacementMode === "OPEN_SLOT" ||
@@ -163,7 +409,7 @@ export class Participant {
   }
 
   /** Prepares the entire withdrawal before Session changes its roster. */
-  prepareWithdrawal(
+  private prepareWithdrawal(
     participation: Participation,
     booking: Booking,
     command: ParticipantWithdrawalCommand,
@@ -202,7 +448,9 @@ export class Participant {
   }
 
   /** Only the owner may prepare this immutable waitlist transition. */
-  prepareWaitlistDeparture(participation: Participation): Participation {
+  private prepareWaitlistDeparture(
+    participation: Participation,
+  ): Participation {
     DomainError.require(
       participation.userId === this.userId,
       "UNAUTHORIZED",
@@ -212,7 +460,7 @@ export class Participant {
   }
 
   /** Offering a replacement changes its availability without refunding it. */
-  prepareReplacementOffer(participation: Participation): {
+  private prepareReplacementOffer(participation: Participation): {
     participation: Participation;
     result: FinancialResult;
   } {
