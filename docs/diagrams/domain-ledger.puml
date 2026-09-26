@@ -1,0 +1,71 @@
+@startuml domain-ledger
+title Ledger facts, balance queries and money
+
+top to bottom direction
+hide empty members
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 22
+skinparam ArrowColor #64748B
+skinparam classBorderColor #64748B
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classBackgroundColor<<ReadModel>> #FEF3C7
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 35
+skinparam ranksep 40
+
+interface LedgerReadPort {
+  +getWalletBalance(walletId)\n  : Promise<WalletBalance | null>
+  +getHoldingAccountBalance(accountId)\n  : Promise<HoldingAccountBalance | null>
+}
+
+interface WalletBalance <<ReadModel>> {
+  +walletId : UUID
+  +availableBalance : Money
+}
+
+interface HoldingAccountBalance <<ReadModel>> {
+  +accountId : UUID
+  +heldBalance : Money
+}
+
+class HoldingAccount <<Identity>> {
+  +accountId : UUID
+}
+
+class LedgerTransaction <<ImmutableFact>> {
+  +transactionId : UUID
+  +amount : Money
+  +kind : TransactionKind
+  +occurredAt : Date
+  +idempotencyKey : string
+  +walletId : UUID [0..1]
+  +holdId : UUID [0..1]
+  +payoutId : UUID [0..1]
+}
+
+class Money <<ValueObject>> {
+  {static} +fromCents(...) : Money
+  +toCents() : number
+  +add(...) : Money
+  +subtract(...) : Money
+  +multiply(...) : Money
+  +divideFloor(...) : Money
+}
+
+LedgerReadPort .down.> WalletBalance : returns
+LedgerReadPort .down.> HoldingAccountBalance : returns
+HoldingAccountBalance -down-> HoldingAccount : accountId
+LedgerTransaction -down-> Money : amount
+LedgerReadPort -[hidden]right- LedgerTransaction
+WalletBalance -[hidden]right- HoldingAccountBalance
+HoldingAccountBalance -[hidden]right- Money
+
+caption Selected public members; (...) abbreviates parameters.\nTransaction IDs refer to Wallet, FundHold and Payout. Wallet derives funds from its complete history.\nRead models serve independent queries; unknown accounts return null. Money uses safe integer SGD cents.
+@enduml

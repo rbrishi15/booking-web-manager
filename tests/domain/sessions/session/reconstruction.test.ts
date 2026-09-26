@@ -1,251 +1,705 @@
+import { DomainError, FundHold, Participation, Session } from "@/domain";
+import { describe, expect, test, vi } from "vitest";
 import {
-  DomainError,
-  Participation,
-  Session,
-  type SessionDetails,
-} from "@/domain";
-import { describe, expect, it, vi } from "vitest";
-import {
-  at,
   before,
-  creationDetails,
-  destination,
   end,
-  join,
-  session,
+  readyBooker,
+  createTestSession,
   sessionDetails,
   sessionState,
   start,
 } from "./session-fixtures";
 
-describe("Session reconstruction and settlement state", () => {
-  it("constructs existing state with domain children and isolates mutable inputs and getters", () => {
-    const source = session();
-    join(source, "a");
-    const participations = [...source.participations];
-    const attemptIds = ["earlier"];
-    const keys = ["earlier-key"];
-    const constructed = new Session(
-      sessionDetails({
-        participations,
-        payoutAttemptIds: attemptIds,
-        payoutIdempotencyKeys: keys,
-      }),
-    );
-    const child = participations[0]!;
-    participations.pop();
-    attemptIds.push("leak");
-    keys.push("leak");
-    (constructed.participations as Participation[]).pop();
-    (constructed.payoutAttemptIds as string[]).pop();
-    (constructed.payoutIdempotencyKeys as string[]).pop();
-    constructed.booking.startAt.setFullYear(2000);
-    child.committedAt?.setFullYear(2000);
-    child.hold?.createdAt.setFullYear(2000);
-    expect(constructed.participations).toHaveLength(1);
-    expect(constructed.participations[0]).toBe(child);
-    expect(constructed.booking.startAt).toEqual(start);
-    expect(child.committedAt).toEqual(before);
-    expect(child.hold?.createdAt).toEqual(before);
-    expect(constructed.payoutAttemptIds).toEqual(["earlier"]);
-    expect(constructed.payoutIdempotencyKeys).toEqual(["earlier-key"]);
-    expect(constructed.nextQueueSequence).toBe(1);
-    expect(() => Session.create({ ...creationDetails(), now: end })).toThrow(
-      expect.objectContaining({ code: "SESSION_STARTED" }),
-    );
-    const ended = new Session(sessionDetails({ status: "SETTLED" }));
-    expect(ended.status).toBe("SETTLED");
-    expect(ended.booking.endAt).toEqual(end);
-  });
-
-  it("constructors validate duplicate rosters, queue ordering, history, and lifecycle state", () => {
-    const source = session();
-    join(source, "a");
-    const roster = source.participations;
-    const queued = Participation.createWaitlisted({
-      participationId: "queued",
-      userId: "queued-user",
-      waitlistedAt: before,
-      queueSequence: 5,
-    });
-    const invalid: Partial<SessionDetails>[] = [
-      { participations: [...roster, ...roster] },
-      { status: "PAYOUT_PENDING" },
-      { participations: [queued], nextQueueSequence: 5 },
-      { participations: roster, status: "SETTLED" },
-      { participations: roster, holdingAccountId: "foreign" },
-      { payoutAttemptIds: ["same", "same"] },
-      { payoutIdempotencyKeys: ["same", "same"] },
-    ];
-    for (const change of invalid)
-      expect(() => new Session(sessionDetails(change))).toThrow(DomainError);
-    expect(
-      new Session(
-        sessionDetails({ participations: [queued], nextQueueSequence: 6 }),
-      ).nextWaitlistedUserId,
-    ).toBe("queued-user");
-  });
-
-  it("constructs pending settlement state and protects batch, lines, destination, and history", () => {
-    const source = session();
-    join(source, "a");
-    source.verifyAttendance({
-      actorId: "booker",
-      marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
-      now: end,
-    });
-    const batch = source.prepareSettlement({
-      actorId: "booker",
-      payoutId: "out",
-      idempotencyKey: "key",
-      destination,
-      now: end,
-    })!;
-    const details = sessionDetails({
-      status: "PAYOUT_PENDING",
-      participations: source.participations,
-      pendingSettlement: batch,
-      payoutAttemptIds: source.payoutAttemptIds,
-      payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-    });
-    const constructed = new Session(details);
-    expect(
-      () =>
-        new Session({
-          ...details,
-          pendingSettlement: { ...batch, sessionId: "foreign" },
+describe("Session", () => {
+  describe("Construction and isolation", () => {
+    test("constructor_WhenInputsAndGettersAreMutated_PreservesRosterAndHistory", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const participations = [...source.participantList.participations];
+      const attemptIds = ["earlier"];
+      const keys = ["earlier-key"];
+      const constructed = new Session(
+        sessionDetails({
+          participations,
+          payoutAttemptIds: attemptIds,
+          payoutIdempotencyKeys: keys,
         }),
-    ).toThrow(DomainError);
-    expect(
-      () =>
-        new Session({
-          ...details,
-          pendingSettlement: {
-            ...batch,
-            lines: [{ ...batch.lines[0]!, walletId: "foreign" }],
-          },
-        }),
-    ).toThrow(DomainError);
-    expect(() => new Session({ ...details, payoutAttemptIds: [] })).toThrow(
-      DomainError,
-    );
-    expect(
-      () => new Session({ ...details, payoutIdempotencyKeys: [] }),
-    ).toThrow(DomainError);
-    batch.requestedAt.setFullYear(2000);
-    (
-      batch.destination as { bankAccountReference: string }
-    ).bankAccountReference = "changed";
-    (batch.lines as unknown[]).pop();
-    constructed.pendingSettlement?.requestedAt.setFullYear(2001);
-    const exposed = constructed.pendingSettlement!;
-    (
-      exposed.destination as { bankAccountReference: string }
-    ).bankAccountReference = "changed-again";
-    (exposed.lines as unknown[]).pop();
-    expect(constructed.pendingSettlement?.requestedAt).toEqual(end);
-    expect(
-      constructed.pendingSettlement?.destination.bankAccountReference,
-    ).toBe("bank");
-    expect(constructed.pendingSettlement?.lines).toHaveLength(1);
-    expect(constructed.pendingSettlement?.lines[0]?.amount.toCents()).toBe(500);
-    expect(constructed.payoutAttemptIds).toEqual(["out"]);
-    expect(constructed.payoutIdempotencyKeys).toEqual(["key"]);
-    expect(
-      constructed
-        .completeSettlement("out", end)
-        .instructions.map((line) => line.kind),
-    ).toEqual(["RELEASE"]);
-    expect(constructed.status).toBe("SETTLED");
-    expect(source.status).toBe("PAYOUT_PENDING");
-    expect(source.participations[0]?.hold?.state).toBe("HELD");
-  });
+      );
+      const child = participations[0]!;
 
-  it("failed settlement preparation leaves proposed expiry and payout history unapplied", () => {
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    s.withdrawParticipant({ actorId: "a", participationId: "p-a", now: at(2) });
-    const command = {
-      actorId: "booker",
-      payoutId: "out",
-      idempotencyKey: "key",
-      destination,
-      now: end,
-    };
-    const initial = sessionState(s);
-    expect(() => s.prepareSettlement(command)).toThrow(
-      expect.objectContaining({ code: "ATTENDANCE_INCOMPLETE" }),
-    );
-    expect(sessionState(s)).toEqual(initial);
-    expect(s.participations[0]?.hold?.state).toBe("AWAITING_REPLACEMENT");
-    s.verifyAttendance({
-      actorId: "booker",
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
-      now: end,
-    });
-    const verified = sessionState(s);
-    expect(() =>
-      s.prepareSettlement({
-        ...command,
-        destination: { ...destination, userId: "foreign" },
-      }),
-    ).toThrow(DomainError);
-    expect(sessionState(s)).toEqual(verified);
-    expect(s.payoutAttemptIds).toEqual([]);
-    expect(s.payoutIdempotencyKeys).toEqual([]);
-    const batch = s.prepareSettlement(command);
-    expect(batch?.lines.map((line) => line.kind)).toEqual([
-      "FORFEIT",
-      "RELEASE",
-    ]);
-    expect(s.participations[0]?.hold?.state).toBe("FORFEITURE_DUE");
-    expect(s.payoutAttemptIds).toEqual(["out"]);
-    expect(s.payoutIdempotencyKeys).toEqual(["key"]);
-  });
+      // Act
+      participations.pop();
+      attemptIds.push("leak");
+      keys.push("leak");
+      (constructed.participantList.participations as Participation[]).pop();
+      (constructed.payoutAttemptIds as string[]).pop();
+      (constructed.payoutIdempotencyKeys as string[]).pop();
+      constructed.booking.startAt.setFullYear(2000);
+      child.committedAt?.setFullYear(2000);
+      child.hold?.createdAt.setFullYear(2000);
 
-  it("failed completion leaves all holds pending even after an earlier line was calculated", () => {
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    s.verifyAttendance({
-      actorId: "booker",
-      marks: [
-        { participationId: "p-a", attendance: "ATTENDED" },
-        { participationId: "p-b", attendance: "ATTENDED" },
-      ],
-      now: end,
+      // Assert
+      expect(constructed.participantList.participations).toHaveLength(1);
+      expect(constructed.participantList.requireParticipation("p-alice")).toBe(
+        child,
+      );
+      expect(constructed.booking.startAt).toEqual(start);
+      expect(child.committedAt).toEqual(before);
+      expect(child.hold?.createdAt).toEqual(before);
+      expect(constructed.payoutAttemptIds).toEqual(["earlier"]);
+      expect(constructed.payoutIdempotencyKeys).toEqual(["earlier-key"]);
+      expect(constructed.participantList.nextQueueSequence).toBe(1);
     });
-    s.prepareSettlement({
-      actorId: "booker",
-      payoutId: "out",
-      idempotencyKey: "key",
-      destination,
-      now: end,
-    });
-    const initial = sessionState(s);
-    expect(() => s.completeSettlement("stale", end)).toThrow(
-      expect.objectContaining({ code: "STALE_PAYOUT" }),
-    );
-    expect(() => s.completeSettlement("out", new Date(Number.NaN))).toThrow(
-      DomainError,
-    );
-    expect(sessionState(s)).toEqual(initial);
-    const failure = vi
-      .spyOn(s.participations[1]!, "settleHold")
-      .mockImplementationOnce(() => {
-        throw new DomainError("INVALID_STATE", "Second line rejected");
+
+    test("constructor_WhenBothHistoriesAreOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: undefined,
       });
-    expect(() => s.completeSettlement("out", end)).toThrow(
-      "Second line rejected",
-    );
-    failure.mockRestore();
-    expect(sessionState(s)).toEqual(initial);
-    expect(s.completeSettlement("out", end).instructions).toHaveLength(2);
-    expect(s.participations.map((p) => p.hold?.state)).toEqual([
-      "RELEASED",
-      "RELEASED",
-    ]);
-    expect(s.pendingSettlement).toBeUndefined();
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual([]);
+      expect(restored.payoutIdempotencyKeys).toEqual([]);
+    });
+
+    test("constructor_WhenAttemptHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: ["earlier-key"],
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual([]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key"]);
+    });
+
+    test("constructor_WhenKeyHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: ["earlier"],
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["earlier"]);
+      expect(restored.payoutIdempotencyKeys).toEqual([]);
+    });
+
+    test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+
+    test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: ["earlier-key", "key"],
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key", "key"]);
+    });
+
+    test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: ["earlier", "out"],
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["earlier", "out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+
+    test("constructor_WhenSessionIsSettled_RestoresStatusAndEndTime", () => {
+      // Arrange
+      const details = sessionDetails({ status: "SETTLED" });
+
+      // Act
+      const restoredSession = new Session(details);
+
+      // Assert
+      expect(restoredSession.status).toBe("SETTLED");
+      expect(restoredSession.booking.endAt).toEqual(end);
+    });
+
+    test("constructor_WhenRosterIsDuplicated_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const roster = source.participantList.participations;
+      const details = sessionDetails({
+        participations: [...roster, ...roster],
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenDifferentUsersShareParticipationId_ThrowsDuplicateId", () => {
+      // Arrange
+      const alice = Participation.createWaitlisted({
+        participationId: "p-shared",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const ben = Participation.createWaitlisted({
+        participationId: "p-shared",
+        userId: "ben",
+        waitlistedAt: before,
+        queueSequence: 2,
+      });
+      const details = sessionDetails({
+        participations: [alice, ben],
+        nextQueueSequence: 3,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenDifferentParticipationsShareUserId_ThrowsDuplicateId", () => {
+      // Arrange
+      const firstEntry = Participation.createWaitlisted({
+        participationId: "p-alice-first",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const secondEntry = Participation.createWaitlisted({
+        participationId: "p-alice-second",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 2,
+      });
+      const details = sessionDetails({
+        participations: [firstEntry, secondEntry],
+        nextQueueSequence: 3,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenDifferentParticipationsShareHoldId_ThrowsDuplicateId", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const alice = source.participantList.requireParticipation("p-alice");
+      const ben = Participation.createCommitted({
+        participationId: "p-ben",
+        userId: "ben",
+        committedAt: before,
+        hold: FundHold.create({
+          holdId: "h-alice",
+          participationId: "p-ben",
+          holdingAccountId: source.holdingAccountId,
+          walletId: "w-ben",
+          amount: source.bookingShare,
+          createdAt: before,
+        }),
+      });
+      const details = sessionDetails({ participations: [alice, ben] });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenWaiterReusesHistoricalQueueSequence_ThrowsDuplicateId", () => {
+      // Arrange
+      const departedAlice = Participation.createWaitlisted({
+        participationId: "p-alice",
+        userId: "alice",
+        waitlistedAt: before,
+        queueSequence: 1,
+      }).leaveWaitlist();
+      const ben = Participation.createWaitlisted({
+        participationId: "p-ben",
+        userId: "ben",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+      const details = sessionDetails({
+        participations: [departedAlice, ben],
+        nextQueueSequence: 2,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(
+        expect.objectContaining({ code: "DUPLICATE_ID" }),
+      );
+    });
+
+    test("constructor_WhenPendingPayoutHasNoBatch_ThrowsDomainError", () => {
+      // Arrange
+
+      const details = sessionDetails({ status: "PAYOUT_PENDING" });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenNextSequenceDoesNotFollowQueue_ThrowsDomainError", () => {
+      // Arrange
+      const queued = Participation.createWaitlisted({
+        participationId: "queued",
+        userId: "queued-user",
+        waitlistedAt: before,
+        queueSequence: 5,
+      });
+      const details = sessionDetails({
+        participations: [queued],
+        nextQueueSequence: 5,
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenSettledRosterStillHasHeldFunds_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const roster = source.participantList.participations;
+      const details = sessionDetails({
+        participations: roster,
+        status: "SETTLED",
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenHoldUsesForeignAccount_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      const roster = source.participantList.participations;
+      const details = sessionDetails({
+        participations: roster,
+        holdingAccountId: "foreign",
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenPayoutAttemptIdsAreDuplicated_ThrowsDomainError", () => {
+      // Arrange
+
+      const details = sessionDetails({ payoutAttemptIds: ["same", "same"] });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenPayoutKeysAreDuplicated_ThrowsDomainError", () => {
+      // Arrange
+
+      const details = sessionDetails({
+        payoutIdempotencyKeys: ["same", "same"],
+      });
+
+      // Act & Assert
+      expect(() => new Session(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenNextSequenceFollowsQueue_RestoresNextWaiter", () => {
+      // Arrange
+      const queued = Participation.createWaitlisted({
+        participationId: "queued",
+        userId: "queued-user",
+        waitlistedAt: before,
+        queueSequence: 5,
+      });
+      const details = sessionDetails({
+        participations: [queued],
+        nextQueueSequence: 6,
+      });
+
+      // Act
+      const restoredSession = new Session(details);
+
+      // Assert
+      expect(restoredSession.participantList.nextWaitlisted()?.userId).toBe(
+        "queued-user",
+      );
+    });
+
+    test("constructor_WhenPendingBatchBelongsToAnotherSession_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+
+      // Act & Assert
+      expect(
+        () =>
+          new Session({
+            ...details,
+            pendingSettlement: { ...batch, sessionId: "foreign" },
+          }),
+      ).toThrow(DomainError);
+    });
+
+    test("constructor_WhenPendingLineUsesForeignWallet_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+
+      // Act & Assert
+      expect(
+        () =>
+          new Session({
+            ...details,
+            pendingSettlement: {
+              ...batch,
+              lines: [{ ...batch.lines[0]!, walletId: "foreign" }],
+            },
+          }),
+      ).toThrow(DomainError);
+    });
+
+    test("constructor_WhenPendingAttemptIsMissingFromHistory_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+
+      // Act & Assert
+      expect(() => new Session({ ...details, payoutAttemptIds: [] })).toThrow(
+        DomainError,
+      );
+    });
+
+    test("constructor_WhenPendingKeyIsMissingFromHistory_ThrowsDomainError", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+
+      // Act & Assert
+      expect(
+        () => new Session({ ...details, payoutIdempotencyKeys: [] }),
+      ).toThrow(DomainError);
+    });
+
+    test("pendingSettlement_WhenInputsAndOutputsAreMutated_PreservesBatchAndHistory", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+      const restoredSession = new Session(details);
+
+      // Act
+      batch.requestedAt.setFullYear(2000);
+      (
+        batch.destination as { bankAccountReference: string }
+      ).bankAccountReference = "changed";
+      (batch.lines as unknown[]).pop();
+      restoredSession.pendingSettlement?.requestedAt.setFullYear(2001);
+      const exposed = restoredSession.pendingSettlement!;
+      (
+        exposed.destination as { bankAccountReference: string }
+      ).bankAccountReference = "changed-again";
+      (exposed.lines as unknown[]).pop();
+
+      // Assert
+      expect(restoredSession.pendingSettlement?.requestedAt).toEqual(end);
+      expect(
+        restoredSession.pendingSettlement?.destination.bankAccountReference,
+      ).toBe("bank");
+      expect(restoredSession.pendingSettlement?.lines).toHaveLength(1);
+      expect(
+        restoredSession.pendingSettlement?.lines[0]?.amount.toCents(),
+      ).toBe(500);
+      expect(restoredSession.payoutAttemptIds).toEqual(["out"]);
+      expect(restoredSession.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+  });
+
+  describe("Settlement completion", () => {
+    test("completeSettlement_WhenPendingSessionIsRestored_SettlesIndependentlyOfSource", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+      const restoredSession = new Session(details);
+
+      // Act
+      const completion = restoredSession.completeSettlement("out", end);
+
+      // Assert
+      expect(completion.instructions.map((line) => line.kind)).toEqual([
+        "RELEASE",
+      ]);
+      expect(restoredSession.status).toBe("SETTLED");
+      expect(source.status).toBe("PAYOUT_PENDING");
+      expect(
+        source.participantList.requireParticipation("p-alice").hold?.state,
+      ).toBe("HELD");
+    });
+
+    test("completeSettlement_WhenCallbackIsStale_LeavesAllHoldsPending", () => {
+      // Arrange
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
+      readyBooker().verifyAttendance(bookingSession, {
+        marks: [
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
+        ],
+        now: end,
+      });
+      readyBooker().prepareSettlement(bookingSession, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => bookingSession.completeSettlement("stale", end)).toThrow(
+        expect.objectContaining({ code: "STALE_PAYOUT" }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("completeSettlement_WhenCompletionDateIsInvalid_LeavesAllHoldsPending", () => {
+      // Arrange
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
+      readyBooker().verifyAttendance(bookingSession, {
+        marks: [
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
+        ],
+        now: end,
+      });
+      readyBooker().prepareSettlement(bookingSession, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() =>
+        bookingSession.completeSettlement("out", new Date(Number.NaN)),
+      ).toThrow(DomainError);
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("completeSettlement_WhenSecondHoldFails_PreservesAllHoldsAndAllowsRetry", () => {
+      // Arrange
+      const bookingSession = createTestSession({
+        committedUserIds: ["alice", "ben"],
+      });
+      readyBooker().verifyAttendance(bookingSession, {
+        marks: [
+          { participationId: "p-alice", attendance: "ATTENDED" },
+          { participationId: "p-ben", attendance: "ATTENDED" },
+        ],
+        now: end,
+      });
+      readyBooker().prepareSettlement(bookingSession, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      const previousState = sessionState(bookingSession);
+      const failure = vi
+        .spyOn(
+          bookingSession.participantList.requireParticipation("p-ben"),
+          "settleHold",
+        )
+        .mockImplementationOnce(() => {
+          throw new DomainError("INVALID_STATE", "Second line rejected");
+        });
+
+      // Act & Assert
+      try {
+        expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+          expect.objectContaining({
+            code: "INVALID_STATE",
+            message: "Second line rejected",
+          }),
+        );
+        expect(sessionState(bookingSession)).toEqual(previousState);
+      } finally {
+        failure.mockRestore();
+      }
+
+      // Act
+      const completion = bookingSession.completeSettlement("out", end);
+
+      // Assert
+      expect(completion.instructions).toHaveLength(2);
+      expect(
+        bookingSession.participantList.participations.map(
+          (participation) => participation.hold?.state,
+        ),
+      ).toEqual(["RELEASED", "RELEASED"]);
+      expect(bookingSession.pendingSettlement).toBeUndefined();
+    });
   });
 });

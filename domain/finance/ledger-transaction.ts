@@ -1,5 +1,5 @@
 import { copyDate } from "../shared/date";
-import { requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { TransactionKind } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Money } from "./money";
@@ -75,32 +75,25 @@ export class LedgerTransaction {
 }
 
 function validate(details: LedgerTransactionDetails): void {
-  requireDomain(
-    typeof details.transactionId === "string" &&
-      details.transactionId.trim() !== "",
+  DomainError.require(
+    details.transactionId.trim() !== "",
     "INVALID_INPUT",
     "transactionId is required",
   );
-  requireDomain(
-    details.amount instanceof Money,
-    "INVALID_INPUT",
-    "Ledger transaction amount must be Money",
-  );
-  requireDomain(
+  DomainError.require(
     details.amount.toCents() > 0,
     "INVALID_INPUT",
     "Ledger transaction amount must be positive",
   );
-  requireDomain(
+  DomainError.require(
     ["TOP_UP", "LOCK", "RELEASE", "REFUND", "FORFEIT", "PAYOUT"].includes(
       details.kind,
     ),
     "INVALID_INPUT",
     "Unknown transaction kind",
   );
-  requireDomain(
-    typeof details.idempotencyKey === "string" &&
-      details.idempotencyKey.trim() !== "",
+  DomainError.require(
+    details.idempotencyKey.trim() !== "",
     "INVALID_INPUT",
     "idempotencyKey is required",
   );
@@ -112,8 +105,8 @@ function validate(details: LedgerTransactionDetails): void {
     details.externalReference,
   ])
     if (id !== undefined)
-      requireDomain(
-        typeof id === "string" && id.trim() !== "",
+      DomainError.require(
+        id.trim() !== "",
         "INVALID_INPUT",
         "References cannot be empty",
       );

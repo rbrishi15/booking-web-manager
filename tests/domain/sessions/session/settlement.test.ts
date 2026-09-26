@@ -1,112 +1,133 @@
-import { describe, expect, it } from "vitest";
+import { Session } from "@/domain";
+import { describe, expect, test } from "vitest";
 import {
   at,
-  captureError,
-  destination,
+  createTestUser,
   end,
-  join,
-  session,
+  readyBooker,
+  createTestSession,
+  sessionDetails,
+  sessionState,
 } from "./session-fixtures";
 
-describe("Session external settlement", () => {
-  it("keeps money held during payout, retries failure with new identity, and finalizes externally", () => {
+describe("Session", () => {
+  test("completeSettlement_WhenRestoredBatchOmitsPayableHold_LeavesAllFundsAndHistoryPending", () => {
     // Arrange
-    const s = session();
-    join(s, "a");
-    join(s, "b");
-    s.withdrawParticipant({ actorId: "a", participationId: "p-a", now: at(2) });
-    s.verifyAttendance({
-      actorId: "booker",
-      marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
+    const source = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    readyBooker().verifyAttendance(source, {
+      marks: [
+        { participationId: "p-alice", attendance: "ATTENDED" },
+        { participationId: "p-ben", attendance: "ATTENDED" },
+      ],
       now: end,
     });
-
-    // Act
-    const batch = s.prepareSettlement({
-      actorId: "booker",
+    const batch = readyBooker().prepareSettlement(source, {
       payoutId: "out",
       idempotencyKey: "key",
-      destination,
       now: end,
-    });
-    const pendingStatus = s.status;
-    const pendingKinds = batch?.lines.map((line) => line.kind);
-    const pendingHoldStates = s.participations.map((p) => p.hold?.state);
-    const inProgress = captureError(() =>
-      s.prepareSettlement({
-        actorId: "booker",
-        payoutId: "another",
-        idempotencyKey: "key2",
-        destination,
-        now: end,
+    })!;
+    const bookingSession = new Session(
+      sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participantList.participations,
+        pendingSettlement: { ...batch, lines: batch.lines.slice(0, 1) },
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
       }),
     );
-    const staleCompletion = captureError(() =>
-      s.completeSettlement("stale", end),
-    );
-    s.failSettlement("out", end);
-    const afterFailure = s.status;
-    const duplicatePayout = captureError(() =>
-      s.prepareSettlement({
-        actorId: "booker",
-        payoutId: "out",
-        idempotencyKey: "new",
-        destination,
-        now: end,
-      }),
-    );
-    const retryBatch = s.prepareSettlement({
-      actorId: "booker",
-      payoutId: "retry",
-      idempotencyKey: "retry-key",
-      destination,
-      now: end,
-    });
-    const completed = s.completeSettlement("retry", end);
-    const finalStatus = s.status;
-    const finalHoldStates = s.participations.map((p) => p.hold?.state);
-    const reliabilityOutcome =
-      s.participations[0]?.reliabilityOutcome(end)?.value;
+    const previousList = bookingSession.participantList;
+    const previousState = sessionState(bookingSession);
 
-    // Assert
-    expect(pendingStatus).toBe("PAYOUT_PENDING");
-    expect(pendingKinds).toEqual(["FORFEIT", "RELEASE"]);
-    expect(pendingHoldStates).toEqual(["FORFEITURE_DUE", "HELD"]);
-    expect(inProgress).toEqual(
-      expect.objectContaining({ code: "PAYOUT_IN_PROGRESS" }),
+    // Act & Assert
+    expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
     );
-    expect(staleCompletion).toEqual(
-      expect.objectContaining({ code: "STALE_PAYOUT" }),
-    );
-    expect(afterFailure).toBe("AWAITING_PAYOUT");
-    expect(duplicatePayout).toEqual(
-      expect.objectContaining({ code: "DUPLICATE_ID" }),
-    );
-    expect(retryBatch?.payoutId).toBe("retry");
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(bookingSession.status).toBe("PAYOUT_PENDING");
+    expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
+    expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
     expect(
-      completed.instructions.map((instruction) => instruction.kind),
-    ).toEqual(["FORFEIT", "RELEASE"]);
-    expect(finalStatus).toBe("SETTLED");
-    expect(finalHoldStates).toEqual(["FORFEITED", "RELEASED"]);
-    expect(reliabilityOutcome).toBe(0);
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["HELD", "HELD"]);
   });
 
-  it("settles empty sessions without a zero-value payout", () => {
+  test("completeSettlement_WhenCallbackIsStale_RejectsWithoutChangingState", () => {
     // Arrange
-    const s = session();
-
-    // Act
-    const batch = s.prepareSettlement({
-      actorId: "booker",
-      payoutId: "unused",
-      idempotencyKey: "unused",
-      destination,
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+    readyBooker().verifyAttendance(bookingSession, {
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
-    const status = s.status;
+    readyBooker().prepareSettlement(bookingSession, {
+      payoutId: "out",
+      idempotencyKey: "key",
+      now: end,
+    });
+
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => bookingSession.completeSettlement("stale", end)).toThrow(
+      expect.objectContaining({ code: "STALE_PAYOUT" }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("completeSettlement_WhenFailedAttemptIsRetriedWithNewIdentity_FinalizesHolds", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    createTestUser({ userId: "alice" })
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+    readyBooker().verifyAttendance(bookingSession, {
+      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
+      now: end,
+    });
+    readyBooker().prepareSettlement(bookingSession, {
+      payoutId: "out",
+      idempotencyKey: "key",
+      now: end,
+    });
+
+    // Act
+    bookingSession.failSettlement("out", end);
+    const statusAfterFailure = bookingSession.status;
+    const retryBatch = readyBooker().prepareSettlement(bookingSession, {
+      payoutId: "retry",
+      idempotencyKey: "retry-key",
+      now: end,
+    });
+    const completion = bookingSession.completeSettlement("retry", end);
 
     // Assert
-    expect(batch).toBeUndefined();
-    expect(status).toBe("SETTLED");
+    expect(statusAfterFailure).toBe("AWAITING_PAYOUT");
+    expect(retryBatch?.payoutId).toBe("retry");
+    expect(retryBatch?.idempotencyKey).toBe("retry-key");
+    expect(
+      completion.instructions.map((instruction) => instruction.kind),
+    ).toEqual(["FORFEIT", "RELEASE"]);
+    expect(bookingSession.status).toBe("SETTLED");
+    expect(
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["FORFEITED", "RELEASED"]);
+    expect(
+      bookingSession.participantList
+        .requireParticipation("p-alice")
+        .reliabilityOutcome(end)?.value,
+    ).toBe(0);
   });
 });

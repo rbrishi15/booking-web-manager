@@ -1,0 +1,113 @@
+@startuml domain-accounts
+title Accounts, roles and regular groups
+
+top to bottom direction
+hide empty members
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 22
+skinparam ArrowColor #64748B
+skinparam classBorderColor #64748B
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
+skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classBackgroundColor<<RoleView>> #F3E8FF
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 35
+skinparam ranksep 40
+
+class Booker <<RoleView>> {
+  +userId : UUID
+  --
+  +createSession(...) : Session
+  +cancel(...) : FinancialResult
+  +changeVisibility(...) : void
+  +removeParticipant(...) : FinancialResult
+  +verifyAttendance(...) : void
+  +prepareSettlement(...) : SettlementBatch [0..1]
+}
+
+class Participant <<RoleView>> {
+  +userId : UUID
+  --
+  +join(...) : AdmissionResult
+  +promoteFromWaitlist(...) : PromotionResult
+  +leaveWaitlist(...) : void
+  +withdraw(...) : WithdrawalResult
+  +offerReplacementToWaitlist(...) : FinancialResult
+}
+
+class User <<AggregateRoot>> {
+  +userId : UUID
+  +accountStatus : AccountStatus
+  +reliabilityScore : ReliabilityScore
+  +memberGroupIds : UUID[]
+  --
+  {static} +create(...) : User
+  +updateProfile(...) : void
+  +updatePreferences(...) : void
+  +beginPayoutSetup(...) : void
+  +payoutDestination() : PayoutDestination
+  +asBooker() : Booker
+  +asParticipant() : Participant
+  +deactivate(...) : void
+}
+
+class Wallet <<ImmutableChild>> {
+  +walletId : UUID
+  +userId : UUID
+  --
+  +getFunds() : Money
+}
+
+class Email <<ValueObject>> {
+  +toString() : string
+  +equals(...) : boolean
+}
+
+class PayoutAccount <<ImmutableChild>> {
+  +payoutAccountId : UUID
+  +userId : UUID
+  +setupStatus : PayoutSetupStatus
+  --
+  +completeSetup(...) : PayoutAccount
+  +failSetup() : PayoutAccount
+}
+
+class RegularGroup <<AggregateRoot>> {
+  +groupId : UUID
+  +ownerId : UUID
+  +name : string
+  +status : GroupStatus
+  +invitationActive : boolean
+  --
+  {static} +create(...) : RegularGroup
+  +join(...) : GroupJoinResult
+  +removeMember(...) : void
+  +rotateInvitation(...) : void
+  +archive(...) : void
+}
+
+class GroupMembership <<ImmutableChild>> {
+  +userId : UUID
+  +joinedAt : Date
+}
+
+Booker "0..*" -down-> "1" User : wraps
+Participant "0..*" -down-> "1" User : wraps
+User "1" *-down- "1" Wallet : wallet
+User "1" *-down- "0..1" PayoutAccount : payoutAccount
+User -down-> "0..1" Email : email
+RegularGroup "1" *-down- "1..*" GroupMembership : memberships
+
+User -[hidden]right- RegularGroup
+Wallet -[hidden]right- Email
+Email -[hidden]right- PayoutAccount
+
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize actors and run workflows; Session validates and records prepared changes.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
+@enduml

@@ -1,0 +1,140 @@
+@startuml domain-sessions
+title Sessions, participation and reliability
+
+top to bottom direction
+hide empty members
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 22
+skinparam ArrowColor #64748B
+skinparam classBorderColor #64748B
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
+skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classBackgroundColor<<RoleView>> #F3E8FF
+skinparam classBackgroundColor<<ImmutableCollection>> #FEF3C7
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 35
+skinparam ranksep 40
+
+class Session <<AggregateRoot>> {
+  +sessionId : UUID
+  +bookerId : UUID
+  +invitedGroupId : UUID [0..1]
+  +holdingAccountId : UUID
+  +status : SessionStatus
+  +visibility : Visibility
+  +totalSlots : number
+  +minimumReliability : ReliabilityScore [0..1]
+  +participantList : ParticipantListView
+  +pendingSettlement : SettlementBatch [0..1]
+  --
+  +recordAdmission(...) : void
+  +recordParticipationTransition(...) : void
+  +recordCancellation(...) : void
+  +recordAttendance(...) : void
+  +changeVisibility(...) : void
+  +recordSettlementPreparation(...) : void
+  +autoVerifyAttendance(...) : void
+  +expireReplacements(...) : void
+  +completeSettlement(...) : FinancialResult
+  +failSettlement(...) : void
+}
+
+class Participant <<RoleView>> {
+  +userId : UUID
+  --
+  +join(session, ...) : AdmissionResult
+  +promoteFromWaitlist(session, ...) : PromotionResult
+  +withdraw(session, ...) : WithdrawalResult
+  +leaveWaitlist(session, ...) : void
+  +offerReplacementToWaitlist(session, ...) : FinancialResult
+}
+
+class Booker <<RoleView>> {
+  +userId : UUID
+  --
+  +createSession(...) : Session
+  +cancel(session, ...) : FinancialResult
+  +changeVisibility(session, ...) : void
+  +removeParticipant(session, ...) : FinancialResult
+  +verifyAttendance(session, ...) : void
+  +prepareSettlement(session, ...) : SettlementBatch [0..1]
+}
+
+class Booking <<ValueObject>> {
+  +venueName : string
+  +region : Region
+  +sport : Sport
+  +startAt : Date
+  +endAt : Date
+  +totalCost : Money
+  --
+  +hasStarted(...) : boolean
+  +hasEnded(...) : boolean
+}
+
+class ParticipantList <<ImmutableCollection>> {
+  +participations : readonly Participation[]
+  +nextQueueSequence : number
+  +committedCount : number
+  --
+  +requireParticipation(id) : Participation
+  +findByUserId(id) : Participation [0..1]
+  +nextWaitlisted() : Participation [0..1]
+  +oldestAwaitingReplacement() : Participation [0..1]
+}
+
+class Participation <<ImmutableChild>> {
+  +participationId : UUID
+  +userId : UUID
+  +status : ParticipationStatus
+  +attendance : AttendanceStatus
+  +queueSequence : number [0..1]
+  +replacesParticipationId : UUID [0..1]
+  --
+  +commit(...) : Participation
+  +withdraw(...) : Participation
+  +verify(...) : Participation
+  +reliabilityOutcome(...) : ReliabilityOutcome [0..1]
+}
+
+class FundHold <<ImmutableChild>> {
+  +holdId : UUID
+  +participationId : UUID
+  +walletId : UUID
+  +holdingAccountId : UUID
+  +payoutId : UUID [0..1]
+  +amount : Money
+  +state : HoldState
+  --
+  +awaitReplacement() : FundHold
+  +refund(...) : FundHold
+  +release(...) : FundHold
+  +forfeit(...) : FundHold
+}
+
+class ReliabilityScore <<ValueObject>> {
+  {static} +from(...) : ReliabilityScore
+  {static} +fromHistory(...) : ReliabilityScore
+  +toNumber() : number
+  +meetsMinimum(...) : boolean
+}
+
+Session "1" *-down- "1" Booking : booking
+Participant .down.> Session : records prepared children
+Booker .down.> Session : creates; records prepared changes
+Session "1" *-down- "1" ParticipantList : participantList
+ParticipantList "1" *-down- "0..*" Participation : participations
+Participation "1" *-down- "0..1" FundHold : hold
+ReliabilityScore .up.> Participation : finalized outcomes
+Booking -[hidden]right- ParticipantList
+FundHold -[hidden]right- ReliabilityScore
+
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session atomically records prepared children through its internal list.\nThe participantList getter exposes only ParticipantListView queries.
+@enduml

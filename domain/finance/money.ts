@@ -20,24 +20,20 @@ export class Money {
   }
 
   equals(other: Money): boolean {
-    assertMoney(other);
     return this.#cents === other.#cents;
   }
 
   compareTo(other: Money): -1 | 0 | 1 {
-    assertMoney(other);
     if (this.#cents < other.#cents) return -1;
     if (this.#cents > other.#cents) return 1;
     return 0;
   }
 
   add(other: Money): Money {
-    assertMoney(other);
     return Money.fromBigInt(BigInt(this.#cents) + BigInt(other.#cents));
   }
 
   subtract(other: Money): Money {
-    assertMoney(other);
     return Money.fromBigInt(BigInt(this.#cents) - BigInt(other.#cents));
   }
 
@@ -74,9 +70,4 @@ export class Money {
     }
     return new Money(Number(cents));
   }
-}
-
-function assertMoney(value: Money): asserts value is Money {
-  if (!(value instanceof Money))
-    throw new RangeError("Money arithmetic requires another Money value");
 }

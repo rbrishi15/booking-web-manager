@@ -1,3 +1,4 @@
+export { Email } from "./accounts/email";
 export {
   Booking,
   type BookingDetails,
@@ -39,11 +40,10 @@ export {
 } from "./groups/regular-group";
 export {
   Session,
-  type JoinCommand,
-  type PromotionCommand,
-  type SessionCreation,
   type SessionDetails,
+  type SessionSettlementPreparation,
 } from "./sessions/session";
+export type { ParticipantListView } from "./sessions/session/participant-list";
 export {
   User,
   type UserRegistration,
@@ -58,9 +58,10 @@ export {
 } from "./accounts/booker";
 export {
   Participant,
+  type PromotionCommand,
   type LeaveWaitlistCommand,
-  type ParticipantAdmissionFacts,
   type ParticipantJoinCommand,
+  type ParticipantReplacementOfferCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
 export {
@@ -69,13 +70,11 @@ export {
 } from "./finance/wallet";
 export {
   DomainError,
-  requireDomain,
   type DomainErrorCode,
 } from "./shared/errors";
 export type {
-  AdmissionFacts,
   AdmissionResult,
-  DeactivationFacts,
+  DeactivationInput,
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,
@@ -87,15 +86,8 @@ export type {
 } from "./shared/operations";
 export type { LedgerReadPort } from "./finance/ledger-read-port";
 export type { HoldingAccountBalance } from "./finance/holding-account-balance";
-export {
-  createUserReliability,
-  type UserReliability,
-} from "./reliability/user-reliability";
 export type { WalletBalance } from "./finance/wallet-balance";
-export {
-  ReliabilityService,
-  type ParticipationHistoryEntry,
-} from "./reliability/reliability-service";
+export type { ParticipationHistoryEntry } from "./reliability/reliability-score";
 export type {
   AccountStatus,
   AttendanceStatus,

@@ -1,5 +1,5 @@
 import { copyDate, copyOptionalDate } from "../shared/date";
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type {
   AttendanceStatus,
   ParticipationStatus,
@@ -34,8 +34,10 @@ export interface ReliabilityOutcome {
 /**
  * Immutable child entity of the Session aggregate root; owns an optional FundHold.
  * Transition methods validate this child's state and return a replacement.
- * Session commands decide when to apply that replacement to the roster and
- * enforce rules involving other participants, capacity, or settlement.
+ * Participant runs voluntary workflows; Booker runs administrative workflows.
+ * Session records their prepared replacements through its ParticipantList,
+ * which protects capacity, queue order, and cross-participation consistency.
+ * Session retains lifecycle and settlement rules.
  */
 export class Participation {
   readonly #participationId: UUID;
@@ -56,7 +58,7 @@ export class Participation {
   constructor(details: ParticipationDetails) {
     requireId(details.participationId, "participationId");
     requireId(details.userId, "userId");
-    requireDomain(
+    DomainError.require(
       [
         "WAITLISTED",
         "COMMITTED",
@@ -68,19 +70,19 @@ export class Participation {
       "INVALID_INPUT",
       "Unknown participation status",
     );
-    requireDomain(
+    DomainError.require(
       ["UNVERIFIED", "ATTENDED", "ABSENT"].includes(details.attendance),
       "INVALID_INPUT",
       "Unknown attendance status",
     );
     if (details.replacementMode !== undefined)
-      requireDomain(
+      DomainError.require(
         ["OPEN_SLOT", "INVITE_LINK"].includes(details.replacementMode),
         "INVALID_INPUT",
         "Unknown replacement mode",
       );
     if (details.verificationMethod !== undefined)
-      requireDomain(
+      DomainError.require(
         ["BOOKER", "AUTOMATIC"].includes(details.verificationMethod),
         "INVALID_INPUT",
         "Unknown verification method",
@@ -90,12 +92,7 @@ export class Participation {
     const withdrawnAt = copyOptionalDate(details.withdrawnAt, "withdrawnAt");
     const verifiedAt = copyOptionalDate(details.verifiedAt, "verifiedAt");
     const hold = details.hold;
-    requireDomain(
-      hold === undefined || hold instanceof FundHold,
-      "INVALID_INPUT",
-      "A participation hold must be a FundHold",
-    );
-    requireDomain(
+    DomainError.require(
       hold === undefined || hold.participationId === details.participationId,
       "INVALID_INPUT",
       "The hold belongs to another participation",
@@ -126,41 +123,41 @@ export class Participation {
       );
     }
     if (details.status === "WAITLISTED") {
-      requireDomain(
+      DomainError.require(
         waitlistedAt !== undefined && details.queueSequence !== undefined,
         "INVALID_INPUT",
         "A waitlisted participation needs queue metadata",
       );
-      requireDomain(
+      DomainError.require(
         hold === undefined,
         "INVALID_INPUT",
         "A waitlisted participation cannot hold funds",
       );
     }
     if (details.status === "COMMITTED") {
-      requireDomain(
+      DomainError.require(
         committedAt !== undefined && hold !== undefined,
         "INVALID_INPUT",
         "A committed participation needs a commitment time and hold",
       );
-      requireDomain(
+      DomainError.require(
         ["HELD", "RELEASED", "FORFEITED"].includes(hold.state),
         "INVALID_INPUT",
         "A committed participation needs an active or settled hold",
       );
     }
     if (details.status === "WITHDRAWN") {
-      requireDomain(
+      DomainError.require(
         details.attendance === "UNVERIFIED",
         "INVALID_INPUT",
         "A withdrawn participation cannot have attendance",
       );
-      requireDomain(
+      DomainError.require(
         withdrawnAt !== undefined && hold !== undefined,
         "INVALID_INPUT",
         "A withdrawn participation needs a withdrawal time and hold",
       );
-      requireDomain(
+      DomainError.require(
         [
           "REFUNDED",
           "AWAITING_REPLACEMENT",
@@ -176,7 +173,7 @@ export class Participation {
       details.status === "REMOVED" ||
       details.status === "CANCELLED"
     ) {
-      requireDomain(
+      DomainError.require(
         hold === undefined ||
           ["REFUNDED", "RELEASED", "FORFEITED"].includes(hold.state),
         "INVALID_INPUT",
@@ -184,41 +181,40 @@ export class Participation {
       );
     }
     if (details.status !== "WITHDRAWN")
-      requireDomain(
+      DomainError.require(
         details.replacementMode === undefined &&
           details.replacementToken === undefined,
         "INVALID_INPUT",
         "Replacement details belong only to a withdrawn participation",
       );
     if (details.replacementToken !== undefined)
-      requireDomain(
-        typeof details.replacementToken === "string" &&
-          details.replacementToken.trim() !== "",
+      DomainError.require(
+        details.replacementToken.trim() !== "",
         "INVALID_INPUT",
         "A replacement token cannot be empty",
       );
     if (details.replacementMode === "INVITE_LINK")
-      requireDomain(
+      DomainError.require(
         details.replacementToken !== undefined,
         "INVALID_INPUT",
         "An invitation replacement needs a token",
       );
     if (details.replacementMode === "OPEN_SLOT")
-      requireDomain(
+      DomainError.require(
         details.replacementToken === undefined,
         "INVALID_INPUT",
         "An open-slot replacement cannot have an invitation token",
       );
     if (details.replacesParticipationId !== undefined) {
       requireId(details.replacesParticipationId, "replacesParticipationId");
-      requireDomain(
+      DomainError.require(
         details.replacesParticipationId !== details.participationId,
         "INVALID_INPUT",
         "A participation cannot replace itself",
       );
     }
     if (details.queueSequence !== undefined)
-      requireDomain(
+      DomainError.require(
         Number.isSafeInteger(details.queueSequence) &&
           details.queueSequence > 0,
         "INVALID_INPUT",
@@ -248,15 +244,14 @@ export class Participation {
     readonly queueSequence: number;
     readonly replacementToken?: string;
   }): Participation {
-    requireDomain(
+    DomainError.require(
       Number.isSafeInteger(details.queueSequence) && details.queueSequence > 0,
       "INVALID_INPUT",
       "Queue sequence must be positive",
     );
     if (details.replacementToken !== undefined)
-      requireDomain(
-        typeof details.replacementToken === "string" &&
-          details.replacementToken.trim() !== "",
+      DomainError.require(
+        details.replacementToken.trim() !== "",
         "INVALID_INPUT",
         "A replacement token cannot be empty",
       );
@@ -275,12 +270,7 @@ export class Participation {
     readonly replacesParticipationId?: UUID;
     readonly replacementMode?: ReplacementMode;
   }): Participation {
-    requireDomain(
-      details.hold instanceof FundHold,
-      "INVALID_INPUT",
-      "A commitment needs a FundHold",
-    );
-    requireDomain(
+    DomainError.require(
       details.hold.state === "HELD",
       "INVALID_INPUT",
       "A new commitment needs a held fund",
@@ -301,22 +291,17 @@ export class Participation {
     at: Date,
     replacesParticipationId?: UUID,
   ): Participation {
-    requireDomain(
+    DomainError.require(
       this.status === "WAITLISTED",
       "INVALID_STATE",
       "Only a waitlisted user can be promoted",
     );
-    requireDomain(
-      hold instanceof FundHold,
-      "INVALID_INPUT",
-      "Promotion requires a FundHold",
-    );
-    requireDomain(
+    DomainError.require(
       hold.state === "HELD",
       "INVALID_INPUT",
       "Promotion requires a held fund",
     );
-    requireDomain(
+    DomainError.require(
       hold.participationId === this.participationId,
       "INVALID_INPUT",
       "The hold belongs to another participation",
@@ -330,7 +315,7 @@ export class Participation {
   }
 
   leaveWaitlist(): Participation {
-    requireDomain(
+    DomainError.require(
       this.status === "WAITLISTED",
       "INVALID_STATE",
       "Only a waitlisted user can leave the waitlist",
@@ -346,34 +331,29 @@ export class Participation {
     replacementMode?: ReplacementMode,
     replacementToken?: string,
   ): Participation {
-    requireDomain(
+    DomainError.require(
       this.status === "COMMITTED",
       "INVALID_STATE",
       "Only a committed participant can withdraw",
     );
-    requireDomain(
-      hold instanceof FundHold,
-      "INVALID_INPUT",
-      "Withdrawal requires a FundHold",
-    );
-    requireDomain(
+    DomainError.require(
       hold.participationId === this.participationId,
       "INVALID_INPUT",
       "The hold belongs to another participation",
     );
-    requireDomain(
+    DomainError.require(
       ["REFUNDED", "AWAITING_REPLACEMENT"].includes(hold.state),
       "INVALID_STATE",
       "Withdrawal needs a refunded or awaiting-replacement hold",
     );
     if (replacementMode === "INVITE_LINK")
-      requireDomain(
-        typeof replacementToken === "string" && replacementToken.trim() !== "",
+      DomainError.require(
+        replacementToken !== undefined && replacementToken.trim() !== "",
         "INVALID_INPUT",
         "An invitation replacement needs a token",
       );
     if (replacementMode !== "INVITE_LINK")
-      requireDomain(
+      DomainError.require(
         replacementToken === undefined,
         "INVALID_INPUT",
         "An open-slot replacement cannot have an invitation token",
@@ -387,23 +367,32 @@ export class Participation {
     });
   }
 
+  offerReplacementToWaitlist(): Participation {
+    DomainError.require(
+      this.#status === "WITHDRAWN" &&
+        this.#hold?.state === "AWAITING_REPLACEMENT" &&
+        this.#replacementMode === "INVITE_LINK",
+      "INVALID_STATE",
+      "Only an awaiting personal replacement can be offered to the waitlist",
+    );
+    return this.withChanges({
+      replacementMode: "OPEN_SLOT",
+      replacementToken: undefined,
+    });
+  }
+
   remove(hold: FundHold): Participation {
-    requireDomain(
+    DomainError.require(
       this.status === "COMMITTED",
       "INVALID_STATE",
       "Only a committed participant can be removed",
     );
-    requireDomain(
-      hold instanceof FundHold,
-      "INVALID_INPUT",
-      "Removal requires a FundHold",
-    );
-    requireDomain(
+    DomainError.require(
       hold.state === "REFUNDED",
       "INVALID_STATE",
       "Removal requires a refund",
     );
-    requireDomain(
+    DomainError.require(
       hold.participationId === this.participationId,
       "INVALID_INPUT",
       "The hold belongs to another participation",
@@ -415,7 +404,7 @@ export class Participation {
   }
 
   cancel(hold?: FundHold): Participation {
-    requireDomain(
+    DomainError.require(
       ["WAITLISTED", "LEFT_WAITLIST", "COMMITTED", "WITHDRAWN"].includes(
         this.status,
       ),
@@ -423,25 +412,25 @@ export class Participation {
       "This participation is already closed",
     );
     if (this.status === "COMMITTED")
-      requireDomain(
+      DomainError.require(
         hold?.state === "REFUNDED",
         "INVALID_STATE",
         "Cancellation requires a refund",
       );
     if (this.status === "COMMITTED" || this.status === "WITHDRAWN")
-      requireDomain(
+      DomainError.require(
         hold === undefined || hold.participationId === this.participationId,
         "INVALID_INPUT",
         "The hold belongs to another participation",
       );
     if (this.status === "WAITLISTED" || this.status === "LEFT_WAITLIST")
-      requireDomain(
+      DomainError.require(
         hold === undefined,
         "INVALID_INPUT",
         "A waitlist participation cannot be cancelled with a hold",
       );
     if (this.status === "WITHDRAWN" && hold !== undefined)
-      requireDomain(
+      DomainError.require(
         hold.state === "REFUNDED",
         "INVALID_STATE",
         "Cancellation requires a refund",
@@ -459,22 +448,22 @@ export class Participation {
     method: "BOOKER" | "AUTOMATIC",
     at: Date,
   ): Participation {
-    requireDomain(
+    DomainError.require(
       attendance === "ATTENDED" || attendance === "ABSENT",
       "INVALID_INPUT",
       "Unknown attendance status",
     );
-    requireDomain(
+    DomainError.require(
       method === "BOOKER" || method === "AUTOMATIC",
       "INVALID_INPUT",
       "Unknown verification method",
     );
-    requireDomain(
+    DomainError.require(
       this.status === "COMMITTED",
       "INVALID_STATE",
       "Only a committed participant can be verified",
     );
-    requireDomain(
+    DomainError.require(
       this.attendance === "UNVERIFIED",
       "ATTENDANCE_CONFLICT",
       "Attendance has already been verified",
@@ -487,7 +476,7 @@ export class Participation {
   }
 
   refundReplacement(at: Date): Participation {
-    requireDomain(
+    DomainError.require(
       this.#status === "WITHDRAWN" &&
         this.#hold?.state === "AWAITING_REPLACEMENT",
       "INVALID_STATE",
@@ -512,19 +501,23 @@ export class Participation {
     at: Date,
   ): Participation {
     const hold = this.#hold;
-    requireDomain(
+    const isPayableParticipation =
       hold !== undefined &&
-        (this.#status === "COMMITTED" || this.#status === "WITHDRAWN"),
+      (this.#status === "COMMITTED" || this.#status === "WITHDRAWN");
+    DomainError.require(
+      isPayableParticipation,
       "INVALID_STATE",
       "Settlement requires a payable participation",
     );
-    requireDomain(
+    const settlementMatchesOutcome =
       kind === "RELEASE"
         ? this.#status === "COMMITTED" && this.#attendance === "ATTENDED"
         : kind === "FORFEIT" &&
-            (this.#status === "WITHDRAWN" ||
-              this.#attendance === "ABSENT" ||
-              hold.state === "FORFEITURE_DUE"),
+          (this.#status === "WITHDRAWN" ||
+            this.#attendance === "ABSENT" ||
+            hold.state === "FORFEITURE_DUE");
+    DomainError.require(
+      settlementMatchesOutcome,
       "INVALID_STATE",
       "Settlement reason must match the participation outcome",
     );
@@ -626,8 +619,8 @@ export class Participation {
 }
 
 function requireId(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );

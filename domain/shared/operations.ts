@@ -1,21 +1,8 @@
 import type { Money } from "../finance/money";
-import type { ReliabilityScore } from "../reliability/reliability-score";
-import type { AccountStatus } from "./statuses";
 import type { UUID } from "./types";
 
-/** Loaded by the use-case layer in the transaction, never accepted from a client DTO. */
-export interface AdmissionFacts {
-  readonly userId: UUID;
-  readonly walletId: UUID;
-  readonly accountStatus: AccountStatus;
-  /** Derived reliability supplied by the use-case layer. `reliabilityScore` is a compatibility alias. */
-  readonly score?: ReliabilityScore;
-  readonly reliabilityScore?: ReliabilityScore;
-  readonly availableBalance: Money;
-  readonly memberGroupIds: readonly UUID[];
-}
-
-export interface DeactivationFacts {
+/** Parameter object containing balances and obligations checked before deactivation. */
+export interface DeactivationInput {
   readonly availableBalance: Money;
   readonly heldBalance: Money;
   readonly activeCommitments: number;

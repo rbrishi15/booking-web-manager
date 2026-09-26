@@ -1,12 +1,15 @@
 import {
-  type AdmissionFacts,
   Booking,
+  FundHold,
   Money,
-  ReliabilityScore,
+  Participation,
   Session,
+  type BookerSessionCreation,
   type SessionDetails,
-  type SessionCreation,
 } from "@/domain";
+import { readyBookerUser } from "../../accounts/user-fixtures";
+
+export { createTestUser } from "../../accounts/user-fixtures";
 
 export const hour = 3_600_000;
 export const start = new Date("2026-10-10T10:00:00Z");
@@ -21,27 +24,9 @@ export const destination = {
   bankAccountReference: "bank",
 };
 
-export function facts(
-  userId: string,
-  patch: Partial<AdmissionFacts> = {},
-): AdmissionFacts {
-  return {
-    userId,
-    walletId: `w-${userId}`,
-    accountStatus: "ACTIVE",
-    availableBalance: Money.fromCents(10000),
-    score: ReliabilityScore.from(100),
-    memberGroupIds: [],
-    ...patch,
-  };
-}
-
-export function creationDetails(totalSlots = 2): SessionCreation {
+export function creationDetails(totalSlots = 2): BookerSessionCreation {
   return {
     sessionId: "s",
-    bookerId: "booker",
-    bookerStatus: "ACTIVE",
-    payoutReady: true,
     booking: new Booking({
       venueName: "Court",
       region: "North",
@@ -59,16 +44,63 @@ export function creationDetails(totalSlots = 2): SessionCreation {
   };
 }
 
-export function session(totalSlots = 2) {
-  return Session.create(creationDetails(totalSlots));
+export function readyBooker(userId = "booker") {
+  return readyBookerUser(userId).asBooker();
 }
 
-export function join(s: Session, id: string, now = before) {
-  return s.join({
-    participationId: `p-${id}`,
-    holdId: `h-${id}`,
-    facts: facts(id),
-    now,
+interface TestSessionOptions {
+  readonly totalSlots?: number;
+  readonly committedUserIds?: readonly string[];
+  readonly waitlistedUserIds?: readonly string[];
+}
+
+/** Constructs the declared starting roster; admission workflows stay in the test. */
+export function createTestSession({
+  totalSlots = 2,
+  committedUserIds = [],
+  waitlistedUserIds = [],
+}: TestSessionOptions = {}): Session {
+  const details = sessionDetails({ totalSlots });
+  const terms = {
+    holdingAccountId: details.holdingAccountId,
+    bookingShare: details.booking.totalCost.divideFloor(totalSlots),
+  };
+  return new Session({
+    ...details,
+    participations: [
+      ...committedUserIds.map((userId) =>
+        committedParticipation(terms, userId),
+      ),
+      ...waitlistedUserIds.map((userId, index) =>
+        Participation.createWaitlisted({
+          participationId: `p-${userId}`,
+          userId,
+          waitlistedAt: before,
+          queueSequence: index + 1,
+        }),
+      ),
+    ],
+    nextQueueSequence: waitlistedUserIds.length + 1,
+  });
+}
+
+export function committedParticipation(
+  session: Pick<Session, "holdingAccountId" | "bookingShare">,
+  userId: string,
+  now = before,
+) {
+  return Participation.createCommitted({
+    participationId: `p-${userId}`,
+    userId,
+    committedAt: now,
+    hold: FundHold.create({
+      holdId: `h-${userId}`,
+      participationId: `p-${userId}`,
+      holdingAccountId: session.holdingAccountId,
+      walletId: `w-${userId}`,
+      amount: session.bookingShare,
+      createdAt: now,
+    }),
   });
 }
 
@@ -100,7 +132,7 @@ export function sessionState(s: Session) {
     status: s.status,
     visibility: s.visibility,
     invitedGroupId: s.invitedGroupId,
-    nextQueueSequence: s.nextQueueSequence,
+    nextQueueSequence: s.participantList.nextQueueSequence,
     payoutAttemptIds: s.payoutAttemptIds,
     payoutIdempotencyKeys: s.payoutIdempotencyKeys,
     pendingSettlement: batch && {
@@ -110,7 +142,7 @@ export function sessionState(s: Session) {
         amount: line.amount.toCents(),
       })),
     },
-    participations: s.participations.map((p) => ({
+    participations: s.participantList.participations.map((p) => ({
       participationId: p.participationId,
       userId: p.userId,
       status: p.status,
@@ -137,13 +169,4 @@ export function sessionState(s: Session) {
       },
     })),
   };
-}
-
-export function captureError(run: () => unknown): unknown {
-  try {
-    run();
-    return undefined;
-  } catch (error) {
-    return error;
-  }
 }
