@@ -78,6 +78,56 @@ describe("Session", () => {
     expect(bookingSession.nextQueueSequence).toBe(queueSequence);
   });
 
+  test("offerReplacementToWaitlist_WhenOwnerWithdrewBeforeOpenSlotParticipant_PreservesOriginalRefundPriority", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "alice");
+    join(bookingSession, "ben");
+    join(bookingSession, "dana");
+    bookingSession.withdrawParticipant({
+      actorId: "ben",
+      participationId: "p-ben",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "ben-replacement",
+    });
+    bookingSession.withdrawParticipant({
+      actorId: "alice",
+      participationId: "p-alice",
+      now: at(9),
+      replacementMode: "OPEN_SLOT",
+    });
+
+    // Act
+    bookingSession.offerReplacementToWaitlist({
+      actorId: "ben",
+      participationId: "p-ben",
+      now: at(8),
+    });
+    const promotion = bookingSession.promoteNext(loadedUser("dana"), {
+      holdId: "h-dana",
+      now: at(7),
+    });
+
+    // Assert
+    expect(promotion).toMatchObject({
+      kind: "PROMOTED",
+      refundedParticipationId: "p-ben",
+      instructions: [
+        { kind: "LOCK", participationId: "p-dana" },
+        { kind: "REFUND", participationId: "p-ben" },
+      ],
+    });
+    const ben = bookingSession.participations.find((p) => p.userId === "ben");
+    const alice = bookingSession.participations.find((p) => p.userId === "alice");
+    const dana = bookingSession.participations.find((p) => p.userId === "dana");
+    expect(ben?.withdrawnAt).toEqual(at(10));
+    expect(ben?.hold?.state).toBe("REFUNDED");
+    expect(alice?.withdrawnAt).toEqual(at(9));
+    expect(alice?.hold?.state).toBe("AWAITING_REPLACEMENT");
+    expect(dana?.replacesParticipationId).toBe("p-ben");
+  });
+
   test("offerReplacementToWaitlist_WhenActorIsNotOwner_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = session();
