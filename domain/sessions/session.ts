@@ -1,9 +1,6 @@
-import { calculateJoin } from "./session-admission";
+import { calculateJoin, calculatePromotion } from "./session-admission";
 import { availableSlots } from "./session-roster";
-import {
-  ineligibilityReason,
-  meetsReliabilityRequirement,
-} from "./session-admission";
+import { meetsReliabilityRequirement } from "./session-admission";
 import {
   leaveWaitlist,
   withdrawParticipant,
@@ -15,9 +12,6 @@ import {
   autoVerifyAttendance,
 } from "./session-roster";
 import {
-  oldestAwaiting,
-  lockInstruction,
-  refundInstruction,
   requireParticipation,
   nextWaitlisted,
   replaceParticipation,
@@ -51,8 +45,7 @@ import type {
 } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Booking } from "./booking";
-import { FundHold } from "./fund-hold";
-import { Participation } from "./participation";
+import type { Participation } from "./participation";
 
 export interface SessionDetails {
   readonly sessionId: UUID;
@@ -249,61 +242,22 @@ export class Session {
 
   promoteNext(user: User, command: PromotionCommand): PromotionResult {
     this.assertOpenBefore(command.now);
-    const next = nextWaitlisted(this.#participations);
-    if (next === undefined) return { kind: "NONE", instructions: [] };
-    requireId(command.holdId, "holdId");
-    DomainError.require(
-      this.getAvailableSlots(command.now) > 0,
-      "CAPACITY_EXCEEDED",
-      "There is no available slot to promote",
-    );
-    DomainError.require(
-      next.userId === user.userId,
-      "INVALID_INPUT",
-      "Promotion input belongs to another user",
-    );
-    const reason = ineligibilityReason(
+    const change = calculatePromotion(
       {
-        minimumReliability: this.#minimumReliability,
-        totalCost: this.#booking.totalCost,
+        sessionId: this.#sessionId,
+        holdingAccountId: this.#holdingAccountId,
+        participations: this.#participations,
+        nextQueueSequence: this.#nextQueueSequence,
         totalSlots: this.#totalSlots,
+        totalCost: this.#booking.totalCost,
+        minimumReliability: this.#minimumReliability,
       },
       user,
+      command,
     );
-    if (reason !== undefined) {
-      this.#participations = replaceParticipation(
-        this.#participations,
-        next.participationId,
-        next.leaveWaitlist(),
-      );
-      return {
-        kind: "SKIPPED",
-        participationId: next.participationId,
-        reason,
-        instructions: [],
-      };
-    }
-    const replacement = oldestAwaiting(this.#participations);
-    const committed = next.commit(
-      this.newHold(next.participationId, command.holdId, user, command.now),
-      command.now,
-      replacement?.participationId,
-    );
-    this.#participations = replaceParticipation(
-      this.#participations,
-      next.participationId,
-      committed,
-    );
-    const refund = this.refundOldestAwaiting(command.now);
-    return {
-      kind: "PROMOTED",
-      participationId: committed.participationId,
-      refundedParticipationId: refund.participationId,
-      instructions: [
-        lockInstruction(this.#sessionId, committed, command.now),
-        ...(refund.instruction === undefined ? [] : [refund.instruction]),
-      ],
-    };
+    this.#participations = change.participations;
+    this.#nextQueueSequence = change.nextQueueSequence;
+    return change.result;
   }
 
   leaveWaitlist(command: {
@@ -704,40 +658,6 @@ export class Session {
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {
     return meetsReliabilityRequirement(score, this.#minimumReliability);
-  }
-
-  private refundOldestAwaiting(at: Date): {
-    readonly participationId?: UUID;
-    readonly instruction?: FinancialInstruction;
-  } {
-    const awaiting = oldestAwaiting(this.#participations);
-    if (awaiting === undefined || awaiting.hold === undefined) return {};
-    const refunded = awaiting.refundReplacement(at);
-    this.#participations = replaceParticipation(
-      this.#participations,
-      awaiting.participationId,
-      refunded,
-    );
-    return {
-      participationId: awaiting.participationId,
-      instruction: refundInstruction(this.#sessionId, refunded, at),
-    };
-  }
-
-  private newHold(
-    participationId: UUID,
-    holdId: UUID,
-    user: User,
-    now: Date,
-  ): FundHold {
-    return FundHold.create({
-      holdId,
-      participationId,
-      holdingAccountId: this.#holdingAccountId,
-      walletId: user.wallet.walletId,
-      amount: this.bookingShare,
-      createdAt: now,
-    });
   }
 
   private assertOpenBefore(at: Date): void {

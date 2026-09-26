@@ -420,6 +420,48 @@ describe("Session", () => {
   });
 
   describe("Queue promotion", () => {
+    test("promoteNext_WhenReplacementRefundFails_LeavesRosterQueueAndHoldsUnchanged", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      join(bookingSession, "first-waiter");
+      join(bookingSession, "second-waiter");
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: at(2),
+      });
+      const previousState = sessionState(bookingSession);
+      const awaiting = bookingSession.participations.find(
+        (p) => p.participationId === "p-a",
+      )!;
+      const failure = new DomainError(
+        "INVALID_STATE",
+        "Replacement refund failed",
+      );
+      const refund = vi
+        .spyOn(awaiting, "refundReplacement")
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+
+      try {
+        // Act & Assert
+        expect(() =>
+          bookingSession.promoteNext(loadedUser("first-waiter"), {
+            holdId: "h-promoted",
+            now: at(1),
+          }),
+        ).toThrow(failure);
+        expect(refund).toHaveBeenCalledOnce();
+        expect(sessionState(bookingSession)).toEqual(previousState);
+        expect(bookingSession.nextWaitlistedUserId).toBe("first-waiter");
+      } finally {
+        refund.mockRestore();
+      }
+    });
+
     test("promoteNext_WhenLoadedUserDoesNotMatchNextWaiter_RejectsWithoutChangingState", () => {
       // Arrange
       const bookingSession = session();

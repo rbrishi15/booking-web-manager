@@ -1,7 +1,8 @@
 import { FundHold } from "./fund-hold";
-import type { JoinCommand } from "./session";
+import type { JoinCommand, PromotionCommand } from "./session";
 import type {
   AdmissionResult,
+  PromotionResult,
   FinancialInstruction,
 } from "../shared/operations";
 import {
@@ -12,7 +13,7 @@ import {
   lockInstruction,
   refundInstruction,
 } from "./session-roster";
-import { validDate } from "./session-validation";
+import { requireId, validDate } from "./session-validation";
 import type { User } from "../accounts/user";
 import type { Money } from "../finance/money";
 import type { ReliabilityScore } from "../reliability/reliability-score";
@@ -278,5 +279,90 @@ function refundOldestAwaiting(
     ),
     participationId: awaiting.participationId,
     instruction: refundInstruction(sessionId, refunded, at),
+  };
+}
+
+interface PromotionRules extends EligibilityRules {
+  readonly sessionId: UUID;
+  readonly holdingAccountId: UUID;
+  readonly participations: readonly Participation[];
+  readonly nextQueueSequence: number;
+}
+
+export function calculatePromotion(
+  rules: PromotionRules,
+  user: User,
+  command: PromotionCommand,
+): AdmissionChange<PromotionResult> {
+  const next = nextWaitlisted(rules.participations);
+  if (next === undefined)
+    return {
+      participations: [...rules.participations],
+      nextQueueSequence: rules.nextQueueSequence,
+      result: { kind: "NONE", instructions: [] },
+    };
+  requireId(command.holdId, "holdId");
+  validDate(command.now, "now");
+  DomainError.require(
+    availableSlots(rules.participations, rules.totalSlots) > 0,
+    "CAPACITY_EXCEEDED",
+    "There is no available slot to promote",
+  );
+  DomainError.require(
+    next.userId === user.userId,
+    "INVALID_INPUT",
+    "Promotion input belongs to another user",
+  );
+  const reason = ineligibilityReason(rules, user);
+  if (reason !== undefined) {
+    return {
+      participations: replaceParticipation(
+        rules.participations,
+        next.participationId,
+        next.leaveWaitlist(),
+      ),
+      nextQueueSequence: rules.nextQueueSequence,
+      result: {
+        kind: "SKIPPED",
+        participationId: next.participationId,
+        reason,
+        instructions: [],
+      },
+    };
+  }
+  const replacement = oldestAwaiting(rules.participations);
+  const committed = next.commit(
+    createAdmissionHold(
+      rules,
+      next.participationId,
+      command.holdId,
+      user,
+      command.now,
+    ),
+    command.now,
+    replacement?.participationId,
+  );
+  const participations = replaceParticipation(
+    rules.participations,
+    next.participationId,
+    committed,
+  );
+  const refund = refundOldestAwaiting(
+    rules.sessionId,
+    participations,
+    command.now,
+  );
+  return {
+    participations: refund.participations,
+    nextQueueSequence: rules.nextQueueSequence,
+    result: {
+      kind: "PROMOTED",
+      participationId: committed.participationId,
+      refundedParticipationId: refund.participationId,
+      instructions: [
+        lockInstruction(rules.sessionId, committed, command.now),
+        ...(refund.instruction === undefined ? [] : [refund.instruction]),
+      ],
+    },
   };
 }
