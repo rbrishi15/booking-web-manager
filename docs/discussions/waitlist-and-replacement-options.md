@@ -33,6 +33,15 @@ forfeits her own $10 share. Her withdrawal does not make Ben responsible again
 or reverse his refund. The user selected this outcome for product-owner review;
 approval remains pending.
 
+**Proposed limit on booker refund exceptions (26 September 2026):** Ben withdraws
+two hours before start, nobody replaces him, and the session will still go
+ahead. The booker cannot waive Ben's charge individually under the first-release
+proposal. Ben remains awaiting replacement; his share is refunded if a
+replacement successfully joins or the booker cancels the session, and is
+forfeited if no replacement is found before start. This does not change the
+diagram's refund when the booker removes a still-joined participant. The user
+selected this limit for product-owner review; approval remains pending.
+
 ## 1. Confirmed baseline: the supplied state diagram
 
 ![Product-owner-confirmed participant state diagram, reproduced without changes](../assets/participant-state-diagram-product-owner-reference.png)
@@ -141,6 +150,7 @@ waitlist is a valid outcome of the discussion.
 | Which allocation approach, or alternative, should the product use? | Pending | Pending |
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
+| Can the booker waive one participant's charge after that participant has already withdrawn late, while the session still goes ahead? | User proposes no individual exception in the first release; product-owner answer pending. | Pending |
 | Who receives the refund when several participants await replacement? | Pending | Pending |
 | If personal links exist, do they reserve capacity and outrank waiting people? | Pending | Pending |
 | If Option 3 is chosen, which rows in section 4 are approved or changed? | Pending | Pending |
