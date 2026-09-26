@@ -1,0 +1,71 @@
+@startuml domain-settlement
+title Payouts and settlement snapshots
+
+top to bottom direction
+hide empty members
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 22
+skinparam ArrowColor #64748B
+skinparam classBorderColor #64748B
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
+skinparam classBackgroundColor<<Snapshot>> #FFF7ED
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 35
+skinparam ranksep 40
+
+class Payout <<AggregateRoot>> {
+  +payoutId : UUID
+  +sessionId : UUID
+  +payoutAccountId : UUID
+  +amount : Money
+  +status : PayoutStatus
+  +idempotencyKey : string
+  +requestedAt : Date
+  +completedAt : Date [0..1]
+  +failedAt : Date [0..1]
+  --
+  {static} +create(batch) : Payout
+  +complete(...) : boolean
+  +fail(...) : boolean
+  +requestedIntent() : PayoutRequestedIntent
+}
+
+interface SettlementBatch <<Snapshot>> {
+  +payoutId : UUID
+  +sessionId : UUID
+  +idempotencyKey : string
+  +requestedAt : Date
+  +lines : SettlementLine [1..*]
+  +destination : PayoutDestination
+}
+
+interface SettlementLine <<Snapshot>> {
+  +holdId : UUID
+  +participationId : UUID
+  +holdingAccountId : UUID
+  +walletId : UUID
+  +amount : Money
+  +kind : RELEASE | FORFEIT
+}
+
+interface PayoutDestination <<Snapshot>> {
+  +payoutAccountId : UUID
+  +userId : UUID
+  +providerAccountReference : string
+  +bankAccountReference : string
+}
+
+Payout .right.> SettlementBatch : create(batch)
+Payout "1" *-down- "1..*" SettlementLine : frozen lines
+Payout "1" *-down- "1" PayoutDestination : frozen destination
+SettlementLine -[hidden]right- PayoutDestination
+
+caption Selected public members; (...) abbreviates parameters.\nSession prepares and owns the pending batch; Payout freezes copies for one attempt.\nIDs refer to Session, PayoutAccount, User, Participation, FundHold, Wallet and HoldingAccount.
+@enduml

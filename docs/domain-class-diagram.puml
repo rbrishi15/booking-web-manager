@@ -1,0 +1,98 @@
+@startuml domain-class-diagram
+' Main view: aggregate ownership and the main cross-aggregate references.
+' Supporting values, role views, ledger queries and operations are in diagrams/.
+title Domain model
+caption Booking Web Manager · Aggregate roots and owned objects
+
+top to bottom direction
+hide circle
+hide empty members
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 24
+skinparam captionFontColor #64748B
+skinparam ArrowColor #64748B
+skinparam ArrowFontSize 12
+skinparam classBorderColor #94A3B8
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
+skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 90
+skinparam ranksep 55
+
+class User <<AggregateRoot>> {
+  +userId : UUID
+  +email : Email [0..1]
+  +accountStatus : AccountStatus
+}
+class RegularGroup <<AggregateRoot>> {
+  +groupId : UUID
+  +name : string
+  +status : GroupStatus
+}
+class Session <<AggregateRoot>> {
+  +sessionId : UUID
+  +status : SessionStatus
+  +totalSlots : number
+  +bookingShare : Money {derived}
+}
+class Payout <<AggregateRoot>> {
+  +payoutId : UUID
+  +status : PayoutStatus
+  +amount : Money
+}
+class Wallet <<ImmutableChild>> {
+  +walletId : UUID
+  +getFunds() : Money
+}
+class PayoutAccount <<ImmutableChild>> {
+  +payoutAccountId : UUID
+  +setupStatus : PayoutSetupStatus
+}
+class GroupMembership <<ImmutableChild>> {
+  +userId : UUID
+  +joinedAt : Date
+}
+class Booking <<ValueObject>> {
+  +venueName : string
+  +startAt : Date
+  +endAt : Date
+  +totalCost : Money
+}
+class Participation <<ImmutableChild>> {
+  +participationId : UUID
+  +userId : UUID
+  +status : ParticipationStatus
+  +attendance : AttendanceStatus
+}
+class FundHold <<ImmutableChild>> {
+  +holdId : UUID
+  +walletId : UUID
+  +amount : Money
+  +state : HoldState
+}
+
+' Keep the aggregate references together; owned children branch downward.
+User "1" <-right- "0..*" Session : booker
+Session "1" <-right- "0..*" Payout : attempts
+RegularGroup "0..*" -down-> "1" User : owner
+Session "0..*" -up-> "0..1" RegularGroup : invited group
+
+User "1" *-down- "1" Wallet
+User "1" *-down- "0..1" PayoutAccount
+RegularGroup "1" *-left- "1..*" GroupMembership
+Session "1" *-down- "1" Booking
+Session "1" *-down- "0..*" Participation
+Participation "1" *-down- "0..1" FundHold
+
+legend bottom left
+  <back:#DBEAFE> Aggregate root </back>   <back:#DCFCE7> Value object </back>
+  Filled diamond: ownership · Arrow: ID reference
+  Supporting types and operations appear in the focused diagrams.
+endlegend
+@enduml

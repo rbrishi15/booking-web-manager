@@ -1,0 +1,101 @@
+@startuml domain-sessions
+title Sessions, participation and reliability
+
+top to bottom direction
+hide empty members
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 14
+skinparam titleFontSize 22
+skinparam ArrowColor #64748B
+skinparam classBorderColor #64748B
+skinparam classBackgroundColor #FFFFFF
+skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
+skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 35
+skinparam ranksep 40
+
+class Session <<AggregateRoot>> {
+  +sessionId : UUID
+  +bookerId : UUID
+  +invitedGroupId : UUID [0..1]
+  +holdingAccountId : UUID
+  +status : SessionStatus
+  +visibility : Visibility
+  +totalSlots : number
+  +minimumReliability : ReliabilityScore [0..1]
+  +pendingSettlement : SettlementBatch [0..1]
+  --
+  {static} +create(...) : Session
+  +join(...) : AdmissionResult
+  +promoteNext(...) : PromotionResult
+  +withdrawParticipant(...) : WithdrawalResult
+  +cancel(...) : FinancialResult
+  +verifyAttendance(...) : void
+  +prepareSettlement(...) : SettlementBatch [0..1]
+  +completeSettlement(...) : FinancialResult
+  +failSettlement(...) : void
+}
+
+class Booking <<ValueObject>> {
+  +venueName : string
+  +region : Region
+  +sport : Sport
+  +startAt : Date
+  +endAt : Date
+  +totalCost : Money
+  --
+  +hasStarted(...) : boolean
+  +hasEnded(...) : boolean
+}
+
+class Participation <<ImmutableChild>> {
+  +participationId : UUID
+  +userId : UUID
+  +status : ParticipationStatus
+  +attendance : AttendanceStatus
+  +queueSequence : number [0..1]
+  +replacesParticipationId : UUID [0..1]
+  --
+  +commit(...) : Participation
+  +withdraw(...) : Participation
+  +verify(...) : Participation
+  +reliabilityOutcome(...) : ReliabilityOutcome [0..1]
+}
+
+class FundHold <<ImmutableChild>> {
+  +holdId : UUID
+  +participationId : UUID
+  +walletId : UUID
+  +holdingAccountId : UUID
+  +payoutId : UUID [0..1]
+  +amount : Money
+  +state : HoldState
+  --
+  +awaitReplacement() : FundHold
+  +refund(...) : FundHold
+  +release(...) : FundHold
+  +forfeit(...) : FundHold
+}
+
+class ReliabilityScore <<ValueObject>> {
+  {static} +from(...) : ReliabilityScore
+  {static} +fromHistory(...) : ReliabilityScore
+  +toNumber() : number
+  +meetsMinimum(...) : boolean
+}
+
+Session "1" *-down- "1" Booking : booking
+Session "1" *-down- "0..*" Participation : participations
+Participation "1" *-down- "0..1" FundHold : hold
+ReliabilityScore .up.> Participation : finalized outcomes
+Booking -[hidden]right- Participation
+FundHold -[hidden]right- ReliabilityScore
+
+caption Selected public members; (...) abbreviates parameters.\nExternal IDs refer to User, RegularGroup, Wallet, HoldingAccount and Payout.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
+@enduml
