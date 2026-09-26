@@ -16,6 +16,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md).
 - [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md).
 - [ADR-0005: Domain unit-test structure](./adr/0005-domain-unit-test-structure.md).
+- [ADR-0006: Personal replacement reservations — proposed](./adr/0006-personal-replacement-reservations.md).
 
 Product discussions awaiting approval:
 
