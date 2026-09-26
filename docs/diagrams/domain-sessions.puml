@@ -15,6 +15,7 @@ skinparam classBorderColor #64748B
 skinparam classBackgroundColor #FFFFFF
 skinparam classBackgroundColor<<AggregateRoot>> #DBEAFE
 skinparam classBackgroundColor<<ValueObject>> #DCFCE7
+skinparam classBackgroundColor<<RoleView>> #F3E8FF
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
 skinparam nodesep 35
@@ -32,14 +33,25 @@ class Session <<AggregateRoot>> {
   +pendingSettlement : SettlementBatch [0..1]
   --
   {static} +create(...) : Session
-  +join(...) : AdmissionResult
-  +promoteNext(...) : PromotionResult
-  +withdrawParticipant(...) : WithdrawalResult
+  +admitParticipant(participant, ...) : AdmissionResult
+  +promoteNext(participant, ...) : PromotionResult
+  +applyParticipantWithdrawal(participant, ...) : WithdrawalResult
+  +removeWaitlistedParticipant(participant, ...) : void
+  +releaseParticipantReplacement(participant, ...) : FinancialResult
   +cancel(...) : FinancialResult
   +verifyAttendance(...) : void
   +prepareSettlement(...) : SettlementBatch [0..1]
   +completeSettlement(...) : FinancialResult
   +failSettlement(...) : void
+}
+
+class Participant <<RoleView>> {
+  +userId : UUID
+  --
+  +join(session, ...) : AdmissionResult
+  +withdraw(session, ...) : WithdrawalResult
+  +leaveWaitlist(session, ...) : void
+  +offerReplacementToWaitlist(session, ...) : FinancialResult
 }
 
 class Booking <<ValueObject>> {
@@ -91,11 +103,12 @@ class ReliabilityScore <<ValueObject>> {
 }
 
 Session "1" *-down- "1" Booking : booking
+Participant .down.> Session : requests guarded roster change
 Session "1" *-down- "0..*" Participation : participations
 Participation "1" *-down- "0..1" FundHold : hold
 ReliabilityScore .up.> Participation : finalized outcomes
 Booking -[hidden]right- Participation
 FundHold -[hidden]right- ReliabilityScore
 
-caption Selected public members; (...) abbreviates parameters.\nExternal IDs refer to User, RegularGroup, Wallet, HoldingAccount and Payout.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
+caption Selected public members; (...) abbreviates parameters.\nSession invokes Participant's eligibility, funding and departure calculations before applying changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
 @enduml

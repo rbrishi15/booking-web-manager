@@ -35,6 +35,7 @@ class Participant <<RoleView>> {
   +join(...) : AdmissionResult
   +leaveWaitlist(...) : void
   +withdraw(...) : WithdrawalResult
+  +offerReplacementToWaitlist(...) : FinancialResult
 }
 
 class User <<AggregateRoot>> {
@@ -104,5 +105,5 @@ User -[hidden]right- RegularGroup
 Wallet -[hidden]right- Email
 Email -[hidden]right- PayoutAccount
 
-caption Selected public members; (...) abbreviates parameters.\nRole views command Session. Group owner/member IDs refer to User.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
+caption Selected public members; (...) abbreviates parameters.\nParticipant owns eligibility, funding and voluntary-departure decisions; Session owns the roster.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
 @enduml

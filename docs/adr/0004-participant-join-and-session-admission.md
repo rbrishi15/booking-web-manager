@@ -3,6 +3,12 @@
 - Status: Accepted
 - Date: 2026-09-16
 
+Admission routing is superseded by
+[ADR-0007](./0007-participant-behavior-and-session-roster.md). The complete-user
+hydration, refresh, and unit-of-work contracts remain accepted. The original
+delegation code and sequence diagram below are decision history; Session now
+collaborates with Participant instead of receiving User directly.
+
 ## Context
 
 `User` represents a person in the booking domain. Admission needs that user's

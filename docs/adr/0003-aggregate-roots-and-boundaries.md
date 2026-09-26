@@ -3,6 +3,12 @@
 - Status: Accepted
 - Date: 2026-09-15
 
+Participant responsibility routing is superseded by
+[ADR-0007](./0007-participant-behavior-and-session-roster.md). Aggregate ownership
+and persistence boundaries remain accepted. The original routing below is kept
+as decision history: participant actions now contain their own rules and
+collaborate with guarded Session operations.
+
 ## Context
 
 The domain contains entities, value objects, role views, and derived facts.

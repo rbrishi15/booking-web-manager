@@ -40,7 +40,6 @@ export {
 } from "./groups/regular-group";
 export {
   Session,
-  type JoinCommand,
   type PromotionCommand,
   type SessionCreation,
   type SessionDetails,
@@ -61,6 +60,7 @@ export {
   Participant,
   type LeaveWaitlistCommand,
   type ParticipantJoinCommand,
+  type ParticipantReplacementOfferCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
 export {

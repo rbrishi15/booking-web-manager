@@ -4,6 +4,7 @@ import {
   destination,
   end,
   join,
+  loadedUser,
   session,
   sessionState,
 } from "./session-fixtures";
@@ -14,11 +15,9 @@ describe("Session", () => {
     const bookingSession = session();
     join(bookingSession, "a");
     join(bookingSession, "b");
-    bookingSession.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: at(2),
-    });
+    loadedUser("a")
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
     bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
@@ -52,11 +51,9 @@ describe("Session", () => {
     const bookingSession = session();
     join(bookingSession, "a");
     join(bookingSession, "b");
-    bookingSession.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: at(2),
-    });
+    loadedUser("a")
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
     bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
@@ -90,11 +87,9 @@ describe("Session", () => {
     const bookingSession = session();
     join(bookingSession, "a");
     join(bookingSession, "b");
-    bookingSession.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: at(2),
-    });
+    loadedUser("a")
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
     bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
@@ -158,7 +153,8 @@ describe("Session", () => {
     ).toThrow(
       expect.objectContaining({
         code: "DUPLICATE_ID",
-        message: "A payout idempotency key can only be used once for this session",
+        message:
+          "A payout idempotency key can only be used once for this session",
       }),
     );
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -188,11 +184,9 @@ describe("Session", () => {
     const bookingSession = session();
     join(bookingSession, "a");
     join(bookingSession, "b");
-    bookingSession.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: at(2),
-    });
+    loadedUser("a")
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
     bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
@@ -220,11 +214,9 @@ describe("Session", () => {
     const bookingSession = session();
     join(bookingSession, "a");
     join(bookingSession, "b");
-    bookingSession.withdrawParticipant({
-      actorId: "a",
-      participationId: "p-a",
-      now: at(2),
-    });
+    loadedUser("a")
+      .asParticipant()
+      .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
     bookingSession.verifyAttendance({
       actorId: "booker",
       marks: [{ participationId: "p-b", attendance: "ATTENDED" }],

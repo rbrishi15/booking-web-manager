@@ -13,10 +13,11 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 
 - [ADR-0001: Use-case-driven development](./adr/0001-use-case-driven-development.md).
 - [ADR-0002: Constructor-based domain hydration](./adr/0002-constructor-based-domain-hydration.md).
-- [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md).
-- [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md).
+- [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md) — participant routing updated by ADR-0007.
+- [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md) — admission routing updated by ADR-0007.
 - [ADR-0005: Domain unit-test structure](./adr/0005-domain-unit-test-structure.md).
 - [ADR-0006: Personal replacement reservations — proposed](./adr/0006-personal-replacement-reservations.md).
+- [ADR-0007: Participant behavior and the Session roster](./adr/0007-participant-behavior-and-session-roster.md).
 
 Product discussions awaiting approval:
 

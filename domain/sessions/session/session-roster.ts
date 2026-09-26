@@ -2,11 +2,11 @@ import { DomainError } from "../../shared/errors";
 import type {
   FinancialInstruction,
   FinancialResult,
-  WithdrawalResult,
 } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import type { Participation } from "../participation";
+import { refundInstruction } from "../participation-instructions";
 import type { Session } from "./session";
 import { validDate } from "./session-validation";
 
@@ -22,46 +22,6 @@ export function oldestAwaiting(
       (a, b) =>
         (a.withdrawnAt?.getTime() ?? 0) - (b.withdrawnAt?.getTime() ?? 0),
     )[0];
-}
-
-export function lockInstruction(
-  sessionId: UUID,
-  participation: Participation,
-  at: Date,
-): FinancialInstruction {
-  const hold = participation.hold;
-  if (hold === undefined)
-    throw new DomainError("INVALID_STATE", "A commitment needs a hold");
-  return {
-    kind: "LOCK",
-    sessionId,
-    participationId: participation.participationId,
-    holdId: hold.holdId,
-    holdingAccountId: hold.holdingAccountId,
-    walletId: hold.walletId,
-    amount: hold.amount,
-    occurredAt: validDate(at, "at"),
-  };
-}
-
-export function refundInstruction(
-  sessionId: UUID,
-  participation: Participation,
-  at: Date,
-): FinancialInstruction {
-  const hold = participation.hold;
-  if (hold === undefined)
-    throw new DomainError("INVALID_STATE", "A refund needs a hold");
-  return {
-    kind: "REFUND",
-    sessionId,
-    participationId: participation.participationId,
-    holdId: hold.holdId,
-    holdingAccountId: hold.holdingAccountId,
-    walletId: hold.walletId,
-    amount: hold.amount,
-    occurredAt: validDate(at, "at"),
-  };
 }
 
 export function requireParticipation(
@@ -95,94 +55,6 @@ export function replaceParticipation(
 interface RosterChange<Result> {
   readonly participations: Participation[];
   readonly result: Result;
-}
-
-export function leaveWaitlist(
-  participations: readonly Participation[],
-  command: Parameters<Session["leaveWaitlist"]>[0],
-): Participation[] {
-  const participation = requireParticipation(
-    participations,
-    command.participationId,
-  );
-  DomainError.require(
-    participation.userId === command.actorId,
-    "UNAUTHORIZED",
-    "Only the participant can leave the waitlist",
-  );
-  return replaceParticipation(
-    participations,
-    participation.participationId,
-    participation.leaveWaitlist(),
-  );
-}
-
-export function withdrawParticipant(
-  sessionId: UUID,
-  participations: readonly Participation[],
-  booking: Booking,
-  command: Parameters<Session["withdrawParticipant"]>[0],
-): RosterChange<WithdrawalResult> {
-  const participation = requireParticipation(
-    participations,
-    command.participationId,
-  );
-  DomainError.require(
-    participation.userId === command.actorId,
-    "UNAUTHORIZED",
-    "Only the participant can withdraw",
-  );
-  DomainError.require(
-    participation.status === "COMMITTED" && participation.hold !== undefined,
-    "INVALID_STATE",
-    "Only a committed participant can withdraw",
-  );
-  const hold = participation.hold;
-  const late = booking.hoursUntilStart(command.now) <= 30;
-  const nextHold = late ? hold.awaitReplacement() : hold.refund(command.now);
-  const next = participation.withdraw(
-    nextHold,
-    command.now,
-    late ? (command.replacementMode ?? "OPEN_SLOT") : undefined,
-    late ? command.replacementToken : undefined,
-  );
-  return {
-    participations: replaceParticipation(
-      participations,
-      participation.participationId,
-      next,
-    ),
-    result: {
-      kind: late ? "AWAITING_REPLACEMENT" : "REFUNDED",
-      participationId: participation.participationId,
-      instructions: late
-        ? []
-        : [refundInstruction(sessionId, next, command.now)],
-    },
-  };
-}
-
-export function offerReplacementToWaitlist(
-  participations: readonly Participation[],
-  command: Parameters<Session["offerReplacementToWaitlist"]>[0],
-): RosterChange<FinancialResult> {
-  const participation = requireParticipation(
-    participations,
-    command.participationId,
-  );
-  DomainError.require(
-    participation.userId === command.actorId,
-    "UNAUTHORIZED",
-    "Only the participant can offer their replacement to the waitlist",
-  );
-  const offered = participation.offerReplacementToWaitlist();
-  const next = replaceParticipation(
-    participations,
-    participation.participationId,
-    offered,
-  );
-  const result: FinancialResult = { instructions: [] };
-  return { participations: next, result };
 }
 
 export function removeParticipant(

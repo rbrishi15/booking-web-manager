@@ -14,9 +14,9 @@ Class comments identify each root with `Aggregate root: <Name>.` and describe
 its boundary; child comments identify their owning root.
 
 - `Session` owns its immutable `Booking`, participation children, waitlist order,
-  and each participation's `FundHold`. Admission, withdrawal, replacement,
-  cancellation, attendance, and settlement transitions are commands on the
-  aggregate root.
+  and each participation's `FundHold`. It checks shared roster rules and installs
+  complete changes from participant actions through guarded operations.
+  Cancellation, attendance, and settlement remain commands on the root.
 - `User` owns profile/preferences, account status, its `Wallet`, and payout
   setup. The wallet holds its complete committed transaction history and derives
   spendable funds through `getFunds(): Money`. Calculated reliability and
@@ -30,18 +30,33 @@ its boundary; child comments identify their owning root.
 `Wallet` is an immutable child owned by `User`; the shared `HoldingAccount`
 and `LedgerTransaction` represent an identity and immutable facts rather than
 aggregate roots. Account funds are derived from committed ledger entries.
-`Booker` and `Participant` are role views over `User`.
+`Booker` and `Participant` are role views over `User`, with no independent
+repository or persisted lifecycle. Participant owns its eligibility, funding,
+authorization over its records, and voluntary-departure decisions.
 
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
-for ownership, command routing, and coordination across roots.
+for ownership and coordination across roots, and
+[ADR-0007: Participant behavior and the Session roster](../docs/adr/0007-participant-behavior-and-session-roster.md)
+for current participant responsibility routing.
 
 The application enters session admission through
 `user.asParticipant().join(session, command)`. The repository loads a complete
-user, `Participant` delegates to `session.join(user, command)`, and `Session`
-enforces admission rules using that user's values. Commands contain action
-details only. Promotion likewise receives a loaded user directly. See
-[ADR-0004: Participant join and session admission](../docs/adr/0004-participant-join-and-session-admission.md)
-for the intended transaction flow, example, and references.
+user; Participant checks its live account status, loaded reliability and funds,
+and creates the hold from its wallet. Session checks access, capacity, duplicate
+enrollment and queue order, then applies the complete change. Promotion receives
+a Participant and uses the same eligibility and hold-creation behavior.
+`ParticipantJoinCommand` is declared beside Participant and contains action
+details only. The complete-user loading and unit-of-work contracts remain in
+[ADR-0004](../docs/adr/0004-participant-join-and-session-admission.md); its earlier
+admission routing is superseded by ADR-0007.
+
+```ts
+const admission = user.asParticipant().join(session, {
+  participationId,
+  holdId,
+  now,
+});
+```
 
 Public constructors accept valid domain state and validate its invariants.
 Nested arguments are domain objects, such as a `Booking` and `Participation`
@@ -91,33 +106,55 @@ for construction, mapping, and encapsulation conventions.
 
 ## Session command calculations
 
-`Session` remains the public command entry point and owns all session state.
-It keeps construction, getters, shared lifecycle and booker checks, payout-attempt
-history, and final assignments. Detailed rules live in four internal modules in `sessions/session/`, alongside
-the root implementation. The folder entry point preserves the existing
-`sessions/session` import path:
+Participant actions are `join`, `withdraw`, `leaveWaitlist`, and
+`offerReplacementToWaitlist`. They collaborate with Session through
+`admitParticipant`, `applyParticipantWithdrawal`, `removeWaitlistedParticipant`,
+and `releaseParticipantReplacement`, respectively. These guarded operations
+check session conditions, find relevant owned records, invoke Participant's
+calculations, and apply the result. Direct calls still enforce ownership and
+lifecycle checks. `promoteNext` remains a Session operation and verifies that its
+Participant owns the front waiting record before attempting promotion.
+
+Participant checks record ownership and prepares immutable withdrawal,
+waitlist-exit, and replacement-offer transitions. It determines whether a
+withdrawal receives an immediate refund or awaits replacement. Session admission
+does not read User or wallet state; Session retains private access and link
+validity, capacity, FIFO and re-entry rules, and the selection and refund of
+another participant's awaiting withdrawal.
+
+`Session` owns all session state and keeps construction, getters, shared lifecycle
+and booker checks, payout-attempt history, and final assignments. Shared session
+calculations live in four internal modules in `sessions/session/`, alongside the
+root implementation. The folder entry point preserves the `sessions/session`
+import path:
 
 | Module | Responsibility |
 | --- | --- |
 | `sessions/session/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
-| `sessions/session/session-roster.ts` | Withdrawal, removal, cancellation, attendance, replacement expiry, waitlist departure, and shared roster operations. |
-| `sessions/session/session-admission.ts` | Access, eligibility, joining, FIFO promotion, waitlist re-entry, and replacement refunds. |
+| `sessions/session/session-roster.ts` | Shared roster operations, removal, cancellation, attendance, and replacement expiry. |
+| `sessions/session/session-admission.ts` | Access, capacity, duplicate enrollment, FIFO promotion, waitlist re-entry, replacement refunds, and collaboration with Participant eligibility and hold creation. |
 | `sessions/session/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
 
-These functions read operation-specific values and immutable children, then
-return complete candidate changes and results. They never mutate `Session`.
-The root installs those changes only after calculations and result construction
-succeed, including both the new commitment and any replacement refund. Ordered
-checks can stay between calculation stages, so extraction preserves which error
-a rejected command reports. The modules are not exported from the public domain
-entry point, and aggregate ownership is unchanged.
+`sessions/participation-instructions.ts` supplies shared lock/refund instruction
+construction to Participant and the session calculations. It is an internal
+helper, not a public domain export.
+
+Calculations use operation-specific values and immutable children. They never
+mutate `Session`; the root installs the change only after all calculations and
+result construction succeed, including both a new commitment and any replacement
+refund. A failed calculation leaves roster, queue sequence, and holds unchanged.
+There are no public roster setters, arbitrary mutation callbacks, or independently
+applicable change plans. The session modules are not exported from the public
+domain entry point, and aggregate ownership is unchanged.
 
 A future use case loads `Session` and any required complete `User` through its
-transaction repositories, invokes the public session command (directly or via
-the participant role), then saves the root and applies its financial instructions
-in the same unit of work. It does not call these helpers or save individual child
-changes. Payout dispatch calls the provider outside that transaction. This split
-adds no use-case, database, or payment-provider implementation.
+transaction repositories, obtains the participant role for participant actions,
+then saves the session and applies its financial instructions in the same unit of
+work. It does not call internal helpers or save individual child changes.
+Booker administration, attendance, cancellation, and settlement retain their
+existing entry points. Payout dispatch calls the provider outside the transaction.
+This split adds no use-case, database, or payment-provider implementation; domain
+atomicity tests do not establish database concurrency guarantees.
 
 ## Money and booking
 
@@ -149,7 +186,7 @@ replacement holds become `FORFEITURE_DUE`. See the
 for the source diagram and policy questions separate from that boundary issue.
 
 The working copy also contains a **provisional**
-`Session.offerReplacementToWaitlist({ actorId, participationId, now })` command.
+`Participant.offerReplacementToWaitlist(session, { participationId, now })` action.
 It lets the owning participant change an awaiting personal replacement to an
 open-slot replacement before start and invalidates the personal link. It
 preserves the held share and original withdrawal time and returns no financial

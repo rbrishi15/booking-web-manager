@@ -1,11 +1,11 @@
-import { loadedUser } from "../../accounts/user-fixtures";
 import {
   Booking,
   Money,
   Session,
-  type SessionDetails,
   type SessionCreation,
+  type SessionDetails,
 } from "@/domain";
+import { loadedUser } from "../../accounts/user-fixtures";
 
 export { loadedUser };
 
@@ -50,11 +50,13 @@ export function session(totalSlots = 2) {
 }
 
 export function join(s: Session, id: string, now = before) {
-  return s.join(loadedUser(id), {
-    participationId: `p-${id}`,
-    holdId: `h-${id}`,
-    now,
-  });
+  return loadedUser(id)
+    .asParticipant()
+    .join(s, {
+      participationId: `p-${id}`,
+      holdId: `h-${id}`,
+      now,
+    });
 }
 
 export function sessionDetails(

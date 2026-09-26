@@ -1,6 +1,5 @@
 import { DomainError, Participation, Session } from "@/domain";
-import { vi } from "vitest";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   at,
   before,
@@ -8,6 +7,7 @@ import {
   destination,
   end,
   join,
+  loadedUser,
   session,
   sessionDetails,
   sessionState,
@@ -513,11 +513,9 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.withdrawParticipant({
-        actorId: "a",
-        participationId: "p-a",
-        now: at(2),
-      });
+      loadedUser("a")
+        .asParticipant()
+        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
       const command = {
         actorId: "booker",
         payoutId: "out",
@@ -542,11 +540,9 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.withdrawParticipant({
-        actorId: "a",
-        participationId: "p-a",
-        now: at(2),
-      });
+      loadedUser("a")
+        .asParticipant()
+        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
       bookingSession.verifyAttendance({
         actorId: "booker",
         marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
@@ -578,11 +574,9 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.withdrawParticipant({
-        actorId: "a",
-        participationId: "p-a",
-        now: at(2),
-      });
+      loadedUser("a")
+        .asParticipant()
+        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
       bookingSession.verifyAttendance({
         actorId: "booker",
         marks: [{ participationId: "p-b", attendance: "ATTENDED" }],

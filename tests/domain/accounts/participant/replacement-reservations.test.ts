@@ -6,9 +6,9 @@ import {
   session,
   sessionState,
   start,
-} from "./session-fixtures";
+} from "../../sessions/session/session-fixtures";
 
-describe("Session", () => {
+describe("Participant", () => {
   test("offerReplacementToWaitlist_WhenOwnerReleasesPersonalPlace_RefundsOnlyAfterFundedPromotion", () => {
     // Arrange
     const bookingSession = session();
@@ -16,22 +16,24 @@ describe("Session", () => {
     join(bookingSession, "alex");
     join(bookingSession, "dana");
     join(bookingSession, "evan");
-    bookingSession.withdrawParticipant({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
     const heldShare = bookingSession.participations[0]?.hold;
     const queueSequence = bookingSession.nextQueueSequence;
 
     // Act
-    const offer = bookingSession.offerReplacementToWaitlist({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(9),
-    });
+    const offer = loadedUser("ben")
+      .asParticipant()
+      .offerReplacementToWaitlist(bookingSession, {
+        participationId: "p-ben",
+        now: at(9),
+      });
 
     // Assert
     expect(offer.instructions).toEqual([]);
@@ -47,20 +49,25 @@ describe("Session", () => {
     // Act & Assert: the old personal link cannot admit or queue another person.
     const releasedState = sessionState(bookingSession);
     expect(() =>
-      bookingSession.join(loadedUser("cara"), {
-        participationId: "p-cara",
-        holdId: "h-cara",
-        replacementToken: "ben-replacement",
-        now: at(8),
-      }),
+      loadedUser("cara")
+        .asParticipant()
+        .join(bookingSession, {
+          participationId: "p-cara",
+          holdId: "h-cara",
+          replacementToken: "ben-replacement",
+          now: at(8),
+        }),
     ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
     expect(sessionState(bookingSession)).toEqual(releasedState);
 
     // Act: the first waiter successfully funds the replacement.
-    const promotion = bookingSession.promoteNext(loadedUser("dana"), {
-      holdId: "h-dana",
-      now: at(8),
-    });
+    const promotion = bookingSession.promoteNext(
+      loadedUser("dana").asParticipant(),
+      {
+        holdId: "h-dana",
+        now: at(8),
+      },
+    );
 
     // Assert
     expect(promotion).toMatchObject({
@@ -68,10 +75,9 @@ describe("Session", () => {
       participationId: "p-dana",
       refundedParticipationId: "p-ben",
     });
-    expect(promotion.instructions.map((instruction) => instruction.kind)).toEqual([
-      "LOCK",
-      "REFUND",
-    ]);
+    expect(
+      promotion.instructions.map((instruction) => instruction.kind),
+    ).toEqual(["LOCK", "REFUND"]);
     expect(bookingSession.participations[0]?.hold?.state).toBe("REFUNDED");
     expect(bookingSession.participations[2]?.hold?.state).toBe("HELD");
     expect(bookingSession.nextWaitlistedUserId).toBe("evan");
@@ -84,30 +90,36 @@ describe("Session", () => {
     join(bookingSession, "alice");
     join(bookingSession, "ben");
     join(bookingSession, "dana");
-    bookingSession.withdrawParticipant({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-    });
-    bookingSession.withdrawParticipant({
-      actorId: "alice",
-      participationId: "p-alice",
-      now: at(9),
-      replacementMode: "OPEN_SLOT",
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
+    loadedUser("alice")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: at(9),
+        replacementMode: "OPEN_SLOT",
+      });
 
     // Act
-    bookingSession.offerReplacementToWaitlist({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(8),
-    });
-    const promotion = bookingSession.promoteNext(loadedUser("dana"), {
-      holdId: "h-dana",
-      now: at(7),
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .offerReplacementToWaitlist(bookingSession, {
+        participationId: "p-ben",
+        now: at(8),
+      });
+    const promotion = bookingSession.promoteNext(
+      loadedUser("dana").asParticipant(),
+      {
+        holdId: "h-dana",
+        now: at(7),
+      },
+    );
 
     // Assert
     expect(promotion).toMatchObject({
@@ -119,7 +131,9 @@ describe("Session", () => {
       ],
     });
     const ben = bookingSession.participations.find((p) => p.userId === "ben");
-    const alice = bookingSession.participations.find((p) => p.userId === "alice");
+    const alice = bookingSession.participations.find(
+      (p) => p.userId === "alice",
+    );
     const dana = bookingSession.participations.find((p) => p.userId === "dana");
     expect(ben?.withdrawnAt).toEqual(at(10));
     expect(ben?.hold?.state).toBe("REFUNDED");
@@ -132,22 +146,24 @@ describe("Session", () => {
     // Arrange
     const bookingSession = session();
     join(bookingSession, "ben");
-    bookingSession.withdrawParticipant({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      bookingSession.offerReplacementToWaitlist({
-        actorId: "booker",
-        participationId: "p-ben",
-        now: at(9),
-      }),
+      loadedUser("booker")
+        .asParticipant()
+        .offerReplacementToWaitlist(bookingSession, {
+          participationId: "p-ben",
+          now: at(9),
+        }),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
@@ -156,22 +172,24 @@ describe("Session", () => {
     // Arrange
     const bookingSession = session();
     join(bookingSession, "ben");
-    bookingSession.withdrawParticipant({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      bookingSession.offerReplacementToWaitlist({
-        actorId: "ben",
-        participationId: "p-ben",
-        now: start,
-      }),
+      loadedUser("ben")
+        .asParticipant()
+        .offerReplacementToWaitlist(bookingSession, {
+          participationId: "p-ben",
+          now: start,
+        }),
     ).toThrow(expect.objectContaining({ code: "SESSION_STARTED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
@@ -180,28 +198,32 @@ describe("Session", () => {
     // Arrange
     const bookingSession = session();
     join(bookingSession, "ben");
-    bookingSession.withdrawParticipant({
-      actorId: "ben",
-      participationId: "p-ben",
-      now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-    });
-    bookingSession.join(loadedUser("cara"), {
-      participationId: "p-cara",
-      holdId: "h-cara",
-      replacementToken: "ben-replacement",
-      now: at(9),
-    });
+    loadedUser("ben")
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
+    loadedUser("cara")
+      .asParticipant()
+      .join(bookingSession, {
+        participationId: "p-cara",
+        holdId: "h-cara",
+        replacementToken: "ben-replacement",
+        now: at(9),
+      });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      bookingSession.offerReplacementToWaitlist({
-        actorId: "ben",
-        participationId: "p-ben",
-        now: at(8),
-      }),
+      loadedUser("ben")
+        .asParticipant()
+        .offerReplacementToWaitlist(bookingSession, {
+          participationId: "p-ben",
+          now: at(8),
+        }),
     ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });

@@ -2,7 +2,7 @@
 
 These diagrams describe the current TypeScript domain in [`domain/`](../domain),
 following [ADR-0003](./adr/0003-aggregate-roots-and-boundaries.md) and
-[ADR-0004](./adr/0004-participant-join-and-session-admission.md). They document the
+[ADR-0007](./adr/0007-participant-behavior-and-session-roster.md). They document the
 implementation; they do not introduce new domain behavior.
 
 - [Editable PlantUML source](./domain-class-diagram.puml)
@@ -34,6 +34,10 @@ getters on classes and readonly fields on interfaces. Parameter types are
 abbreviated.
 
 - `Booker` and `Participant` wrap a `User`; they are role views, not subclasses.
+- Participant actions own eligibility, funding, record ownership checks, and
+  voluntary-departure decisions. Session's guarded operations enforce session
+  conditions and apply complete roster changes; promotion receives a Participant.
+  The participant role does not own participation records or holds.
 - `Session` owns all participation records, so its roster multiplicity is `0..*`.
   Only active commitments are limited by `totalSlots` (at most eight).
   Waitlisted participation has no hold; a commitment requires one.
@@ -44,8 +48,9 @@ abbreviated.
   query result, not the wallet's hydration state.
 - Reliability and group membership IDs are loaded related values. Calculating
   reliability reads participation outcomes and session end times without
-  retaining that history. Admission reads a fully loaded `User` without owning
-  or modifying it.
+  retaining that history. Participant reads its fully loaded User's values;
+  Session admission collaborates with Participant without retaining it or
+  reading wallet/account state.
 - `Payout` owns frozen settlement lines and a destination copy; it does not own
   live holds. The session retains its own pending batch. Failed attempts remain
   recorded, and each retry has a new payout ID. Frozen account references may

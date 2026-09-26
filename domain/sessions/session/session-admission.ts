@@ -1,4 +1,7 @@
-import type { User } from "../../accounts/user";
+import type {
+  Participant,
+  ParticipantJoinCommand,
+} from "../../accounts/participant";
 import type { Money } from "../../finance/money";
 import type { ReliabilityScore } from "../../reliability/reliability-score";
 import { DomainError } from "../../shared/errors";
@@ -9,15 +12,16 @@ import type {
 } from "../../shared/operations";
 import type { Visibility } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
-import { FundHold } from "../fund-hold";
 import { Participation } from "../participation";
-import type { JoinCommand, PromotionCommand } from "./session";
+import {
+  lockInstruction,
+  refundInstruction,
+} from "../participation-instructions";
+import type { PromotionCommand } from "./session";
 import {
   availableSlots,
-  lockInstruction,
   nextWaitlisted,
   oldestAwaiting,
-  refundInstruction,
   replaceParticipation,
 } from "./session-roster";
 import { requireId, validDate } from "./session-validation";
@@ -44,7 +48,7 @@ export function meetsReliabilityRequirement(
 
 function assertAccess(
   rules: AccessRules,
-  user: User,
+  participant: Participant,
   roomToken?: string,
   replacementToken?: string,
 ): void {
@@ -65,55 +69,13 @@ function assertAccess(
   if (roomToken === rules.roomToken) return;
   if (
     rules.invitedGroupId !== undefined &&
-    user.memberGroupIds.includes(rules.invitedGroupId)
+    participant.isMemberOf(rules.invitedGroupId)
   )
     return;
   throw new DomainError(
     "INVALID_ACCESS",
     "The user does not have access to this private session",
   );
-}
-
-function assertEligible(
-  rules: EligibilityRules,
-  user: User,
-  requireFunds: boolean,
-): void {
-  const reason = ineligibilityReason(rules, user, requireFunds);
-  if (reason === "INACTIVE_ACCOUNT")
-    throw new DomainError(
-      "INACTIVE_ACCOUNT",
-      "An inactive account cannot participate",
-    );
-  if (reason === "LOW_RELIABILITY")
-    throw new DomainError(
-      "LOW_RELIABILITY",
-      "The user's reliability is below the session requirement",
-    );
-  if (reason === "INSUFFICIENT_FUNDS")
-    throw new DomainError(
-      "INSUFFICIENT_FUNDS",
-      "The wallet cannot fund this commitment",
-    );
-}
-
-function ineligibilityReason(
-  rules: EligibilityRules,
-  user: User,
-  requireFunds = true,
-): "INACTIVE_ACCOUNT" | "LOW_RELIABILITY" | "INSUFFICIENT_FUNDS" | undefined {
-  if (user.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
-  const score = user.reliabilityScore;
-  if (!meetsReliabilityRequirement(score, rules.minimumReliability))
-    return "LOW_RELIABILITY";
-  if (
-    requireFunds &&
-    user.wallet
-      .getFunds()
-      .compareTo(rules.totalCost.divideFloor(rules.totalSlots)) < 0
-  )
-    return "INSUFFICIENT_FUNDS";
-  return undefined;
 }
 
 interface JoinRules extends AccessRules, EligibilityRules {
@@ -130,12 +92,18 @@ interface AdmissionChange<Result> {
 
 export function calculateJoin(
   rules: JoinRules,
-  user: User,
-  command: JoinCommand,
+  participant: Participant,
+  command: ParticipantJoinCommand,
 ): AdmissionChange<AdmissionResult> {
-  assertAccess(rules, user, command.roomToken, command.replacementToken);
-  assertEligible(rules, user, false);
-  const existing = rules.participations.find((p) => p.userId === user.userId);
+  assertAccess(rules, participant, command.roomToken, command.replacementToken);
+  const terms = {
+    minimumReliability: rules.minimumReliability,
+    share: rules.totalCost.divideFloor(rules.totalSlots),
+  };
+  participant.assertEligibleFor(terms, false);
+  const existing = rules.participations.find(
+    (p) => p.userId === participant.userId,
+  );
   if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
     throw new DomainError(
       existing.status === "WITHDRAWN" || existing.status === "REMOVED"
@@ -169,7 +137,7 @@ export function calculateJoin(
     );
     const queued = Participation.createWaitlisted({
       participationId: existing?.participationId ?? command.participationId,
-      userId: user.userId,
+      userId: participant.userId,
       waitlistedAt: command.now,
       queueSequence: sequence,
     });
@@ -190,24 +158,24 @@ export function calculateJoin(
       },
     };
   }
-  assertEligible(rules, user, true);
+  participant.assertEligibleFor(terms, true);
   const holdId = command.holdId;
   DomainError.require(
     holdId !== undefined,
     "INVALID_INPUT",
     "A commitment needs a hold ID",
   );
-  const hold = createAdmissionHold(
-    rules,
-    command.participationId,
+  const hold = participant.createAdmissionHold({
+    participationId: command.participationId,
     holdId,
-    user,
-    command.now,
-  );
+    holdingAccountId: rules.holdingAccountId,
+    share: terms.share,
+    now: command.now,
+  });
   const replacement = oldestAwaiting(rules.participations);
   const committed = Participation.createCommitted({
     participationId: existing?.participationId ?? command.participationId,
-    userId: user.userId,
+    userId: participant.userId,
     committedAt: command.now,
     hold,
     replacementMode: command.replacementMode,
@@ -235,27 +203,6 @@ export function calculateJoin(
       ],
     },
   };
-}
-
-function createAdmissionHold(
-  rules: {
-    readonly holdingAccountId: UUID;
-    readonly totalCost: Money;
-    readonly totalSlots: number;
-  },
-  participationId: UUID,
-  holdId: UUID,
-  user: User,
-  now: Date,
-): FundHold {
-  return FundHold.create({
-    holdId,
-    participationId,
-    holdingAccountId: rules.holdingAccountId,
-    walletId: user.wallet.walletId,
-    amount: rules.totalCost.divideFloor(rules.totalSlots),
-    createdAt: now,
-  });
 }
 
 function refundOldestAwaiting(
@@ -291,7 +238,7 @@ interface PromotionRules extends EligibilityRules {
 
 export function calculatePromotion(
   rules: PromotionRules,
-  user: User,
+  participant: Participant,
   command: PromotionCommand,
 ): AdmissionChange<PromotionResult> {
   const next = nextWaitlisted(rules.participations);
@@ -309,11 +256,15 @@ export function calculatePromotion(
     "There is no available slot to promote",
   );
   DomainError.require(
-    next.userId === user.userId,
+    next.userId === participant.userId,
     "INVALID_INPUT",
     "Promotion input belongs to another user",
   );
-  const reason = ineligibilityReason(rules, user);
+  const terms = {
+    minimumReliability: rules.minimumReliability,
+    share: rules.totalCost.divideFloor(rules.totalSlots),
+  };
+  const reason = participant.admissionIneligibility(terms);
   if (reason !== undefined) {
     return {
       participations: replaceParticipation(
@@ -332,13 +283,13 @@ export function calculatePromotion(
   }
   const replacement = oldestAwaiting(rules.participations);
   const committed = next.commit(
-    createAdmissionHold(
-      rules,
-      next.participationId,
-      command.holdId,
-      user,
-      command.now,
-    ),
+    participant.createAdmissionHold({
+      participationId: next.participationId,
+      holdId: command.holdId,
+      holdingAccountId: rules.holdingAccountId,
+      share: terms.share,
+      now: command.now,
+    }),
     command.now,
     replacement?.participationId,
   );

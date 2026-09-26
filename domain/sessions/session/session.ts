@@ -1,4 +1,10 @@
-import type { User } from "../../accounts/user";
+import type {
+  LeaveWaitlistCommand,
+  Participant,
+  ParticipantJoinCommand,
+  ParticipantReplacementOfferCommand,
+  ParticipantWithdrawalCommand,
+} from "../../accounts/participant";
 import type { Money } from "../../finance/money";
 import type { ReliabilityScore } from "../../reliability/reliability-score";
 import { DomainError } from "../../shared/errors";
@@ -28,12 +34,11 @@ import {
   availableSlots,
   cancelRoster,
   expireReplacements,
-  leaveWaitlist,
   nextWaitlisted,
-  offerReplacementToWaitlist,
   removeParticipant,
+  replaceParticipation,
+  requireParticipation,
   verifyAttendance,
-  withdrawParticipant,
 } from "./session-roster";
 import {
   buildSettlementBatch,
@@ -84,15 +89,6 @@ export interface SessionCreation {
   readonly invitedGroupId?: UUID;
 }
 
-export interface JoinCommand {
-  readonly participationId: UUID;
-  readonly holdId?: UUID;
-  readonly now: Date;
-  readonly roomToken?: string;
-  readonly replacementToken?: string;
-  readonly replacementMode?: "OPEN_SLOT" | "INVITE_LINK";
-}
-
 export interface PromotionCommand {
   readonly holdId: UUID;
   readonly now: Date;
@@ -106,11 +102,13 @@ interface PayoutPending {
  * Aggregate root: Session.
  * Owns Booking, Participation children and their FundHold children, queue order,
  * attendance, and session settlement state, including payout-attempt history.
- * Roster and lifecycle commands enter through this root so capacity, admission,
- * replacement, attendance, and settlement rules are checked together.
+ * Participant owns eligibility, funding, and voluntary departure decisions.
+ * Guarded roster operations retain lifecycle, access, capacity, queue order,
+ * cross-participant replacement refunds, and atomic installation of changes.
+ * Booker administration, attendance, and settlement remain root operations.
  * Payout is a separate root; financial instructions describe effects for the
  * application layer to coordinate with the ledger.
- * See docs/adr/0003-aggregate-roots-and-boundaries.md.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md and ADR-0007.
  */
 export class Session {
   readonly #sessionId: UUID;
@@ -217,7 +215,10 @@ export class Session {
     return session;
   }
 
-  join(user: User, command: JoinCommand): AdmissionResult {
+  admitParticipant(
+    participant: Participant,
+    command: ParticipantJoinCommand,
+  ): AdmissionResult {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     this.assertOpenBefore(command.now);
@@ -234,7 +235,7 @@ export class Session {
         roomToken: this.#roomToken,
         invitedGroupId: this.#invitedGroupId,
       },
-      user,
+      participant,
       command,
     );
     this.#participations = change.participations;
@@ -242,7 +243,10 @@ export class Session {
     return change.result;
   }
 
-  promoteNext(user: User, command: PromotionCommand): PromotionResult {
+  promoteNext(
+    participant: Participant,
+    command: PromotionCommand,
+  ): PromotionResult {
     this.assertOpenBefore(command.now);
     const change = calculatePromotion(
       {
@@ -254,7 +258,7 @@ export class Session {
         totalCost: this.#booking.totalCost,
         minimumReliability: this.#minimumReliability,
       },
-      user,
+      participant,
       command,
     );
     this.#participations = change.participations;
@@ -262,53 +266,67 @@ export class Session {
     return change.result;
   }
 
-  leaveWaitlist(command: {
-    readonly actorId: UUID;
-    readonly participationId: UUID;
-    readonly now?: Date;
-  }): void {
+  removeWaitlistedParticipant(
+    participant: Participant,
+    command: LeaveWaitlistCommand,
+  ): void {
     DomainError.require(
       this.#status === "OPEN",
       "SESSION_CLOSED",
       "The session is not open",
     );
     if (command.now !== undefined) this.assertOpenBefore(command.now);
-    this.#participations = leaveWaitlist(this.#participations, command);
+    const existing = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
+    const departed = participant.prepareWaitlistDeparture(existing);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      existing.participationId,
+      departed,
+    );
   }
 
-  withdrawParticipant(command: {
-    readonly actorId: UUID;
-    readonly participationId: UUID;
-    readonly now: Date;
-    readonly replacementMode?: "OPEN_SLOT" | "INVITE_LINK";
-    readonly replacementToken?: string;
-  }): WithdrawalResult {
-    if (command.replacementMode !== undefined)
-      DomainError.require(
-        command.replacementMode === "OPEN_SLOT" ||
-          command.replacementMode === "INVITE_LINK",
-        "INVALID_INPUT",
-        "Unknown replacement mode",
-      );
+  applyParticipantWithdrawal(
+    participant: Participant,
+    command: ParticipantWithdrawalCommand,
+  ): WithdrawalResult {
+    participant.validateWithdrawal(command);
     this.assertOpenBefore(command.now);
-    const change = withdrawParticipant(
-      this.#sessionId,
+    const existing = requireParticipation(
       this.#participations,
+      command.participationId,
+    );
+    const change = participant.prepareWithdrawal(
+      existing,
       this.#booking,
       command,
+      this.#sessionId,
     );
-    this.#participations = change.participations;
+    this.#participations = replaceParticipation(
+      this.#participations,
+      existing.participationId,
+      change.participation,
+    );
     return change.result;
   }
 
-  offerReplacementToWaitlist(command: {
-    readonly actorId: UUID;
-    readonly participationId: UUID;
-    readonly now: Date;
-  }): FinancialResult {
+  releaseParticipantReplacement(
+    participant: Participant,
+    command: ParticipantReplacementOfferCommand,
+  ): FinancialResult {
     this.assertOpenBefore(command.now);
-    const change = offerReplacementToWaitlist(this.#participations, command);
-    this.#participations = change.participations;
+    const existing = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
+    const change = participant.prepareReplacementOffer(existing);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      existing.participationId,
+      change.participation,
+    );
     return change.result;
   }
 
