@@ -54,6 +54,147 @@ describe("Session", () => {
       expect(constructed.nextQueueSequence).toBe(1);
     });
 
+    test("constructor_WhenBothHistoriesAreOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual([]);
+      expect(restored.payoutIdempotencyKeys).toEqual([]);
+    });
+
+    test("constructor_WhenAttemptHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: ["earlier-key"],
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual([]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key"]);
+    });
+
+    test("constructor_WhenKeyHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const details = sessionDetails({
+        payoutAttemptIds: ["earlier"],
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["earlier"]);
+      expect(restored.payoutIdempotencyKeys).toEqual([]);
+    });
+
+    test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = session();
+      join(source, "a");
+      source.verifyAttendance({
+        actorId: "booker",
+        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = source.prepareSettlement({
+        actorId: "booker",
+        payoutId: "out",
+        idempotencyKey: "key",
+        destination,
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+
+    test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = session();
+      join(source, "a");
+      source.verifyAttendance({
+        actorId: "booker",
+        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = source.prepareSettlement({
+        actorId: "booker",
+        payoutId: "out",
+        idempotencyKey: "key",
+        destination,
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: undefined,
+        payoutIdempotencyKeys: ["earlier-key", "key"],
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key", "key"]);
+    });
+
+    test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+      // Arrange
+      const source = session();
+      join(source, "a");
+      source.verifyAttendance({
+        actorId: "booker",
+        marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
+        now: end,
+      });
+      const batch = source.prepareSettlement({
+        actorId: "booker",
+        payoutId: "out",
+        idempotencyKey: "key",
+        destination,
+        now: end,
+      })!;
+      const details = sessionDetails({
+        status: "PAYOUT_PENDING",
+        participations: source.participations,
+        pendingSettlement: batch,
+        payoutAttemptIds: ["earlier", "out"],
+        payoutIdempotencyKeys: undefined,
+      });
+
+      // Act
+      const restored = new Session(details);
+
+      // Assert
+      expect(restored.payoutAttemptIds).toEqual(["earlier", "out"]);
+      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+
     test("constructor_WhenSessionIsSettled_RestoresStatusAndEndTime", () => {
       // Arrange
       const details = sessionDetails({ status: "SETTLED" });
