@@ -393,6 +393,25 @@ export class Session {
     };
   }
 
+  offerReplacementToWaitlist(command: {
+    readonly actorId: UUID;
+    readonly participationId: UUID;
+    readonly now: Date;
+  }): FinancialResult {
+    this.assertOpenBefore(command.now);
+    const participation = this.requireParticipation(command.participationId);
+    DomainError.require(
+      participation.userId === command.actorId,
+      "UNAUTHORIZED",
+      "Only the participant can offer their replacement to the waitlist",
+    );
+    const offered = participation.offerReplacementToWaitlist();
+    const next = this.replace(participation.participationId, offered);
+    const result: FinancialResult = { instructions: [] };
+    this.#participations = next;
+    return result;
+  }
+
   removeParticipant(command: {
     readonly actorId: UUID;
     readonly participationId: UUID;
