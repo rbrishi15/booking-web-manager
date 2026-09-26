@@ -11,6 +11,11 @@ choices were design assumptions, not approved requirements. The
 maintained record of those proposals, simpler alternatives, and pending answers.
 [ADR-0006](../adr/0006-personal-replacement-reservations.md) is proposed, not accepted.
 
+The user's current first-release proposal is to defer the joining waitlist,
+pending product-owner review. Replacement acceptance and allocation still need
+decisions. This proposal does not authorize removing existing queue behavior
+as part of the structural cleanup.
+
 The diagram establishes immediate refunds at least 30 hours before start,
 replacement-dependent refunds for later withdrawal, forfeiture without a
 replacement when the session starts, and the depicted cancellation/removal

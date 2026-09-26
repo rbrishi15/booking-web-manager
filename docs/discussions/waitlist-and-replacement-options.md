@@ -10,6 +10,14 @@ conversation are recorded here as proposals, not product-owner decisions.
 The purpose of this discussion is to decide whether a waitlist is needed and
 what promise the product should make before adding its exceptions and workflow.
 
+**Current proposal for the first release (26 September 2026): defer the joining
+waitlist.** The user selected this direction for product-owner discussion. Focus
+on the replacement process in the confirmed diagram without maintaining a queue
+of interested people. Product-owner approval remains pending. This choice does
+not settle how replacements are accepted, matched to refunds, or given a place;
+it does not approve personal links or reservations. Keep the richer waitlist
+options below as deferred discussion material.
+
 ## 1. Confirmed baseline: the supplied state diagram
 
 ![Product-owner-confirmed participant state diagram, reproduced without changes](../assets/participant-state-diagram-product-owner-reference.png)
@@ -113,7 +121,7 @@ waitlist is a valid outcome of the discussion.
 
 | Decision | Product-owner answer | Approval/date |
 | --- | --- | --- |
-| Is an automatic waitlist needed for the first release? | Pending | Pending |
+| Is an automatic waitlist needed for the first release? | User proposes deferring the joining waitlist; product-owner answer pending. | Pending |
 | Which allocation approach, or alternative, should the product use? | Pending | Pending |
 | What counts as a successfully found replacement? | Pending | Pending |
 | Who receives the refund when several participants await replacement? | Pending | Pending |
