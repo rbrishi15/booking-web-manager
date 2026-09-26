@@ -26,6 +26,13 @@ available. Her agreement or unsuccessful joining attempt does not refund Ben;
 he remains awaiting replacement with his $10 held. The user selected this rule
 for product-owner review; approval remains pending.
 
+**Proposed responsibility after a successful replacement (26 September 2026):**
+Ben keeps his refund once Cara successfully replaces him. If Cara then withdraws
+two hours before start and nobody replaces her before the session starts, Cara
+forfeits her own $10 share. Her withdrawal does not make Ben responsible again
+or reverse his refund. The user selected this outcome for product-owner review;
+approval remains pending.
+
 ## 1. Confirmed baseline: the supplied state diagram
 
 ![Product-owner-confirmed participant state diagram, reproduced without changes](../assets/participant-state-diagram-product-owner-reference.png)
@@ -133,6 +140,7 @@ waitlist is a valid outcome of the discussion.
 | Is an automatic waitlist needed for the first release? | User proposes deferring the joining waitlist; product-owner answer pending. | Pending |
 | Which allocation approach, or alternative, should the product use? | Pending | Pending |
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
+| What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
 | Who receives the refund when several participants await replacement? | Pending | Pending |
 | If personal links exist, do they reserve capacity and outrank waiting people? | Pending | Pending |
 | If Option 3 is chosen, which rows in section 4 are approved or changed? | Pending | Pending |
