@@ -2,7 +2,8 @@
 
 These diagrams describe the current TypeScript domain in [`domain/`](../domain),
 following [ADR-0003](./adr/0003-aggregate-roots-and-boundaries.md) and
-[ADR-0007](./adr/0007-participant-behavior-and-session-roster.md). They document the
+[ADR-0007](./adr/0007-participant-behavior-and-session-roster.md), extended by
+[ADR-0008](./adr/0008-booker-behavior-and-session-lifecycle.md). They document the
 implementation; they do not introduce new domain behavior.
 
 - [Editable PlantUML source](./domain-class-diagram.puml)
@@ -34,6 +35,10 @@ getters on classes and readonly fields on interfaces. Parameter types are
 abbreviated.
 
 - `Booker` and `Participant` wrap a `User`; they are role views, not subclasses.
+- Booker owns creation, session ownership authorization, cancellation/removal
+  refunds, manual attendance, and payout-destination acquisition. Its actions
+  create a Session or invoke guarded Session operations; the root keeps lifecycle,
+  shared roster, and atomic state-update responsibilities.
 - Participant actions own eligibility, funding, record ownership checks, and
   voluntary-departure decisions. Session's guarded operations enforce session
   conditions and apply complete roster changes; promotion receives a Participant.

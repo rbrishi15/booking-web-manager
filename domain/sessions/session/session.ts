@@ -1,4 +1,9 @@
 import type {
+  Booker,
+  SettlementCommand,
+  VerifyAttendanceCommand,
+} from "../../accounts/booker";
+import type {
   LeaveWaitlistCommand,
   Participant,
   ParticipantJoinCommand,
@@ -11,16 +16,11 @@ import { DomainError } from "../../shared/errors";
 import type {
   AdmissionResult,
   FinancialResult,
-  PayoutDestination,
   PromotionResult,
   SettlementBatch,
   WithdrawalResult,
 } from "../../shared/operations";
-import type {
-  AccountStatus,
-  SessionStatus,
-  Visibility,
-} from "../../shared/statuses";
+import type { SessionStatus, Visibility } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import type { Participation } from "../participation";
@@ -35,7 +35,6 @@ import {
   cancelRoster,
   expireReplacements,
   nextWaitlisted,
-  removeParticipant,
   replaceParticipation,
   requireParticipation,
   verifyAttendance,
@@ -73,22 +72,6 @@ export interface SessionDetails {
   readonly payoutIdempotencyKeys?: readonly string[];
 }
 
-export interface SessionCreation {
-  readonly sessionId: UUID;
-  readonly bookerId: UUID;
-  readonly bookerStatus: AccountStatus;
-  readonly payoutReady: boolean;
-  readonly booking: Booking;
-  readonly totalSlots: number;
-  readonly minimumHeadcount: number;
-  readonly roomToken: string;
-  readonly holdingAccountId: UUID;
-  readonly now: Date;
-  readonly visibility?: Visibility;
-  readonly minimumReliability?: ReliabilityScore;
-  readonly invitedGroupId?: UUID;
-}
-
 export interface PromotionCommand {
   readonly holdId: UUID;
   readonly now: Date;
@@ -105,10 +88,12 @@ interface PayoutPending {
  * Participant owns eligibility, funding, and voluntary departure decisions.
  * Guarded roster operations retain lifecycle, access, capacity, queue order,
  * cross-participant replacement refunds, and atomic installation of changes.
- * Booker administration, attendance, and settlement remain root operations.
+ * Booker owns creation, owner authorization, and individual administrative
+ * transitions. This root guards and atomically installs their combined results.
+ * Automated attendance and the settlement lifecycle remain root operations.
  * Payout is a separate root; financial instructions describe effects for the
  * application layer to coordinate with the ledger.
- * See docs/adr/0003-aggregate-roots-and-boundaries.md and ADR-0007.
+ * See docs/adr/0003-aggregate-roots-and-boundaries.md, ADR-0007, and ADR-0008.
  */
 export class Session {
   readonly #sessionId: UUID;
@@ -171,48 +156,6 @@ export class Session {
       payoutIdempotencyKeys: this.#payoutIdempotencyKeys,
       sessionId: this.#sessionId,
     });
-  }
-
-  static create(details: SessionCreation): Session {
-    DomainError.require(
-      details.bookerStatus === "ACTIVE",
-      "INACTIVE_ACCOUNT",
-      "An inactive booker cannot create a session",
-    );
-    DomainError.require(
-      details.payoutReady === true,
-      "PAYOUT_ACCOUNT_NOT_READY",
-      "A session needs a completed payout account",
-    );
-    const now = validDate(details.now, "now");
-    const session = new Session({
-      sessionId: details.sessionId,
-      bookerId: details.bookerId,
-      booking: details.booking,
-      totalSlots: details.totalSlots,
-      minimumHeadcount: details.minimumHeadcount,
-      roomToken: details.roomToken,
-      holdingAccountId: details.holdingAccountId,
-      visibility: details.visibility ?? "PRIVATE",
-      status: "OPEN",
-      minimumReliability: details.minimumReliability,
-      invitedGroupId: details.invitedGroupId,
-      participations: [],
-      nextQueueSequence: 1,
-      payoutAttemptIds: [],
-      payoutIdempotencyKeys: [],
-    });
-    DomainError.require(
-      !session.#booking.hasStarted(now),
-      "SESSION_STARTED",
-      "A new session must be upcoming",
-    );
-    DomainError.require(
-      session.bookingShare.toCents() > 0,
-      "INVALID_INPUT",
-      "The booking share must be positive",
-    );
-    return session;
   }
 
   admitParticipant(
@@ -330,56 +273,58 @@ export class Session {
     return change.result;
   }
 
-  removeParticipant(command: {
-    readonly actorId: UUID;
-    readonly participationId: UUID;
-    readonly now: Date;
-  }): FinancialResult {
-    this.assertBooker(command.actorId);
-    this.assertOpenBefore(command.now);
-    const change = removeParticipant(
-      this.#sessionId,
+  applyBookerRemoval(
+    booker: Booker,
+    participationId: UUID,
+    now: Date,
+  ): FinancialResult {
+    booker.assertOwnsSession(this.#bookerId);
+    this.assertOpenBefore(now);
+    const existing = requireParticipation(
       this.#participations,
-      command,
+      participationId,
     );
-    this.#participations = change.participations;
+    const change = booker.prepareRemoval(existing, this.#sessionId, now);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      existing.participationId,
+      change.participation,
+    );
     return change.result;
   }
 
-  cancel(command: {
-    readonly actorId: UUID;
-    readonly now: Date;
-  }): FinancialResult {
-    this.assertBooker(command.actorId);
-    this.assertOpenBefore(command.now);
+  applyBookerCancellation(booker: Booker, now: Date): FinancialResult {
+    booker.assertOwnsSession(this.#bookerId);
+    this.assertOpenBefore(now);
     const change = cancelRoster(
+      booker,
       this.#sessionId,
       this.#participations,
-      command.now,
+      now,
     );
     this.#participations = change.participations;
     this.#status = "CANCELLED";
     return change.result;
   }
 
-  changeVisibility(command: {
-    readonly actorId: UUID;
-    readonly visibility: Visibility;
-    readonly now: Date;
-  }): void {
+  applyBookerVisibilityChange(
+    booker: Booker,
+    visibility: Visibility,
+    now: Date,
+  ): void {
     DomainError.require(
-      command.visibility === "PRIVATE" || command.visibility === "PUBLIC",
+      visibility === "PRIVATE" || visibility === "PUBLIC",
       "INVALID_INPUT",
       "Unknown session visibility",
     );
-    this.assertBooker(command.actorId);
-    this.assertOpenBefore(command.now);
+    booker.assertOwnsSession(this.#bookerId);
+    this.assertOpenBefore(now);
     DomainError.require(
-      this.getAvailableSlots(command.now) > 0,
+      this.getAvailableSlots(now) > 0,
       "CAPACITY_EXCEEDED",
       "Visibility cannot change after the session is full",
     );
-    this.#visibility = command.visibility;
+    this.#visibility = visibility;
   }
 
   expireReplacements(now: Date): void {
@@ -388,16 +333,12 @@ export class Session {
     this.#participations = expireReplacements(this.#participations, now);
   }
 
-  verifyAttendance(command: {
-    readonly actorId: UUID;
-    readonly marks: readonly {
-      readonly participationId: UUID;
-      readonly attendance: "ATTENDED" | "ABSENT";
-    }[];
-    readonly now: Date;
-  }): void {
+  applyBookerAttendance(
+    booker: Booker,
+    command: VerifyAttendanceCommand,
+  ): void {
     validDate(command.now, "now");
-    this.assertBooker(command.actorId);
+    booker.assertOwnsSession(this.#bookerId);
     DomainError.require(
       this.#status === "OPEN",
       "INVALID_STATE",
@@ -408,7 +349,7 @@ export class Session {
       "SESSION_NOT_ENDED",
       "Attendance verification requires the session to end",
     );
-    const change = verifyAttendance(this.#participations, command);
+    const change = verifyAttendance(this.#participations, booker, command);
     this.#participations = change.participations;
     this.#status = change.status;
   }
@@ -429,21 +370,19 @@ export class Session {
     this.#status = change.status;
   }
 
-  prepareSettlement(command: {
-    readonly actorId: UUID;
-    readonly payoutId: UUID;
-    readonly idempotencyKey: string;
-    readonly destination: PayoutDestination;
-    readonly now: Date;
-  }): SettlementBatch | undefined {
+  prepareBookerSettlement(
+    booker: Booker,
+    command: SettlementCommand,
+  ): SettlementBatch | undefined {
+    const destination = booker.payoutDestination();
     requireId(command.payoutId, "payoutId");
     DomainError.require(
       command.idempotencyKey.trim() !== "",
       "INVALID_INPUT",
       "idempotencyKey is required",
     );
-    validatePayoutDestination(command.destination);
-    this.assertBooker(command.actorId);
+    validatePayoutDestination(destination);
+    booker.assertOwnsSession(this.#bookerId);
     validDate(command.now, "now");
     DomainError.require(
       this.#status !== "PAYOUT_PENDING",
@@ -463,7 +402,7 @@ export class Session {
     const next = prepareSettlementRoster(
       this.#participations,
       this.#bookerId,
-      command.destination,
+      destination,
       command.now,
     );
     DomainError.require(
@@ -481,7 +420,12 @@ export class Session {
       "DUPLICATE_ID",
       "A payout idempotency key can only be used once for this session",
     );
-    const batch = buildSettlementBatch(this.#sessionId, next, command);
+    const batch = buildSettlementBatch(
+      this.#sessionId,
+      next,
+      command,
+      destination,
+    );
     if (batch === undefined) {
       this.#participations = next;
       this.#status = "SETTLED";
@@ -623,14 +567,6 @@ export class Session {
       !this.#booking.hasStarted(at),
       "SESSION_STARTED",
       "The session has started",
-    );
-  }
-
-  private assertBooker(actorId: UUID): void {
-    DomainError.require(
-      actorId === this.#bookerId,
-      "UNAUTHORIZED",
-      "Only the booker may perform this action",
     );
   }
 }

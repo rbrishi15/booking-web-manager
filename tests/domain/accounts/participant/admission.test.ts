@@ -3,7 +3,6 @@ import {
   LedgerTransaction,
   Money,
   ReliabilityScore,
-  Session,
   Wallet,
 } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
@@ -13,6 +12,7 @@ import {
   creationDetails,
   join,
   loadedUser,
+  readyBooker,
   session,
   sessionState,
   start,
@@ -116,7 +116,7 @@ describe("Participant", () => {
 
     test("join_WhenUserIsNotInInvitedGroup_RejectsWithoutChangingState", () => {
       // Arrange
-      const privateSession = Session.create({
+      const privateSession = readyBooker().createSession({
         ...creationDetails(),
         visibility: "PRIVATE",
         invitedGroupId: "group",
@@ -135,7 +135,7 @@ describe("Participant", () => {
 
     test("join_WhenMemberIsBelowReliabilityThreshold_RejectsWithoutChangingState", () => {
       // Arrange
-      const privateSession = Session.create({
+      const privateSession = readyBooker().createSession({
         ...creationDetails(),
         visibility: "PRIVATE",
         invitedGroupId: "group",
@@ -157,7 +157,7 @@ describe("Participant", () => {
 
     test("join_WhenInvitedMemberMeetsReliabilityThreshold_CommitsFromLoadedWallet", () => {
       // Arrange
-      const privateSession = Session.create({
+      const privateSession = readyBooker().createSession({
         ...creationDetails(),
         visibility: "PRIVATE",
         invitedGroupId: "group",
@@ -219,11 +219,7 @@ describe("Participant", () => {
     test("join_WhenPrivateRoomTokenIsMissing_RejectsWithoutChangingState", () => {
       // Arrange
       const bookingSession = session();
-      bookingSession.changeVisibility({
-        actorId: "booker",
-        visibility: "PRIVATE",
-        now: before,
-      });
+      readyBooker().changeVisibility(bookingSession, "PRIVATE", before);
       const previousState = sessionState(bookingSession);
 
       // Act & Assert
@@ -239,11 +235,7 @@ describe("Participant", () => {
     test("join_WhenPrivateRoomTokenMatches_CommitsApplicant", () => {
       // Arrange
       const bookingSession = session();
-      bookingSession.changeVisibility({
-        actorId: "booker",
-        visibility: "PRIVATE",
-        now: before,
-      });
+      readyBooker().changeVisibility(bookingSession, "PRIVATE", before);
 
       // Act
       const admission = loadedUser("u").asParticipant().join(bookingSession, {
@@ -368,11 +360,7 @@ describe("Participant", () => {
           replacementMode: "INVITE_LINK",
           replacementToken: "new",
         });
-      bookingSession.changeVisibility({
-        actorId: "booker",
-        visibility: "PRIVATE",
-        now: at(19),
-      });
+      readyBooker().changeVisibility(bookingSession, "PRIVATE", at(19));
 
       // Act
       const replacement = loadedUser("c")
@@ -482,11 +470,7 @@ describe("Participant", () => {
       // Arrange
       const bookingSession = session();
       join(bookingSession, "a");
-      bookingSession.removeParticipant({
-        actorId: "booker",
-        participationId: "p-a",
-        now: before,
-      });
+      readyBooker().removeParticipant(bookingSession, "p-a", before);
       const previousState = sessionState(bookingSession);
 
       // Act & Assert

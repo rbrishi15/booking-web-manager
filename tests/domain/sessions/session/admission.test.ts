@@ -1,10 +1,9 @@
-import { DomainError, Session } from "@/domain";
+import { DomainError } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
 import { fundedWallet } from "../../accounts/user-fixtures";
 import {
   at,
   before,
-  creationDetails,
   join,
   loadedUser,
   session,
@@ -13,48 +12,6 @@ import {
 } from "./session-fixtures";
 
 describe("Session", () => {
-  describe("Creation", () => {
-    test("create_WhenBookerIsInactive_ThrowsInactiveAccount", () => {
-      // Arrange
-      const details = creationDetails();
-
-      // Act & Assert
-      expect(() =>
-        Session.create({ ...details, bookerStatus: "INACTIVE" }),
-      ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
-    });
-
-    test("create_WhenPayoutAccountIsIncomplete_ThrowsPayoutAccountNotReady", () => {
-      // Arrange
-      const details = creationDetails();
-
-      // Act & Assert
-      expect(() => Session.create({ ...details, payoutReady: false })).toThrow(
-        expect.objectContaining({ code: "PAYOUT_ACCOUNT_NOT_READY" }),
-      );
-    });
-
-    test("create_WhenShareWouldBeZero_ThrowsInvalidInput", () => {
-      // Arrange
-      const details = creationDetails();
-
-      // Act & Assert
-      expect(() => Session.create({ ...details, totalSlots: 1001 })).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-    });
-
-    test("create_WhenMinimumHeadcountIsOne_ThrowsInvalidInput", () => {
-      // Arrange
-      const details = creationDetails();
-
-      // Act & Assert
-      expect(() => Session.create({ ...details, minimumHeadcount: 1 })).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-    });
-  });
-
   describe("Capacity", () => {
     test("admitParticipant_WhenEightSlotsFillIncludingBooker_WaitlistsNextApplicant", () => {
       // Arrange

@@ -2,6 +2,7 @@ import {
   Email,
   LedgerTransaction,
   Money,
+  PayoutAccount,
   ReliabilityScore,
   User,
   type UserDetails,
@@ -58,4 +59,16 @@ export function loadedUser(
   overrides: Partial<UserDetails> = {},
 ): User {
   return new User(loadedUserDetails(userId, overrides));
+}
+
+export function readyBookerUser(userId = "booker"): User {
+  return loadedUser(userId, {
+    payoutAccount: new PayoutAccount({
+      payoutAccountId: "pa",
+      userId,
+      providerAccountReference: "provider",
+      setupStatus: "COMPLETE",
+      bankAccountReference: "bank",
+    }),
+  });
 }

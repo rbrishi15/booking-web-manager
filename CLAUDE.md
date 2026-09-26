@@ -168,8 +168,8 @@ creation and cannot be changed.
 - Validate at the boundary with Zod; the domain layer assumes valid input.
 - Waitlist promotion is strictly FIFO on `joined_at`, using
   `SELECT ... FOR UPDATE SKIP LOCKED`.
-- Deletion is soft. `Session.cancel()`, not `delete()`. User records are
-  anonymised and retained for audit.
+- Cancel sessions through `user.asBooker().cancel(session, now)` and retain their
+  records. User records are anonymised and retained for audit.
 - SGD displays to two decimals. The applicable refund amount is shown before any
   irreversible action.
 - Responsive from 390px.

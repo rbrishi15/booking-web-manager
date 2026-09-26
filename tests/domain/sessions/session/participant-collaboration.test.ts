@@ -5,6 +5,7 @@ import {
   before,
   join,
   loadedUser,
+  readyBooker,
   session,
   sessionState,
   start,
@@ -70,7 +71,7 @@ describe("Session", () => {
     join(bookingSession, "a");
     join(bookingSession, "b");
     join(bookingSession, "waiting");
-    bookingSession.cancel({ actorId: "booker", now: before });
+    readyBooker().cancel(bookingSession, before);
     const participant = loadedUser("waiting").asParticipant();
     const previousState = sessionState(bookingSession);
 

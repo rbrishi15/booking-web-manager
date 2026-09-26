@@ -1,3 +1,4 @@
+import type { SettlementCommand } from "../../accounts/booker";
 import { DomainError } from "../../shared/errors";
 import type {
   FinancialInstruction,
@@ -8,7 +9,6 @@ import type {
 } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Participation } from "../participation";
-import type { Session } from "./session";
 import {
   expireReplacements,
   replaceParticipation,
@@ -43,7 +43,8 @@ export function prepareSettlementRoster(
 export function buildSettlementBatch(
   sessionId: UUID,
   participations: readonly Participation[],
-  command: Parameters<Session["prepareSettlement"]>[0],
+  command: SettlementCommand,
+  destination: PayoutDestination,
 ): SettlementBatch | undefined {
   const lines: SettlementLine[] = [];
   for (const participation of participations) {
@@ -82,7 +83,7 @@ export function buildSettlementBatch(
     sessionId,
     idempotencyKey: command.idempotencyKey,
     requestedAt: validDate(command.now, "now"),
-    destination: command.destination,
+    destination,
     lines,
   };
   return batch;

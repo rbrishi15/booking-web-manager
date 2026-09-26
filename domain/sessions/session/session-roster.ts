@@ -1,3 +1,4 @@
+import type { Booker, VerifyAttendanceCommand } from "../../accounts/booker";
 import { DomainError } from "../../shared/errors";
 import type {
   FinancialInstruction,
@@ -6,8 +7,6 @@ import type {
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import type { Participation } from "../participation";
-import { refundInstruction } from "../participation-instructions";
-import type { Session } from "./session";
 import { validDate } from "./session-validation";
 
 export function oldestAwaiting(
@@ -57,33 +56,8 @@ interface RosterChange<Result> {
   readonly result: Result;
 }
 
-export function removeParticipant(
-  sessionId: UUID,
-  participations: readonly Participation[],
-  command: Parameters<Session["removeParticipant"]>[0],
-): RosterChange<FinancialResult> {
-  const participation = requireParticipation(
-    participations,
-    command.participationId,
-  );
-  DomainError.require(
-    participation.status === "COMMITTED" && participation.hold !== undefined,
-    "INVALID_STATE",
-    "Only a committed participant can be removed",
-  );
-  const nextHold = participation.hold.refund(command.now);
-  const next = participation.remove(nextHold);
-  return {
-    participations: replaceParticipation(
-      participations,
-      participation.participationId,
-      next,
-    ),
-    result: { instructions: [refundInstruction(sessionId, next, command.now)] },
-  };
-}
-
 export function cancelRoster(
+  booker: Booker,
   sessionId: UUID,
   participations: readonly Participation[],
   now: Date,
@@ -91,18 +65,13 @@ export function cancelRoster(
   const instructions: FinancialInstruction[] = [];
   let next = [...participations];
   for (const participation of participations) {
-    let changed: Participation;
-    if (
-      participation.hold !== undefined &&
-      !["REFUNDED", "RELEASED", "FORFEITED"].includes(participation.hold.state)
-    ) {
-      const refundedHold = participation.hold.refund(now);
-      changed = participation.cancel(refundedHold);
-      instructions.push(refundInstruction(sessionId, changed, now));
-    } else {
-      changed = participation.cancel();
-    }
-    next = replaceParticipation(next, participation.participationId, changed);
+    const change = booker.prepareCancellation(participation, sessionId, now);
+    instructions.push(...change.result.instructions);
+    next = replaceParticipation(
+      next,
+      participation.participationId,
+      change.participation,
+    );
   }
   return { participations: next, result: { instructions } };
 }
@@ -118,7 +87,8 @@ export function expireReplacements(
 
 export function verifyAttendance(
   participations: readonly Participation[],
-  command: Parameters<Session["verifyAttendance"]>[0],
+  booker: Booker,
+  command: VerifyAttendanceCommand,
 ): AttendanceChange {
   const markedIds = new Set<UUID>();
   let next = [...participations];
@@ -133,9 +103,9 @@ export function verifyAttendance(
       participations,
       mark.participationId,
     );
-    const verified = participation.verify(
+    const verified = booker.prepareAttendance(
+      participation,
       mark.attendance,
-      "BOOKER",
       command.now,
     );
     next = replaceParticipation(next, participation.participationId, verified);

@@ -34,8 +34,9 @@ export interface ReliabilityOutcome {
 /**
  * Immutable child entity of the Session aggregate root; owns an optional FundHold.
  * Transition methods validate this child's state and return a replacement.
- * Participant prepares voluntary transitions; Session applies replacements to
- * its roster and enforces capacity, queue, cross-participant, and settlement rules.
+ * Participant prepares voluntary transitions; Booker prepares administrative
+ * transitions. Session applies replacements and enforces capacity, queue,
+ * cross-participant, and settlement rules.
  */
 export class Participation {
   readonly #participationId: UUID;

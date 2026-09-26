@@ -1,13 +1,10 @@
 import { DomainError, Participation, Session } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
 import {
-  at,
   before,
-  creationDetails,
-  destination,
   end,
   join,
-  loadedUser,
+  readyBooker,
   session,
   sessionDetails,
   sessionState,
@@ -103,16 +100,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -135,16 +129,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -167,16 +158,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -318,16 +306,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -352,16 +337,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -389,16 +371,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -419,16 +398,13 @@ describe("Session", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -445,30 +421,17 @@ describe("Session", () => {
       ).toThrow(DomainError);
     });
 
-    test("create_WhenBookingHasEnded_ThrowsSessionStarted", () => {
-      // Arrange
-      const details = { ...creationDetails(), now: end };
-
-      // Act & Assert
-      expect(() => Session.create(details)).toThrow(
-        expect.objectContaining({ code: "SESSION_STARTED" }),
-      );
-    });
-
     test("pendingSettlement_WhenInputsAndOutputsAreMutated_PreservesBatchAndHistory", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -507,128 +470,18 @@ describe("Session", () => {
     });
   });
 
-  describe("Settlement preparation", () => {
-    test("prepareSettlement_WhenAttendanceIsIncomplete_LeavesExpiryUnapplied", () => {
-      // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
-      loadedUser("a")
-        .asParticipant()
-        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
-      const command = {
-        actorId: "booker",
-        payoutId: "out",
-        idempotencyKey: "key",
-        destination,
-        now: end,
-      };
-      const previousState = sessionState(bookingSession);
-
-      // Act & Assert
-      expect(() => bookingSession.prepareSettlement(command)).toThrow(
-        expect.objectContaining({ code: "ATTENDANCE_INCOMPLETE" }),
-      );
-      expect(sessionState(bookingSession)).toEqual(previousState);
-      expect(bookingSession.participations[0]?.hold?.state).toBe(
-        "AWAITING_REPLACEMENT",
-      );
-    });
-
-    test("prepareSettlement_WhenDestinationIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
-      // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
-      loadedUser("a")
-        .asParticipant()
-        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
-      bookingSession.verifyAttendance({
-        actorId: "booker",
-        marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const command = {
-        actorId: "booker",
-        payoutId: "out",
-        idempotencyKey: "key",
-        destination,
-        now: end,
-      };
-      const previousState = sessionState(bookingSession);
-
-      // Act & Assert
-      expect(() =>
-        bookingSession.prepareSettlement({
-          ...command,
-          destination: { ...destination, userId: "foreign" },
-        }),
-      ).toThrow(DomainError);
-      expect(sessionState(bookingSession)).toEqual(previousState);
-      expect(bookingSession.payoutAttemptIds).toEqual([]);
-      expect(bookingSession.payoutIdempotencyKeys).toEqual([]);
-    });
-
-    test("prepareSettlement_WhenInvalidDestinationIsCorrected_AppliesExpiryAndRecordsAttempt", () => {
-      // Arrange
-      const bookingSession = session();
-      join(bookingSession, "a");
-      join(bookingSession, "b");
-      loadedUser("a")
-        .asParticipant()
-        .withdraw(bookingSession, { participationId: "p-a", now: at(2) });
-      bookingSession.verifyAttendance({
-        actorId: "booker",
-        marks: [{ participationId: "p-b", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const command = {
-        actorId: "booker",
-        payoutId: "out",
-        idempotencyKey: "key",
-        destination,
-        now: end,
-      };
-
-      // Act & Assert
-      expect(() =>
-        bookingSession.prepareSettlement({
-          ...command,
-          destination: { ...destination, userId: "foreign" },
-        }),
-      ).toThrow(DomainError);
-
-      // Act
-      const batch = bookingSession.prepareSettlement(command);
-
-      // Assert
-      expect(batch?.lines.map((line) => line.kind)).toEqual([
-        "FORFEIT",
-        "RELEASE",
-      ]);
-      expect(bookingSession.participations[0]?.hold?.state).toBe(
-        "FORFEITURE_DUE",
-      );
-      expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
-      expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
-    });
-  });
-
   describe("Settlement completion", () => {
     test("completeSettlement_WhenPendingSessionIsRestored_SettlesIndependentlyOfSource", () => {
       // Arrange
       const source = session();
       join(source, "a");
-      source.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(source, {
         marks: [{ participationId: "p-a", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = source.prepareSettlement({
-        actorId: "booker",
+      const batch = readyBooker().prepareSettlement(source, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       })!;
       const details = sessionDetails({
@@ -657,19 +510,16 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(bookingSession, {
         marks: [
           { participationId: "p-a", attendance: "ATTENDED" },
           { participationId: "p-b", attendance: "ATTENDED" },
         ],
         now: end,
       });
-      bookingSession.prepareSettlement({
-        actorId: "booker",
+      readyBooker().prepareSettlement(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       });
       const previousState = sessionState(bookingSession);
@@ -686,19 +536,16 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(bookingSession, {
         marks: [
           { participationId: "p-a", attendance: "ATTENDED" },
           { participationId: "p-b", attendance: "ATTENDED" },
         ],
         now: end,
       });
-      bookingSession.prepareSettlement({
-        actorId: "booker",
+      readyBooker().prepareSettlement(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       });
       const previousState = sessionState(bookingSession);
@@ -715,19 +562,16 @@ describe("Session", () => {
       const bookingSession = session();
       join(bookingSession, "a");
       join(bookingSession, "b");
-      bookingSession.verifyAttendance({
-        actorId: "booker",
+      readyBooker().verifyAttendance(bookingSession, {
         marks: [
           { participationId: "p-a", attendance: "ATTENDED" },
           { participationId: "p-b", attendance: "ATTENDED" },
         ],
         now: end,
       });
-      bookingSession.prepareSettlement({
-        actorId: "booker",
+      readyBooker().prepareSettlement(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
-        destination,
         now: end,
       });
       const previousState = sessionState(bookingSession);

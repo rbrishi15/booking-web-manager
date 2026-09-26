@@ -3,8 +3,9 @@
 Status: implemented. Product-policy proposals remain awaiting product-owner review.
 
 This records the earlier internal extraction. Its preserved public Session API
-and placement of participant calculations are superseded by
-[ADR-0007](../adr/0007-participant-behavior-and-session-roster.md). See the
+and placement of role calculations are superseded by
+[ADR-0007](../adr/0007-participant-behavior-and-session-roster.md) and
+[ADR-0008](../adr/0008-booker-behavior-and-session-lifecycle.md). See the
 [domain guide](../../domain/README.md#session-command-calculations) for current
 responsibilities. The historical validation results below describe that
 extraction, not subsequent changes.

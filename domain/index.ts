@@ -41,7 +41,6 @@ export {
 export {
   Session,
   type PromotionCommand,
-  type SessionCreation,
   type SessionDetails,
 } from "./sessions/session";
 export {

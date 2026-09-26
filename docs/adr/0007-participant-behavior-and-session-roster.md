@@ -6,6 +6,11 @@
   [ADR-0003](./0003-aggregate-roots-and-boundaries.md) and admission routing in
   [ADR-0004](./0004-participant-join-and-session-admission.md).
 
+[ADR-0008](./0008-booker-behavior-and-session-lifecycle.md) subsequently extends
+this collaboration to Booker. Participant behavior and the decisions in this
+record remain accepted; its references to unchanged Booker routing describe
+the scope of this earlier refactor.
+
 ## Context
 
 `Participant` previously forwarded its loaded `User` to `Session`, which decided

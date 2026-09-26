@@ -25,6 +25,9 @@ class Booker <<RoleView>> {
   +userId : UUID
   --
   +createSession(...) : Session
+  +cancel(...) : FinancialResult
+  +changeVisibility(...) : void
+  +removeParticipant(...) : FinancialResult
   +verifyAttendance(...) : void
   +prepareSettlement(...) : SettlementBatch [0..1]
 }
@@ -105,5 +108,5 @@ User -[hidden]right- RegularGroup
 Wallet -[hidden]right- Email
 Email -[hidden]right- PayoutAccount
 
-caption Selected public members; (...) abbreviates parameters.\nParticipant owns eligibility, funding and voluntary-departure decisions; Session owns the roster.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
+caption Selected public members; (...) abbreviates parameters.\nBooker and Participant own role decisions; Session owns its lifecycle and roster.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
 @enduml

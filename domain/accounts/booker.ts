@@ -1,9 +1,16 @@
-import { Session, type SessionCreation } from "../sessions/session";
+import type { ReliabilityScore } from "../reliability/reliability-score";
+import type { Booking } from "../sessions/booking";
+import type { Participation } from "../sessions/participation";
+import { refundInstruction } from "../sessions/participation-instructions";
+import { Session } from "../sessions/session";
+import { validDate } from "../sessions/session/session-validation";
+import { DomainError } from "../shared/errors";
 import type {
   FinancialResult,
   PayoutDestination,
   SettlementBatch,
 } from "../shared/operations";
+import type { Visibility } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import type { User } from "./user";
 
@@ -13,10 +20,18 @@ import type { User } from "./user";
  * Identity, account status, and payout readiness come from the User aggregate;
  * IDs, tokens, and the clock remain application-owned inputs.
  */
-export type BookerSessionCreation = Omit<
-  SessionCreation,
-  "bookerId" | "bookerStatus" | "payoutReady"
->;
+export interface BookerSessionCreation {
+  readonly sessionId: UUID;
+  readonly booking: Booking;
+  readonly totalSlots: number;
+  readonly minimumHeadcount: number;
+  readonly roomToken: string;
+  readonly holdingAccountId: UUID;
+  readonly now: Date;
+  readonly visibility?: Visibility;
+  readonly minimumReliability?: ReliabilityScore;
+  readonly invitedGroupId?: UUID;
+}
 
 export interface AttendanceMark {
   readonly participationId: UUID;
@@ -35,9 +50,10 @@ export interface SettlementCommand {
 }
 
 /**
- * User's booker role. It supplies the booker's identity to Session commands,
- * keeping actor IDs and payout destinations out of application-facing flows.
+ * User's booker role. Owns session creation, owner authorization, cancellation
+ * and removal preparation, manual attendance marks, and payout destination access.
  * This is a role view over User, with no independently owned aggregate lifecycle.
+ * Session guards its lifecycle and atomically installs prepared roster changes.
  */
 export class Booker {
   readonly #user: User;
@@ -55,16 +71,49 @@ export class Booker {
   }
 
   createSession(details: BookerSessionCreation): Session {
-    return Session.create({
-      ...details,
+    DomainError.require(
+      this.#user.accountStatus === "ACTIVE",
+      "INACTIVE_ACCOUNT",
+      "An inactive booker cannot create a session",
+    );
+    DomainError.require(
+      this.#user.payoutAccount?.setupStatus === "COMPLETE",
+      "PAYOUT_ACCOUNT_NOT_READY",
+      "A session needs a completed payout account",
+    );
+    const now = validDate(details.now, "now");
+    const session = new Session({
+      sessionId: details.sessionId,
       bookerId: this.#user.userId,
-      bookerStatus: this.#user.accountStatus,
-      payoutReady: this.#user.payoutAccount?.setupStatus === "COMPLETE",
+      booking: details.booking,
+      totalSlots: details.totalSlots,
+      minimumHeadcount: details.minimumHeadcount,
+      roomToken: details.roomToken,
+      holdingAccountId: details.holdingAccountId,
+      visibility: details.visibility ?? "PRIVATE",
+      status: "OPEN",
+      minimumReliability: details.minimumReliability,
+      invitedGroupId: details.invitedGroupId,
+      participations: [],
+      nextQueueSequence: 1,
+      payoutAttemptIds: [],
+      payoutIdempotencyKeys: [],
     });
+    DomainError.require(
+      !session.booking.hasStarted(now),
+      "SESSION_STARTED",
+      "A new session must be upcoming",
+    );
+    DomainError.require(
+      session.bookingShare.toCents() > 0,
+      "INVALID_INPUT",
+      "The booking share must be positive",
+    );
+    return session;
   }
 
   cancel(session: Session, now: Date): FinancialResult {
-    return session.cancel({ actorId: this.#user.userId, now });
+    return session.applyBookerCancellation(this, now);
   }
 
   changeVisibility(
@@ -72,11 +121,7 @@ export class Booker {
     visibility: "PRIVATE" | "PUBLIC",
     now: Date,
   ): void {
-    session.changeVisibility({
-      actorId: this.#user.userId,
-      visibility,
-      now,
-    });
+    session.applyBookerVisibilityChange(this, visibility, now);
   }
 
   removeParticipant(
@@ -84,26 +129,84 @@ export class Booker {
     participationId: UUID,
     now: Date,
   ): FinancialResult {
-    return session.removeParticipant({
-      actorId: this.#user.userId,
-      participationId,
-      now,
-    });
+    return session.applyBookerRemoval(this, participationId, now);
   }
 
   verifyAttendance(session: Session, command: VerifyAttendanceCommand): void {
-    session.verifyAttendance({ actorId: this.#user.userId, ...command });
+    session.applyBookerAttendance(this, command);
   }
 
   prepareSettlement(
     session: Session,
     command: SettlementCommand,
   ): SettlementBatch | undefined {
-    const destination: PayoutDestination = this.#user.payoutDestination();
-    return session.prepareSettlement({
-      actorId: this.#user.userId,
-      destination,
-      ...command,
-    });
+    return session.prepareBookerSettlement(this, command);
+  }
+
+  /** Session invokes this guard before applying a booker's administration. */
+  assertOwnsSession(bookerId: UUID): void {
+    DomainError.require(
+      this.userId === bookerId,
+      "UNAUTHORIZED",
+      "Only the booker may perform this action",
+    );
+  }
+
+  /** Prepares one cancellation; Session installs the complete roster together. */
+  prepareCancellation(
+    participation: Participation,
+    sessionId: UUID,
+    now: Date,
+  ): { participation: Participation; result: FinancialResult } {
+    if (
+      participation.hold !== undefined &&
+      !["REFUNDED", "RELEASED", "FORFEITED"].includes(participation.hold.state)
+    ) {
+      const refundedHold = participation.hold.refund(now);
+      const cancelled = participation.cancel(refundedHold);
+      return {
+        participation: cancelled,
+        result: {
+          instructions: [refundInstruction(sessionId, cancelled, now)],
+        },
+      };
+    }
+    return {
+      participation: participation.cancel(),
+      result: { instructions: [] },
+    };
+  }
+
+  /** A booker's removal always refunds the committed participant's share. */
+  prepareRemoval(
+    participation: Participation,
+    sessionId: UUID,
+    now: Date,
+  ): { participation: Participation; result: FinancialResult } {
+    DomainError.require(
+      participation.status === "COMMITTED" && participation.hold !== undefined,
+      "INVALID_STATE",
+      "Only a committed participant can be removed",
+    );
+    const refundedHold = participation.hold.refund(now);
+    const removed = participation.remove(refundedHold);
+    return {
+      participation: removed,
+      result: { instructions: [refundInstruction(sessionId, removed, now)] },
+    };
+  }
+
+  /** Marks a single participation manually without changing the session roster. */
+  prepareAttendance(
+    participation: Participation,
+    attendance: "ATTENDED" | "ABSENT",
+    now: Date,
+  ): Participation {
+    return participation.verify(attendance, "BOOKER", now);
+  }
+
+  /** Reads the current user's validated payout destination for settlement. */
+  payoutDestination(): PayoutDestination {
+    return this.#user.payoutDestination();
   }
 }

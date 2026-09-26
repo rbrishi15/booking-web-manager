@@ -4,10 +4,11 @@
 - Date: 2026-09-15
 
 Participant responsibility routing is superseded by
-[ADR-0007](./0007-participant-behavior-and-session-roster.md). Aggregate ownership
+[ADR-0007](./0007-participant-behavior-and-session-roster.md), and Booker routing
+by [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md). Aggregate ownership
 and persistence boundaries remain accepted. The original routing below is kept
-as decision history: participant actions now contain their own rules and
-collaborate with guarded Session operations.
+as decision history: role actions now contain their own rules and collaborate
+with guarded Session operations.
 
 ## Context
 

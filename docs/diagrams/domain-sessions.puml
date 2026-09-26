@@ -32,15 +32,17 @@ class Session <<AggregateRoot>> {
   +minimumReliability : ReliabilityScore [0..1]
   +pendingSettlement : SettlementBatch [0..1]
   --
-  {static} +create(...) : Session
   +admitParticipant(participant, ...) : AdmissionResult
   +promoteNext(participant, ...) : PromotionResult
   +applyParticipantWithdrawal(participant, ...) : WithdrawalResult
   +removeWaitlistedParticipant(participant, ...) : void
   +releaseParticipantReplacement(participant, ...) : FinancialResult
-  +cancel(...) : FinancialResult
-  +verifyAttendance(...) : void
-  +prepareSettlement(...) : SettlementBatch [0..1]
+  +applyBookerCancellation(booker, ...) : FinancialResult
+  +applyBookerVisibilityChange(booker, ...) : void
+  +applyBookerRemoval(booker, ...) : FinancialResult
+  +applyBookerAttendance(booker, ...) : void
+  +prepareBookerSettlement(booker, ...) : SettlementBatch [0..1]
+  +autoVerifyAttendance(...) : void
   +completeSettlement(...) : FinancialResult
   +failSettlement(...) : void
 }
@@ -52,6 +54,17 @@ class Participant <<RoleView>> {
   +withdraw(session, ...) : WithdrawalResult
   +leaveWaitlist(session, ...) : void
   +offerReplacementToWaitlist(session, ...) : FinancialResult
+}
+
+class Booker <<RoleView>> {
+  +userId : UUID
+  --
+  +createSession(...) : Session
+  +cancel(session, ...) : FinancialResult
+  +changeVisibility(session, ...) : void
+  +removeParticipant(session, ...) : FinancialResult
+  +verifyAttendance(session, ...) : void
+  +prepareSettlement(session, ...) : SettlementBatch [0..1]
 }
 
 class Booking <<ValueObject>> {
@@ -104,11 +117,12 @@ class ReliabilityScore <<ValueObject>> {
 
 Session "1" *-down- "1" Booking : booking
 Participant .down.> Session : requests guarded roster change
+Booker .down.> Session : creates and administers
 Session "1" *-down- "0..*" Participation : participations
 Participation "1" *-down- "0..1" FundHold : hold
 ReliabilityScore .up.> Participation : finalized outcomes
 Booking -[hidden]right- Participation
 FundHold -[hidden]right- ReliabilityScore
 
-caption Selected public members; (...) abbreviates parameters.\nSession invokes Participant's eligibility, funding and departure calculations before applying changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
+caption Selected public members; (...) abbreviates parameters.\nSession invokes role decisions, checks shared conditions, and applies complete changes.\nSession owns its pending settlement snapshot; the settlement view expands that contract.
 @enduml

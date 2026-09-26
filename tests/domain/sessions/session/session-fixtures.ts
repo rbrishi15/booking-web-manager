@@ -2,10 +2,10 @@ import {
   Booking,
   Money,
   Session,
-  type SessionCreation,
+  type BookerSessionCreation,
   type SessionDetails,
 } from "@/domain";
-import { loadedUser } from "../../accounts/user-fixtures";
+import { loadedUser, readyBookerUser } from "../../accounts/user-fixtures";
 
 export { loadedUser };
 
@@ -22,12 +22,9 @@ export const destination = {
   bankAccountReference: "bank",
 };
 
-export function creationDetails(totalSlots = 2): SessionCreation {
+export function creationDetails(totalSlots = 2): BookerSessionCreation {
   return {
     sessionId: "s",
-    bookerId: "booker",
-    bookerStatus: "ACTIVE",
-    payoutReady: true,
     booking: new Booking({
       venueName: "Court",
       region: "North",
@@ -45,8 +42,12 @@ export function creationDetails(totalSlots = 2): SessionCreation {
   };
 }
 
+export function readyBooker(userId = "booker") {
+  return readyBookerUser(userId).asBooker();
+}
+
 export function session(totalSlots = 2) {
-  return Session.create(creationDetails(totalSlots));
+  return readyBooker().createSession(creationDetails(totalSlots));
 }
 
 export function join(s: Session, id: string, now = before) {

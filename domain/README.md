@@ -15,8 +15,9 @@ its boundary; child comments identify their owning root.
 
 - `Session` owns its immutable `Booking`, participation children, waitlist order,
   and each participation's `FundHold`. It checks shared roster rules and installs
-  complete changes from participant actions through guarded operations.
-  Cancellation, attendance, and settlement remain commands on the root.
+  complete changes from Participant and Booker actions through guarded operations.
+  Automatic verification, replacement expiry, promotion, and payout callbacks
+  remain operations on the root.
 - `User` owns profile/preferences, account status, its `Wallet`, and payout
   setup. The wallet holds its complete committed transaction history and derives
   spendable funds through `getFunds(): Money`. Calculated reliability and
@@ -32,12 +33,15 @@ and `LedgerTransaction` represent an identity and immutable facts rather than
 aggregate roots. Account funds are derived from committed ledger entries.
 `Booker` and `Participant` are role views over `User`, with no independent
 repository or persisted lifecycle. Participant owns its eligibility, funding,
-authorization over its records, and voluntary-departure decisions.
+authorization over its records, and voluntary-departure decisions. Booker owns
+session creation, ownership authorization, cancellation/removal refund decisions,
+manual attendance transitions, and payout-destination acquisition.
 
 See [ADR-0003: Aggregate roots and boundaries](../docs/adr/0003-aggregate-roots-and-boundaries.md)
 for ownership and coordination across roots, and
 [ADR-0007: Participant behavior and the Session roster](../docs/adr/0007-participant-behavior-and-session-roster.md)
-for current participant responsibility routing.
+and [ADR-0008: Booker behavior and the Session lifecycle](../docs/adr/0008-booker-behavior-and-session-lifecycle.md)
+for current role responsibility routing.
 
 The application enters session admission through
 `user.asParticipant().join(session, command)`. The repository loads a complete
@@ -78,8 +82,12 @@ their writes and protect against concurrent overspending.
 Named creation factories remain where they apply business rules or defaults:
 `User.create({ userId, email: new Email(emailText), walletId, now })` registers an active user with a
 wallet with empty transactions and zero funds, empty memberships, and the
-empty-history reliability default. `Session.create(...)` checks booker
-eligibility and an upcoming booking. Children and values such
+empty-history reliability default. `user.asBooker().createSession(details)` owns
+the session creation workflow: booker eligibility, payout readiness, an upcoming
+booking, a positive share, and initial defaults. `BookerSessionCreation` contains
+the caller-supplied creation details; the role supplies identity and current
+account/payout facts. `new Session(details)` validates existing state for hydration.
+Children and values such
 as `Wallet` and `Booking` use constructors directly. Hydrating existing state
 does not repeat creation workflows or reset lifecycle fields.
 
@@ -122,8 +130,26 @@ does not read User or wallet state; Session retains private access and link
 validity, capacity, FIFO and re-entry rules, and the selection and refund of
 another participant's awaiting withdrawal.
 
-`Session` owns all session state and keeps construction, getters, shared lifecycle
-and booker checks, payout-attempt history, and final assignments. Shared session
+Booker actions are `createSession`, `cancel`, `changeVisibility`,
+`removeParticipant`, `verifyAttendance`, and `prepareSettlement`. Creation is
+implemented in Booker and constructs Session directly. The other actions call
+`applyBookerCancellation`, `applyBookerVisibilityChange`, `applyBookerRemoval`,
+`applyBookerAttendance`, and `prepareBookerSettlement`, respectively. Session
+invokes Booker's ownership check, finds owned records, and obtains cancellation,
+removal, and manual-attendance transitions from the role. Booker supplies the
+trusted payout destination through User; commands accept no raw actor ID or
+destination. The existing Booker action signatures remain unchanged.
+
+Session owns lifecycle and timing conditions, visibility/capacity rules,
+roster iteration, duplicate attendance marks, aggregate status, payout history,
+and complete settlement batches. It gathers all cancellation refunds and
+attendance updates before installing any roster or status change. Creation and
+payout-destination acquisition retain their current active-account requirements;
+cancellation, visibility changes, removal, and manual attendance add no new
+active-account restriction.
+
+`Session` owns all session state and keeps validated construction, getters, shared
+lifecycle checks, payout-attempt history, and final assignments. Shared session
 calculations live in four internal modules in `sessions/session/`, alongside the
 root implementation. The folder entry point preserves the `sessions/session`
 import path:
@@ -131,12 +157,12 @@ import path:
 | Module | Responsibility |
 | --- | --- |
 | `sessions/session/session-validation.ts` | Construction invariants, settlement-data validation, defensive copies, and session-specific ID/date checks. |
-| `sessions/session/session-roster.ts` | Shared roster operations, removal, cancellation, attendance, and replacement expiry. |
+| `sessions/session/session-roster.ts` | Shared roster operations, cancellation/manual-attendance iteration through Booker, automatic verification, attendance-derived status, and replacement expiry. |
 | `sessions/session/session-admission.ts` | Access, capacity, duplicate enrollment, FIFO promotion, waitlist re-entry, replacement refunds, and collaboration with Participant eligibility and hold creation. |
 | `sessions/session/session-settlement.ts` | Settlement preparation, batches, completed holds, and financial instructions. |
 
 `sessions/participation-instructions.ts` supplies shared lock/refund instruction
-construction to Participant and the session calculations. It is an internal
+construction to Participant, Booker, and the session calculations. It is an internal
 helper, not a public domain export.
 
 Calculations use operation-specific values and immutable children. They never
@@ -148,11 +174,11 @@ applicable change plans. The session modules are not exported from the public
 domain entry point, and aggregate ownership is unchanged.
 
 A future use case loads `Session` and any required complete `User` through its
-transaction repositories, obtains the participant role for participant actions,
+transaction repositories, obtains the appropriate Participant or Booker role,
 then saves the session and applies its financial instructions in the same unit of
 work. It does not call internal helpers or save individual child changes.
-Booker administration, attendance, cancellation, and settlement retain their
-existing entry points. Payout dispatch calls the provider outside the transaction.
+Automatic operations and payout callbacks invoke Session directly. Payout dispatch
+calls the provider outside the transaction.
 This split adds no use-case, database, or payment-provider implementation; domain
 atomicity tests do not establish database concurrency guarantees.
 
@@ -216,9 +242,12 @@ without retaining the history.
 
 ## Settlement and ledger boundary
 
-After all committed attendance is finalized, `Session.prepareSettlement` freezes
-hold IDs, amounts, release/forfeiture reasons, and the booker's payout
-destination. It returns no batch when there are no payable holds. Otherwise a
+After all committed attendance is finalized,
+`booker.prepareSettlement(session, command)` obtains the trusted destination
+through the role and asks Session to freeze hold IDs, amounts,
+release/forfeiture reasons, and that destination. Session guards payout-attempt
+history and prepares the complete batch before updating state. It returns no
+batch when there are no payable holds. Otherwise a
 future use-case coordinator saves the session, `Payout`, and a durable payout
 intent in one transaction. A dispatcher calls the external provider later. Only a matching
 confirmed callback can complete that attempt; completion then settles holds and
@@ -242,7 +271,8 @@ The source tree follows the business capabilities and aggregate boundaries:
 - `domain/sessions` contains `Session`, `Participation`, `FundHold`, and the
   `Booking` value object they own.
 - `domain/groups` contains `RegularGroup` and `GroupMembership`.
-- `domain/accounts` contains `User` and payout-account setup.
+- `domain/accounts` contains `User`, its Booker and Participant roles, and
+  payout-account setup.
 - `domain/finance` contains money, wallets, holding accounts, ledger facts,
   payouts, and derived balance read models.
 - `domain/reliability` contains the reliability value object and its history
