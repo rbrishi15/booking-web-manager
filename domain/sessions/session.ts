@@ -1,33 +1,6 @@
-import {
-  prepareSettlementRoster,
-  buildSettlementBatch,
-  completeSettlement,
-} from "./session-settlement";
-import { calculateJoin, calculatePromotion } from "./session-admission";
-import { availableSlots } from "./session-roster";
-import { meetsReliabilityRequirement } from "./session-admission";
-import {
-  leaveWaitlist,
-  withdrawParticipant,
-  offerReplacementToWaitlist,
-  removeParticipant,
-  cancelRoster,
-  expireReplacements,
-  verifyAttendance,
-  autoVerifyAttendance,
-} from "./session-roster";
-import { nextWaitlisted } from "./session-roster";
-import {
-  cloneBatch,
-  requireId,
-  validDate,
-  validatePayoutDestination,
-  validateSessionDetails,
-  validateSessionRoster,
-} from "./session-validation";
 import type { User } from "../accounts/user";
-import { Money } from "../finance/money";
-import { ReliabilityScore } from "../reliability/reliability-score";
+import type { Money } from "../finance/money";
+import type { ReliabilityScore } from "../reliability/reliability-score";
 import { DomainError } from "../shared/errors";
 import type {
   AdmissionResult,
@@ -43,8 +16,38 @@ import type {
   Visibility,
 } from "../shared/statuses";
 import type { UUID } from "../shared/types";
-import { Booking } from "./booking";
+import type { Booking } from "./booking";
 import type { Participation } from "./participation";
+import {
+  calculateJoin,
+  calculatePromotion,
+  meetsReliabilityRequirement,
+} from "./session-admission";
+import {
+  autoVerifyAttendance,
+  availableSlots,
+  cancelRoster,
+  expireReplacements,
+  leaveWaitlist,
+  nextWaitlisted,
+  offerReplacementToWaitlist,
+  removeParticipant,
+  verifyAttendance,
+  withdrawParticipant,
+} from "./session-roster";
+import {
+  buildSettlementBatch,
+  completeSettlement,
+  prepareSettlementRoster,
+} from "./session-settlement";
+import {
+  cloneBatch,
+  requireId,
+  validDate,
+  validatePayoutDestination,
+  validateSessionDetails,
+  validateSessionRoster,
+} from "./session-validation";
 
 export interface SessionDetails {
   readonly sessionId: UUID;

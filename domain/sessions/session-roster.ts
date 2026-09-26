@@ -4,10 +4,10 @@ import type {
   FinancialResult,
   WithdrawalResult,
 } from "../shared/operations";
-import type { Booking } from "./booking";
-import type { Session } from "./session";
 import type { UUID } from "../shared/types";
+import type { Booking } from "./booking";
 import type { Participation } from "./participation";
+import type { Session } from "./session";
 import { validDate } from "./session-validation";
 
 export function oldestAwaiting(
@@ -34,7 +34,7 @@ export function lockInstruction(
     throw new DomainError("INVALID_STATE", "A commitment needs a hold");
   return {
     kind: "LOCK",
-    sessionId: sessionId,
+    sessionId,
     participationId: participation.participationId,
     holdId: hold.holdId,
     holdingAccountId: hold.holdingAccountId,
@@ -54,7 +54,7 @@ export function refundInstruction(
     throw new DomainError("INVALID_STATE", "A refund needs a hold");
   return {
     kind: "REFUND",
-    sessionId: sessionId,
+    sessionId,
     participationId: participation.participationId,
     holdId: hold.holdId,
     holdingAccountId: hold.holdingAccountId,

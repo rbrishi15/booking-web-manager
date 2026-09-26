@@ -1,26 +1,26 @@
-import { FundHold } from "./fund-hold";
-import type { JoinCommand, PromotionCommand } from "./session";
-import type {
-  AdmissionResult,
-  PromotionResult,
-  FinancialInstruction,
-} from "../shared/operations";
-import {
-  availableSlots,
-  nextWaitlisted,
-  oldestAwaiting,
-  replaceParticipation,
-  lockInstruction,
-  refundInstruction,
-} from "./session-roster";
-import { requireId, validDate } from "./session-validation";
 import type { User } from "../accounts/user";
 import type { Money } from "../finance/money";
 import type { ReliabilityScore } from "../reliability/reliability-score";
 import { DomainError } from "../shared/errors";
+import type {
+  AdmissionResult,
+  FinancialInstruction,
+  PromotionResult,
+} from "../shared/operations";
 import type { Visibility } from "../shared/statuses";
 import type { UUID } from "../shared/types";
+import { FundHold } from "./fund-hold";
 import { Participation } from "./participation";
+import type { JoinCommand, PromotionCommand } from "./session";
+import {
+  availableSlots,
+  lockInstruction,
+  nextWaitlisted,
+  oldestAwaiting,
+  refundInstruction,
+  replaceParticipation,
+} from "./session-roster";
+import { requireId, validDate } from "./session-validation";
 
 interface AccessRules {
   readonly participations: readonly Participation[];
@@ -42,7 +42,7 @@ export function meetsReliabilityRequirement(
   return minimum === undefined || score.meetsMinimum(minimum);
 }
 
-export function assertAccess(
+function assertAccess(
   rules: AccessRules,
   user: User,
   roomToken?: string,
@@ -70,11 +70,11 @@ export function assertAccess(
     return;
   throw new DomainError(
     "INVALID_ACCESS",
-    "The user does not have access to this export function session",
+    "The user does not have access to this private session",
   );
 }
 
-export function assertEligible(
+function assertEligible(
   rules: EligibilityRules,
   user: User,
   requireFunds: boolean,
@@ -97,7 +97,7 @@ export function assertEligible(
     );
 }
 
-export function ineligibilityReason(
+function ineligibilityReason(
   rules: EligibilityRules,
   user: User,
   requireFunds = true,

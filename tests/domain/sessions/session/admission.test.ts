@@ -297,7 +297,10 @@ describe("Session", () => {
 
       // Act & Assert
       expect(() => join(bookingSession, "u")).toThrow(
-        expect.objectContaining({ code: "INVALID_ACCESS" }),
+        expect.objectContaining({
+          code: "INVALID_ACCESS",
+          message: "The user does not have access to this private session",
+        }),
       );
       expect(sessionState(bookingSession)).toEqual(previousState);
     });
@@ -420,6 +423,39 @@ describe("Session", () => {
   });
 
   describe("Queue promotion", () => {
+    test("promoteNext_WhenQueueIsEmpty_ReturnsNoneBeforeValidatingHoldId", () => {
+      // Arrange
+      const bookingSession = session();
+      const previousState = sessionState(bookingSession);
+
+      // Act
+      const result = bookingSession.promoteNext(loadedUser("a"), {
+        holdId: "",
+        now: before,
+      });
+
+      // Assert
+      expect(result).toEqual({ kind: "NONE", instructions: [] });
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("promoteNext_WhenSessionHasStartedAndQueueIsEmpty_RejectsBeforeReturningNone", () => {
+      // Arrange
+      const bookingSession = session();
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() =>
+        bookingSession.promoteNext(loadedUser("a"), { holdId: "", now: start }),
+      ).toThrow(
+        expect.objectContaining({
+          code: "SESSION_STARTED",
+          message: "The session has started",
+        }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
     test("promoteNext_WhenReplacementRefundFails_LeavesRosterQueueAndHoldsUnchanged", () => {
       // Arrange
       const bookingSession = session();

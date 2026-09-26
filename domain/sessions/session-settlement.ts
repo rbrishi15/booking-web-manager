@@ -11,8 +11,8 @@ import type { Participation } from "./participation";
 import type { Session } from "./session";
 import {
   expireReplacements,
-  requireParticipation,
   replaceParticipation,
+  requireParticipation,
 } from "./session-roster";
 import { validDate } from "./session-validation";
 
@@ -79,7 +79,7 @@ export function buildSettlementBatch(
   if (lines.length === 0) return undefined;
   const batch: SettlementBatch = {
     payoutId: command.payoutId,
-    sessionId: sessionId,
+    sessionId,
     idempotencyKey: command.idempotencyKey,
     requestedAt: validDate(command.now, "now"),
     destination: command.destination,
@@ -114,7 +114,7 @@ export function completeSettlement(
     next = replaceParticipation(next, participation.participationId, updated);
     instructions.push({
       kind: line.kind,
-      sessionId: sessionId,
+      sessionId,
       participationId: line.participationId,
       holdId: line.holdId,
       holdingAccountId: line.holdingAccountId,
