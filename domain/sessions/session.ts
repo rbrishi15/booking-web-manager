@@ -1,4 +1,12 @@
 import {
+  oldestAwaiting,
+  lockInstruction,
+  refundInstruction,
+  requireParticipation,
+  nextWaitlisted,
+  replaceParticipation,
+} from "./session-roster";
+import {
   cloneBatch,
   requireId,
   validDate,
@@ -247,7 +255,11 @@ export class Session {
       this.#participations =
         existing === undefined
           ? [...this.#participations, queued]
-          : this.replace(existing.participationId, queued);
+          : replaceParticipation(
+              this.#participations,
+              existing.participationId,
+              queued,
+            );
       return {
         kind: "WAITLISTED",
         participationId: queued.participationId,
@@ -260,7 +272,7 @@ export class Session {
 
   promoteNext(user: User, command: PromotionCommand): PromotionResult {
     this.assertOpenBefore(command.now);
-    const next = this.nextWaitlisted();
+    const next = nextWaitlisted(this.#participations);
     if (next === undefined) return { kind: "NONE", instructions: [] };
     requireId(command.holdId, "holdId");
     DomainError.require(
@@ -275,7 +287,8 @@ export class Session {
     );
     const reason = this.ineligibilityReason(user);
     if (reason !== undefined) {
-      this.#participations = this.replace(
+      this.#participations = replaceParticipation(
+        this.#participations,
         next.participationId,
         next.leaveWaitlist(),
       );
@@ -286,20 +299,24 @@ export class Session {
         instructions: [],
       };
     }
-    const replacement = this.oldestAwaiting();
+    const replacement = oldestAwaiting(this.#participations);
     const committed = next.commit(
       this.newHold(next.participationId, command.holdId, user, command.now),
       command.now,
       replacement?.participationId,
     );
-    this.#participations = this.replace(next.participationId, committed);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      next.participationId,
+      committed,
+    );
     const refund = this.refundOldestAwaiting(command.now);
     return {
       kind: "PROMOTED",
       participationId: committed.participationId,
       refundedParticipationId: refund.participationId,
       instructions: [
-        this.lockInstruction(committed, command.now),
+        lockInstruction(this.#sessionId, committed, command.now),
         ...(refund.instruction === undefined ? [] : [refund.instruction]),
       ],
     };
@@ -316,13 +333,17 @@ export class Session {
       "The session is not open",
     );
     if (command.now !== undefined) this.assertOpenBefore(command.now);
-    const participation = this.requireParticipation(command.participationId);
+    const participation = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
     DomainError.require(
       participation.userId === command.actorId,
       "UNAUTHORIZED",
       "Only the participant can leave the waitlist",
     );
-    this.#participations = this.replace(
+    this.#participations = replaceParticipation(
+      this.#participations,
       participation.participationId,
       participation.leaveWaitlist(),
     );
@@ -343,7 +364,10 @@ export class Session {
         "Unknown replacement mode",
       );
     this.assertOpenBefore(command.now);
-    const participation = this.requireParticipation(command.participationId);
+    const participation = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
     DomainError.require(
       participation.userId === command.actorId,
       "UNAUTHORIZED",
@@ -363,11 +387,17 @@ export class Session {
       late ? (command.replacementMode ?? "OPEN_SLOT") : undefined,
       late ? command.replacementToken : undefined,
     );
-    this.#participations = this.replace(participation.participationId, next);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      participation.participationId,
+      next,
+    );
     return {
       kind: late ? "AWAITING_REPLACEMENT" : "REFUNDED",
       participationId: participation.participationId,
-      instructions: late ? [] : [this.refundInstruction(next, command.now)],
+      instructions: late
+        ? []
+        : [refundInstruction(this.#sessionId, next, command.now)],
     };
   }
 
@@ -377,14 +407,21 @@ export class Session {
     readonly now: Date;
   }): FinancialResult {
     this.assertOpenBefore(command.now);
-    const participation = this.requireParticipation(command.participationId);
+    const participation = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
     DomainError.require(
       participation.userId === command.actorId,
       "UNAUTHORIZED",
       "Only the participant can offer their replacement to the waitlist",
     );
     const offered = participation.offerReplacementToWaitlist();
-    const next = this.replace(participation.participationId, offered);
+    const next = replaceParticipation(
+      this.#participations,
+      participation.participationId,
+      offered,
+    );
     const result: FinancialResult = { instructions: [] };
     this.#participations = next;
     return result;
@@ -397,7 +434,10 @@ export class Session {
   }): FinancialResult {
     this.assertBooker(command.actorId);
     this.assertOpenBefore(command.now);
-    const participation = this.requireParticipation(command.participationId);
+    const participation = requireParticipation(
+      this.#participations,
+      command.participationId,
+    );
     DomainError.require(
       participation.status === "COMMITTED" && participation.hold !== undefined,
       "INVALID_STATE",
@@ -405,8 +445,14 @@ export class Session {
     );
     const nextHold = participation.hold.refund(command.now);
     const next = participation.remove(nextHold);
-    this.#participations = this.replace(participation.participationId, next);
-    return { instructions: [this.refundInstruction(next, command.now)] };
+    this.#participations = replaceParticipation(
+      this.#participations,
+      participation.participationId,
+      next,
+    );
+    return {
+      instructions: [refundInstruction(this.#sessionId, next, command.now)],
+    };
   }
 
   cancel(command: {
@@ -427,11 +473,13 @@ export class Session {
       ) {
         const refundedHold = participation.hold.refund(command.now);
         changed = participation.cancel(refundedHold);
-        instructions.push(this.refundInstruction(changed, command.now));
+        instructions.push(
+          refundInstruction(this.#sessionId, changed, command.now),
+        );
       } else {
         changed = participation.cancel();
       }
-      next = this.replaceIn(next, participation.participationId, changed);
+      next = replaceParticipation(next, participation.participationId, changed);
     }
     this.#participations = next;
     this.#status = "CANCELLED";
@@ -495,13 +543,20 @@ export class Session {
         "A participation may be verified only once per command",
       );
       markedIds.add(mark.participationId);
-      const participation = this.requireParticipation(mark.participationId);
+      const participation = requireParticipation(
+        this.#participations,
+        mark.participationId,
+      );
       const verified = participation.verify(
         mark.attendance,
         "BOOKER",
         command.now,
       );
-      next = this.replaceIn(next, participation.participationId, verified);
+      next = replaceParticipation(
+        next,
+        participation.participationId,
+        verified,
+      );
     }
     this.#participations = next;
     this.markAwaitingPayoutIfComplete();
@@ -667,14 +722,17 @@ export class Session {
     const instructions: FinancialInstruction[] = [];
     let next = this.#participations;
     for (const line of pending.batch.lines) {
-      const participation = this.requireParticipation(line.participationId);
+      const participation = requireParticipation(
+        this.#participations,
+        line.participationId,
+      );
       DomainError.require(
         participation.hold?.holdId === line.holdId,
         "INVALID_STATE",
         "Settlement hold no longer matches the batch",
       );
       const updated = participation.settleHold(line.kind, payoutId, at);
-      next = this.replaceIn(next, participation.participationId, updated);
+      next = replaceParticipation(next, participation.participationId, updated);
       instructions.push({
         kind: line.kind,
         sessionId: this.#sessionId,
@@ -756,7 +814,7 @@ export class Session {
     return [...this.#payoutIdempotencyKeys];
   }
   get nextWaitlistedUserId(): UUID | undefined {
-    return this.nextWaitlisted()?.userId;
+    return nextWaitlisted(this.#participations)?.userId;
   }
   get pendingSettlement(): SettlementBatch | undefined {
     return this.#pendingSettlement === undefined
@@ -801,7 +859,7 @@ export class Session {
       user,
       command.now,
     );
-    const replacement = this.oldestAwaiting();
+    const replacement = oldestAwaiting(this.#participations);
     const committed = Participation.createCommitted({
       participationId: existing?.participationId ?? command.participationId,
       userId: user.userId,
@@ -813,14 +871,18 @@ export class Session {
     this.#participations =
       existing === undefined
         ? [...this.#participations, committed]
-        : this.replace(existing.participationId, committed);
+        : replaceParticipation(
+            this.#participations,
+            existing.participationId,
+            committed,
+          );
     const refund = this.refundOldestAwaiting(command.now);
     return {
       kind: "COMMITTED",
       participationId: committed.participationId,
       refundedParticipationId: refund.participationId,
       instructions: [
-        this.lockInstruction(committed, command.now),
+        lockInstruction(this.#sessionId, committed, command.now),
         ...(refund.instruction === undefined ? [] : [refund.instruction]),
       ],
     };
@@ -830,26 +892,18 @@ export class Session {
     readonly participationId?: UUID;
     readonly instruction?: FinancialInstruction;
   } {
-    const awaiting = this.oldestAwaiting();
+    const awaiting = oldestAwaiting(this.#participations);
     if (awaiting === undefined || awaiting.hold === undefined) return {};
     const refunded = awaiting.refundReplacement(at);
-    this.#participations = this.replace(awaiting.participationId, refunded);
+    this.#participations = replaceParticipation(
+      this.#participations,
+      awaiting.participationId,
+      refunded,
+    );
     return {
       participationId: awaiting.participationId,
-      instruction: this.refundInstruction(refunded, at),
+      instruction: refundInstruction(this.#sessionId, refunded, at),
     };
-  }
-
-  private oldestAwaiting(): Participation | undefined {
-    return this.#participations
-      .filter(
-        (p) =>
-          p.status === "WITHDRAWN" && p.hold?.state === "AWAITING_REPLACEMENT",
-      )
-      .sort(
-        (a, b) =>
-          (a.withdrawnAt?.getTime() ?? 0) - (b.withdrawnAt?.getTime() ?? 0),
-      )[0];
   }
 
   private newHold(
@@ -866,44 +920,6 @@ export class Session {
       amount: this.bookingShare,
       createdAt: now,
     });
-  }
-
-  private lockInstruction(
-    participation: Participation,
-    at: Date,
-  ): FinancialInstruction {
-    const hold = participation.hold;
-    if (hold === undefined)
-      throw new DomainError("INVALID_STATE", "A commitment needs a hold");
-    return {
-      kind: "LOCK",
-      sessionId: this.#sessionId,
-      participationId: participation.participationId,
-      holdId: hold.holdId,
-      holdingAccountId: hold.holdingAccountId,
-      walletId: hold.walletId,
-      amount: hold.amount,
-      occurredAt: validDate(at, "at"),
-    };
-  }
-
-  private refundInstruction(
-    participation: Participation,
-    at: Date,
-  ): FinancialInstruction {
-    const hold = participation.hold;
-    if (hold === undefined)
-      throw new DomainError("INVALID_STATE", "A refund needs a hold");
-    return {
-      kind: "REFUND",
-      sessionId: this.#sessionId,
-      participationId: participation.participationId,
-      holdId: hold.holdId,
-      holdingAccountId: hold.holdingAccountId,
-      walletId: hold.walletId,
-      amount: hold.amount,
-      occurredAt: validDate(at, "at"),
-    };
   }
 
   private assertOpenBefore(at: Date): void {
@@ -988,32 +1004,6 @@ export class Session {
     if (requireFunds && user.wallet.getFunds().compareTo(this.bookingShare) < 0)
       return "INSUFFICIENT_FUNDS";
     return undefined;
-  }
-
-  private requireParticipation(id: UUID): Participation {
-    const result = this.#participations.find((p) => p.participationId === id);
-    if (result === undefined)
-      throw new DomainError("NOT_FOUND", "Participation was not found");
-    return result;
-  }
-
-  private nextWaitlisted(): Participation | undefined {
-    return this.#participations
-      .filter((p) => p.status === "WAITLISTED")
-      .sort((a, b) => (a.queueSequence ?? 0) - (b.queueSequence ?? 0))[0];
-  }
-
-  private replace(id: UUID, value: Participation): Participation[] {
-    return this.replaceIn(this.#participations, id, value);
-  }
-  private replaceIn(
-    source: readonly Participation[],
-    id: UUID,
-    value: Participation,
-  ): Participation[] {
-    return source.map((candidate) =>
-      candidate.participationId === id ? value : candidate,
-    );
   }
 
   private markAwaitingPayoutIfComplete(): void {
