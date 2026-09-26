@@ -110,9 +110,23 @@ Transaction collections are defensively copied, and entries are immutable.
 Participation status describes enrollment (`WAITLISTED`, `COMMITTED`,
 `LEFT_WAITLIST`, `WITHDRAWN`, `REMOVED`, `CANCELLED`), while attendance and hold
 states remain separate. A waitlist re-entry reuses its participation ID and gets
-a new persisted queue sequence. A withdrawal more than 30 hours before start is
-refunded immediately; at 30 hours or less it awaits a replacement. At start,
-unmatched replacement holds become `FORFEITURE_DUE`.
+a new persisted queue sequence. The current implementation immediately refunds
+a withdrawal more than 30 hours before start; at 30 hours or less it awaits a
+replacement. This differs from the product-owner-confirmed state diagram, which
+includes exactly 30 hours in the immediate-refund window. At start, unmatched
+replacement holds become `FORFEITURE_DUE`. See the
+[product discussion](../docs/discussions/waitlist-and-replacement-options.md)
+for the source diagram and policy questions separate from that boundary issue.
+
+The working copy also contains a **provisional**
+`Session.offerReplacementToWaitlist({ actorId, participationId, now })` command.
+It lets the owning participant change an awaiting personal replacement to an
+open-slot replacement before start and invalidates the personal link. It
+preserves the held share and original withdrawal time and returns no financial
+instructions; a refund still requires a subsequently funded replacement. This
+command and its tests implement a discussion assumption, not a requirement
+approved by the product owner. Personal reservation priority and other waitlist policies
+remain under review in the discussion above.
 
 `Participation.reliabilityOutcome(asOf)` derives at most one finalized outcome:
 verified attendance (manual or automatic) or a finalized late-withdrawal hold
