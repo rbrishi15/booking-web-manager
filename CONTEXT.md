@@ -46,6 +46,10 @@ forfeited, distinct from people waiting to join.
 A proposed entrant intended to take a particular withdrawing participant's
 place.
 
+**Successful replacement**:
+A replacement who has successfully joined with their full booking share held.
+An agreement alone does not meet this proposed definition.
+
 **Replacement link**:
 A proposed invitation link shared to find a replacement for a participant.
 

@@ -18,6 +18,14 @@ not settle how replacements are accepted, matched to refunds, or given a place;
 it does not approve personal links or reservations. Keep the richer waitlist
 options below as deferred discussion material.
 
+**Proposed definition of a successful replacement (26 September 2026):** the
+replacement must successfully join with their full booking share held before
+the withdrawing participant receives a refund. For example, Ben withdraws
+12 hours before start with $10 held. Cara agrees to replace him but has only $5
+available. Her agreement or unsuccessful joining attempt does not refund Ben;
+he remains awaiting replacement with his $10 held. The user selected this rule
+for product-owner review; approval remains pending.
+
 ## 1. Confirmed baseline: the supplied state diagram
 
 ![Product-owner-confirmed participant state diagram, reproduced without changes](../assets/participant-state-diagram-product-owner-reference.png)
@@ -97,7 +105,8 @@ conversation so the product owner can accept, change, or reject them.
 In all of these proposals, a late-withdrawing person's refund depends on a
 replacement successfully securing and funding the place. Sharing a link,
 joining a waitlist, or releasing a reservation alone would not issue a refund.
-That definition of successful replacement should also be confirmed explicitly.
+The user has explicitly selected the funded-joining definition above; it still
+requires product-owner review.
 
 ## 5. Why the richer option becomes complicated
 
@@ -123,7 +132,7 @@ waitlist is a valid outcome of the discussion.
 | --- | --- | --- |
 | Is an automatic waitlist needed for the first release? | User proposes deferring the joining waitlist; product-owner answer pending. | Pending |
 | Which allocation approach, or alternative, should the product use? | Pending | Pending |
-| What counts as a successfully found replacement? | Pending | Pending |
+| What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | Who receives the refund when several participants await replacement? | Pending | Pending |
 | If personal links exist, do they reserve capacity and outrank waiting people? | Pending | Pending |
 | If Option 3 is chosen, which rows in section 4 are approved or changed? | Pending | Pending |
