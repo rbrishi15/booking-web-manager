@@ -304,3 +304,13 @@ function attendanceStatus(
     ? "AWAITING_PAYOUT"
     : "OPEN";
 }
+
+export function availableSlots(
+  participations: readonly Participation[],
+  totalSlots: number,
+): number {
+  return Math.max(
+    0,
+    totalSlots - participations.filter((p) => p.status === "COMMITTED").length,
+  );
+}

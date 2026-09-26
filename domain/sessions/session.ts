@@ -1,6 +1,6 @@
+import { calculateJoin } from "./session-admission";
+import { availableSlots } from "./session-roster";
 import {
-  assertAccess,
-  assertEligible,
   ineligibilityReason,
   meetsReliabilityRequirement,
 } from "./session-admission";
@@ -226,90 +226,25 @@ export class Session {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     this.assertOpenBefore(command.now);
-    assertAccess(
+    const change = calculateJoin(
       {
+        sessionId: this.#sessionId,
+        holdingAccountId: this.#holdingAccountId,
         participations: this.#participations,
+        nextQueueSequence: this.#nextQueueSequence,
+        totalSlots: this.#totalSlots,
+        totalCost: this.#booking.totalCost,
+        minimumReliability: this.#minimumReliability,
         visibility: this.#visibility,
         roomToken: this.#roomToken,
         invitedGroupId: this.#invitedGroupId,
       },
       user,
-      command.roomToken,
-      command.replacementToken,
+      command,
     );
-    assertEligible(
-      {
-        minimumReliability: this.#minimumReliability,
-        totalCost: this.#booking.totalCost,
-        totalSlots: this.#totalSlots,
-      },
-      user,
-      false,
-    );
-    const existing = this.#participations.find((p) => p.userId === user.userId);
-    if (existing !== undefined && existing.status !== "LEFT_WAITLIST") {
-      throw new DomainError(
-        existing.status === "WITHDRAWN" || existing.status === "REMOVED"
-          ? "REJOIN_NOT_ALLOWED"
-          : "ALREADY_PARTICIPATING",
-        "This user already has a participation",
-      );
-    }
-    if (
-      existing !== undefined &&
-      command.participationId !== existing.participationId
-    ) {
-      throw new DomainError(
-        "DUPLICATE_ID",
-        "Waitlist re-entry must reuse the existing participation ID",
-      );
-    }
-
-    if (
-      this.getAvailableSlots(command.now) === 0 ||
-      this.nextWaitlistedUserId !== undefined
-    ) {
-      const sequence = this.#nextQueueSequence;
-      const isValidQueueSequence =
-        Number.isSafeInteger(sequence) &&
-        sequence > 0 &&
-        sequence < Number.MAX_SAFE_INTEGER;
-      DomainError.require(
-        isValidQueueSequence,
-        "INVALID_INPUT",
-        "Queue sequence overflowed",
-      );
-      const queued = Participation.createWaitlisted({
-        participationId: existing?.participationId ?? command.participationId,
-        userId: user.userId,
-        waitlistedAt: command.now,
-        queueSequence: sequence,
-      });
-      this.#nextQueueSequence = sequence + 1;
-      this.#participations =
-        existing === undefined
-          ? [...this.#participations, queued]
-          : replaceParticipation(
-              this.#participations,
-              existing.participationId,
-              queued,
-            );
-      return {
-        kind: "WAITLISTED",
-        participationId: queued.participationId,
-        instructions: [],
-      };
-    }
-    assertEligible(
-      {
-        minimumReliability: this.#minimumReliability,
-        totalCost: this.#booking.totalCost,
-        totalSlots: this.#totalSlots,
-      },
-      user,
-      true,
-    );
-    return this.commitNew(user, command, existing);
+    this.#participations = change.participations;
+    this.#nextQueueSequence = change.nextQueueSequence;
+    return change.result;
   }
 
   promoteNext(user: User, command: PromotionCommand): PromotionResult {
@@ -764,61 +699,11 @@ export class Session {
       const at = validDate(now, "now");
       if (this.#booking.hasStarted(at)) return 0;
     }
-    return Math.max(
-      0,
-      this.#totalSlots -
-        this.#participations.filter((p) => p.status === "COMMITTED").length,
-    );
+    return availableSlots(this.#participations, this.#totalSlots);
   }
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {
     return meetsReliabilityRequirement(score, this.#minimumReliability);
-  }
-
-  private commitNew(
-    user: User,
-    command: JoinCommand,
-    existing?: Participation,
-  ): AdmissionResult {
-    const holdId = command.holdId;
-    DomainError.require(
-      holdId !== undefined,
-      "INVALID_INPUT",
-      "A commitment needs a hold ID",
-    );
-    const hold = this.newHold(
-      command.participationId,
-      holdId,
-      user,
-      command.now,
-    );
-    const replacement = oldestAwaiting(this.#participations);
-    const committed = Participation.createCommitted({
-      participationId: existing?.participationId ?? command.participationId,
-      userId: user.userId,
-      committedAt: command.now,
-      hold,
-      replacementMode: command.replacementMode,
-      replacesParticipationId: replacement?.participationId,
-    });
-    this.#participations =
-      existing === undefined
-        ? [...this.#participations, committed]
-        : replaceParticipation(
-            this.#participations,
-            existing.participationId,
-            committed,
-          );
-    const refund = this.refundOldestAwaiting(command.now);
-    return {
-      kind: "COMMITTED",
-      participationId: committed.participationId,
-      refundedParticipationId: refund.participationId,
-      instructions: [
-        lockInstruction(this.#sessionId, committed, command.now),
-        ...(refund.instruction === undefined ? [] : [refund.instruction]),
-      ],
-    };
   }
 
   private refundOldestAwaiting(at: Date): {

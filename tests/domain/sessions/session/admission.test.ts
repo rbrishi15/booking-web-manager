@@ -1,13 +1,15 @@
 import {
+  DomainError,
   LedgerTransaction,
   Money,
   ReliabilityScore,
   Session,
   Wallet,
 } from "@/domain";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { fundedWallet } from "../../accounts/user-fixtures";
 import {
+  at,
   before,
   creationDetails,
   loadedUser,
@@ -61,6 +63,48 @@ describe("Session", () => {
   });
 
   describe("Admission and reentry", () => {
+    test("join_WhenReplacementRefundFails_LeavesRosterQueueAndHoldsUnchanged", () => {
+      // Arrange
+      const bookingSession = session();
+      join(bookingSession, "a");
+      join(bookingSession, "b");
+      join(bookingSession, "former-waiter");
+      bookingSession.leaveWaitlist({
+        actorId: "former-waiter",
+        participationId: "p-former-waiter",
+        now: before,
+      });
+      bookingSession.withdrawParticipant({
+        actorId: "a",
+        participationId: "p-a",
+        now: at(2),
+      });
+      const previousState = sessionState(bookingSession);
+      const awaiting = bookingSession.participations.find(
+        (p) => p.participationId === "p-a",
+      )!;
+      const failure = new DomainError(
+        "INVALID_STATE",
+        "Replacement refund failed",
+      );
+      const refund = vi
+        .spyOn(awaiting, "refundReplacement")
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+
+      try {
+        // Act & Assert
+        expect(() => join(bookingSession, "replacement", at(1))).toThrow(
+          failure,
+        );
+        expect(refund).toHaveBeenCalledOnce();
+        expect(sessionState(bookingSession)).toEqual(previousState);
+      } finally {
+        refund.mockRestore();
+      }
+    });
+
     test("join_WhenFundsExactlyCoverShare_CommitsAndEmitsLock", () => {
       // Arrange
       const bookingSession = session();
