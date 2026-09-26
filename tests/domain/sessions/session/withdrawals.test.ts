@@ -146,6 +146,78 @@ describe("Session", () => {
     ).toBe("AWAITING_REPLACEMENT");
   });
 
+  test("join_WhenPersonalReplacementLinkWasUsedAndOrdinarySlotIsAvailable_RejectsWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "ben");
+    bookingSession.withdrawParticipant({
+      actorId: "ben",
+      participationId: "p-ben",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "ben-replacement",
+    });
+    const replacement = bookingSession.join(loadedUser("cara"), {
+      participationId: "p-cara",
+      holdId: "h-cara",
+      replacementToken: "ben-replacement",
+      now: at(9),
+    });
+    expect(replacement.kind).toBe("COMMITTED");
+    expect(replacement.refundedParticipationId).toBe("p-ben");
+    expect(bookingSession.getAvailableSlots(at(8))).toBe(1);
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.join(loadedUser("evan"), {
+        participationId: "p-evan",
+        holdId: "h-evan",
+        replacementToken: "ben-replacement",
+        now: at(8),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "INVALID_ACCESS",
+        message: "The replacement link is invalid or no longer available",
+      }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("join_WhenPersonalReplacementLinkWasUsedAndSessionIsFull_RejectsWithoutWaitlisting", () => {
+    // Arrange
+    const bookingSession = session();
+    join(bookingSession, "ben");
+    bookingSession.withdrawParticipant({
+      actorId: "ben",
+      participationId: "p-ben",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "ben-replacement",
+    });
+    bookingSession.join(loadedUser("cara"), {
+      participationId: "p-cara",
+      holdId: "h-cara",
+      replacementToken: "ben-replacement",
+      now: at(9),
+    });
+    join(bookingSession, "dana", at(8));
+    expect(bookingSession.getAvailableSlots(at(7))).toBe(0);
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.join(loadedUser("evan"), {
+        participationId: "p-evan",
+        holdId: "h-evan",
+        replacementToken: "ben-replacement",
+        now: at(7),
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
   test("join_WhenParticipantWasRemoved_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = session();

@@ -936,21 +936,24 @@ export class Session {
     roomToken?: string,
     replacementToken?: string,
   ): void {
+    if (replacementToken !== undefined) {
+      DomainError.require(
+        this.#participations.some(
+          (p) =>
+            p.status === "WITHDRAWN" &&
+            p.hold?.state === "AWAITING_REPLACEMENT" &&
+            p.replacementToken === replacementToken,
+        ),
+        "INVALID_ACCESS",
+        "The replacement link is invalid or no longer available",
+      );
+      return;
+    }
     if (this.#visibility === "PUBLIC") return;
     if (roomToken === this.#roomToken) return;
     if (
       this.#invitedGroupId !== undefined &&
       user.memberGroupIds.includes(this.#invitedGroupId)
-    )
-      return;
-    if (
-      replacementToken !== undefined &&
-      this.#participations.some(
-        (p) =>
-          p.status === "WITHDRAWN" &&
-          p.hold?.state === "AWAITING_REPLACEMENT" &&
-          p.replacementToken === replacementToken,
-      )
     )
       return;
     throw new DomainError(
