@@ -11,7 +11,8 @@ import type { Participation } from "../participation";
 import type { ParticipantList } from "./participant-list";
 import { validDate } from "./session-validation";
 
-export function prepareSettlementRoster(
+/** Prepares participant records for the booker's payout without releasing funds. */
+export function prepareParticipantListForPayout(
   participations: readonly Participation[],
   bookerId: UUID,
   destination: PayoutDestination,

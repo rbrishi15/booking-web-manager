@@ -13,6 +13,7 @@ bringing together its booker and participants.
 **Participant list**:
 The participation records associated with one booking room, including people
 who have joined and past changes to their participation.
+_Avoid_: Roster
 
 **Booker**:
 The person who books the venue for a session and takes the initial booking risk.

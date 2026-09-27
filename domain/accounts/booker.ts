@@ -11,7 +11,7 @@ import {
 } from "../sessions/session/session-guards";
 import {
   buildSettlementBatch,
-  prepareSettlementRoster,
+  prepareParticipantListForPayout,
 } from "../sessions/session/session-settlement";
 import {
   cloneBatch,
@@ -220,7 +220,7 @@ export class Booker {
     validatePayoutDestination(destination);
     this.assertOwnsSession(session.bookerId);
     assertSettlementOpen(session.status, session.booking, command.now);
-    const next = prepareSettlementRoster(
+    const next = prepareParticipantListForPayout(
       session.participantList.participations,
       session.bookerId,
       destination,
