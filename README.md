@@ -23,8 +23,6 @@ directory ownership and conventions. See [docs/](./docs) for the SRS.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Supabase/Stripe/OneMap/VAPID keys
-npx supabase start           # local Postgres
 npm run dev
 ```
 
@@ -34,6 +32,38 @@ npm run lint
 npm test
 npm run test:concurrency
 ```
+
+### Environment variables
+
+Real values live in the project's Vercel settings, not in git. If you've been
+added as a collaborator on the `rishi-331c/booking-web-manager` Vercel
+project:
+
+```bash
+npx vercel link          # first time only — links this checkout to the project
+npx vercel env pull      # writes .env.local from Vercel's Development env vars
+```
+
+Re-run `vercel env pull` whenever a new variable gets added (Stripe, OneMap,
+VAPID, etc.) instead of copying values by hand — it overwrites `.env.local`
+with whatever's currently in Vercel, so there's one source of truth instead of
+five drifting local copies.
+
+One thing `vercel env pull` can't do: variables stored as a **Secret**
+(currently `SUPABASE_SERVICE_ROLE_KEY`) are write-only by design — once set,
+Vercel will never hand the value back to anyone, including its own CLI. A pull
+writes `[SENSITIVE]` as a placeholder for those instead of the real value.
+That's expected, not a bug — those keys should only ever live inside Vercel's
+serverless functions, never on a laptop or in a browser, so you shouldn't need
+the actual value locally. If a local script genuinely needs it, ask Rishi to
+paste it directly rather than trying to pull it.
+
+Not on the Vercel project yet, or need to run entirely offline? Fall back to
+`cp .env.example .env.local` and fill in your own test-mode/dev keys — see
+that file for what each variable is for.
+
+`npx supabase start` gets you local Postgres if you're testing against a real
+database (needs Docker); most day-to-day work doesn't need it.
 
 ## Testing
 
