@@ -1,6 +1,6 @@
 import { Money } from "../finance/money";
 import { copyDate, copyOptionalDate } from "../shared/date";
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { HoldState } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 
@@ -19,8 +19,8 @@ export interface FundHoldDetails {
 /**
  * Immutable child entity owned by Participation within the Session aggregate.
  * Protects the lifecycle of one participant's held share. Transitions return new
- * holds; Session commands apply the resulting participation changes and return
- * financial instructions for the application layer to coordinate.
+ * holds; role workflows prepare financial instructions before Session records
+ * the resulting participation changes for the application layer to persist.
  */
 export class FundHold {
   readonly #holdId: UUID;
@@ -39,7 +39,7 @@ export class FundHold {
     requireId(details.holdingAccountId, "holdingAccountId");
     requireId(details.walletId, "walletId");
     if (details.payoutId !== undefined) requireId(details.payoutId, "payoutId");
-    requireDomain(
+    DomainError.require(
       [
         "HELD",
         "AWAITING_REPLACEMENT",
@@ -51,12 +51,7 @@ export class FundHold {
       "INVALID_INPUT",
       "Unknown hold state",
     );
-    requireDomain(
-      details.amount instanceof Money,
-      "INVALID_INPUT",
-      "A fund hold needs a Money amount",
-    );
-    requireDomain(
+    DomainError.require(
       details.amount.toCents() > 0,
       "INVALID_INPUT",
       "A fund hold must be positive",
@@ -67,31 +62,31 @@ export class FundHold {
       details.state,
     );
     if (terminal) {
-      requireDomain(
+      DomainError.require(
         settledAt !== undefined,
         "INVALID_INPUT",
         "A settled hold needs settledAt",
       );
       if (details.state !== "REFUNDED") {
-        requireDomain(
+        DomainError.require(
           details.payoutId !== undefined,
           "INVALID_INPUT",
           "A payout settlement needs payoutId",
         );
       } else {
-        requireDomain(
+        DomainError.require(
           details.payoutId === undefined,
           "INVALID_INPUT",
           "A refund cannot have a payout ID",
         );
       }
     } else {
-      requireDomain(
+      DomainError.require(
         settledAt === undefined,
         "INVALID_INPUT",
         "An active hold cannot have settledAt",
       );
-      requireDomain(
+      DomainError.require(
         details.payoutId === undefined,
         "INVALID_INPUT",
         "An active hold cannot have payoutId",
@@ -159,8 +154,8 @@ export class FundHold {
 
   release(payoutId: UUID, at: Date): FundHold {
     this.requireActive();
-    requireDomain(
-      typeof payoutId === "string" && payoutId.trim() !== "",
+    DomainError.require(
+      payoutId.trim() !== "",
       "INVALID_INPUT",
       "A release needs a payout ID",
     );
@@ -172,8 +167,8 @@ export class FundHold {
 
   forfeit(payoutId: UUID, at: Date): FundHold {
     this.requireActive();
-    requireDomain(
-      typeof payoutId === "string" && payoutId.trim() !== "",
+    DomainError.require(
+      payoutId.trim() !== "",
       "INVALID_INPUT",
       "A forfeiture needs a payout ID",
     );
@@ -254,8 +249,8 @@ export class FundHold {
 }
 
 function requireId(value: string, name: string): void {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );

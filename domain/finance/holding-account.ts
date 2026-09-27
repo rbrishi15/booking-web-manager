@@ -1,4 +1,4 @@
-import { requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { UUID } from "../shared/types";
 
 export interface HoldingAccountDetails {
@@ -13,8 +13,8 @@ export interface HoldingAccountDetails {
 export class HoldingAccount {
   readonly #accountId: UUID;
   constructor(details: HoldingAccountDetails) {
-    requireDomain(
-      typeof details.accountId === "string" && details.accountId.trim() !== "",
+    DomainError.require(
+      details.accountId.trim() !== "",
       "INVALID_INPUT",
       "accountId is required",
     );

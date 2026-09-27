@@ -1,7 +1,6 @@
 /** Convenience module for adapters that prefer separate port imports. */
 export type {
-  AdmissionFactsPort,
-  DeactivationFactsPort,
+  DeactivationInputPort,
   DurableIntentPort,
   DurablePayoutIntentPort,
   LedgerWritePort,

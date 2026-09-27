@@ -9,6 +9,17 @@ is trust: making sure the person who took the financial risk is reimbursed.
 
 NTU SC2006 group project, Group 3.
 
+## Before planning or making changes
+
+Read the [ADR index](./docs/README.md), then read the relevant architecture
+decision records in [docs/adr](./docs/adr) in full before planning, reviewing,
+or changing code or tests. Follow links to related ADRs and implementation
+guides, including the domain testing guide for domain test work.
+
+Treat accepted ADRs as implementation constraints. If the requested change
+revises an accepted decision, record the new decision in an ADR, identify which
+earlier decision it supersedes, and update the index.
+
 ---
 
 ## Non-negotiable rules
@@ -81,6 +92,14 @@ A repeat key returns the original result without re-executing.
 
 The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
 `/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
+
+Actor-driven session workflows enter through `User`'s Participant or Booker
+role, which performs actor authorization and prepares the complete change.
+Session guards lifecycle and records prepared state through bounded operations; see
+[ADR-0009](./docs/adr/0009-role-workflows-and-session-recording.md).
+Read participation state through `session.participantList`; its query-only view
+and the internal list's collection validation are defined in
+[ADR-0010](./docs/adr/0010-session-participant-list.md).
 
 ### Money states
 
@@ -157,8 +176,8 @@ creation and cannot be changed.
 - Validate at the boundary with Zod; the domain layer assumes valid input.
 - Waitlist promotion is strictly FIFO on `joined_at`, using
   `SELECT ... FOR UPDATE SKIP LOCKED`.
-- Deletion is soft. `Session.cancel()`, not `delete()`. User records are
-  anonymised and retained for audit.
+- Cancel sessions through `user.asBooker().cancel(session, now)` and retain their
+  records. User records are anonymised and retained for audit.
 - SGD displays to two decimals. The applicable refund amount is shown before any
   irreversible action.
 - Responsive from 390px.
@@ -178,6 +197,12 @@ creation and cannot be changed.
 ---
 
 ## Testing
+
+For domain unit tests, follow the
+[domain testing guide](./tests/domain/README.md). It defines scenario naming,
+Arrange/Act/Assert comments, grouping, fixtures, and error assertions. The
+rationale is recorded in
+[ADR-0005](./docs/adr/0005-domain-unit-test-structure.md).
 
 Priority test, and the one most likely to catch a real bug: fire twenty
 concurrent commits at an eight-slot session and assert exactly 8 succeed, 12

@@ -37,7 +37,11 @@ npm run test:concurrency
 
 ## Testing
 
-Automated tests are organised by use case in
+Domain unit tests live in [tests/domain](./tests/domain). Follow the
+[domain testing standard](./tests/domain/README.md) for test structure, naming,
+fixtures, and assertions.
+
+Use-case acceptance tests are organised in
 [tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
 `test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
 that folder's README for the convention.

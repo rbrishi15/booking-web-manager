@@ -1,4 +1,4 @@
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type { PayoutSetupStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 
@@ -26,7 +26,7 @@ export class PayoutAccount {
     validateText(details.payoutAccountId, "payoutAccountId");
     validateText(details.userId, "userId");
     validateText(details.providerAccountReference, "providerAccountReference");
-    requireDomain(
+    DomainError.require(
       ["PENDING", "COMPLETE", "FAILED"].includes(details.setupStatus),
       "INVALID_INPUT",
       "Unknown payout setup status",
@@ -34,7 +34,7 @@ export class PayoutAccount {
     if (details.setupStatus === "COMPLETE") {
       validateText(details.bankAccountReference, "bankAccountReference");
     } else {
-      requireDomain(
+      DomainError.require(
         details.bankAccountReference === undefined,
         "INVALID_INPUT",
         "Only a completed payout account has bank details",
@@ -65,7 +65,7 @@ export class PayoutAccount {
         "A completed payout destination cannot be changed",
       );
     }
-    requireDomain(
+    DomainError.require(
       this.setupStatus === "PENDING",
       "INVALID_STATE",
       "Only a pending payout setup can complete",
@@ -80,7 +80,7 @@ export class PayoutAccount {
   }
 
   failSetup(): PayoutAccount {
-    requireDomain(
+    DomainError.require(
       this.setupStatus === "PENDING",
       "INVALID_STATE",
       "Only a pending payout setup can fail",
@@ -114,8 +114,8 @@ function validateText(
   value: string | undefined,
   name: string,
 ): asserts value is string {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value !== undefined && value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );
