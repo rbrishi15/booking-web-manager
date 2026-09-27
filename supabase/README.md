@@ -35,3 +35,80 @@ put them in `.env.local` (see `.env.example` at the repo root) and in Vercel's
 project env vars. `npx supabase link --project-ref rofrvxezteioulhlnfcj` links
 a fresh checkout to this project (asks for a personal access token from
 https://supabase.com/dashboard/account/tokens the first time).
+
+`main` auto-pushes new migrations to this project on merge — see
+[`.github/workflows/supabase-migrations.yml`](../.github/workflows/supabase-migrations.yml).
+Nobody should need to run `supabase db push --linked` against it by hand;
+if you find yourself doing that, something upstream of this file didn't work.
+
+## Local development
+
+The default `npm run dev` setup (README at the repo root) points at the
+hosted project above, so most day-to-day feature work never touches this
+section. You need a local Postgres for two things specifically:
+
+- **Writing or testing a migration.** Try it locally before it touches the
+  one shared hosted database everyone else is also using.
+- **Running the DB-backed half of the ledger test suite** (see
+  [`lib/money/README.md`](../lib/money/README.md#tests)) — the in-memory
+  tests don't exercise the actual SQL, constraints or triggers.
+
+### Prerequisites
+
+Docker Desktop, running. The CLI shells out to it for every local Postgres
+container; there's no way around this requirement short of using the hosted
+project directly.
+
+### Start it up
+
+```bash
+npx supabase start
+```
+
+First run pulls the Postgres/GoTrue/Studio images, so expect it to take a
+few minutes; after that it's seconds. When it's done it prints a block like:
+
+```
+         API URL: http://127.0.0.1:54321
+     GraphQL URL: http://127.0.0.1:54321/graphql/v1
+  S3 Storage URL: http://127.0.0.1:54321/storage/v1/s3
+          DB URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      Studio URL: http://127.0.0.1:54323
+    Inbucket URL: http://127.0.0.1:54324
+      JWT secret: ...
+        anon key: ...
+service_role key: ...
+```
+
+These are **local-only** credentials, always the same defaults, and
+completely unrelated to the hosted project's — don't confuse the two. All
+migrations in `supabase/migrations/` are applied automatically on startup, in
+order.
+
+- **Studio** (`http://127.0.0.1:54323`) is a local dashboard — browse tables,
+  run SQL, inspect auth users — without touching the hosted project.
+- To point the running Next.js app at local Postgres instead of hosted,
+  temporarily use the `anon key` / `API URL` above in your own
+  `.env.local` in place of the `NEXT_PUBLIC_SUPABASE_*` values from
+  `vercel env pull`. Don't commit that swap or push it to Vercel.
+
+### Working on a migration
+
+```bash
+npx supabase migration new <name>   # check the table above first for the next number
+# edit the new file in supabase/migrations/
+npx supabase db reset                # wipes local Postgres, reapplies every migration from scratch
+```
+
+`db reset` is the important one: it's how you catch a migration that only
+works if it runs after some manual step you did by hand and forgot about.
+Re-run it after every edit to the migration file, not just once at the end.
+
+### Shut down
+
+```bash
+npx supabase stop
+```
+
+Leaving it running costs you laptop resources, not correctness — nothing
+breaks if you forget, but Docker Desktop will let you know.

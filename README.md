@@ -63,7 +63,10 @@ Not on the Vercel project yet, or need to run entirely offline? Fall back to
 that file for what each variable is for.
 
 `npx supabase start` gets you local Postgres if you're testing against a real
-database (needs Docker); most day-to-day work doesn't need it.
+database (needs Docker); most day-to-day work doesn't need it. See
+[supabase/README.md](./supabase/README.md#local-development) for the full
+local-development workflow — starting it, working on a migration, and
+pointing the app at local Postgres instead of the hosted project.
 
 ## Testing
 
