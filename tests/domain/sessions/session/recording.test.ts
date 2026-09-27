@@ -21,8 +21,7 @@ describe("Session", () => {
     const reserved = alice.withdraw(
       alice.hold!.awaitReplacement(),
       at(10),
-      "INVITE_LINK",
-      "alice-invite",
+      "DIRECT_INVITE",
       "cara",
     );
     const bookingSession = new Session(
@@ -43,6 +42,32 @@ describe("Session", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
+  test("recordAdmission_WhenPendingInviteeTakesOrdinaryOpenSeat_RejectsWithoutChanges", () => {
+    // Arrange
+    const source = createTestSession({ committedUserIds: ["alice"] });
+    const alice = source.participantList.requireParticipation("p-alice");
+    const reserved = alice.withdraw(
+      alice.hold!.awaitReplacement(),
+      at(10),
+      "DIRECT_INVITE",
+      "cara",
+    );
+    const bookingSession = new Session(
+      sessionDetails({ participations: [reserved] }),
+    );
+    const admission = committedParticipation(bookingSession, "cara", at(9));
+    const previousList = bookingSession.participantList;
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordAdmission(admission, undefined, at(9)),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(bookingSession.getAvailableSlots(at(9))).toBe(1);
+  });
+
   test("recordAdmission_WhenPreparedReplacementNamesWrongRecipient_RejectsWithoutChanges", () => {
     // Arrange
     const source = createTestSession({ committedUserIds: ["alice"] });
@@ -50,8 +75,7 @@ describe("Session", () => {
     const reserved = alice.withdraw(
       alice.hold!.awaitReplacement(),
       at(10),
-      "INVITE_LINK",
-      "alice-invite",
+      "DIRECT_INVITE",
       "cara",
     );
     const bookingSession = new Session(
@@ -85,8 +109,7 @@ describe("Session", () => {
     const reserved = alice.withdraw(
       alice.hold!.refund(before),
       before,
-      "INVITE_LINK",
-      "alice-invite",
+      "DIRECT_INVITE",
       "dana",
     );
     const participations = [
@@ -333,8 +356,7 @@ describe("Session", () => {
     const withdrawn = committed.withdraw(
       committed.hold!.refund(at(40)),
       at(40),
-      "INVITE_LINK",
-      "alice-invite",
+      "DIRECT_INVITE",
       "ben",
     );
     const bookingSession = new Session(
@@ -384,8 +406,7 @@ describe("Session", () => {
       attendance: withdrawn.attendance,
       committedAt: withdrawn.committedAt,
       withdrawnAt: withdrawn.withdrawnAt,
-      replacementMode: "INVITE_LINK",
-      replacementToken: "alice-invite",
+      replacementMode: "DIRECT_INVITE",
       replacementInviteeId: "ben",
       hold: withdrawn.hold,
     });

@@ -50,6 +50,7 @@ class Participant <<RoleView>> {
   +userId : UUID
   --
   +join(session, ...) : ParticipantJoinResult
+  +acceptReplacement(session, ...) : ParticipantJoinResult
   +promoteFromWaitlist(session, ...) : PromotionResult
   +withdraw(session, ...) : WithdrawalResult
   +leaveWaitlist(session, ...) : void
@@ -88,7 +89,6 @@ class ParticipantList <<ImmutableCollection>> {
   +findByUserId(id) : Participation [0..1]
   +nextWaitlisted() : Participation [0..1]
   +oldestAwaitingReplacement() : Participation [0..1]
-  +personalReplacementFor(token) : Participation [0..1]
   +personalReplacementForInvitee(userId) : Participation [0..1]
 }
 

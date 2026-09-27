@@ -51,7 +51,6 @@ function assertReplacementUnchanged(
   DomainError.require(
     sameDate(before.withdrawnAt, after.withdrawnAt) &&
       before.replacementMode === after.replacementMode &&
-      before.replacementToken === after.replacementToken &&
       before.replacementInviteeId === after.replacementInviteeId,
     "INVALID_INPUT",
     "This transition cannot change replacement details",
@@ -132,16 +131,29 @@ export function validateAdmission(
     admission.replacesParticipationId === undefined
       ? undefined
       : roster.findParticipation(admission.replacesParticipationId);
-  const personalReplacement =
-    target?.replacementToken === undefined
+  const reservedForInvitee =
+    target?.replacementInviteeId === undefined
       ? undefined
-      : roster.personalReplacementFor(target.replacementToken);
+      : roster.personalReplacementForInvitee(target.replacementInviteeId);
+  const personalReplacement =
+    reservedForInvitee === target ? target : undefined;
   if (personalReplacement !== undefined)
     DomainError.require(
       personalReplacement.replacementInviteeId === admission.userId,
       "INVALID_STATE",
       "Only the named invitee may take a reserved replacement seat",
     );
+  if (admission.status === "COMMITTED") {
+    const pendingInvitation = roster.personalReplacementForInvitee(
+      admission.userId,
+    );
+    DomainError.require(
+      pendingInvitation === undefined ||
+        personalReplacement === pendingInvitation,
+      "INVALID_STATE",
+      "A pending invitee must take their reserved replacement seat",
+    );
+  }
   const ordinarySlots = Math.max(
     0,
     totalSlots - roster.committedCount - roster.reservedCount,

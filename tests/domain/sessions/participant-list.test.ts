@@ -118,8 +118,7 @@ describe("ParticipantList", () => {
     const personal = alice.withdraw(
       alice.hold!.awaitReplacement(),
       at(10),
-      "INVITE_LINK",
-      "alice-invite",
+      "DIRECT_INVITE",
       "cara",
     );
     const open = ben.withdraw(ben.hold!.awaitReplacement(), at(9), "OPEN_SLOT");
@@ -133,6 +132,6 @@ describe("ParticipantList", () => {
     // Assert
     expect(replacement).toBe(open);
     expect(list.reservedCount).toBe(1);
-    expect(list.personalReplacementFor("alice-invite")).toBe(personal);
+    expect(list.personalReplacementForInvitee("cara")).toBe(personal);
   });
 });

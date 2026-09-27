@@ -137,8 +137,8 @@ Reserved count covers active, unconsumed named places. Use
 `requireParticipation(id)` for a required record, `findByUserId(id)` for an
 optional user lookup, `nextWaitlisted()` for the first waiter, and
 `oldestAwaitingReplacement()` for the oldest eligible open-slot late withdrawal.
-`personalReplacementFor(token)` finds an active personal reservation by token;
-`personalReplacementForInvitee(userId)` finds it by its named recipient.
+`personalReplacementForInvitee(userId)` finds the unique active personal
+reservation addressed to that user.
 The next waiter's identity is `session.participantList.nextWaitlisted()?.userId`.
 `Session.getAvailableSlots(now)` applies the session's timing rules and excludes
 places reserved for named personal replacements from ordinary capacity.
@@ -161,11 +161,12 @@ or compatibility getters are introduced.
 
 ## Session command calculations
 
-Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, and
-`leaveWaitlist`. Each action performs the workflow: authorize,
+Participant actions are `join`, `acceptReplacement`, `promoteFromWaitlist`,
+`withdraw`, and `leaveWaitlist`. Each action performs the workflow: authorize,
 read session facts, calculate immutable child changes and financial instructions,
-record the complete change, then return the result. Joining and promotion prepare
-the entrant and any replacement refund together. Promotion preserves `NONE`,
+record the complete change, then return the result. Joining, explicit replacement
+acceptance, and promotion prepare the entrant and any replacement refund together.
+Promotion preserves `NONE`,
 `SKIPPED`, and `PROMOTED`; there is no Session promotion command.
 
 Booker actions are `createSession`, `cancel`, `changeVisibility`,
@@ -252,26 +253,23 @@ at withdrawal and cannot be changed afterward. See
 [ADR-0006](../docs/adr/0006-personal-replacement-reservations.md) for the confirmed
 scope and its distinction from unresolved financial and rejoining proposals.
 
-`Participant.withdraw` accepts `replacementMode: "INVITE_LINK"` with a
-`replacementToken` and one `replacementInviteeId`, or
+`Participant.withdraw` accepts `replacementMode: "DIRECT_INVITE"` with one
+`replacementInviteeId`, or
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
-behavior. A personal invitation reserves the departing person's one place after early or late
-withdrawal. The token identifies the invitation, but only the named recipient
-may accept it; sharing the token does not transfer that authority.
+behavior. A direct invitation reserves the departing person's one place after
+early or late withdrawal. There is no replacement link or token.
 
-The application enters explicit acceptance through the named user's participant
-role and supplies `replacementToken` to `join`. A matching token supplies
-invitation access, including for a private session, while the user must still
-meet eligibility and funding requirements. An existing waiter can accept their
-personal invitation from any queue position; everyone else's ordinary order
-remains unchanged.
+The application loads the authenticated named user's participant role and calls
+`acceptReplacement(session, { participationId, holdId, now })`. The user's ID
+authorizes their unique active pending reservation, including access to a
+private session; eligibility and funding requirements still apply. An existing
+waiter can explicitly accept from any queue position. Everyone else's ordinary
+order remains unchanged.
 
-An otherwise-authorized join by the named recipient also consumes their
-reservation without requiring the token. FIFO promotion does the same when
-that recipient is the queue head, including when their reservation is the only
-vacancy. Promotion still selects the FIFO head; direct personal acceptance is
-available through `join`. This keeps an invitee's reserved place from being
-stranded after they enter through another allowed path.
+`join` and `promoteFromWaitlist` reject a named recipient with a pending
+invitation without changing the reservation or existing waitlist entry. Neither
+action accepts an invitation implicitly. FIFO promotion must await an invited
+queue head's response rather than skip them or charge them automatically.
 
 Successful acceptance consumes the reservation through
 `replacesParticipationId`, locks the entrant's full share, and refunds the
@@ -290,6 +288,8 @@ allocation choice. The earlier `offerPlaceToWaitlist` workflow is removed:
 choosing a named replacement cannot later expose that place to ordinary
 admission. This restriction concerns the departing participant's place; an
 already-waitlisted named invitee can still accept it as described above.
+There is no new action to decline or cancel a personal invitation. Existing
+session cancellation and start rules still apply.
 
 The repository supplies domain behavior only for this flow. It has no
 departure-choice UI, invitation delivery, application coordinator, or persistence

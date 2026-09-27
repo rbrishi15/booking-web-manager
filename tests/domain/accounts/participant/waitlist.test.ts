@@ -18,8 +18,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
 

@@ -498,7 +498,7 @@ describe("Participant", () => {
     });
   });
   describe("Replacement admission", () => {
-    test("join_WhenNamedInviteeAcceptsNewerInvitation_RefundsOnlyTheirInviter", () => {
+    test("acceptReplacement_WhenNamedInviteeAcceptsNewerPrivateInvitation_RefundsOnlyTheirInviter", () => {
       // Arrange
       const bookingSession = createTestSession({
         committedUserIds: ["alice"],
@@ -516,8 +516,7 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-alice",
           now: at(20),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "old",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "donna",
         });
       createTestUser({ userId: "ben" })
@@ -525,17 +524,15 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-ben",
           now: at(19),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "new",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "cara",
         });
       // Act
       const replacement = createTestUser({ userId: "cara" })
         .asParticipant()
-        .join(bookingSession, {
+        .acceptReplacement(bookingSession, {
           participationId: "p-cara",
           holdId: "h-cara",
-          replacementToken: "new",
           now: at(18),
         });
 
@@ -555,7 +552,7 @@ describe("Participant", () => {
       expect(bookingSession.getAvailableSlots(at(18))).toBe(0);
     });
 
-    test("join_WhenPersonalReplacementLinkWasUsedAndOrdinarySlotIsAvailable_RejectsWithoutChangingState", () => {
+    test("acceptReplacement_WhenInvitationWasAcceptedAndOrdinarySlotIsAvailable_RejectsWithoutChangingState", () => {
       // Arrange
       const bookingSession = createTestSession({ committedUserIds: ["ben"] });
 
@@ -564,16 +561,14 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-ben",
           now: at(10),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "ben-replacement",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "cara",
         });
       const replacement = createTestUser({ userId: "cara" })
         .asParticipant()
-        .join(bookingSession, {
+        .acceptReplacement(bookingSession, {
           participationId: "p-cara",
           holdId: "h-cara",
-          replacementToken: "ben-replacement",
           now: at(9),
         });
       expect(replacement.kind).toBe("COMMITTED");
@@ -583,24 +578,18 @@ describe("Participant", () => {
 
       // Act & Assert
       expect(() =>
-        createTestUser({ userId: "evan" })
+        createTestUser({ userId: "cara" })
           .asParticipant()
-          .join(bookingSession, {
-            participationId: "p-evan",
-            holdId: "h-evan",
-            replacementToken: "ben-replacement",
+          .acceptReplacement(bookingSession, {
+            participationId: "p-cara",
+            holdId: "h-another",
             now: at(8),
           }),
-      ).toThrow(
-        expect.objectContaining({
-          code: "INVALID_ACCESS",
-          message: "The replacement link is invalid or no longer available",
-        }),
-      );
+      ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
       expect(sessionState(bookingSession)).toEqual(previousState);
     });
 
-    test("join_WhenPersonalReplacementLinkWasUsedAndSessionIsFull_RejectsWithoutWaitlisting", () => {
+    test("acceptReplacement_WhenInvitationWasAcceptedAndSessionIsFull_RejectsWithoutWaitlisting", () => {
       // Arrange
       const bookingSession = createTestSession({ committedUserIds: ["ben"] });
 
@@ -609,16 +598,14 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-ben",
           now: at(10),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "ben-replacement",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "cara",
         });
       createTestUser({ userId: "cara" })
         .asParticipant()
-        .join(bookingSession, {
+        .acceptReplacement(bookingSession, {
           participationId: "p-cara",
           holdId: "h-cara",
-          replacementToken: "ben-replacement",
           now: at(9),
         });
       createTestUser({ userId: "dana" })
@@ -633,12 +620,11 @@ describe("Participant", () => {
 
       // Act & Assert
       expect(() =>
-        createTestUser({ userId: "evan" })
+        createTestUser({ userId: "cara" })
           .asParticipant()
-          .join(bookingSession, {
-            participationId: "p-evan",
-            holdId: "h-evan",
-            replacementToken: "ben-replacement",
+          .acceptReplacement(bookingSession, {
+            participationId: "p-cara",
+            holdId: "h-another",
             now: at(7),
           }),
       ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));

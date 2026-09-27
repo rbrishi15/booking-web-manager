@@ -20,7 +20,9 @@ records the 27 September confirmation of the queue and fixed either/or departure
 choice: one named replacement or the groups/public waitlist. The historical
 `offerPlaceToWaitlist` / `releaseParticipantReplacement` APIs below are removed;
 a personal place cannot switch to the waitlist after withdrawal. References
-below to proposed policy describe the original decision date.
+below to proposed policy describe the original decision date. Replacement-link
+references are also historical: current personal invitations use the recipient's
+user ID and require explicit `Participant.acceptReplacement` acceptance.
 
 ## Context
 

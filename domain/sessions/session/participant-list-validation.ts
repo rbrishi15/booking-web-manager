@@ -17,7 +17,7 @@ export function personalReplacementReservations(
   return participations.filter(
     (p) =>
       p.status === "WITHDRAWN" &&
-      p.replacementMode === "INVITE_LINK" &&
+      p.replacementMode === "DIRECT_INVITE" &&
       (p.hold?.state === "AWAITING_REPLACEMENT" ||
         p.hold?.state === "REFUNDED") &&
       !replacedIds.has(p.participationId),
@@ -79,14 +79,6 @@ export function validateParticipantList(
     );
     holdIds.add(hold.holdId);
   }
-  const tokens = participations
-    .map((p) => p.replacementToken)
-    .filter((token) => token !== undefined);
-  DomainError.require(
-    new Set(tokens).size === tokens.length,
-    "DUPLICATE_ID",
-    "Replacement invitations must have unique tokens",
-  );
   const replacedIds = participations
     .map((p) => p.replacesParticipationId)
     .filter((id) => id !== undefined);
@@ -121,7 +113,7 @@ export function validateParticipantList(
       "INVALID_INPUT",
       "Only a participation with a commitment history can replace a seat",
     );
-    if (replaced.replacementMode === "INVITE_LINK")
+    if (replaced.replacementMode === "DIRECT_INVITE")
       DomainError.require(
         replaced.replacementInviteeId === replacement.userId,
         "INVALID_INPUT",

@@ -17,7 +17,9 @@ records the 27 September confirmation of the session queue and fixed either/or
 departure choice. A participant chooses one named replacement or the
 groups/public waitlist at withdrawal and cannot switch afterward. The historical
 offer-to-waitlist action and proposal-only status mentioned below are superseded;
-the switching proposal is rejected and its action removed.
+the switching proposal is rejected and its action removed. Replacement-link
+checks are also historical: current personal invitations address one user ID
+and require explicit `Participant.acceptReplacement` acceptance, without tokens.
 
 ## Implemented scope
 

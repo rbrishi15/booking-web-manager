@@ -67,9 +67,9 @@ replacement and opening their place to the groups/public waitlist.
 A replacement who has successfully joined with their full booking share held.
 An agreement alone is not a successful replacement.
 
-**Replacement link**:
-A link to an invitation for one reserved place that only its named invitee can
-accept.
+**Replacement invitation**:
+A direct invitation addressed to one named person for one reserved place,
+requiring that person's explicit acceptance.
 
 **Open-slot replacement**:
 A participant who fills an ordinary opening without targeting a specific

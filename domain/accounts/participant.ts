@@ -28,15 +28,19 @@ export interface ParticipantJoinCommand {
   readonly holdId?: UUID;
   readonly now: Date;
   readonly roomToken?: string;
-  readonly replacementToken?: string;
-  readonly replacementMode?: "OPEN_SLOT" | "INVITE_LINK";
+}
+
+/** Explicit acceptance by the user named in a pending replacement invitation. */
+export interface ParticipantReplacementAcceptanceCommand {
+  readonly participationId: UUID;
+  readonly holdId: UUID;
+  readonly now: Date;
 }
 
 export interface ParticipantWithdrawalCommand {
   readonly participationId: UUID;
   readonly now: Date;
-  readonly replacementMode?: "OPEN_SLOT" | "INVITE_LINK";
-  readonly replacementToken?: string;
+  readonly replacementMode?: "OPEN_SLOT" | "DIRECT_INVITE";
   readonly replacementInviteeId?: UUID;
 }
 
@@ -64,8 +68,8 @@ interface CommitmentTerms {
 }
 
 /**
- * User's participant role. Coordinates admission, promotion, withdrawal,
- * and waitlist departure using this user's loaded facts.
+ * User's participant role. Coordinates admission, invitation acceptance,
+ * promotion, withdrawal, and waitlist departure using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  * Each workflow prepares its result and immutable child changes before asking
  * Session to record them together. Session never calls back into this role.
@@ -89,13 +93,40 @@ export class Participant {
     session: Session,
     command: ParticipantJoinCommand,
   ): ParticipantJoinResult {
+    return this.admit(session, command);
+  }
+
+  acceptReplacement(
+    session: Session,
+    command: ParticipantReplacementAcceptanceCommand,
+  ): ParticipantJoinResult {
+    requireId(command.participationId, "participationId");
+    requireId(command.holdId, "holdId");
+    assertOpenBefore(session.status, session.booking, command.now);
+    const invitation = session.participantList.personalReplacementForInvitee(
+      this.userId,
+    );
+    DomainError.require(
+      invitation !== undefined,
+      "INVALID_ACCESS",
+      "This user has no pending replacement invitation for this session",
+    );
+    return this.admit(session, command, invitation);
+  }
+
+  private admit(
+    session: Session,
+    command: ParticipantJoinCommand,
+    personalReplacement?: Participation,
+  ): ParticipantJoinResult {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     assertOpenBefore(session.status, session.booking, command.now);
     const participantList = session.participantList;
-    const personalReplacement =
-      this.assertAccess(session, command) ??
-      participantList.personalReplacementForInvitee(this.userId);
+    if (personalReplacement === undefined) {
+      this.assertAccess(session, command);
+      this.assertNoPendingReplacement(session);
+    }
     const terms = {
       minimumReliability: session.minimumReliability,
       share: session.bookingShare,
@@ -178,7 +209,6 @@ export class Participant {
             userId: this.userId,
             committedAt: command.now,
             hold,
-            replacementMode: command.replacementMode,
             replacesParticipationId: replacement?.participationId,
           });
     const refunded =
@@ -216,11 +246,9 @@ export class Participant {
     if (next === undefined) return { kind: "NONE", instructions: [] };
     requireId(command.holdId, "holdId");
     validDate(command.now, "now");
-    const personalReplacement = participantList.personalReplacementForInvitee(
-      this.userId,
-    );
+    this.assertNoPendingReplacement(session);
     DomainError.require(
-      personalReplacement !== undefined || session.getAvailableSlots() > 0,
+      session.getAvailableSlots() > 0,
       "CAPACITY_EXCEEDED",
       "There is no available slot to promote",
     );
@@ -245,8 +273,7 @@ export class Participant {
       session.recordParticipationTransition(next, departed, command.now);
       return result;
     }
-    const replacement =
-      personalReplacement ?? participantList.oldestAwaitingReplacement();
+    const replacement = participantList.oldestAwaitingReplacement();
     const committed = next.commit(
       this.createBookingShareHold({
         participationId: next.participationId,
@@ -275,11 +302,7 @@ export class Participant {
         ...(refund === undefined ? [] : [refund]),
       ],
     };
-    session.recordAdmission(
-      committed,
-      refunded ?? personalReplacement,
-      command.now,
-    );
+    session.recordAdmission(committed, refunded, command.now);
     return result;
   }
 
@@ -309,7 +332,7 @@ export class Participant {
       command,
       session.sessionId,
     );
-    if (command.replacementMode === "INVITE_LINK") {
+    if (command.replacementMode === "DIRECT_INVITE") {
       const invitee =
         command.replacementInviteeId === undefined
           ? undefined
@@ -333,19 +356,7 @@ export class Participant {
   private assertAccess(
     session: Session,
     command: ParticipantJoinCommand,
-  ): Participation | undefined {
-    if (command.replacementToken !== undefined) {
-      const replacement = session.participantList.personalReplacementFor(
-        command.replacementToken,
-      );
-      DomainError.require(
-        replacement !== undefined &&
-          replacement.replacementInviteeId === this.userId,
-        "INVALID_ACCESS",
-        "The replacement link is invalid or no longer available",
-      );
-      return replacement;
-    }
+  ): void {
     if (session.visibility === "PUBLIC") return;
     if (command.roomToken === session.roomToken) return;
     if (
@@ -356,6 +367,15 @@ export class Participant {
     throw new DomainError(
       "INVALID_ACCESS",
       "The user does not have access to this private session",
+    );
+  }
+
+  private assertNoPendingReplacement(session: Session): void {
+    DomainError.require(
+      session.participantList.personalReplacementForInvitee(this.userId) ===
+        undefined,
+      "INVALID_STATE",
+      "Accept the pending replacement invitation explicitly before joining",
     );
   }
 
@@ -418,7 +438,7 @@ export class Participant {
     if (command.replacementMode !== undefined)
       DomainError.require(
         command.replacementMode === "OPEN_SLOT" ||
-          command.replacementMode === "INVITE_LINK",
+          command.replacementMode === "DIRECT_INVITE",
         "INVALID_INPUT",
         "Unknown replacement mode",
       );
@@ -455,7 +475,6 @@ export class Participant {
       nextHold,
       command.now,
       command.replacementMode ?? "OPEN_SLOT",
-      command.replacementToken,
       command.replacementInviteeId,
     );
     return {

@@ -10,6 +10,75 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("withdraw_WhenParticipantDirectlyInvitesSomeone_ReservesSeatWithoutCommittingInviteeOrRefunding", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+    });
+
+    // Act
+    const withdrawal = createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        replacementMode: "DIRECT_INVITE",
+        replacementInviteeId: "cara",
+        now: at(10),
+      });
+
+    // Assert
+    expect(withdrawal.kind).toBe("AWAITING_REPLACEMENT");
+    expect(withdrawal.instructions).toEqual([]);
+    expect(bookingSession.participantList.findByUserId("cara")).toBeUndefined();
+    expect(
+      bookingSession.participantList.requireParticipation("p-ben").hold?.state,
+    ).toBe("AWAITING_REPLACEMENT");
+    expect(
+      bookingSession.participantList.personalReplacementForInvitee("cara")
+        ?.participationId,
+    ).toBe("p-ben");
+    expect(bookingSession.participantList.committedCount).toBe(1);
+    expect(bookingSession.participantList.reservedCount).toBe(1);
+    expect(bookingSession.getAvailableSlots(at(10))).toBe(0);
+  });
+
+  test("withdraw_WhenInviteeAlreadyWaits_KeepsTheirQueueEntryUntilTheyAccept", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+      waitlistedUserIds: ["dana", "cara"],
+    });
+    const waiting =
+      bookingSession.participantList.requireParticipation("p-cara");
+    const queueSequence = bookingSession.participantList.nextQueueSequence;
+
+    // Act
+    const withdrawal = createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        replacementMode: "DIRECT_INVITE",
+        replacementInviteeId: "cara",
+        now: at(10),
+      });
+
+    // Assert
+    expect(withdrawal.instructions).toEqual([]);
+    expect(bookingSession.participantList.requireParticipation("p-cara")).toBe(
+      waiting,
+    );
+    expect(waiting.status).toBe("WAITLISTED");
+    expect(waiting.hold).toBeUndefined();
+    expect(waiting.queueSequence).toBe(2);
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+    expect(bookingSession.participantList.nextQueueSequence).toBe(
+      queueSequence,
+    );
+    expect(bookingSession.participantList.reservedCount).toBe(1);
+  });
+
   test("withdraw_WhenParticipantChoseInvitation_RejectsSwitchToWaitlistAndKeepsReservedSeat", () => {
     // Arrange
     const bookingSession = createTestSession({
@@ -20,8 +89,7 @@ describe("Participant", () => {
     participant.withdraw(bookingSession, {
       participationId: "p-alice",
       now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "alice-replacement",
+      replacementMode: "DIRECT_INVITE",
       replacementInviteeId: "cara",
     });
     const previousState = sessionState(bookingSession);
@@ -37,8 +105,7 @@ describe("Participant", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
     const withdrawn =
       bookingSession.participantList.requireParticipation("p-alice");
-    expect(withdrawn.replacementMode).toBe("INVITE_LINK");
-    expect(withdrawn.replacementToken).toBe("alice-replacement");
+    expect(withdrawn.replacementMode).toBe("DIRECT_INVITE");
     expect(withdrawn.replacementInviteeId).toBe("cara");
     expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
     expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
@@ -65,8 +132,7 @@ describe("Participant", () => {
       participant.withdraw(bookingSession, {
         participationId: "p-alice",
         now: at(9),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "alice-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       }),
     ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
@@ -74,7 +140,6 @@ describe("Participant", () => {
     const withdrawn =
       bookingSession.participantList.requireParticipation("p-alice");
     expect(withdrawn.replacementMode).toBe("OPEN_SLOT");
-    expect(withdrawn.replacementToken).toBeUndefined();
     expect(withdrawn.replacementInviteeId).toBeUndefined();
     expect(bookingSession.getAvailableSlots(at(9))).toBe(1);
     expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
@@ -114,8 +179,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-alice",
         now: at(40),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "alice-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
 
@@ -126,8 +190,7 @@ describe("Participant", () => {
     expect(
       withdrawal.instructions.map((instruction) => instruction.kind),
     ).toEqual(["REFUND"]);
-    expect(withdrawn.replacementMode).toBe("INVITE_LINK");
-    expect(withdrawn.replacementToken).toBe("alice-replacement");
+    expect(withdrawn.replacementMode).toBe("DIRECT_INVITE");
     expect(withdrawn.replacementInviteeId).toBe("cara");
     expect(withdrawn.hold?.state).toBe("REFUNDED");
     expect(bookingSession.getAvailableSlots(at(40))).toBe(0);
@@ -142,8 +205,7 @@ describe("Participant", () => {
     ben.withdraw(bookingSession, {
       participationId: "p-ben",
       now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "invite-cara",
+      replacementMode: "DIRECT_INVITE",
       replacementInviteeId: "cara",
     });
     const previousState = sessionState(bookingSession);
@@ -153,18 +215,17 @@ describe("Participant", () => {
       ben.withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(9),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "invite-dana",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "dana",
       }),
     ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
     expect(
-      bookingSession.participantList.personalReplacementFor("invite-cara")
+      bookingSession.participantList.personalReplacementForInvitee("cara")
         ?.replacementInviteeId,
     ).toBe("cara");
     expect(
-      bookingSession.participantList.personalReplacementFor("invite-dana"),
+      bookingSession.participantList.personalReplacementForInvitee("dana"),
     ).toBeUndefined();
     expect(bookingSession.participantList.reservedCount).toBe(1);
     expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
@@ -182,8 +243,7 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-alice",
           now: at(40),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "alice-replacement",
+          replacementMode: "DIRECT_INVITE",
         }),
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -201,8 +261,7 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-alice",
           now: at(10),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "alice-replacement",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "alice",
         }),
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
@@ -223,8 +282,7 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-alice",
           now: at(10),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "alice-replacement",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "ben",
         }),
     ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
@@ -241,8 +299,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-alice",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "alice-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     const previousState = sessionState(bookingSession);
@@ -254,40 +311,8 @@ describe("Participant", () => {
         .withdraw(bookingSession, {
           participationId: "p-ben",
           now: at(9),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "ben-replacement",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "cara",
-        }),
-    ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
-    expect(sessionState(bookingSession)).toEqual(previousState);
-  });
-
-  test("withdraw_WhenInvitationTokenBelongsToAnotherSeat_RejectsWithoutChangingState", () => {
-    // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-    });
-    createTestUser({ userId: "alice" })
-      .asParticipant()
-      .withdraw(bookingSession, {
-        participationId: "p-alice",
-        now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "shared-token",
-        replacementInviteeId: "cara",
-      });
-    const previousState = sessionState(bookingSession);
-
-    // Act & Assert
-    expect(() =>
-      createTestUser({ userId: "ben" })
-        .asParticipant()
-        .withdraw(bookingSession, {
-          participationId: "p-ben",
-          now: at(9),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "shared-token",
-          replacementInviteeId: "dana",
         }),
     ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
     expect(sessionState(bookingSession)).toEqual(previousState);

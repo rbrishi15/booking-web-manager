@@ -18,7 +18,6 @@ export interface ParticipationDetails {
   readonly committedAt?: Date;
   readonly withdrawnAt?: Date;
   readonly replacementMode?: ReplacementMode;
-  readonly replacementToken?: string;
   readonly replacementInviteeId?: UUID;
   readonly verifiedAt?: Date;
   readonly verificationMethod?: VerificationMethod;
@@ -49,7 +48,6 @@ export class Participation {
   readonly #committedAt?: Date;
   readonly #withdrawnAt?: Date;
   readonly #replacementMode?: ReplacementMode;
-  readonly #replacementToken?: string;
   readonly #replacementInviteeId?: UUID;
   readonly #verifiedAt?: Date;
   readonly #verificationMethod?: VerificationMethod;
@@ -79,7 +77,7 @@ export class Participation {
     );
     if (details.replacementMode !== undefined)
       DomainError.require(
-        ["OPEN_SLOT", "INVITE_LINK"].includes(details.replacementMode),
+        ["OPEN_SLOT", "DIRECT_INVITE"].includes(details.replacementMode),
         "INVALID_INPUT",
         "Unknown replacement mode",
       );
@@ -185,23 +183,15 @@ export class Participation {
     if (details.status !== "WITHDRAWN")
       DomainError.require(
         details.replacementMode === undefined &&
-          details.replacementToken === undefined &&
           details.replacementInviteeId === undefined,
         "INVALID_INPUT",
         "Replacement details belong only to a withdrawn participation",
       );
-    if (details.replacementToken !== undefined)
+    if (details.replacementMode === "DIRECT_INVITE") {
       DomainError.require(
-        details.replacementToken.trim() !== "",
+        details.replacementInviteeId !== undefined,
         "INVALID_INPUT",
-        "A replacement token cannot be empty",
-      );
-    if (details.replacementMode === "INVITE_LINK") {
-      DomainError.require(
-        details.replacementToken !== undefined &&
-          details.replacementInviteeId !== undefined,
-        "INVALID_INPUT",
-        "An invitation replacement needs a token and one named invitee",
+        "An invitation replacement needs one named invitee",
       );
       requireId(details.replacementInviteeId, "replacementInviteeId");
       DomainError.require(
@@ -211,10 +201,9 @@ export class Participation {
       );
     } else {
       DomainError.require(
-        details.replacementToken === undefined &&
-          details.replacementInviteeId === undefined,
+        details.replacementInviteeId === undefined,
         "INVALID_INPUT",
-        "Only an invitation replacement can have a token or named invitee",
+        "Only an invitation replacement can have a named invitee",
       );
     }
     if (details.replacesParticipationId !== undefined) {
@@ -241,7 +230,6 @@ export class Participation {
     this.#committedAt = committedAt;
     this.#withdrawnAt = withdrawnAt;
     this.#replacementMode = details.replacementMode;
-    this.#replacementToken = details.replacementToken;
     this.#replacementInviteeId = details.replacementInviteeId;
     this.#verifiedAt = verifiedAt;
     this.#verificationMethod = details.verificationMethod;
@@ -255,19 +243,12 @@ export class Participation {
     readonly userId: UUID;
     readonly waitlistedAt: Date;
     readonly queueSequence: number;
-    readonly replacementToken?: string;
   }): Participation {
     DomainError.require(
       Number.isSafeInteger(details.queueSequence) && details.queueSequence > 0,
       "INVALID_INPUT",
       "Queue sequence must be positive",
     );
-    if (details.replacementToken !== undefined)
-      DomainError.require(
-        details.replacementToken.trim() !== "",
-        "INVALID_INPUT",
-        "A replacement token cannot be empty",
-      );
     return new Participation({
       ...details,
       status: "WAITLISTED",
@@ -281,7 +262,6 @@ export class Participation {
     readonly committedAt: Date;
     readonly hold: FundHold;
     readonly replacesParticipationId?: UUID;
-    readonly replacementMode?: ReplacementMode;
   }): Participation {
     DomainError.require(
       details.hold.state === "HELD",
@@ -342,7 +322,6 @@ export class Participation {
     hold: FundHold,
     at: Date,
     replacementMode?: ReplacementMode,
-    replacementToken?: string,
     replacementInviteeId?: UUID,
   ): Participation {
     DomainError.require(
@@ -364,7 +343,6 @@ export class Participation {
       status: "WITHDRAWN",
       withdrawnAt: at,
       replacementMode,
-      replacementToken,
       replacementInviteeId,
       hold: hold,
     });
@@ -427,7 +405,6 @@ export class Participation {
     return this.withChanges({
       status: "CANCELLED",
       replacementMode: undefined,
-      replacementToken: undefined,
       replacementInviteeId: undefined,
       hold: hold ?? this.hold,
     });
@@ -567,9 +544,6 @@ export class Participation {
   get replacementMode(): ReplacementMode | undefined {
     return this.#replacementMode;
   }
-  get replacementToken(): string | undefined {
-    return this.#replacementToken;
-  }
   get replacementInviteeId(): UUID | undefined {
     return this.#replacementInviteeId;
   }
@@ -600,7 +574,6 @@ export class Participation {
       committedAt: this.#committedAt,
       withdrawnAt: this.#withdrawnAt,
       replacementMode: this.#replacementMode,
-      replacementToken: this.#replacementToken,
       replacementInviteeId: this.#replacementInviteeId,
       verifiedAt: this.#verifiedAt,
       verificationMethod: this.#verificationMethod,

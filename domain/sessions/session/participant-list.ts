@@ -26,7 +26,6 @@ export interface ParticipantListView {
   findByUserId(userId: UUID): Participation | undefined;
   nextWaitlisted(): Participation | undefined;
   oldestAwaitingReplacement(): Participation | undefined;
-  personalReplacementFor(token: string): Participation | undefined;
   personalReplacementForInvitee(userId: UUID): Participation | undefined;
 }
 
@@ -82,12 +81,6 @@ export class ParticipantList implements ParticipantListView {
     return personalReplacementReservations(this.participations).length;
   }
 
-  personalReplacementFor(token: string): Participation | undefined {
-    return personalReplacementReservations(this.participations).find(
-      (p) => p.replacementToken === token,
-    );
-  }
-
   personalReplacementForInvitee(userId: UUID): Participation | undefined {
     return personalReplacementReservations(this.participations).find(
       (p) => p.replacementInviteeId === userId,
@@ -129,7 +122,7 @@ export class ParticipantList implements ParticipantListView {
     for (const participation of this.#byId.values()) {
       if (
         participation.status !== "WITHDRAWN" ||
-        participation.replacementMode === "INVITE_LINK" ||
+        participation.replacementMode === "DIRECT_INVITE" ||
         participation.hold?.state !== "AWAITING_REPLACEMENT"
       )
         continue;

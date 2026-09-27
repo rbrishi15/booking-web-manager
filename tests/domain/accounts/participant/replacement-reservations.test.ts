@@ -1,13 +1,18 @@
+import { ReliabilityScore } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   at,
+  before,
+  creationDetails,
   createTestUser,
   createTestSession,
+  readyBooker,
   sessionState,
+  start,
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
-  test("join_WhenNamedInviteeUsesPublicAdmission_ConsumesTheirReservationBeforeAnOrdinaryOpening", () => {
+  test("join_WhenNamedInviteeHasPendingInvitation_RejectsUntilExplicitAcceptance", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -24,30 +29,27 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
+    const previousState = sessionState(bookingSession);
 
-    // Act
-    const admission = createTestUser({ userId: "cara" })
-      .asParticipant()
-      .join(bookingSession, {
-        participationId: "p-cara",
-        holdId: "h-cara",
-        now: at(9),
-      });
-
-    // Assert
-    expect(admission.kind).toBe("COMMITTED");
-    expect(admission.refundedParticipationId).toBe("p-ben");
+    // Act & Assert
+    expect(() =>
+      createTestUser({ userId: "cara" })
+        .asParticipant()
+        .join(bookingSession, {
+          participationId: "p-cara",
+          holdId: "h-cara",
+          now: at(9),
+        }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(bookingSession.participantList.findByUserId("cara")).toBeUndefined();
     expect(
-      bookingSession.participantList.requireParticipation("p-cara")
-        .replacesParticipationId,
+      bookingSession.participantList.personalReplacementForInvitee("cara")
+        ?.participationId,
     ).toBe("p-ben");
-    expect(
-      bookingSession.participantList.requireParticipation("p-ben").hold?.state,
-    ).toBe("REFUNDED");
     expect(
       bookingSession.participantList.requireParticipation("p-alice").hold
         ?.state,
@@ -55,7 +57,7 @@ describe("Participant", () => {
     expect(bookingSession.getAvailableSlots(at(9))).toBe(1);
   });
 
-  test("join_WhenTokenIsPresentedBySomeoneElse_RejectsWithoutChangingReservedSeat", () => {
+  test("acceptReplacement_WhenUserHasNoPendingInvitation_RejectsWithoutChangingReservedSeat", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -65,8 +67,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     const previousState = sessionState(bookingSession);
@@ -75,10 +76,9 @@ describe("Participant", () => {
     expect(() =>
       createTestUser({ userId: "dana" })
         .asParticipant()
-        .join(bookingSession, {
+        .acceptReplacement(bookingSession, {
           participationId: "p-dana",
           holdId: "h-dana",
-          replacementToken: "ben-replacement",
           now: at(9),
         }),
     ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
@@ -90,7 +90,7 @@ describe("Participant", () => {
     ).toBe("cara");
   });
 
-  test("join_WhenNamedInviteeIsBehindOtherWaiters_AcceptsOnlyTheirReservedSeat", () => {
+  test("acceptReplacement_WhenNamedInviteeIsBehindOtherWaiters_AcceptsOnlyTheirReservedSeat", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -101,8 +101,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     const queueSequence = bookingSession.participantList.nextQueueSequence;
@@ -110,10 +109,9 @@ describe("Participant", () => {
     // Act
     const admission = createTestUser({ userId: "cara" })
       .asParticipant()
-      .join(bookingSession, {
+      .acceptReplacement(bookingSession, {
         participationId: "p-cara",
         holdId: "h-cara",
-        replacementToken: "ben-replacement",
         now: at(9),
       });
 
@@ -137,7 +135,7 @@ describe("Participant", () => {
     expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
   });
 
-  test("join_WhenQueuedInviteeCannotPay_KeepsReservationAndQueuePosition", () => {
+  test("acceptReplacement_WhenQueuedInviteeCannotPay_KeepsReservationAndQueuePosition", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -148,8 +146,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     const participant = createTestUser({
@@ -160,10 +157,9 @@ describe("Participant", () => {
 
     // Act & Assert
     expect(() =>
-      participant.join(bookingSession, {
+      participant.acceptReplacement(bookingSession, {
         participationId: "p-cara",
         holdId: "h-cara",
-        replacementToken: "ben-replacement",
         now: at(9),
       }),
     ).toThrow(expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }));
@@ -175,7 +171,98 @@ describe("Participant", () => {
     ).toBe(2);
   });
 
-  test("join_WhenInviterWasAlreadyRefunded_AcceptsSeatWithoutRefundingAnotherWithdrawal", () => {
+  test("acceptReplacement_WhenInviteeIsInactive_RejectsWithoutChangingReservation", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+    });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        replacementMode: "DIRECT_INVITE",
+        replacementInviteeId: "cara",
+        now: at(10),
+      });
+    const participant = createTestUser({
+      userId: "cara",
+      accountStatus: "INACTIVE",
+    }).asParticipant();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      participant.acceptReplacement(bookingSession, {
+        participationId: "p-cara",
+        holdId: "h-cara",
+        now: at(9),
+      }),
+    ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("acceptReplacement_WhenInviteeIsBelowReliabilityThreshold_RejectsWithoutChangingReservation", () => {
+    // Arrange
+    const bookingSession = readyBooker().createSession({
+      ...creationDetails(),
+      minimumReliability: ReliabilityScore.from(80),
+    });
+    const ben = createTestUser({ userId: "ben" }).asParticipant();
+    ben.join(bookingSession, {
+      participationId: "p-ben",
+      holdId: "h-ben",
+      now: before,
+    });
+    ben.withdraw(bookingSession, {
+      participationId: "p-ben",
+      replacementMode: "DIRECT_INVITE",
+      replacementInviteeId: "cara",
+      now: at(10),
+    });
+    const participant = createTestUser({
+      userId: "cara",
+      reliabilityScore: ReliabilityScore.from(79),
+    }).asParticipant();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      participant.acceptReplacement(bookingSession, {
+        participationId: "p-cara",
+        holdId: "h-cara",
+        now: at(9),
+      }),
+    ).toThrow(expect.objectContaining({ code: "LOW_RELIABILITY" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("acceptReplacement_WhenSessionStartsNow_RejectsUnacceptedInvitation", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["ben"] });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        replacementMode: "DIRECT_INVITE",
+        replacementInviteeId: "cara",
+        now: at(10),
+      });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      createTestUser({ userId: "cara" })
+        .asParticipant()
+        .acceptReplacement(bookingSession, {
+          participationId: "p-cara",
+          holdId: "h-cara",
+          now: start,
+        }),
+    ).toThrow(expect.objectContaining({ code: "SESSION_STARTED" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("acceptReplacement_WhenInviterWasAlreadyRefunded_AcceptsSeatWithoutRefundingAnotherWithdrawal", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -185,8 +272,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(40),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     createTestUser({ userId: "alice" })
@@ -202,10 +288,9 @@ describe("Participant", () => {
     // Act
     const admission = createTestUser({ userId: "cara" })
       .asParticipant()
-      .join(bookingSession, {
+      .acceptReplacement(bookingSession, {
         participationId: "p-cara",
         holdId: "h-cara",
-        replacementToken: "ben-replacement",
         now: at(19),
       });
 
@@ -230,7 +315,7 @@ describe("Participant", () => {
     expect(bookingSession.getAvailableSlots(at(19))).toBe(1);
   });
 
-  test("join_WhenEarlyInvitationHasBeenAccepted_RejectsReplayEvenWithAnOpenSeat", () => {
+  test("acceptReplacement_WhenEarlyInvitationHasBeenAccepted_RejectsReplayEvenWithAnOpenSeat", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["ben"] });
     createTestUser({ userId: "ben" })
@@ -238,25 +323,22 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(40),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "cara",
       });
     const participant = createTestUser({ userId: "cara" }).asParticipant();
-    participant.join(bookingSession, {
+    participant.acceptReplacement(bookingSession, {
       participationId: "p-cara",
       holdId: "h-cara",
-      replacementToken: "ben-replacement",
       now: at(39),
     });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      participant.join(bookingSession, {
+      participant.acceptReplacement(bookingSession, {
         participationId: "p-cara",
         holdId: "h-another",
-        replacementToken: "ben-replacement",
         now: at(38),
       }),
     ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));

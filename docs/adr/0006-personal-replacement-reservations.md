@@ -2,7 +2,7 @@
 
 - Status: Accepted for the confirmed scope below; separate financial proposals remain under review
 - Date: 2026-09-27
-- Supersedes: the proposal-only status of this ADR, the 26 September proposal to defer the joining waitlist, and the proposal to release a personal place to the waitlist
+- Supersedes: the proposal-only status of this ADR, the 26 September proposal to defer the joining waitlist, the proposal to release a personal place to the waitlist, and replacement-link/token admission
 
 ## Confirmed scope
 
@@ -12,17 +12,20 @@ place to groups / the public waitlist. The user clarified that the invitation
 is for **one named person**. The place is like an airplane seat: one departing
 participant can invite one person to take that one place.
 
+The user chose a **direct invitation by user ID with explicit recipient
+acceptance**. Replacement links and tokens are removed from the flow.
+
 The user further clarified that these choices are **strictly either/or at
 withdrawal**. A participant cannot invite someone and then open that same place
 to the waitlist, and cannot change the allocation choice after withdrawing.
 This rejects the earlier offer-to-waitlist proposal. It does not prevent a named
 invitee who is already queued from accepting their own reserved place.
 
-The personal choice therefore reserves one place for its named invitee. It
-cannot become a bearer link that anyone can claim, invite several people to
-compete, or let an ordinary entrant take the reserved place. The open choice
-makes the place available through the session's existing group/public access
-rules and joining queue.
+The personal choice reserves one place for its named invitee until they
+explicitly accept, subject to existing session cancellation and start rules.
+It cannot invite several people to compete or let an ordinary entrant take the
+reserved place. The open choice makes the place available through the session's
+existing group/public access rules and joining queue.
 
 This replaces the earlier proposal to postpone the joining waitlist. It does
 not approve every scenario in the
@@ -31,26 +34,25 @@ financial, rejoining, completion-balance, and cutoff questions remain separate.
 
 ## Domain representation and consequences
 
-`INVITE_LINK` retains the invitation token and adds one `replacementInviteeId`.
-Both identify the reservation: possession of the token alone gives no right to
-accept it. For explicit invitation acceptance, a future application must load
-the authenticated invitee's `User` and pass the token to that user's participant
-role. The invitation reserves one place after either an early or a late
-withdrawal, independently of whether the
-departing person's share is still held.
+`DIRECT_INVITE` replaces `INVITE_LINK` and stores one `replacementInviteeId`;
+there is no `replacementToken`. A future application loads the authenticated
+invitee's `User` and calls its participant role's
+`acceptReplacement(session, { participationId, holdId, now })` action. The user's
+identity authorizes their unique active pending reservation, including access
+to a private session. Eligibility and funding checks still apply. The invitation
+reserves one place after either an early or a late withdrawal, independently of
+whether the departing person's share is still held.
 
-The named invitee can accept directly, including from any position in the
-joining waitlist. A successful acceptance consumes that one reservation through
+The named invitee can explicitly accept from any position in the joining
+waitlist. A successful acceptance consumes that one reservation through
 the entrant's `replacesParticipationId`; a second acceptance cannot reuse it.
 Other people keep their ordinary queue order. Failed eligibility, funding, or
 recording leaves the reservation, funds, and any existing queue position intact.
 
-An otherwise-authorized join by the named invitee also consumes their reservation
-without requiring the token. FIFO promotion consumes it when that invitee is the
-queue head, even if it is the only vacancy. This prevents the named place from
-remaining reserved after its recipient has joined through another allowed path.
-An explicit matching token also supplies invitation access to a private session;
-eligibility and funding checks still apply.
+`join` and `promoteFromWaitlist` cannot accept an invitation implicitly. They
+reject a recipient with a pending invitation without changing that invitation
+or their existing queue entry. Promotion retains FIFO order and must await the
+invited queue head's response rather than skip them or charge them automatically.
 
 Ordinary admission and promotion for other people use only unreserved capacity,
 retain existing visibility/membership requirements and FIFO order, and match the
@@ -64,12 +66,12 @@ receives no second refund. This is the financial behavior implemented alongside
 the confirmed allocation rule, not a new blanket approval of the financial
 proposals recorded in the discussion.
 
-Withdrawal records either `INVITE_LINK` for one named person or `OPEN_SLOT` for
+Withdrawal records either `DIRECT_INVITE` for one named person or `OPEN_SLOT` for
 ordinary admission. That choice cannot be changed afterward. The earlier
 `offerPlaceToWaitlist` action and the transition that converted a personal
 reservation to `OPEN_SLOT` are removed. The rejected switch is not a deferred
-workflow; session cancellation, start timing, and existing financial rules
-remain separate.
+workflow. There is no new invitation-decline or invitation-cancellation action;
+session cancellation, start timing, and existing financial rules remain separate.
 
 ## Integration boundary
 
@@ -78,8 +80,8 @@ Aggregate ownership remains as described in
 and recording boundaries in [ADR-0009](./0009-role-workflows-and-session-recording.md).
 Participant and Session supply the domain behavior. This repository has no
 departure-choice UI, invitation delivery, application coordinator, or persistence
-adapter for the flow. Future adapters must persist the recipient with the token
-and commit admission, reservation consumption, and ledger instructions in one
+adapter for the flow. Future adapters must persist the invitation's recipient
+and commit acceptance, reservation consumption, and ledger instructions in one
 transaction. Domain checks alone do not establish database concurrency safety.
 
 The existing exactly-30-hour refund discrepancy and the proposal to rejoin

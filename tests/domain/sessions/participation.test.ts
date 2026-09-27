@@ -143,8 +143,7 @@ describe("Participation", () => {
     test("constructor_WhenCommittedParticipationHasReplacementInvitation_ThrowsDomainError", () => {
       // Arrange
       const details = participationDetails({
-        replacementMode: "INVITE_LINK",
-        replacementToken: "token",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "ben",
       });
 
@@ -152,14 +151,13 @@ describe("Participation", () => {
       expect(() => new Participation(details)).toThrow(DomainError);
     });
 
-    test("constructor_WhenInvitationHasNoNamedInvitee_RejectsBearerInvitation", () => {
+    test("constructor_WhenInvitationHasNoNamedInvitee_RejectsInvitation", () => {
       // Arrange
       const details = participationDetails({
         status: "WITHDRAWN",
         withdrawnAt: settledAt,
         hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "token",
+        replacementMode: "DIRECT_INVITE",
       });
 
       // Act & Assert
@@ -174,42 +172,8 @@ describe("Participation", () => {
         status: "WITHDRAWN",
         withdrawnAt: settledAt,
         hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "token",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: " ",
-      });
-
-      // Act & Assert
-      expect(() => new Participation(details)).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-    });
-
-    test("constructor_WhenInvitationHasNoToken_RejectsInvitation", () => {
-      // Arrange
-      const details = participationDetails({
-        status: "WITHDRAWN",
-        withdrawnAt: settledAt,
-        hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementMode: "INVITE_LINK",
-        replacementInviteeId: "ben",
-      });
-
-      // Act & Assert
-      expect(() => new Participation(details)).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
-    });
-
-    test("constructor_WhenInvitationHasBlankToken_RejectsInvitation", () => {
-      // Arrange
-      const details = participationDetails({
-        status: "WITHDRAWN",
-        withdrawnAt: settledAt,
-        hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementMode: "INVITE_LINK",
-        replacementToken: " ",
-        replacementInviteeId: "ben",
       });
 
       // Act & Assert
@@ -224,8 +188,7 @@ describe("Participation", () => {
         status: "WITHDRAWN",
         withdrawnAt: settledAt,
         hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "token",
+        replacementMode: "DIRECT_INVITE",
         replacementInviteeId: "user",
       });
 
@@ -251,13 +214,13 @@ describe("Participation", () => {
       );
     });
 
-    test("constructor_WhenTokenHasNoReplacementMode_RejectsReservationMetadata", () => {
+    test("constructor_WhenInviteeHasNoReplacementMode_RejectsReservationMetadata", () => {
       // Arrange
       const details = participationDetails({
         status: "WITHDRAWN",
         withdrawnAt: settledAt,
         hold: new FundHold(holdDetails()).awaitReplacement(),
-        replacementToken: "token",
+        replacementInviteeId: "ben",
       });
 
       // Act & Assert
@@ -298,16 +261,14 @@ describe("Participation", () => {
       const withdrawn = committed.withdraw(
         committed.hold!.refund(settledAt),
         settledAt,
-        "INVITE_LINK",
-        "token",
+        "DIRECT_INVITE",
         "ben",
       );
 
       // Assert
       expect(withdrawn.status).toBe("WITHDRAWN");
       expect(withdrawn.hold?.state).toBe("REFUNDED");
-      expect(withdrawn.replacementMode).toBe("INVITE_LINK");
-      expect(withdrawn.replacementToken).toBe("token");
+      expect(withdrawn.replacementMode).toBe("DIRECT_INVITE");
       expect(withdrawn.replacementInviteeId).toBe("ben");
       expect(committed.status).toBe("COMMITTED");
       expect(committed.replacementInviteeId).toBeUndefined();
@@ -321,8 +282,7 @@ describe("Participation", () => {
       const withdrawn = committed.withdraw(
         committed.hold!.awaitReplacement(),
         settledAt,
-        "INVITE_LINK",
-        "token",
+        "DIRECT_INVITE",
         "ben",
       );
 
@@ -339,8 +299,7 @@ describe("Participation", () => {
       const withdrawn = committed.withdraw(
         committed.hold!.refund(settledAt),
         settledAt,
-        "INVITE_LINK",
-        "token",
+        "DIRECT_INVITE",
         "ben",
       );
 
@@ -348,8 +307,7 @@ describe("Participation", () => {
       expect(() =>
         withdrawn.withdraw(withdrawn.hold!, settledAt, "OPEN_SLOT"),
       ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
-      expect(withdrawn.replacementMode).toBe("INVITE_LINK");
-      expect(withdrawn.replacementToken).toBe("token");
+      expect(withdrawn.replacementMode).toBe("DIRECT_INVITE");
       expect(withdrawn.replacementInviteeId).toBe("ben");
       expect(withdrawn.hold?.state).toBe("REFUNDED");
     });
@@ -365,16 +323,9 @@ describe("Participation", () => {
 
       // Act & Assert
       expect(() =>
-        withdrawn.withdraw(
-          withdrawn.hold!,
-          settledAt,
-          "INVITE_LINK",
-          "token",
-          "ben",
-        ),
+        withdrawn.withdraw(withdrawn.hold!, settledAt, "DIRECT_INVITE", "ben"),
       ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
       expect(withdrawn.replacementMode).toBe("OPEN_SLOT");
-      expect(withdrawn.replacementToken).toBeUndefined();
       expect(withdrawn.replacementInviteeId).toBeUndefined();
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
     });
@@ -385,8 +336,7 @@ describe("Participation", () => {
       const withdrawn = committed.withdraw(
         committed.hold!.awaitReplacement(),
         createdAt,
-        "INVITE_LINK",
-        "token",
+        "DIRECT_INVITE",
         "ben",
       );
 
@@ -396,7 +346,6 @@ describe("Participation", () => {
       // Assert
       expect(cancelled.status).toBe("CANCELLED");
       expect(cancelled.replacementMode).toBeUndefined();
-      expect(cancelled.replacementToken).toBeUndefined();
       expect(cancelled.replacementInviteeId).toBeUndefined();
       expect(withdrawn.replacementInviteeId).toBe("ben");
     });
@@ -407,8 +356,7 @@ describe("Participation", () => {
       const withdrawn = committed.withdraw(
         committed.hold!.awaitReplacement(),
         createdAt,
-        "INVITE_LINK",
-        "token",
+        "DIRECT_INVITE",
         "ben",
       );
 
@@ -420,7 +368,6 @@ describe("Participation", () => {
       expect(committed.hold?.state).toBe("HELD");
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
       expect(finalized.hold?.state).toBe("REFUNDED");
-      expect(finalized.replacementToken).toBe("token");
       expect(finalized.replacementInviteeId).toBe("ben");
     });
   });
@@ -433,8 +380,7 @@ describe("Participation", () => {
           status: "WITHDRAWN",
           withdrawnAt: createdAt,
           hold: new FundHold(holdDetails({ state: "AWAITING_REPLACEMENT" })),
-          replacementMode: "INVITE_LINK",
-          replacementToken: "token",
+          replacementMode: "DIRECT_INVITE",
           replacementInviteeId: "ben",
         }),
       );
@@ -445,7 +391,6 @@ describe("Participation", () => {
       // Assert
       expect(expired).not.toBe(withdrawn);
       expect(expired.hold?.state).toBe("FORFEITURE_DUE");
-      expect(expired.replacementToken).toBe("token");
       expect(expired.replacementInviteeId).toBe("ben");
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
     });

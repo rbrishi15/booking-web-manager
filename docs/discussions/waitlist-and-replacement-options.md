@@ -2,13 +2,14 @@
 
 **Status: session queue waitlist and two departure choices confirmed by the user
 on 27 September 2026; the choice is strictly either/or, with no switching after
-withdrawal.**
+withdrawal. Personal invitations are direct by user ID and require explicit
+recipient acceptance.**
 
 When a participant leaves, the product must present these choices:
 
 1. **Invite one named person to replace them.** One invitation reserves the
-   departing person's one place, like an airplane seat. Only that named person
-   can accept it; forwarding the link does not let someone else claim it.
+   departing person's one place, like an airplane seat. The invitation is sent
+   directly to the named user's ID, and only that person can explicitly accept.
 2. **Open the place to groups / the public waitlist.** Ordinary admission uses
    the session's group/public access rules and queue.
 
@@ -19,8 +20,10 @@ that is not an available or deferred path. A named invitee already in the queue
 can still accept their own reserved place: the either/or rule concerns the
 departing participant's allocation choice.
 
-The user explicitly confirmed “one named person” rather than a link claimable
-by whoever accepts first. This supersedes the 26 September proposal to defer
+The user explicitly confirmed “one named person,” then chose a direct invitation
+by user ID and explicit acceptance. Replacement-link and token proposals are
+superseded. Ordinary joining or promotion cannot accept the invitation on the
+recipient's behalf. This also supersedes the 26 September proposal to defer
 the joining waitlist. [ADR-0006](../adr/0006-personal-replacement-reservations.md)
 records the confirmed scope and its domain implementation consequences.
 
@@ -138,21 +141,22 @@ the queue and named-seat allocation choice; it does not blanket-approve every
 proposed answer. Section 6 distinguishes that confirmation from unresolved
 product policies, and section 7 describes the domain behavior implemented with it.
 The two switching scenarios are explicitly rejected by the user's current
-either/or clarification.
+either/or clarification. Link/token scenarios are historical and superseded by
+direct user-ID invitations with an explicit acceptance action.
 
 | Business scenario | Working proposal from the conversation | Decision or complexity introduced |
 | --- | --- | --- |
-| Alice withdrew before Ben, but Cara uses Ben's personal link. | Refund Ben when Cara successfully joins. | Does the link identify a specific replacement, or merely invite someone into the session? |
+| Alice withdrew before Ben, but Cara uses Ben's personal link. | Refund Ben when Cara successfully joins. | **Link mechanism superseded.** Cara now explicitly accepts Ben's direct invitation addressed to her user ID; financial matching remains separately identified below. |
 | Dana is already waiting when Ben invites Cara. | Reserve Ben's place for his personal replacement ahead of the waitlist. | Is keeping the place empty acceptable while someone else is ready to join? Does any reservation expire before session start? |
 | An ordinary entrant joins while some places have personal reservations. | Use only ordinary capacity and refund the oldest eligible open-slot withdrawal. | Reserved places and their owners must be excluded from ordinary admission and refund allocation. |
-| Cara has already used Ben's link; Evan uses it afterward. | Reject Evan's replacement request without charge or queue changes. He may choose ordinary joining separately. | Links need a clear active, used, or invalidated outcome. Another available place must not silently change what Evan is accepting. |
+| Cara has already used Ben's link; Evan uses it afterward. | Reject Evan's replacement request without charge or queue changes. He may choose ordinary joining separately. | **Link scenario superseded.** There is no link to reuse. A direct invitation is addressed to one user ID and can be accepted only once by that recipient. |
 | Ben cannot find a personal replacement, but Dana is waiting. | Historical proposal: let Ben offer the place to the waitlist before start, invalidate the link, and give no refund merely for switching. | **Rejected by the current either/or clarification.** Ben cannot switch his personal place to the waitlist after withdrawing. |
 | Ben withdrew at 8 a.m.; Alice offered her place to the waitlist at 9 a.m.; Ben switches at 10 a.m. | Historical proposal: refund Ben first using his original withdrawal time. | **Rejected scenario.** Neither participant can change from a personal invitation to the waitlist after withdrawing, so this switching-priority question does not apply. |
 | Cara is already second on the waitlist when Ben invites her. | Let her accept directly, pay once, and leave the queue. Dana remains first for ordinary openings. | Joining must update the reservation, payment, refund, and existing queue entry together. A failed attempt must preserve her original position. |
 
 The financial proposal is that a late-withdrawing person's refund depends on a
-replacement successfully securing and funding the place. Sharing a link or
-joining a waitlist alone would not issue a refund. Releasing a personal
+replacement successfully securing and funding the place. Sending an invitation
+or joining a waitlist alone would not issue a refund. Releasing a personal
 reservation to the waitlist was considered earlier and is now rejected.
 The user has explicitly selected the funded-joining definition above; it still
 requires product-owner review.
@@ -161,7 +165,7 @@ requires product-owner review.
 
 One successful personal replacement can need to change several things together:
 allocate a reserved place, accept the entrant's payment, refund the intended
-person, invalidate the link, and remove an existing waitlist entry. A failure
+person, consume the invitation, and remove an existing waitlist entry. A failure
 partway through must leave the prior situation intact.
 
 It also creates product questions beyond the basic withdrawal diagram:
@@ -169,7 +173,7 @@ It also creates product questions beyond the basic withdrawal diagram:
 - Which places are actually available to an ordinary joiner?
 - Can a reservation leave capacity unused while willing participants wait?
 - How should the fixed departure choice be explained before a participant commits to it?
-- What does a person see when a link is used, revoked, or no longer eligible?
+- What does a person see when an invitation is pending, accepted, or no longer eligible?
 - How should competing attempts to claim the same place be explained to users?
 
 The user has now selected the queue and personal-seat allocation despite these
@@ -183,30 +187,33 @@ support that choice; they are not supplied by the domain implementation alone.
 | Is the session queue waitlist needed? | Yes; the earlier proposal to defer it is superseded. | User confirmed, 2026-09-27 |
 | Which choices are presented when a participant leaves? | Invite one person to replace them, or open the place to groups / the public waitlist. | User confirmed, 2026-09-27 |
 | Can the departing participant invite someone and then open the place to the waitlist, or otherwise switch choices after withdrawing? | No. The choice is strictly either/or at withdrawal. The historical offer-to-waitlist proposal is rejected and its action/transition removed. | User clarified, 2026-09-27 |
-| Who may accept the personal invitation? | One named person for the departing participant's one place; the link is not claimable by anyone who receives it. | User confirmed, 2026-09-27 |
+| Who may accept the personal invitation, and how? | One named person identified by user ID, using an explicit acceptance action. No replacement link or token exists. | User confirmed, 2026-09-27 |
+| Can ordinary joining or promotion accept a pending invitation implicitly? | No. The recipient must explicitly accept. Their existing waitlist entry remains unchanged until acceptance; FIFO promotion must await an invited queue head's response. | Explicit acceptance confirmed, 2026-09-27; queue handling is an implementation consequence |
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
 | Can the booker waive one participant's charge after that participant has already withdrawn late, while the session still goes ahead? | User proposes no individual exception in the first release; product-owner answer pending. | Pending |
 | Can a late-withdrawing participant return before start when nobody has replaced them, a place remains available, and their original share is still held? | User proposes rejoining with the existing held share and no additional charge; product-owner answer pending. | Pending |
 | Who receives the refund when several participants await replacement? | The domain matches personal acceptance to its departing participant and ordinary admission to the oldest eligible open-slot withdrawal. An already-refunded early departure is not refunded twice. The earlier financial proposal is not separately approved by the queue confirmation. | Separate financial-policy review pending |
 | Does a personal invitation reserve a place? | The named person's one seat is reserved from ordinary admission. The implementation allows that invitee to accept from any queue position; others keep their ordinary order. | Named-seat requirement confirmed, 2026-09-27; queue handling is an implementation consequence |
-| Which remaining rows in section 4 are approved or changed? | The switching proposals are rejected. Keep the other historical proposals visible; the scope above does not imply approval of unrelated financial rules or invitation expiry policy. | Switching rejected; remaining policies reviewed separately |
+| Which remaining rows in section 4 are approved or changed? | Switching proposals are rejected and link/token proposals are superseded. The scope above does not imply approval of unrelated financial rules or invitation expiry policy. | Switching rejected; links superseded; remaining policies reviewed separately |
 | Should the completion example show $20 or $30 available? | User proposes $20 available and $0 held after paying the $10 share. The original diagram shows $30; reconcile with the product owner. | Pending |
 
 ## 7. Current domain capability and remaining work
 
 The domain implements the confirmed named replacement and ordinary waitlist
-allocation. An `INVITE_LINK` invitation stores one token and one
-`replacementInviteeId`; explicit invitation acceptance checks the token against
-the matching user's participant role. The personal place stays reserved after
-either early or late withdrawal. A named invitee already waiting can accept directly from any queue
-position, while ordinary admissions and promotions keep FIFO order over
-unreserved capacity and existing visibility/membership rules for other people.
-An otherwise-authorized ordinary join by the named invitee also consumes their
-reserved place, as does promotion when they reach the FIFO head. These paths
-avoid stranding the invitation after its recipient joins. A matching token can
-supply private invitation access; ordinary access still uses the session's
-existing rules.
+allocation. `DIRECT_INVITE` stores one `replacementInviteeId`; there is no
+`replacementToken`. The named user's participant role explicitly calls
+`acceptReplacement(session, { participationId, holdId, now })`. Their user ID
+authorizes their unique active pending invitation, including private-session
+access, while eligibility and funding requirements still apply. The personal
+place stays reserved after either early or late withdrawal.
+
+A named invitee already waiting can explicitly accept from any queue position.
+Ordinary `join` and `promoteFromWaitlist` calls by a recipient with a pending
+invitation reject without changing their reservation or existing waitlist entry;
+they cannot accept the invitation implicitly. Promotion keeps FIFO order and
+must await an invited queue head's response. Ordinary admission for others uses
+unreserved capacity and existing visibility/membership rules.
 
 Successful personal acceptance holds the entrant's share, records the one
 replacement through `replacesParticipationId`, and refunds that specific late
@@ -216,12 +223,15 @@ refund an unrelated late withdrawal. Ordinary admission selects the oldest
 eligible `OPEN_SLOT` late withdrawal. These are domain financial behaviors, not
 evidence that all earlier financial proposals have been approved.
 
-The departing participant records either `INVITE_LINK` or `OPEN_SLOT` when
+The departing participant records either `DIRECT_INVITE` or `OPEN_SLOT` when
 withdrawing and cannot switch afterward. The earlier `offerPlaceToWaitlist`
 action and conversion transition are removed because they violate the
 clarification. This does not change the acceptance rights of a named invitee
 who is already waiting. Failed acceptance leaves the reservation, funds, and
 existing queue position unchanged.
+
+No invitation-decline or invitation-cancellation workflow is added. Existing
+session cancellation and start rules remain unchanged.
 
 There is no departure-choice UI, invitation delivery, application coordinator,
 or persistence adapter for this flow in the repository. A future application

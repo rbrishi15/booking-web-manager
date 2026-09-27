@@ -60,8 +60,7 @@ describe("Session", () => {
       attendance: "UNVERIFIED",
       committedAt: before,
       withdrawnAt: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "alice-invite",
+      replacementMode: "DIRECT_INVITE",
       replacementInviteeId: "ben",
       hold: heldShare("alice").awaitReplacement(),
     });
@@ -127,7 +126,7 @@ describe("Session", () => {
     // Assert
     expect(restored.participantList.reservedCount).toBe(0);
     expect(
-      restored.participantList.personalReplacementFor("alice-invite"),
+      restored.participantList.personalReplacementForInvitee("ben"),
     ).toBeUndefined();
     expect(restored.participantList.committedCount).toBe(1);
     expect(restored.getAvailableSlots(at(38))).toBe(1);
@@ -152,7 +151,7 @@ describe("Session", () => {
     // Assert
     expect(restored.participantList.reservedCount).toBe(0);
     expect(
-      restored.participantList.personalReplacementFor("alice-invite"),
+      restored.participantList.personalReplacementForInvitee("ben"),
     ).toBeUndefined();
     expect(
       restored.participantList.requireParticipation("p-ben")
@@ -178,7 +177,7 @@ describe("Session", () => {
     // Assert
     expect(restored.participantList.reservedCount).toBe(0);
     expect(
-      restored.participantList.personalReplacementFor("alice-invite"),
+      restored.participantList.personalReplacementForInvitee("ben"),
     ).toBeUndefined();
     expect(
       restored.participantList.requireParticipation("p-ben")
@@ -206,7 +205,7 @@ describe("Session", () => {
     expect(restored.status).toBe("CANCELLED");
     expect(restored.participantList.reservedCount).toBe(0);
     expect(
-      restored.participantList.personalReplacementFor("alice-invite"),
+      restored.participantList.personalReplacementForInvitee("ben"),
     ).toBeUndefined();
     expect(
       restored.participantList.requireParticipation("p-ben")
@@ -237,8 +236,7 @@ function refundedInvitation(): Participation {
     attendance: "UNVERIFIED",
     committedAt: before,
     withdrawnAt: at(40),
-    replacementMode: "INVITE_LINK",
-    replacementToken: "alice-invite",
+    replacementMode: "DIRECT_INVITE",
     replacementInviteeId: "ben",
     hold: heldShare("alice").refund(at(40)),
   });
