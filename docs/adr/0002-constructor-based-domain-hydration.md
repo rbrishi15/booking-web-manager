@@ -124,7 +124,7 @@ and required related values before calling parent constructors.
 User reads load wallet identity, its complete
 committed transaction history, calculated reliability, and memberships consistently
 within the transaction. A partial history must not hydrate a wallet.
-`wallet.getFunds()` calculates spendable funds synchronously from those entries.
+`wallet.getAvailableBalance()` calculates spendable funds synchronously from those entries.
 For writes, adapters map owned state to storage: saving `User` persists its
 owned state and wallet identity, without rewriting ledger history or persisting
 derived funds, scores, or memberships. These mappings and storage schemas stay outside the

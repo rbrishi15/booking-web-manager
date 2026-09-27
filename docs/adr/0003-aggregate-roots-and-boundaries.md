@@ -47,7 +47,7 @@ These are distinct concepts; see Fowler's
 [Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html) explanations.
 
 `User` owns its immutable `Wallet` child, which holds complete committed
-transactions and derives spendable funds with `getFunds(): Money`. It also
+transactions and derives spendable funds with `getAvailableBalance(): Money`. It also
 exposes a read-only `ReliabilityScore` and membership IDs. Constructors validate
 wallet ownership, transaction types and ownership, unique transaction IDs, and
 nonnegative derived funds within safe integer cents. Ledger writes, participation

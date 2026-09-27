@@ -24,7 +24,7 @@ its boundary; child comments identify their owning root.
   expiry, and payout callbacks remain operations on the root.
 - `User` owns profile/preferences, account status, its `Wallet`, and payout
   setup. The wallet holds its complete committed transaction history and derives
-  spendable funds through `getFunds(): Money`. Calculated reliability and
+  spendable funds through `getAvailableBalance(): Money`. Calculated reliability and
   membership IDs are read-only related values. Ledger writes, participation
   history, and groups remain external. `User` exposes `asBooker()` and
   `asParticipant()` role views.
@@ -164,7 +164,7 @@ the entrant and any replacement refund together. Promotion preserves `NONE`,
 `SKIPPED`, and `PROMOTED`; there is no Session promotion command.
 
 Booker actions are `createSession`, `cancel`, `changeVisibility`,
-`removeParticipant`, `verifyAttendance`, and `prepareSettlement`. Booker
+`removeParticipant`, `verifyAttendance`, and `preparePayout`. Booker
 authorizes ownership and prepares the whole cancellation, attendance, or
 settlement operation before recording any state. It gets the trusted payout
 destination through User; application commands contain action details rather
@@ -219,7 +219,7 @@ does not receive a reserved place.
 
 Financial operation amounts are positive and wallet balances are nonnegative at
 the server boundary. A `Wallet` stores no balance field. Its synchronous
-`getFunds()` sums integer cents exactly from transactions: `TOP_UP` and `REFUND`
+`getAvailableBalance()` sums integer cents exactly from transactions: `TOP_UP` and `REFUND`
 credit, `LOCK` and wallet-withdrawal `PAYOUT` debit, and `RELEASE`/`FORFEIT`
 leave spendable funds unchanged because those funds were already locked.
 The result is independent of entry order; an out-of-range result throws.
@@ -270,7 +270,7 @@ without retaining the history.
 ## Settlement and ledger boundary
 
 After all committed attendance is finalized,
-`booker.prepareSettlement(session, command)` obtains the trusted destination
+`booker.preparePayout(session, command)` obtains the trusted destination
 through User and prepares the candidate participations and frozen batch of hold
 IDs, amounts, release/forfeiture reasons, and that destination. Session validates
 the prepared state and payout-attempt history before recording it. The role

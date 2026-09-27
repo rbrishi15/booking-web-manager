@@ -53,7 +53,7 @@ export {
   Booker,
   type AttendanceMark,
   type BookerSessionCreation,
-  type SettlementCommand,
+  type PreparePayoutCommand,
   type VerifyAttendanceCommand,
 } from "./accounts/booker";
 export {

@@ -64,7 +64,7 @@ class Booker <<RoleView>> {
   +changeVisibility(session, ...) : void
   +removeParticipant(session, ...) : FinancialResult
   +verifyAttendance(session, ...) : void
-  +prepareSettlement(session, ...) : SettlementBatch [0..1]
+  +preparePayout(session, ...) : SettlementBatch [0..1]
 }
 
 class Booking <<ValueObject>> {

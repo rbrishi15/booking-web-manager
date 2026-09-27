@@ -49,7 +49,7 @@ class Payout <<AggregateRoot>> {
 }
 class Wallet <<ImmutableChild>> {
   +walletId : UUID
-  +getFunds() : Money
+  +getAvailableBalance() : Money
 }
 class PayoutAccount <<ImmutableChild>> {
   +payoutAccountId : UUID

@@ -27,7 +27,7 @@ and [ADR-0002: Constructor-based domain hydration](./0002-constructor-based-doma
 
 `Repository<User>.get(userId)` returns a user with required `wallet`,
 `reliabilityScore`, and `memberGroupIds` values. The owned wallet holds complete
-committed transaction history and derives funds through `getFunds(): Money`.
+committed transaction history and derives funds through `getAvailableBalance(): Money`.
 Hydration validates wallet ownership, transaction types and ownership, unique
 transaction IDs, and nonnegative derived funds within safe integer cents. Missing
 related data is an error; partial transaction histories must not hydrate wallets.

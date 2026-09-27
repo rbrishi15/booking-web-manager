@@ -29,7 +29,7 @@ class Booker <<RoleView>> {
   +changeVisibility(...) : void
   +removeParticipant(...) : FinancialResult
   +verifyAttendance(...) : void
-  +prepareSettlement(...) : SettlementBatch [0..1]
+  +preparePayout(...) : SettlementBatch [0..1]
 }
 
 class Participant <<RoleView>> {
@@ -62,7 +62,7 @@ class Wallet <<ImmutableChild>> {
   +walletId : UUID
   +userId : UUID
   --
-  +getFunds() : Money
+  +getAvailableBalance() : Money
 }
 
 class Email <<ValueObject>> {

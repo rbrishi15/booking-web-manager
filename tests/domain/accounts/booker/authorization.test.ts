@@ -47,7 +47,7 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenBookerIsForeign_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenBookerIsForeign_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     readyBooker().verifyAttendance(bookingSession, {
@@ -58,7 +58,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker("other").prepareSettlement(bookingSession, {
+      readyBooker("other").preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,

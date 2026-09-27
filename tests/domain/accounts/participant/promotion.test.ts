@@ -150,8 +150,8 @@ describe("Participant", () => {
     expect(waitlistAdmission.kind).toBe("WAITLISTED");
     expect(promotion.kind).toBe("PROMOTED");
     expect(promotion.instructions[0]?.walletId).toBe("w-cara");
-    expect(unfundedUser.wallet.getFunds().toCents()).toBe(0);
-    expect(reloadedUser.wallet.getFunds().toCents()).toBe(500);
+    expect(unfundedUser.wallet.getAvailableBalance().toCents()).toBe(0);
+    expect(reloadedUser.wallet.getAvailableBalance().toCents()).toBe(500);
   });
 
   test("promoteFromWaitlist_WhenWaitersTieAndFirstCannotPay_PreservesQueuePriority", () => {

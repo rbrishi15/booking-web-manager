@@ -45,7 +45,7 @@ export class Wallet {
     this.#userId = details.userId;
     this.#transactions = [...details.transactions];
     DomainError.require(
-      this.getFunds().toCents() >= 0,
+      this.getAvailableBalance().toCents() >= 0,
       "INVALID_INPUT",
       "Wallet funds cannot be negative",
     );
@@ -62,7 +62,7 @@ export class Wallet {
   }
 
   /** Spendable funds only; held funds have already been debited by LOCK. */
-  getFunds(): Money {
+  getAvailableBalance(): Money {
     // Sum with bigint so the result is exact and independent of history order,
     // even when lifetime credits exceed Money's safe integer range.
     let cents = 0n;

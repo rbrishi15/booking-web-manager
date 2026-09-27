@@ -125,7 +125,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -154,7 +154,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -183,7 +183,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -430,7 +430,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -460,7 +460,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -493,7 +493,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -519,7 +519,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -545,7 +545,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -594,7 +594,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      readyBooker().prepareSettlement(source, {
+      readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -615,7 +615,7 @@ describe("Session", () => {
 
       // Act & Assert
       expect(() =>
-        readyBooker().prepareSettlement(restoredSession, {
+        readyBooker().preparePayout(restoredSession, {
           payoutId: "out",
           idempotencyKey: "retry-key",
           now: end,
@@ -631,7 +631,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      readyBooker().prepareSettlement(source, {
+      readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -652,7 +652,7 @@ describe("Session", () => {
 
       // Act & Assert
       expect(() =>
-        readyBooker().prepareSettlement(restoredSession, {
+        readyBooker().preparePayout(restoredSession, {
           payoutId: "retry",
           idempotencyKey: "key",
           now: end,
@@ -668,7 +668,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      readyBooker().prepareSettlement(source, {
+      readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -686,7 +686,7 @@ describe("Session", () => {
 
       // Act
       const restoredSession = new Session(details);
-      const retryBatch = readyBooker().prepareSettlement(restoredSession, {
+      const retryBatch = readyBooker().preparePayout(restoredSession, {
         payoutId: "retry",
         idempotencyKey: "retry-key",
         now: end,
@@ -711,7 +711,7 @@ describe("Session", () => {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
         now: end,
       });
-      const batch = readyBooker().prepareSettlement(source, {
+      const batch = readyBooker().preparePayout(source, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -751,7 +751,7 @@ describe("Session", () => {
         ],
         now: end,
       });
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -777,7 +777,7 @@ describe("Session", () => {
         ],
         now: end,
       });
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -803,7 +803,7 @@ describe("Session", () => {
         ],
         now: end,
       });
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,

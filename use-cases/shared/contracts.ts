@@ -16,7 +16,7 @@ import type {
  * repository. Adapters choose the storage mapping and hydrate via constructors.
  * User reads include its Wallet with complete committed transaction history, a
  * ReliabilityScore calculated from that user's history, and memberships from a
- * consistent transaction view. Wallet.getFunds() derives spendable funds locally.
+ * consistent transaction view. Wallet.getAvailableBalance() derives spendable funds locally.
  * Reload after related writes; adapters must observe transaction writes and
  * protect concurrent funds. User saves persist owned state and wallet identity,
  * never rewrite ledger history or persist derived funds, scores, or memberships.

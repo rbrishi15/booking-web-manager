@@ -155,7 +155,7 @@ export class Participant {
       "INVALID_INPUT",
       "A commitment needs a hold ID",
     );
-    const hold = this.createAdmissionHold({
+    const hold = this.createBookingShareHold({
       participationId: command.participationId,
       holdId,
       holdingAccountId: session.holdingAccountId,
@@ -227,7 +227,7 @@ export class Participant {
     }
     const replacement = participantList.oldestAwaitingReplacement();
     const committed = next.commit(
-      this.createAdmissionHold({
+      this.createBookingShareHold({
         participationId: next.participationId,
         holdId: command.holdId,
         holdingAccountId: session.holdingAccountId,
@@ -370,13 +370,16 @@ export class Participant {
       !this.#user.reliabilityScore.meetsMinimum(terms.minimumReliability)
     )
       return "LOW_RELIABILITY";
-    if (requireFunds && this.#user.wallet.getFunds().compareTo(terms.share) < 0)
+    if (
+      requireFunds &&
+      this.#user.wallet.getAvailableBalance().compareTo(terms.share) < 0
+    )
       return "INSUFFICIENT_FUNDS";
     return undefined;
   }
 
   /** Prepares a hold after eligibility succeeds; ledger writes remain external. */
-  private createAdmissionHold(terms: CommitmentTerms): FundHold {
+  private createBookingShareHold(terms: CommitmentTerms): FundHold {
     return FundHold.create({
       holdId: terms.holdId,
       participationId: terms.participationId,

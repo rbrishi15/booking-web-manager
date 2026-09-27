@@ -23,7 +23,7 @@ describe("Session", () => {
       ],
       now: end,
     });
-    const batch = readyBooker().prepareSettlement(source, {
+    const batch = readyBooker().preparePayout(source, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -68,7 +68,7 @@ describe("Session", () => {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
-    readyBooker().prepareSettlement(bookingSession, {
+    readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -95,7 +95,7 @@ describe("Session", () => {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
-    readyBooker().prepareSettlement(bookingSession, {
+    readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -104,7 +104,7 @@ describe("Session", () => {
     // Act
     bookingSession.failSettlement("out", end);
     const statusAfterFailure = bookingSession.status;
-    const retryBatch = readyBooker().prepareSettlement(bookingSession, {
+    const retryBatch = readyBooker().preparePayout(bookingSession, {
       payoutId: "retry",
       idempotencyKey: "retry-key",
       now: end,

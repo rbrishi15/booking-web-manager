@@ -12,7 +12,7 @@ import {
 import { readyBookerUser } from "../user-fixtures";
 
 describe("Booker", () => {
-  test("prepareSettlement_WhenRoleWasCreatedBeforeDeactivation_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenRoleWasCreatedBeforeDeactivation_RejectsWithoutChangingState", () => {
     // Arrange
     const owner = createTestUser({
       userId: "booker",
@@ -33,7 +33,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      booker.prepareSettlement(bookingSession, {
+      booker.preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -42,7 +42,7 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenAttendanceIsIncomplete_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenAttendanceIsIncomplete_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -55,7 +55,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
         now: end,
@@ -64,7 +64,7 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenHoldsNeedReleaseAndForfeiture_KeepsFundsPending", () => {
+  test("preparePayout_WhenHoldsNeedReleaseAndForfeiture_KeepsFundsPending", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -78,7 +78,7 @@ describe("Booker", () => {
     });
 
     // Act
-    const batch = readyBooker().prepareSettlement(bookingSession, {
+    const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -98,7 +98,7 @@ describe("Booker", () => {
     ).toEqual(["FORFEITURE_DUE", "HELD"]);
   });
 
-  test("prepareSettlement_WhenAnotherPayoutIsPending_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenAnotherPayoutIsPending_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -110,7 +110,7 @@ describe("Booker", () => {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
-    readyBooker().prepareSettlement(bookingSession, {
+    readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -120,7 +120,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "another",
         idempotencyKey: "key2",
         now: end,
@@ -129,7 +129,7 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenFailedPayoutIdIsReused_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenFailedPayoutIdIsReused_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -141,7 +141,7 @@ describe("Booker", () => {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
       now: end,
     });
-    readyBooker().prepareSettlement(bookingSession, {
+    readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -151,7 +151,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "new",
         now: end,
@@ -160,7 +160,7 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenFailedPayoutKeyIsReusedWithNewPayoutId_RejectsWithoutChangingState", () => {
+  test("preparePayout_WhenFailedPayoutKeyIsReusedWithNewPayoutId_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -172,7 +172,7 @@ describe("Booker", () => {
       ],
       now: end,
     });
-    readyBooker().prepareSettlement(bookingSession, {
+    readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -182,7 +182,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().prepareSettlement(bookingSession, {
+      readyBooker().preparePayout(bookingSession, {
         payoutId: "retry",
         idempotencyKey: "key",
         now: end,
@@ -197,12 +197,12 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("prepareSettlement_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
+  test("preparePayout_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
     const bookingSession = createTestSession();
 
     // Act
-    const batch = readyBooker().prepareSettlement(bookingSession, {
+    const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "unused",
       idempotencyKey: "unused",
       now: end,
@@ -214,7 +214,7 @@ describe("Booker", () => {
     expect(status).toBe("SETTLED");
   });
 
-  test("prepareSettlement_WhenReplacementSweepWasMissed_ExpiresOutstandingReplacement", () => {
+  test("preparePayout_WhenReplacementSweepWasMissed_ExpiresOutstandingReplacement", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     createTestUser({ userId: "alice" })
@@ -223,7 +223,7 @@ describe("Booker", () => {
 
     // Act
     bookingSession.expireReplacements(at(1));
-    const batch = readyBooker().prepareSettlement(bookingSession, {
+    const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,
@@ -237,7 +237,7 @@ describe("Booker", () => {
     expect(batch?.lines).toMatchObject([{ kind: "FORFEIT" }]);
   });
 
-  test("prepareSettlement_WhenAttendanceIsIncomplete_LeavesExpiryUnapplied", () => {
+  test("preparePayout_WhenAttendanceIsIncomplete_LeavesExpiryUnapplied", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -254,7 +254,7 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().prepareSettlement(bookingSession, command),
+      readyBooker().preparePayout(bookingSession, command),
     ).toThrow(expect.objectContaining({ code: "ATTENDANCE_INCOMPLETE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
     expect(
@@ -263,7 +263,7 @@ describe("Booker", () => {
     ).toBe("AWAITING_REPLACEMENT");
   });
 
-  test("prepareSettlement_WhenBookerIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
+  test("preparePayout_WhenBookerIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -284,14 +284,14 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker("foreign").prepareSettlement(bookingSession, command),
+      readyBooker("foreign").preparePayout(bookingSession, command),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
     expect(bookingSession.payoutAttemptIds).toEqual([]);
     expect(bookingSession.payoutIdempotencyKeys).toEqual([]);
   });
 
-  test("prepareSettlement_WhenOwningBookerRetriesAfterForeignBooker_AppliesExpiryAndRecordsAttempt", () => {
+  test("preparePayout_WhenOwningBookerRetriesAfterForeignBooker_AppliesExpiryAndRecordsAttempt", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -313,13 +313,13 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker("foreign").prepareSettlement(bookingSession, command),
+      readyBooker("foreign").preparePayout(bookingSession, command),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
 
     expect(sessionState(bookingSession)).toEqual(previousState);
 
     // Act
-    const batch = readyBooker().prepareSettlement(bookingSession, command);
+    const batch = readyBooker().preparePayout(bookingSession, command);
 
     // Assert
     expect(batch?.lines.map((line) => line.kind)).toEqual([

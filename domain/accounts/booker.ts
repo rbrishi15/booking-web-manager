@@ -59,7 +59,7 @@ export interface VerifyAttendanceCommand {
   readonly now: Date;
 }
 
-export interface SettlementCommand {
+export interface PreparePayoutCommand {
   readonly payoutId: UUID;
   readonly idempotencyKey: string;
   readonly now: Date;
@@ -206,9 +206,9 @@ export class Booker {
     session.recordAttendance(verified, command.now);
   }
 
-  prepareSettlement(
+  preparePayout(
     session: Session,
-    command: SettlementCommand,
+    command: PreparePayoutCommand,
   ): SettlementBatch | undefined {
     const destination = this.payoutDestination();
     requireId(command.payoutId, "payoutId");

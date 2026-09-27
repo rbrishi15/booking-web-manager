@@ -157,18 +157,18 @@ describe("Wallet", () => {
   });
 
   describe("Available funds", () => {
-    test("getFunds_WhenHistoryIsEmpty_ReturnsZero", () => {
+    test("getAvailableBalance_WhenHistoryIsEmpty_ReturnsZero", () => {
       // Arrange
       const emptyWallet = wallet([]);
 
       // Act
-      const funds = emptyWallet.getFunds();
+      const funds = emptyWallet.getAvailableBalance();
 
       // Assert
       expect(funds.equals(Money.fromCents(0))).toBe(true);
     });
 
-    test("getFunds_WhenHistoryIncludesTopUp_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesTopUp_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -176,13 +176,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(1200);
     });
 
-    test("getFunds_WhenHistoryIncludesRefund_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesRefund_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -190,13 +190,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(1200);
     });
 
-    test("getFunds_WhenHistoryIncludesLock_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesLock_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -204,13 +204,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(800);
     });
 
-    test("getFunds_WhenHistoryIncludesPayout_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesPayout_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -218,13 +218,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(800);
     });
 
-    test("getFunds_WhenHistoryIncludesRelease_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesRelease_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -232,13 +232,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(1000);
     });
 
-    test("getFunds_WhenHistoryIncludesForfeit_ReturnsSpendableBalance", () => {
+    test("getAvailableBalance_WhenHistoryIncludesForfeit_ReturnsSpendableBalance", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("initial", "TOP_UP", 1_000),
@@ -246,13 +246,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(1000);
     });
 
-    test("getFunds_WhenHoldsAreRefundedReleasedOrForfeited_AppliesEachMovementOnce", () => {
+    test("getAvailableBalance_WhenHoldsAreRefundedReleasedOrForfeited_AppliesEachMovementOnce", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("top-up", "TOP_UP", 1_000),
@@ -266,13 +266,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(450);
     });
 
-    test("getFunds_WhenExactAvailableAmountIsSpent_ReturnsZero", () => {
+    test("getAvailableBalance_WhenExactAvailableAmountIsSpent_ReturnsZero", () => {
       // Arrange
       const fundedWallet = wallet([
         entry("credit", "TOP_UP", 500),
@@ -280,13 +280,13 @@ describe("Wallet", () => {
       ]);
 
       // Act
-      const funds = fundedWallet.getFunds();
+      const funds = fundedWallet.getAvailableBalance();
 
       // Assert
       expect(funds.toCents()).toBe(0);
     });
 
-    test("getFunds_WhenTransactionOrderChanges_PreservesExactBalance", () => {
+    test("getAvailableBalance_WhenTransactionOrderChanges_PreservesExactBalance", () => {
       // Arrange
       const history = [
         entry("credit", "TOP_UP", Number.MAX_SAFE_INTEGER),
@@ -295,8 +295,8 @@ describe("Wallet", () => {
       ];
 
       // Act
-      const forwardFunds = wallet(history).getFunds();
-      const reversedFunds = wallet([...history].reverse()).getFunds();
+      const forwardFunds = wallet(history).getAvailableBalance();
+      const reversedFunds = wallet([...history].reverse()).getAvailableBalance();
 
       // Assert
       expect(forwardFunds.toCents()).toBe(1);
@@ -325,7 +325,7 @@ describe("Wallet", () => {
       expect(fundedWallet.transactions[0]?.occurredAt.toISOString()).toBe(
         "2026-10-01T10:00:00.000Z",
       );
-      expect(fundedWallet.getFunds().toCents()).toBe(700);
+      expect(fundedWallet.getAvailableBalance().toCents()).toBe(700);
     });
   });
 });

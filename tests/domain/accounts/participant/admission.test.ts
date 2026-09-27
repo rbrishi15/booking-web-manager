@@ -125,8 +125,8 @@ describe("Participant", () => {
         reloadedUser.asParticipant().join(nextSession, command),
       ).toThrow(expect.objectContaining({ code: "INSUFFICIENT_FUNDS" }));
       expect(sessionState(nextSession)).toEqual(previousState);
-      expect(fundedUser.wallet.getFunds().toCents()).toBe(500);
-      expect(reloadedUser.wallet.getFunds().toCents()).toBe(0);
+      expect(fundedUser.wallet.getAvailableBalance().toCents()).toBe(500);
+      expect(reloadedUser.wallet.getAvailableBalance().toCents()).toBe(0);
     });
 
     test("join_WhenUserIsNotInInvitedGroup_RejectsWithoutChangingState", () => {

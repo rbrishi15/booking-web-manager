@@ -107,7 +107,7 @@ describe("User", () => {
       Reflect.set(user, "reliabilityScore", ReliabilityScore.from(0)),
     ).toBe(false);
     expect(user.wallet.walletId).toBe("w-alice");
-    expect(user.wallet.getFunds().toCents()).toBe(700);
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(700);
     expect(user.reliabilityScore).toBe(reliabilityScore);
     expect(user.reliabilityScore.toNumber()).toBe(80);
     expect(user.memberGroupIds).toEqual(["group"]);
@@ -130,7 +130,7 @@ describe("User", () => {
     expect(user.email?.toString()).toBe("new@example.com");
     expect(user.wallet.walletId).toBe("new-wallet");
     expect(user.wallet.transactions).toEqual([]);
-    expect(user.wallet.getFunds().toCents()).toBe(0);
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(0);
     expect(user.reliabilityScore.toNumber()).toBe(
       ReliabilityScore.fromHistory(user.userId, [], userLoadedAt).toNumber(),
     );

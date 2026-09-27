@@ -38,7 +38,7 @@ hydration path under ADR-0002, accepting valid existing lifecycle states.
 
 The existing application-facing Booker methods retain their signatures:
 `createSession`, `cancel`, `changeVisibility`, `removeParticipant`,
-`verifyAttendance`, and `prepareSettlement`. For example:
+`verifyAttendance`, and `preparePayout`. For example:
 
 ```ts
 const booker = user.asBooker();

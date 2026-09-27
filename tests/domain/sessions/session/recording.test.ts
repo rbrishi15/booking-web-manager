@@ -427,7 +427,7 @@ describe("Session", () => {
         participations: source.participantList.participations,
       }),
     );
-    const batch = readyBooker().prepareSettlement(source, {
+    const batch = readyBooker().preparePayout(source, {
       payoutId: "out",
       idempotencyKey: "key",
       now: end,

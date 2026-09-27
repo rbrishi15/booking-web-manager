@@ -56,7 +56,7 @@ abbreviated.
   lifecycle/time guards and payout/batch cross-checks. Hydration still
   supplies participation arrays and a queue sequence through SessionDetails.
 - `RegularGroup` retains at least one membership, including its owner.
-- `User` owns its wallet, but ledger history is external. `Wallet.getFunds()`
+- `User` owns its wallet, but ledger history is external. `Wallet.getAvailableBalance()`
   derives spendable funds from the complete committed transaction collection.
   Saving a user does not rewrite that history. `WalletBalance` is a separate
   query result, not the wallet's hydration state.
