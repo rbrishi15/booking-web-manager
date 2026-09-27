@@ -1,4 +1,4 @@
-import { Money, requireDomain } from "@/domain";
+import { DomainError, Money } from "@/domain";
 
 /**
  * Splitting money without losing cents.
@@ -36,13 +36,13 @@ export interface BookingShare {
  */
 export function bookingShare(totalCost: Money, slots: number): BookingShare {
   requireMoney(totalCost, "totalCost");
-  requireDomain(
+  DomainError.require(
     totalCost.toCents() > 0,
     "INVALID_INPUT",
     "A booking cost must be positive",
   );
   requireCount(slots, "slots");
-  requireDomain(
+  DomainError.require(
     totalCost.toCents() >= slots,
     "INVALID_INPUT",
     `A booking cost of ${totalCost.toCents()} cents cannot be divided across ${slots} slots without a zero share`,
@@ -69,7 +69,7 @@ export function bookingShare(totalCost: Money, slots: number): BookingShare {
  */
 export function allocate(total: Money, parts: number): readonly Money[] {
   requireMoney(total, "total");
-  requireDomain(
+  DomainError.require(
     total.toCents() >= 0,
     "INVALID_INPUT",
     "Cannot allocate a negative total",
@@ -127,7 +127,7 @@ export function formatSgd(money: Money): string {
 }
 
 function requireMoney(value: Money, name: string): void {
-  requireDomain(
+  DomainError.require(
     value instanceof Money,
     "INVALID_INPUT",
     `${name} must be a Money amount`,
@@ -135,7 +135,7 @@ function requireMoney(value: Money, name: string): void {
 }
 
 function requireCount(value: number, name: string): void {
-  requireDomain(
+  DomainError.require(
     Number.isSafeInteger(value) && value > 0,
     "INVALID_INPUT",
     `${name} must be a positive whole number`,
