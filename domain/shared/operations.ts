@@ -18,7 +18,7 @@ export interface PayoutDestination {
   readonly bankAccountReference: string;
 }
 
-export interface SettlementLine {
+export interface PayoutLine {
   readonly holdId: UUID;
   readonly participationId: UUID;
   readonly holdingAccountId: UUID;
@@ -27,13 +27,13 @@ export interface SettlementLine {
   readonly kind: "RELEASE" | "FORFEIT";
 }
 
-export interface SettlementBatch {
+export interface PayoutBatch {
   readonly payoutId: UUID;
   readonly sessionId: UUID;
   readonly idempotencyKey: string;
   readonly requestedAt: Date;
   readonly destination: PayoutDestination;
-  readonly lines: readonly SettlementLine[];
+  readonly lines: readonly PayoutLine[];
 }
 
 /** LOCK debits the origin wallet; REFUND credits it. RELEASE/FORFEIT pay externally. */
@@ -53,7 +53,7 @@ export interface FinancialResult {
   readonly instructions: readonly FinancialInstruction[];
 }
 
-export interface AdmissionResult extends FinancialResult {
+export interface ParticipantJoinResult extends FinancialResult {
   readonly kind: "COMMITTED" | "WAITLISTED";
   readonly participationId: UUID;
   readonly refundedParticipationId?: UUID;

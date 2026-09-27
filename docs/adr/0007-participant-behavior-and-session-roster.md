@@ -58,7 +58,7 @@ const admission = participant.join(session, {
 
 participant.withdraw(session, withdrawalCommand);
 participant.leaveWaitlist(session, leaveWaitlistCommand);
-participant.offerReplacementToWaitlist(session, replacementCommand);
+participant.offerPlaceToWaitlist(session, replacementCommand);
 ```
 
 `ParticipantJoinCommand` is declared beside `Participant`; it is no longer an

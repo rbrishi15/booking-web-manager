@@ -1,7 +1,7 @@
 import type { Money } from "../../finance/money";
 import type { ReliabilityScore } from "../../reliability/reliability-score";
 import { DomainError } from "../../shared/errors";
-import type { FinancialResult, SettlementBatch } from "../../shared/operations";
+import type { FinancialResult, PayoutBatch } from "../../shared/operations";
 import type { SessionStatus, Visibility } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
@@ -15,7 +15,7 @@ import {
   assertSettlementOpen,
   validatePayoutAttempt,
 } from "./session-guards";
-import { validateSettlementBatchPreparation } from "./session-recording";
+import { validatePayoutBatchPreparation } from "./session-recording";
 import {
   cloneBatch,
   requireId,
@@ -39,7 +39,7 @@ export interface SessionDetails {
   readonly holdingAccountId: UUID;
   readonly participations: readonly Participation[];
   readonly nextQueueSequence: number;
-  readonly pendingSettlement?: SettlementBatch;
+  readonly pendingSettlement?: PayoutBatch;
   readonly payoutAttemptIds: readonly UUID[];
   readonly payoutIdempotencyKeys: readonly string[];
 }
@@ -49,16 +49,16 @@ export interface SessionSettlementPreparation {
   readonly payoutId: UUID;
   readonly idempotencyKey: string;
   readonly participations: readonly Participation[];
-  readonly batch?: SettlementBatch;
+  readonly batch?: PayoutBatch;
 }
 
 interface PayoutPending {
-  readonly batch: SettlementBatch;
+  readonly batch: PayoutBatch;
 }
 
 interface PreparedSessionState {
   readonly status: SessionStatus;
-  readonly pendingSettlement?: SettlementBatch;
+  readonly pendingSettlement?: PayoutBatch;
   readonly payoutAttemptIds?: ReadonlySet<UUID>;
   readonly payoutIdempotencyKeys?: ReadonlySet<string>;
 }
@@ -233,7 +233,7 @@ export class Session {
     const next = this.#participantList.withSettlementPreparation(
       preparation.participations,
     );
-    validateSettlementBatchPreparation(
+    validatePayoutBatchPreparation(
       next.participations,
       preparation,
       this.#bookerId,
@@ -361,7 +361,7 @@ export class Session {
   get payoutIdempotencyKeys(): readonly string[] {
     return [...this.#payoutIdempotencyKeys];
   }
-  get pendingSettlement(): SettlementBatch | undefined {
+  get pendingSettlement(): PayoutBatch | undefined {
     return this.#pendingSettlement === undefined
       ? undefined
       : cloneBatch(this.#pendingSettlement.batch);

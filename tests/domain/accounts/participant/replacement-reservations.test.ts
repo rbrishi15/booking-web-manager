@@ -8,7 +8,7 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
-  test("offerReplacementToWaitlist_WhenOwnerReleasesPersonalPlace_RefundsOnlyAfterFundedPromotion", () => {
+  test("offerPlaceToWaitlist_WhenOwnerReleasesPersonalPlace_RefundsOnlyAfterFundedPromotion", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -29,7 +29,7 @@ describe("Participant", () => {
     // Act
     const offer = createTestUser({ userId: "ben" })
       .asParticipant()
-      .offerReplacementToWaitlist(bookingSession, {
+      .offerPlaceToWaitlist(bookingSession, {
         participationId: "p-ben",
         now: at(9),
       });
@@ -106,7 +106,7 @@ describe("Participant", () => {
     );
   });
 
-  test("offerReplacementToWaitlist_WhenOwnerWithdrewBeforeOpenSlotParticipant_PreservesOriginalRefundPriority", () => {
+  test("offerPlaceToWaitlist_WhenOwnerWithdrewBeforeOpenSlotParticipant_PreservesOriginalRefundPriority", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -131,7 +131,7 @@ describe("Participant", () => {
     // Act
     createTestUser({ userId: "ben" })
       .asParticipant()
-      .offerReplacementToWaitlist(bookingSession, {
+      .offerPlaceToWaitlist(bookingSession, {
         participationId: "p-ben",
         now: at(8),
       });
@@ -161,7 +161,7 @@ describe("Participant", () => {
     expect(dana?.replacesParticipationId).toBe("p-ben");
   });
 
-  test("offerReplacementToWaitlist_WhenActorIsNotOwner_RejectsWithoutChangingState", () => {
+  test("offerPlaceToWaitlist_WhenActorIsNotOwner_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["ben"] });
 
@@ -179,7 +179,7 @@ describe("Participant", () => {
     expect(() =>
       createTestUser({ userId: "booker" })
         .asParticipant()
-        .offerReplacementToWaitlist(bookingSession, {
+        .offerPlaceToWaitlist(bookingSession, {
           participationId: "p-ben",
           now: at(9),
         }),
@@ -187,7 +187,7 @@ describe("Participant", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("offerReplacementToWaitlist_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
+  test("offerPlaceToWaitlist_WhenSessionStartsNow_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["ben"] });
 
@@ -205,7 +205,7 @@ describe("Participant", () => {
     expect(() =>
       createTestUser({ userId: "ben" })
         .asParticipant()
-        .offerReplacementToWaitlist(bookingSession, {
+        .offerPlaceToWaitlist(bookingSession, {
           participationId: "p-ben",
           now: start,
         }),
@@ -213,7 +213,7 @@ describe("Participant", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("offerReplacementToWaitlist_WhenPersonalReplacementAlreadyJoined_RejectsWithoutChangingState", () => {
+  test("offerPlaceToWaitlist_WhenPersonalReplacementAlreadyJoined_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["ben"] });
 
@@ -239,7 +239,7 @@ describe("Participant", () => {
     expect(() =>
       createTestUser({ userId: "ben" })
         .asParticipant()
-        .offerReplacementToWaitlist(bookingSession, {
+        .offerPlaceToWaitlist(bookingSession, {
           participationId: "p-ben",
           now: at(8),
         }),

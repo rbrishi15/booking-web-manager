@@ -67,5 +67,5 @@ LedgerReadPort -[hidden]right- LedgerTransaction
 WalletBalance -[hidden]right- HoldingAccountBalance
 HoldingAccountBalance -[hidden]right- Money
 
-caption Selected public members; (...) abbreviates parameters.\nTransaction IDs refer to Wallet, FundHold and Payout. Wallet derives funds from its complete history.\nRead models serve independent queries; unknown accounts return null. Money uses safe integer SGD cents.
+caption Selected public members; (...) abbreviates parameters.\nTransaction IDs refer to Wallet, FundHold and PayoutAttempt. Wallet derives funds from its complete history.\nRead models serve independent queries; unknown accounts return null. Money uses safe integer SGD cents.
 @enduml

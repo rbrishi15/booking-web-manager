@@ -10,7 +10,7 @@ export interface GroupMembershipDetails {
 /**
  * Immutable child entity of the RegularGroup aggregate root.
  * Membership is added or removed through RegularGroup commands, which enforce
- * roster-wide rules such as uniqueness and retaining the group's owner.
+ * membership rules such as uniqueness and retaining the group's owner.
  */
 export class GroupMembership {
   readonly #userId: UUID;

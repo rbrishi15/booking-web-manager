@@ -8,7 +8,7 @@ work.
 
 ## Aggregate roots
 
-The four aggregate roots are `User`, `RegularGroup`, `Session`, and `Payout`.
+The four aggregate roots are `User`, `RegularGroup`, `Session`, and `PayoutAttempt`.
 The business term Booking Room is represented by the existing Session class.
 A root controls changes to its owned state and children. Actor-facing role
 workflows can prepare changes for the root to validate and record.
@@ -28,8 +28,9 @@ its boundary; child comments identify their owning root.
   membership IDs are read-only related values. Ledger writes, participation
   history, and groups remain external. `User` exposes `asBooker()` and
   `asParticipant()` role views.
-- `RegularGroup` owns unique memberships and invitation lifecycle.
-- `Payout` freezes one settlement batch and external destination for one payout
+- `RegularGroup` owns its member list and invitation lifecycle, and requires
+  unique memberships.
+- `PayoutAttempt` freezes one payout batch and external destination for one payout
   attempt. A failed attempt remains a fact; a retry gets a new attempt ID.
 
 `Wallet` is an immutable child owned by `User`; the shared `HoldingAccount`
@@ -157,7 +158,7 @@ or compatibility getters are introduced.
 ## Session command calculations
 
 Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, `leaveWaitlist`,
-and `offerReplacementToWaitlist`. Each action performs the workflow: authorize,
+and `offerPlaceToWaitlist`. Each action performs the workflow: authorize,
 read session facts, calculate immutable child changes and financial instructions,
 record the complete change, then return the result. Joining and promotion prepare
 the entrant and any replacement refund together. Promotion preserves `NONE`,
@@ -239,7 +240,7 @@ replacement holds become `FORFEITURE_DUE`. See the
 for the source diagram and policy questions separate from that boundary issue.
 
 The working copy also contains a **provisional**
-`Participant.offerReplacementToWaitlist(session, { participationId, now })` action.
+`Participant.offerPlaceToWaitlist(session, { participationId, now })` action.
 It lets the owning participant change an awaiting personal replacement to an
 open-slot replacement before start and invalidates the personal link. It
 preserves the held share and original withdrawal time and returns no financial
@@ -275,7 +276,7 @@ through User and prepares the candidate participations and frozen batch of hold
 IDs, amounts, release/forfeiture reasons, and that destination. Session validates
 the prepared state and payout-attempt history before recording it. The role
 returns no batch when there are no payable holds. Otherwise a
-future use-case coordinator saves the session, `Payout`, and a durable payout
+future use-case coordinator saves the session, `PayoutAttempt`, and a durable payout
 intent in one transaction. A dispatcher calls the external provider later. Only a matching
 confirmed callback can complete that attempt; completion then settles holds and
 appends `RELEASE`/`FORFEIT` ledger instructions atomically. Failure keeps holds

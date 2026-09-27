@@ -55,7 +55,7 @@ abbreviated.
   capacity, FIFO, identity, and collection-transition validation; Session retains
   lifecycle/time guards and payout/batch cross-checks. Hydration still
   supplies participation arrays and a queue sequence through SessionDetails.
-- `RegularGroup` retains at least one membership, including its owner.
+- `RegularGroup` has a member list that always includes its owner.
 - `User` owns its wallet, but ledger history is external. `Wallet.getAvailableBalance()`
   derives spendable funds from the complete committed transaction collection.
   Saving a user does not rewrite that history. `WalletBalance` is a separate
@@ -64,7 +64,7 @@ abbreviated.
   reliability reads participation outcomes and session end times without
   retaining that history. Participant reads its fully loaded User's values;
   Session receives prepared immutable children and reads no wallet/account state.
-- `Payout` owns frozen settlement lines and a destination copy; it does not own
+- `PayoutAttempt` owns frozen payout lines and a destination copy; it does not own
   live holds. The session retains its own pending batch. Failed attempts remain
   recorded, and each retry has a new payout ID. Frozen account references may
   outlive the user's current payout-setup child.

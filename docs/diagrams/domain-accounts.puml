@@ -29,17 +29,17 @@ class Booker <<RoleView>> {
   +changeVisibility(...) : void
   +removeParticipant(...) : FinancialResult
   +verifyAttendance(...) : void
-  +preparePayout(...) : SettlementBatch [0..1]
+  +preparePayout(...) : PayoutBatch [0..1]
 }
 
 class Participant <<RoleView>> {
   +userId : UUID
   --
-  +join(...) : AdmissionResult
+  +join(...) : ParticipantJoinResult
   +promoteFromWaitlist(...) : PromotionResult
   +leaveWaitlist(...) : void
   +withdraw(...) : WithdrawalResult
-  +offerReplacementToWaitlist(...) : FinancialResult
+  +offerPlaceToWaitlist(...) : FinancialResult
 }
 
 class User <<AggregateRoot>> {

@@ -10,7 +10,7 @@ import {
   validatePayoutAttempt,
 } from "../sessions/session/session-guards";
 import {
-  buildSettlementBatch,
+  buildPayoutBatch,
   prepareParticipantListForPayout,
 } from "../sessions/session/session-settlement";
 import {
@@ -24,7 +24,7 @@ import type {
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,
-  SettlementBatch,
+  PayoutBatch,
 } from "../shared/operations";
 import type { Visibility } from "../shared/statuses";
 import type { UUID } from "../shared/types";
@@ -209,7 +209,7 @@ export class Booker {
   preparePayout(
     session: Session,
     command: PreparePayoutCommand,
-  ): SettlementBatch | undefined {
+  ): PayoutBatch | undefined {
     const destination = this.payoutDestination();
     requireId(command.payoutId, "payoutId");
     DomainError.require(
@@ -233,7 +233,7 @@ export class Booker {
       command.payoutId,
       command.idempotencyKey,
     );
-    const batch = buildSettlementBatch(
+    const batch = buildPayoutBatch(
       session.sessionId,
       next,
       command,

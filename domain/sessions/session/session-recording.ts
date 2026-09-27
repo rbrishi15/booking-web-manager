@@ -414,7 +414,7 @@ export function validateSettlementParticipations(
   );
 }
 
-export function validateSettlementBatchPreparation(
+export function validatePayoutBatchPreparation(
   next: readonly Participation[],
   preparation: SessionSettlementPreparation,
   bookerId: string,

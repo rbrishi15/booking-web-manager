@@ -44,7 +44,7 @@ export class RegularGroup {
     DomainError.require(
       Array.isArray(details.memberships),
       "INVALID_INPUT",
-      "A group needs a membership roster",
+      "A group needs a member list",
     );
 
     this.#groupId = details.groupId;

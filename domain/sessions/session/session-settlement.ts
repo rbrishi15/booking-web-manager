@@ -3,8 +3,8 @@ import type {
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,
-  SettlementBatch,
-  SettlementLine,
+  PayoutBatch,
+  PayoutLine,
 } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Participation } from "../participation";
@@ -38,7 +38,7 @@ export function prepareParticipantListForPayout(
   return next;
 }
 
-export function buildSettlementBatch(
+export function buildPayoutBatch(
   sessionId: UUID,
   participations: readonly Participation[],
   command: {
@@ -47,8 +47,8 @@ export function buildSettlementBatch(
     readonly now: Date;
   },
   destination: PayoutDestination,
-): SettlementBatch | undefined {
-  const lines: SettlementLine[] = [];
+): PayoutBatch | undefined {
+  const lines: PayoutLine[] = [];
   for (const participation of participations) {
     if (
       !(
@@ -80,7 +80,7 @@ export function buildSettlementBatch(
     });
   }
   if (lines.length === 0) return undefined;
-  const batch: SettlementBatch = {
+  const batch: PayoutBatch = {
     payoutId: command.payoutId,
     sessionId,
     idempotencyKey: command.idempotencyKey,
@@ -94,7 +94,7 @@ export function buildSettlementBatch(
 export function completeSettlement(
   sessionId: UUID,
   participantList: ParticipantList,
-  batch: SettlementBatch,
+  batch: PayoutBatch,
   payoutId: UUID,
   at: Date,
 ): {

@@ -1,7 +1,7 @@
 import { DomainError } from "../../shared/errors";
 import type {
   PayoutDestination,
-  SettlementBatch,
+  PayoutBatch,
 } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { FundHold } from "../fund-hold";
@@ -27,7 +27,7 @@ export function validateSessionDetails(details: SessionDetails): void {
   if (details.invitedGroupId !== undefined)
     requireId(details.invitedGroupId, "invitedGroupId");
   if (details.pendingSettlement !== undefined)
-    validateSettlementBatch(details.pendingSettlement);
+    validatePayoutBatch(details.pendingSettlement);
   DomainError.require(
     Array.isArray(details.payoutAttemptIds),
     "INVALID_INPUT",
@@ -132,7 +132,7 @@ export function validateSessionState(input: SessionStateValidation): void {
       "Payout idempotency keys are required",
     );
   if (input.pendingSettlement !== undefined) {
-    validateSettlementBatch(input.pendingSettlement);
+    validatePayoutBatch(input.pendingSettlement);
     DomainError.require(
       input.pendingSettlement.sessionId === input.sessionId,
       "INVALID_INPUT",
@@ -255,7 +255,7 @@ export function requireId(value: string, name: string): void {
   );
 }
 
-export function cloneBatch(batch: SettlementBatch): SettlementBatch {
+export function cloneBatch(batch: PayoutBatch): PayoutBatch {
   return {
     ...batch,
     requestedAt: validDate(batch.requestedAt, "requestedAt"),
@@ -281,7 +281,7 @@ export function validatePayoutDestination(
   );
 }
 
-export function validateSettlementBatch(batch: SettlementBatch): void {
+export function validatePayoutBatch(batch: PayoutBatch): void {
   requireId(batch.payoutId, "payoutId");
   requireId(batch.sessionId, "sessionId");
   DomainError.require(

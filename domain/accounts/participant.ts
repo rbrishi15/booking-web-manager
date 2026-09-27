@@ -15,8 +15,8 @@ import {
 import { requireId, validDate } from "../sessions/session/session-validation";
 import { DomainError } from "../shared/errors";
 import type {
-  AdmissionResult,
   FinancialResult,
+  ParticipantJoinResult,
   PromotionResult,
   WithdrawalResult,
 } from "../shared/operations";
@@ -45,7 +45,7 @@ export interface LeaveWaitlistCommand {
   readonly now?: Date;
 }
 
-export interface ParticipantReplacementOfferCommand {
+export interface ParticipantPlaceOfferCommand {
   readonly participationId: UUID;
   readonly now: Date;
 }
@@ -70,7 +70,7 @@ interface CommitmentTerms {
 
 /**
  * User's participant role. Coordinates admission, promotion, withdrawal,
- * waitlist departure, and replacement offers using this user's loaded facts.
+ * waitlist departure, and place offers using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  * Each workflow prepares its result and immutable child changes before asking
  * Session to record them together. Session never calls back into this role.
@@ -90,7 +90,10 @@ export class Participant {
     return this.#user.userId;
   }
 
-  join(session: Session, command: ParticipantJoinCommand): AdmissionResult {
+  join(
+    session: Session,
+    command: ParticipantJoinCommand,
+  ): ParticipantJoinResult {
     requireId(command.participationId, "participationId");
     if (command.holdId !== undefined) requireId(command.holdId, "holdId");
     assertOpenBefore(session.status, session.booking, command.now);
@@ -139,7 +142,7 @@ export class Participant {
         waitlistedAt: command.now,
         queueSequence: sequence,
       });
-      const result: AdmissionResult = {
+      const result: ParticipantJoinResult = {
         kind: "WAITLISTED",
         participationId: queued.participationId,
         instructions: [],
@@ -176,7 +179,7 @@ export class Participant {
       refunded === undefined
         ? undefined
         : refundInstruction(session.sessionId, refunded, command.now);
-    const result: AdmissionResult = {
+    const result: ParticipantJoinResult = {
       kind: "COMMITTED",
       participationId: committed.participationId,
       refundedParticipationId: refunded?.participationId,
@@ -289,15 +292,15 @@ export class Participant {
     return change.result;
   }
 
-  offerReplacementToWaitlist(
+  offerPlaceToWaitlist(
     session: Session,
-    command: ParticipantReplacementOfferCommand,
+    command: ParticipantPlaceOfferCommand,
   ): FinancialResult {
     assertOpenBefore(session.status, session.booking, command.now);
     const existing = session.participantList.requireParticipation(
       command.participationId,
     );
-    const change = this.prepareReplacementOffer(existing);
+    const change = this.preparePlaceOffer(existing);
     session.recordParticipationTransition(
       existing,
       change.participation,
@@ -452,18 +455,18 @@ export class Participant {
     return participation.leaveWaitlist();
   }
 
-  /** Offering a replacement changes its availability without refunding it. */
-  private prepareReplacementOffer(participation: Participation): {
+  /** Offering a place changes its availability without refunding its held share. */
+  private preparePlaceOffer(participation: Participation): {
     participation: Participation;
     result: FinancialResult;
   } {
     DomainError.require(
       participation.userId === this.userId,
       "UNAUTHORIZED",
-      "Only the participant can offer their replacement to the waitlist",
+      "Only the participant can offer their place to the waitlist",
     );
     return {
-      participation: participation.offerReplacementToWaitlist(),
+      participation: participation.offerPlaceToWaitlist(),
       result: { instructions: [] },
     };
   }

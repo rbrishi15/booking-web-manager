@@ -32,7 +32,7 @@ class Session <<AggregateRoot>> {
   +totalSlots : number
   +minimumReliability : ReliabilityScore [0..1]
   +participantList : ParticipantListView
-  +pendingSettlement : SettlementBatch [0..1]
+  +pendingSettlement : PayoutBatch [0..1]
   --
   +recordAdmission(...) : void
   +recordParticipationTransition(...) : void
@@ -49,11 +49,11 @@ class Session <<AggregateRoot>> {
 class Participant <<RoleView>> {
   +userId : UUID
   --
-  +join(session, ...) : AdmissionResult
+  +join(session, ...) : ParticipantJoinResult
   +promoteFromWaitlist(session, ...) : PromotionResult
   +withdraw(session, ...) : WithdrawalResult
   +leaveWaitlist(session, ...) : void
-  +offerReplacementToWaitlist(session, ...) : FinancialResult
+  +offerPlaceToWaitlist(session, ...) : FinancialResult
 }
 
 class Booker <<RoleView>> {
@@ -64,7 +64,7 @@ class Booker <<RoleView>> {
   +changeVisibility(session, ...) : void
   +removeParticipant(session, ...) : FinancialResult
   +verifyAttendance(session, ...) : void
-  +preparePayout(session, ...) : SettlementBatch [0..1]
+  +preparePayout(session, ...) : PayoutBatch [0..1]
 }
 
 class Booking <<ValueObject>> {

@@ -1,6 +1,6 @@
 import type { Money } from "../../finance/money";
 import { DomainError } from "../../shared/errors";
-import type { SettlementLine } from "../../shared/operations";
+import type { PayoutLine } from "../../shared/operations";
 import type { UUID } from "../../shared/types";
 import type { Participation } from "../participation";
 import {
@@ -219,7 +219,7 @@ export class ParticipantList implements ParticipantListView {
   }
 
   withCompletedSettlement(
-    lines: readonly SettlementLine[],
+    lines: readonly PayoutLine[],
     payoutId: UUID,
     at: Date,
   ): ParticipantList {

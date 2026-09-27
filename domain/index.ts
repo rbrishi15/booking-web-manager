@@ -25,9 +25,9 @@ export {
   type ReliabilityOutcome,
 } from "./sessions/participation";
 export {
-  Payout,
-  type PayoutDetails,
-} from "./finance/payout";
+  PayoutAttempt,
+  type PayoutAttemptDetails,
+} from "./finance/payout-attempt";
 export {
   PayoutAccount,
   type PayoutAccountDetails,
@@ -61,7 +61,7 @@ export {
   type PromotionCommand,
   type LeaveWaitlistCommand,
   type ParticipantJoinCommand,
-  type ParticipantReplacementOfferCommand,
+  type ParticipantPlaceOfferCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
 export {
@@ -73,15 +73,15 @@ export {
   type DomainErrorCode,
 } from "./shared/errors";
 export type {
-  AdmissionResult,
+  ParticipantJoinResult,
   DeactivationInput,
   FinancialInstruction,
   FinancialResult,
   PayoutDestination,
   PayoutRequestedIntent,
   PromotionResult,
-  SettlementBatch,
-  SettlementLine,
+  PayoutBatch,
+  PayoutLine,
   WithdrawalResult,
 } from "./shared/operations";
 export type { LedgerReadPort } from "./finance/ledger-read-port";

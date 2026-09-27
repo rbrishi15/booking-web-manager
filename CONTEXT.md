@@ -15,6 +15,10 @@ The participation records associated with one booking room, including people
 who have joined and past changes to their participation.
 _Avoid_: Roster
 
+**Member list**:
+The users who belong to a group, including its owner.
+_Avoid_: Membership roster
+
 **Booker**:
 The person who books the venue for a session and takes the initial booking risk.
 

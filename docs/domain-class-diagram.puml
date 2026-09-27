@@ -42,7 +42,7 @@ class Session <<AggregateRoot>> {
   +totalSlots : number
   +bookingShare : Money {derived}
 }
-class Payout <<AggregateRoot>> {
+class PayoutAttempt <<AggregateRoot>> {
   +payoutId : UUID
   +status : PayoutStatus
   +amount : Money
@@ -84,7 +84,7 @@ class FundHold <<ImmutableChild>> {
 
 ' Keep the aggregate references together; owned children branch downward.
 User "1" <-right- "0..*" Session : booker
-Session "1" <-right- "0..*" Payout : attempts
+Session "1" <-right- "0..*" PayoutAttempt : attempts
 RegularGroup "0..*" -down-> "1" User : owner
 Session "0..*" -up-> "0..1" RegularGroup : invited group
 

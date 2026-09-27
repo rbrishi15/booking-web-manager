@@ -71,7 +71,7 @@ const result = user.asParticipant().join(session, {
 `Participant` holds its user and delegates directly:
 
 ```ts
-join(session: Session, command: ParticipantJoinCommand): AdmissionResult {
+join(session: Session, command: ParticipantJoinCommand): ParticipantJoinResult {
   return session.join(this.#user, command);
 }
 ```
@@ -114,8 +114,8 @@ sequenceDiagram
     U-->>S: Values required for admission
     Note over S: Enforce access, eligibility, capacity, and queue rules
     alt Admission accepted
-        S-->>P: AdmissionResult with financial instructions
-        P-->>UC: AdmissionResult
+        S-->>P: ParticipantJoinResult with financial instructions
+        P-->>UC: ParticipantJoinResult
         UC->>TX: Save Session and append instructions to ledger
         Note over UC,TX: Unit of work commits
     else Admission rejected

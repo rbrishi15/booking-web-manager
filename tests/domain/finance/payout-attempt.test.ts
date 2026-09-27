@@ -1,19 +1,19 @@
 import {
   DomainError,
   Money,
-  Payout,
-  type PayoutDetails,
-  type SettlementBatch,
+  PayoutAttempt,
+  type PayoutAttemptDetails,
+  type PayoutBatch,
 } from "@/domain";
 import { describe, expect, test } from "vitest";
 
 const requestedAt = new Date("2026-10-10T12:00:00Z");
 
-describe("Payout", () => {
+describe("PayoutAttempt", () => {
   describe("Construction and isolation", () => {
     test("constructor_WhenCompletionMetadataIsMissing_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -21,14 +21,14 @@ describe("Payout", () => {
       };
 
       // Act & Assert
-      expect(() => new Payout({ ...details, status: "COMPLETED" })).toThrow(
+      expect(() => new PayoutAttempt({ ...details, status: "COMPLETED" })).toThrow(
         DomainError,
       );
     });
 
     test("constructor_WhenCompletedProviderReferenceIsBlank_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -38,7 +38,7 @@ describe("Payout", () => {
       // Act & Assert
       expect(
         () =>
-          new Payout({
+          new PayoutAttempt({
             ...details,
             status: "COMPLETED",
             completedAt: requestedAt,
@@ -49,7 +49,7 @@ describe("Payout", () => {
 
     test("constructor_WhenFailureReasonIsMissing_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -59,13 +59,13 @@ describe("Payout", () => {
       // Act & Assert
       expect(
         () =>
-          new Payout({ ...details, status: "FAILED", failedAt: requestedAt }),
+          new PayoutAttempt({ ...details, status: "FAILED", failedAt: requestedAt }),
       ).toThrow(DomainError);
     });
 
     test("constructor_WhenFailedPayoutHasCompletionDate_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -75,7 +75,7 @@ describe("Payout", () => {
       // Act & Assert
       expect(
         () =>
-          new Payout({
+          new PayoutAttempt({
             ...details,
             status: "FAILED",
             failedAt: requestedAt,
@@ -87,7 +87,7 @@ describe("Payout", () => {
 
     test("constructor_WhenRequestedPayoutHasCompletionDate_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -96,13 +96,13 @@ describe("Payout", () => {
 
       // Act & Assert
       expect(
-        () => new Payout({ ...details, completedAt: requestedAt }),
+        () => new PayoutAttempt({ ...details, completedAt: requestedAt }),
       ).toThrow(DomainError);
     });
 
     test("constructor_WhenRequestedPayoutHasProviderReference_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -111,13 +111,13 @@ describe("Payout", () => {
 
       // Act & Assert
       expect(
-        () => new Payout({ ...details, providerReference: "provider" }),
+        () => new PayoutAttempt({ ...details, providerReference: "provider" }),
       ).toThrow(DomainError);
     });
 
     test("constructor_WhenAmountDoesNotMatchLines_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -126,13 +126,13 @@ describe("Payout", () => {
 
       // Act & Assert
       expect(
-        () => new Payout({ ...details, amount: Money.fromCents(99) }),
+        () => new PayoutAttempt({ ...details, amount: Money.fromCents(99) }),
       ).toThrow(DomainError);
     });
 
     test("constructor_WhenAccountDoesNotMatchDestination_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -141,13 +141,13 @@ describe("Payout", () => {
 
       // Act & Assert
       expect(
-        () => new Payout({ ...details, payoutAccountId: "foreign" }),
+        () => new PayoutAttempt({ ...details, payoutAccountId: "foreign" }),
       ).toThrow(DomainError);
     });
 
     test("constructor_WhenLinesAreEmpty_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -155,12 +155,12 @@ describe("Payout", () => {
       };
 
       // Act & Assert
-      expect(() => new Payout({ ...details, lines: [] })).toThrow(DomainError);
+      expect(() => new PayoutAttempt({ ...details, lines: [] })).toThrow(DomainError);
     });
 
     test("constructor_WhenLinesAreDuplicated_ThrowsDomainError", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -170,7 +170,7 @@ describe("Payout", () => {
       // Act & Assert
       expect(
         () =>
-          new Payout({
+          new PayoutAttempt({
             ...details,
             lines: [...details.lines, ...details.lines],
           }),
@@ -181,7 +181,7 @@ describe("Payout", () => {
       // Arrange
       const source = batch();
       const completedAt = new Date(requestedAt);
-      const payout = new Payout({
+      const payout = new PayoutAttempt({
         ...source,
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -212,7 +212,7 @@ describe("Payout", () => {
     test("create_WhenRequestDateIsMutated_PreservesRequestedBatch", () => {
       // Arrange
       const source = batch();
-      const payout = Payout.create(source);
+      const payout = PayoutAttempt.create(source);
 
       // Act
       source.requestedAt.setTime(0);
@@ -227,7 +227,7 @@ describe("Payout", () => {
   describe("Request intent", () => {
     test("requestedIntent_WhenPayoutIsRequested_ContainsDurableRequestDetails", () => {
       // Arrange
-      const payout = Payout.create(batch());
+      const payout = PayoutAttempt.create(batch());
 
       // Act
       const intent = payout.requestedIntent();
@@ -244,13 +244,13 @@ describe("Payout", () => {
   describe("Completion", () => {
     test("complete_WhenRestoredPayoutHasFailed_ThrowsStalePayout", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
         status: "REQUESTED",
       };
-      const payout = new Payout({
+      const payout = new PayoutAttempt({
         ...details,
         status: "FAILED",
         failedAt: requestedAt,
@@ -265,7 +265,7 @@ describe("Payout", () => {
 
     test("complete_WhenSameCallbackIsRepeated_CompletesOnlyOnce", () => {
       // Arrange
-      const payout = Payout.create(batch());
+      const payout = PayoutAttempt.create(batch());
 
       // Act
       const completed = payout.complete("provider-result", requestedAt);
@@ -281,7 +281,7 @@ describe("Payout", () => {
 
     test("complete_WhenProviderReferenceConflicts_ThrowsPayoutConflict", () => {
       // Arrange
-      const payout = Payout.create(batch());
+      const payout = PayoutAttempt.create(batch());
       payout.complete("provider-result", requestedAt);
 
       // Act & Assert
@@ -292,7 +292,7 @@ describe("Payout", () => {
 
     test("complete_WhenRestoredCompletionMatches_ReturnsFalse", () => {
       // Arrange
-      const payout = new Payout({
+      const payout = new PayoutAttempt({
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
@@ -316,7 +316,7 @@ describe("Payout", () => {
 
     test("complete_WhenFailureHasBeenRecorded_RejectsLateCallback", () => {
       // Arrange
-      const payout = Payout.create(batch());
+      const payout = PayoutAttempt.create(batch());
       payout.fail("timeout", requestedAt);
 
       // Act & Assert
@@ -329,13 +329,13 @@ describe("Payout", () => {
   describe("Failure", () => {
     test("fail_WhenRestoredFailureMatches_ReturnsFalse", () => {
       // Arrange
-      const details: PayoutDetails = {
+      const details: PayoutAttemptDetails = {
         ...batch(),
         payoutAccountId: "account",
         amount: Money.fromCents(100),
         status: "REQUESTED",
       };
-      const payout = new Payout({
+      const payout = new PayoutAttempt({
         ...details,
         status: "FAILED",
         failedAt: requestedAt,
@@ -351,7 +351,7 @@ describe("Payout", () => {
 
     test("fail_WhenSameCallbackIsRepeated_FailsOnlyOnce", () => {
       // Arrange
-      const payout = Payout.create(batch());
+      const payout = PayoutAttempt.create(batch());
 
       // Act
       const failed = payout.fail("timeout", requestedAt);
@@ -364,7 +364,7 @@ describe("Payout", () => {
   });
 });
 
-function batch(): SettlementBatch {
+function batch(): PayoutBatch {
   return {
     payoutId: "payout",
     sessionId: "session",

@@ -38,7 +38,7 @@ children’s lifecycle and applies replacements returned by immutable children.
 | `User` | Profile, preferences, account status, `Wallet` child, optional `PayoutAccount` | Active-account operations, payout-setup transitions, valid ownership of loaded related data, and deactivation using supplied obligation facts. |
 | `RegularGroup` | Group details, invitation/archive state, `GroupMembership` children | Unique membership, retaining the owner, invitation access, owner-authorized administration, and archive eligibility. |
 | `Session` | `Booking`, `Participation` children and their `FundHold` children, queue order, attendance, pending settlement, payout-attempt history | Capacity and admission, waitlist ordering, withdrawal/replacement, attendance, cancellation, and session settlement. |
-| `Payout` | One provider attempt's fixed settlement lines, amount, destination and idempotency key, plus status and outcome | Matching/idempotent confirmations, conflicting callbacks, and terminal success or failure. A retry creates a new attempt. |
+| `PayoutAttempt` | One provider attempt's fixed payout lines, amount, destination and idempotency key, plus status and outcome | Matching/idempotent confirmations, conflicting callbacks, and terminal success or failure. A retry creates a new attempt. |
 
 One consistent domain model can contain several aggregates. A bounded context
 defines the scope of a model; an aggregate groups objects managed as a unit.
@@ -70,7 +70,7 @@ marker interface is required.
 - Change enrollment, holds, attendance, or session settlement through `Session`.
   `Participation` and `FundHold` validate local transitions; the root decides
   when to apply them and checks rules involving the rest of the roster.
-- Complete or fail a provider attempt through `Payout`. Changing a `Payout`
+- Complete or fail a provider attempt through `PayoutAttempt`. Changing a `PayoutAttempt`
   alone does not settle a session's holds or append ledger entries.
 
 Constructors remain public under ADR-0002. Adapters and tests can construct
@@ -106,12 +106,12 @@ A session stores its booker and optional group IDs, and each hold stores
 wallet/holding-account identities. Those references do not transfer ownership
 into the session aggregate.
 
-`Session` and `Payout` are separate roots because a session controls roster and
+`Session` and `PayoutAttempt` are separate roots because a session controls roster and
 held funds while a payout tracks one external attempt. Fixed settlement data in
 the payout describes that attempt; the session still owns its live holds.
 
 The repository contracts load and save `User`, `RegularGroup`, `Session`, and
-`Payout`. Child entities have no independent command repository. Read-side
+`PayoutAttempt`. Child entities have no independent command repository. Read-side
 queries may expose child information without granting independent mutation.
 Storage layout and row mapping remain adapter responsibilities.
 

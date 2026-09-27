@@ -20,7 +20,7 @@ skinparam linetype polyline
 skinparam nodesep 35
 skinparam ranksep 40
 
-class Payout <<AggregateRoot>> {
+class PayoutAttempt <<AggregateRoot>> {
   +payoutId : UUID
   +sessionId : UUID
   +payoutAccountId : UUID
@@ -31,22 +31,22 @@ class Payout <<AggregateRoot>> {
   +completedAt : Date [0..1]
   +failedAt : Date [0..1]
   --
-  {static} +create(batch) : Payout
+  {static} +create(batch) : PayoutAttempt
   +complete(...) : boolean
   +fail(...) : boolean
   +requestedIntent() : PayoutRequestedIntent
 }
 
-interface SettlementBatch <<Snapshot>> {
+interface PayoutBatch <<Snapshot>> {
   +payoutId : UUID
   +sessionId : UUID
   +idempotencyKey : string
   +requestedAt : Date
-  +lines : SettlementLine [1..*]
+  +lines : PayoutLine [1..*]
   +destination : PayoutDestination
 }
 
-interface SettlementLine <<Snapshot>> {
+interface PayoutLine <<Snapshot>> {
   +holdId : UUID
   +participationId : UUID
   +holdingAccountId : UUID
@@ -62,10 +62,10 @@ interface PayoutDestination <<Snapshot>> {
   +bankAccountReference : string
 }
 
-Payout .right.> SettlementBatch : create(batch)
-Payout "1" *-down- "1..*" SettlementLine : frozen lines
-Payout "1" *-down- "1" PayoutDestination : frozen destination
-SettlementLine -[hidden]right- PayoutDestination
+PayoutAttempt .right.> PayoutBatch : create(batch)
+PayoutAttempt "1" *-down- "1..*" PayoutLine : frozen lines
+PayoutAttempt "1" *-down- "1" PayoutDestination : frozen destination
+PayoutLine -[hidden]right- PayoutDestination
 
-caption Selected public members; (...) abbreviates parameters.\nSession prepares and owns the pending batch; Payout freezes copies for one attempt.\nIDs refer to Session, PayoutAccount, User, Participation, FundHold, Wallet and HoldingAccount.
+caption Selected public members; (...) abbreviates parameters.\nSession prepares and owns the pending batch; PayoutAttempt freezes copies for one attempt.\nIDs refer to Session, PayoutAccount, User, Participation, FundHold, Wallet and HoldingAccount.
 @enduml

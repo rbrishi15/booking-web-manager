@@ -2,7 +2,7 @@ import type {
   DeactivationInput,
   FinancialInstruction,
   GroupJoinResult,
-  Payout,
+  PayoutAttempt,
   PayoutRequestedIntent,
   RegularGroup,
   Session,
@@ -11,7 +11,7 @@ import type {
 } from "@/domain";
 
 /**
- * Loads and saves an aggregate root: User, Session, RegularGroup, or Payout.
+ * Loads and saves an aggregate root: User, Session, RegularGroup, or PayoutAttempt.
  * Owned children are part of their root's state and have no independent command
  * repository. Adapters choose the storage mapping and hydrate via constructors.
  * User reads include its Wallet with complete committed transaction history, a
@@ -50,7 +50,7 @@ export interface DomainTransaction {
   readonly users: Repository<User>;
   readonly sessions: Repository<Session>;
   readonly groups: Repository<RegularGroup>;
-  readonly payouts: Repository<Payout>;
+  readonly payouts: Repository<PayoutAttempt>;
   readonly deactivationInput: DeactivationInputPort;
   readonly ledger: LedgerWritePort;
   readonly payoutIntents: DurablePayoutIntentPort;

@@ -1,5 +1,5 @@
 import { DomainError } from "../../shared/errors";
-import type { SettlementBatch } from "../../shared/operations";
+import type { PayoutBatch } from "../../shared/operations";
 import type { SessionStatus } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
@@ -70,7 +70,7 @@ export function assertSettlementOpen(
 }
 
 export function validatePayoutAttempt(
-  pendingSettlement: SettlementBatch | undefined,
+  pendingSettlement: PayoutBatch | undefined,
   payoutAttemptIds: readonly UUID[],
   payoutIdempotencyKeys: readonly string[],
   payoutId: UUID,

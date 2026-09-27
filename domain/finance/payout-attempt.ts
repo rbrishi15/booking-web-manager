@@ -3,13 +3,13 @@ import { DomainError } from "../shared/errors";
 import type {
   PayoutDestination,
   PayoutRequestedIntent,
-  SettlementBatch,
+  PayoutBatch,
 } from "../shared/operations";
 import type { PayoutStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Money } from "./money";
 
-export interface PayoutDetails {
+export interface PayoutAttemptDetails {
   readonly payoutId: UUID;
   readonly sessionId: UUID;
   readonly payoutAccountId: UUID;
@@ -22,11 +22,11 @@ export interface PayoutDetails {
   readonly failureReason?: string;
   readonly providerReference?: string;
   readonly destination: PayoutDestination;
-  readonly lines: readonly SettlementBatch["lines"][number][];
+  readonly lines: readonly PayoutBatch["lines"][number][];
 }
 
 /**
- * Aggregate root: Payout.
+ * Aggregate root: PayoutAttempt.
  * Owns one provider attempt's status and outcome, with fixed settlement lines,
  * amount, destination, and idempotency key. Completion and failure commands enter
  * through this root; terminal outcomes are retained and retries use a new root.
@@ -34,7 +34,7 @@ export interface PayoutDetails {
  * coordinator combines both roots' changes and the resulting ledger effects.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
-export class Payout {
+export class PayoutAttempt {
   readonly #payoutId: UUID;
   readonly #sessionId: UUID;
   readonly #payoutAccountId: UUID;
@@ -47,9 +47,9 @@ export class Payout {
   #failureReason?: string;
   #providerReference?: string;
   readonly #destination: PayoutDestination;
-  readonly #lines: readonly SettlementBatch["lines"][number][];
+  readonly #lines: readonly PayoutBatch["lines"][number][];
 
-  constructor(details: PayoutDetails) {
+  constructor(details: PayoutAttemptDetails) {
     DomainError.require(
       ["REQUESTED", "COMPLETED", "FAILED"].includes(details.status),
       "INVALID_INPUT",
@@ -140,13 +140,13 @@ export class Payout {
     this.#lines = details.lines.map((line) => ({ ...line }));
   }
 
-  static create(batch: SettlementBatch): Payout {
+  static create(batch: PayoutBatch): PayoutAttempt {
     validateBatch(batch);
     const amount = batch.lines.reduce(
       (sum, line) => sum.add(line.amount),
       Money.fromCents(0),
     );
-    return new Payout({
+    return new PayoutAttempt({
       payoutId: batch.payoutId,
       sessionId: batch.sessionId,
       payoutAccountId: batch.destination.payoutAccountId,
@@ -246,12 +246,12 @@ export class Payout {
   get destination(): PayoutDestination {
     return { ...this.#destination };
   }
-  get lines(): readonly SettlementBatch["lines"][number][] {
+  get lines(): readonly PayoutBatch["lines"][number][] {
     return this.#lines.map((line) => ({ ...line }));
   }
 }
 
-function validateBatch(batch: SettlementBatch): void {
+function validateBatch(batch: PayoutBatch): void {
   validateText(batch.payoutId, "payoutId");
   validateText(batch.sessionId, "sessionId");
   validateText(batch.idempotencyKey, "idempotencyKey");
