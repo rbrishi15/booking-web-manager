@@ -1,6 +1,6 @@
 import { FundHold, Money, Participation, Session } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { at, before, sessionDetails } from "./session-fixtures";
+import { hoursBeforeSessionStart, sessionDetails } from "./session-fixtures";
 
 describe("Session", () => {
   test("constructor_WhenReplacementTargetIsMissing_RejectsUnownedReference", () => {
@@ -22,7 +22,7 @@ describe("Session", () => {
       userId: "ben",
       status: "LEFT_WAITLIST",
       attendance: "UNVERIFIED",
-      waitlistedAt: before,
+      waitlistedAt: hoursBeforeSessionStart(48),
       queueSequence: 1,
       replacesParticipationId: "p-alice",
     });
@@ -53,13 +53,15 @@ describe("Session", () => {
 
   test("constructor_WhenReplacedWithdrawalIsNotRefunded_RejectsUnsettledAcceptance", () => {
     // Arrange
+    const aliceCommittedAt = hoursBeforeSessionStart(48);
+    const aliceInvitedAt = hoursBeforeSessionStart(10);
     const inviter = new Participation({
       participationId: "p-alice",
       userId: "alice",
       status: "WITHDRAWN",
       attendance: "UNVERIFIED",
-      committedAt: before,
-      withdrawnAt: at(10),
+      committedAt: aliceCommittedAt,
+      withdrawnAt: aliceInvitedAt,
       replacementMode: "DIRECT_INVITE",
       replacementInviteeId: "ben",
       hold: heldShare("alice").awaitReplacement(),
@@ -75,13 +77,15 @@ describe("Session", () => {
 
   test("constructor_WhenTargetWasCancelledWithoutWithdrawal_RejectsUnrelatedRefund", () => {
     // Arrange
+    const aliceCommittedAt = hoursBeforeSessionStart(48);
+    const cancelledAt = hoursBeforeSessionStart(40);
     const cancelledParticipant = new Participation({
       participationId: "p-alice",
       userId: "alice",
       status: "CANCELLED",
       attendance: "UNVERIFIED",
-      committedAt: before,
-      hold: heldShare("alice").refund(at(40)),
+      committedAt: aliceCommittedAt,
+      hold: heldShare("alice").refund(cancelledAt),
     });
     const replacement = replacementCommitment("ben", "p-alice");
     const details = sessionDetails({
@@ -129,16 +133,18 @@ describe("Session", () => {
       restored.participantList.personalReplacementForInvitee("ben"),
     ).toBeUndefined();
     expect(restored.participantList.committedCount).toBe(1);
-    expect(restored.getAvailableSlots(at(38))).toBe(1);
+    expect(restored.getAvailableSlots(hoursBeforeSessionStart(38))).toBe(1);
   });
 
   test("constructor_WhenAcceptedReplacementLaterWithdraws_KeepsOriginalInvitationConsumed", () => {
     // Arrange
+    const benWithdrewAt = hoursBeforeSessionStart(10);
+    const availabilityCheckedAt = hoursBeforeSessionStart(9);
     const inviter = refundedInvitation();
     const replacement = replacementCommitment("ben", "p-alice");
     const withdrawnReplacement = replacement.withdraw(
       replacement.hold!.awaitReplacement(),
-      at(10),
+      benWithdrewAt,
       "OPEN_SLOT",
     );
     const details = sessionDetails({
@@ -157,15 +163,17 @@ describe("Session", () => {
       restored.participantList.requireParticipation("p-ben")
         .replacesParticipationId,
     ).toBe("p-alice");
-    expect(restored.getAvailableSlots(at(9))).toBe(2);
+    expect(restored.getAvailableSlots(availabilityCheckedAt)).toBe(2);
   });
 
   test("constructor_WhenAcceptedReplacementIsRemoved_KeepsOriginalInvitationConsumed", () => {
     // Arrange
+    const benRemovedAt = hoursBeforeSessionStart(38);
+    const availabilityCheckedAt = hoursBeforeSessionStart(37);
     const inviter = refundedInvitation();
     const replacement = replacementCommitment("ben", "p-alice");
     const removedReplacement = replacement.remove(
-      replacement.hold!.refund(at(38)),
+      replacement.hold!.refund(benRemovedAt),
     );
     const details = sessionDetails({
       participations: [inviter, removedReplacement],
@@ -183,7 +191,7 @@ describe("Session", () => {
       restored.participantList.requireParticipation("p-ben")
         .replacesParticipationId,
     ).toBe("p-alice");
-    expect(restored.getAvailableSlots(at(37))).toBe(2);
+    expect(restored.getAvailableSlots(availabilityCheckedAt)).toBe(2);
   });
 
   test("constructor_WhenSessionWithAcceptedReplacementIsCancelled_RetainsReplacementHistory", () => {
@@ -194,7 +202,9 @@ describe("Session", () => {
       status: "CANCELLED",
       participations: [
         inviter.cancel(),
-        replacement.cancel(replacement.hold!.refund(at(38))),
+        replacement.cancel(
+          replacement.hold!.refund(hoursBeforeSessionStart(38)),
+        ),
       ],
     });
 
@@ -217,7 +227,10 @@ describe("Session", () => {
   });
 });
 
-function heldShare(userId: string, createdAt = before): FundHold {
+function heldShare(
+  userId: string,
+  createdAt = hoursBeforeSessionStart(48),
+): FundHold {
   return FundHold.create({
     holdId: `h-${userId}`,
     participationId: `p-${userId}`,
@@ -229,16 +242,17 @@ function heldShare(userId: string, createdAt = before): FundHold {
 }
 
 function refundedInvitation(): Participation {
+  const aliceInvitedAt = hoursBeforeSessionStart(40);
   return new Participation({
     participationId: "p-alice",
     userId: "alice",
     status: "WITHDRAWN",
     attendance: "UNVERIFIED",
-    committedAt: before,
-    withdrawnAt: at(40),
+    committedAt: hoursBeforeSessionStart(48),
+    withdrawnAt: aliceInvitedAt,
     replacementMode: "DIRECT_INVITE",
     replacementInviteeId: "ben",
-    hold: heldShare("alice").refund(at(40)),
+    hold: heldShare("alice").refund(aliceInvitedAt),
   });
 }
 
@@ -246,11 +260,12 @@ function replacementCommitment(
   userId: string,
   replacesParticipationId: string,
 ): Participation {
+  const replacementCommittedAt = hoursBeforeSessionStart(39);
   return Participation.createCommitted({
     participationId: `p-${userId}`,
     userId,
-    committedAt: at(39),
-    hold: heldShare(userId, at(39)),
+    committedAt: replacementCommittedAt,
+    hold: heldShare(userId, replacementCommittedAt),
     replacesParticipationId,
   });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
-  before,
+  hoursBeforeSessionStart,
   createTestSession,
   readyBooker,
 } from "../sessions/session/session-fixtures";
@@ -8,11 +8,12 @@ import {
 describe("Booker", () => {
   test("cancel_WhenOwnerCancelsEmptySession_ReturnsNoInstructions", () => {
     // Arrange
+    const cancellationTime = hoursBeforeSessionStart(48);
     const booker = readyBooker();
     const session = createTestSession();
 
     // Act
-    const cancellation = booker.cancel(session, before);
+    const cancellation = booker.cancel(session, cancellationTime);
 
     // Assert
     expect(session.bookerId).toBe(booker.userId);

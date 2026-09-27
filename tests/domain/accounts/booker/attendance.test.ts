@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
-  at,
+  hoursBeforeSessionEnd,
   createTestUser,
-  end,
+  sessionEndsAt,
   readyBooker,
   createTestSession,
   sessionState,
@@ -11,6 +11,7 @@ import {
 describe("Booker", () => {
   test("verifyAttendance_WhenOwnerIsInactive_StillFinalizesAttendance", () => {
     // Arrange
+    const attendanceVerificationTime = sessionEndsAt;
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const booker = createTestUser({
       userId: "booker",
@@ -20,7 +21,7 @@ describe("Booker", () => {
     // Act
     booker.verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
 
     // Assert
@@ -32,6 +33,7 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenSessionHasNotEnded_RejectsWithoutChangingState", () => {
     // Arrange
+    const attendanceVerificationTime = hoursBeforeSessionEnd(1);
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
@@ -42,7 +44,7 @@ describe("Booker", () => {
     expect(() =>
       readyBooker().verifyAttendance(bookingSession, {
         marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: at(-1),
+        now: attendanceVerificationTime,
       }),
     ).toThrow(expect.objectContaining({ code: "SESSION_NOT_ENDED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -50,12 +52,13 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenLaterMarkConflicts_RejectsWithoutChangingState", () => {
     // Arrange
+    const attendanceVerificationTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     const previousState = sessionState(bookingSession);
 
@@ -66,7 +69,7 @@ describe("Booker", () => {
           { participationId: "p-ben", attendance: "ATTENDED" },
           { participationId: "p-alice", attendance: "ABSENT" },
         ],
-        now: end,
+        now: attendanceVerificationTime,
       }),
     ).toThrow(expect.objectContaining({ code: "ATTENDANCE_CONFLICT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -74,18 +77,19 @@ describe("Booker", () => {
 
   test("verifyAttendance_WhenFinalParticipantIsMarked_AwaitsPayout", () => {
     // Arrange
+    const attendanceVerificationTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
 
     // Act
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ABSENT" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
 
     // Assert
