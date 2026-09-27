@@ -195,24 +195,43 @@ describe("Participation", () => {
   });
 
   describe("Settlement", () => {
-    test("settleHold_WhenReplacementExpires_ReturnsNewChild", () => {
+    test("expireReplacement_WhenReplacementIsStillAwaited_ReturnsForfeitureDueCopy", () => {
       // Arrange
-      const committed = new Participation(participationDetails());
-      const withdrawn = committed.withdraw(
-        committed.hold!.awaitReplacement(),
-        createdAt,
+      const withdrawn = new Participation(
+        participationDetails({
+          status: "WITHDRAWN",
+          withdrawnAt: createdAt,
+          hold: new FundHold(holdDetails({ state: "AWAITING_REPLACEMENT" })),
+        }),
       );
 
       // Act
-      const finalized = withdrawn
-        .expireReplacement(settledAt)
-        .settleHold("FORFEIT", "payout", settledAt);
+      const expired = withdrawn.expireReplacement(settledAt);
 
       // Assert
-      expect(committed.status).toBe("COMMITTED");
-      expect(committed.hold?.state).toBe("HELD");
+      expect(expired).not.toBe(withdrawn);
+      expect(expired.hold?.state).toBe("FORFEITURE_DUE");
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
+    });
+
+    test("settleHold_WhenReplacementForfeitureIsDue_ReturnsForfeitedCopy", () => {
+      // Arrange
+      const withdrawn = new Participation(
+        participationDetails({
+          status: "WITHDRAWN",
+          withdrawnAt: createdAt,
+          hold: new FundHold(holdDetails({ state: "FORFEITURE_DUE" })),
+        }),
+      );
+
+      // Act
+      const finalized = withdrawn.settleHold("FORFEIT", "payout", settledAt);
+
+      // Assert
+      expect(finalized).not.toBe(withdrawn);
+      expect(withdrawn.hold?.state).toBe("FORFEITURE_DUE");
       expect(finalized.hold?.state).toBe("FORFEITED");
+      expect(finalized.hold?.payoutId).toBe("payout");
       expect(finalized.reliabilityOutcome(settledAt)?.value).toBe(0);
     });
 

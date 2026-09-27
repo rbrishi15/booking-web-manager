@@ -9,46 +9,34 @@ import {
 
 describe("Session", () => {
   describe("Capacity", () => {
-    test("recordAdmission_WhenEightSlotsFillIncludingBooker_RecordsNextApplicantOnWaitlist", () => {
+    test("recordAdmission_WhenBookerTakesEighthSlot_FillsSession", () => {
       // Arrange
-      const bookingSession = createTestSession({ totalSlots: 8 });
+      const bookingSession = createTestSession({
+        totalSlots: 8,
+        committedUserIds: [
+          "alice",
+          "ben",
+          "cara",
+          "dana",
+          "evan",
+          "farah",
+          "grace",
+        ],
+      });
+      const bookerAdmission = committedParticipation(bookingSession, "booker");
 
       // Act
-      for (const id of [
-        "booker",
-        "alice",
-        "ben",
-        "cara",
-        "dana",
-        "evan",
-        "farah",
-        "grace",
-      ]) {
-        bookingSession.recordAdmission(
-          committedParticipation(bookingSession, id),
-          undefined,
-          before,
-        );
-      }
-      const commitments = bookingSession.participantList.participations.map(
-        (entry) => entry.status,
-      );
-      const availableSlots = bookingSession.getAvailableSlots(before);
-      bookingSession.recordAdmission(
-        Participation.createWaitlisted({
-          participationId: "p-waiting",
-          userId: "waiting",
-          waitlistedAt: before,
-          queueSequence: bookingSession.participantList.nextQueueSequence,
-        }),
-        undefined,
-        before,
-      );
-      const waitingStatus =
-        bookingSession.participantList.participations.at(-1)?.status;
+      bookingSession.recordAdmission(bookerAdmission, undefined, before);
 
       // Assert
-      expect(commitments).toEqual([
+      expect(bookingSession.participantList.findByUserId("booker")).toBe(
+        bookerAdmission,
+      );
+      expect(
+        bookingSession.participantList.participations.map(
+          (entry) => entry.status,
+        ),
+      ).toEqual([
         "COMMITTED",
         "COMMITTED",
         "COMMITTED",
@@ -58,8 +46,42 @@ describe("Session", () => {
         "COMMITTED",
         "COMMITTED",
       ]);
-      expect(availableSlots).toBe(0);
-      expect(waitingStatus).toBe("WAITLISTED");
+      expect(bookingSession.getAvailableSlots(before)).toBe(0);
+    });
+
+    test("recordAdmission_WhenSessionIsFull_RecordsWaitlistedParticipation", () => {
+      // Arrange
+      const bookingSession = createTestSession({
+        totalSlots: 8,
+        committedUserIds: [
+          "booker",
+          "alice",
+          "ben",
+          "cara",
+          "dana",
+          "evan",
+          "farah",
+          "grace",
+        ],
+      });
+      const waiting = Participation.createWaitlisted({
+        participationId: "p-waiting",
+        userId: "waiting",
+        waitlistedAt: before,
+        queueSequence: 1,
+      });
+
+      // Act
+      bookingSession.recordAdmission(waiting, undefined, before);
+
+      // Assert
+      expect(
+        bookingSession.participantList.requireParticipation("p-waiting"),
+      ).toBe(waiting);
+      expect(bookingSession.participantList.nextWaitlisted()).toBe(waiting);
+      expect(bookingSession.participantList.committedCount).toBe(8);
+      expect(bookingSession.participantList.nextQueueSequence).toBe(2);
+      expect(bookingSession.getAvailableSlots(before)).toBe(0);
     });
   });
 

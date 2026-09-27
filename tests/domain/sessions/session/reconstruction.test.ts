@@ -1,12 +1,11 @@
 import { DomainError, FundHold, Participation, Session } from "@/domain";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   before,
   end,
-  readyBooker,
+  pendingPayoutDetails,
   createTestSession,
   sessionDetails,
-  sessionState,
   start,
 } from "./session-fixtures";
 
@@ -109,7 +108,10 @@ describe("Session", () => {
 
     test("constructor_WhenKeyHistoryIsNotAnArray_ThrowsInvalidInput", () => {
       // Arrange
-      const details = { ...sessionDetails(), payoutIdempotencyKeys: "earlier-key" };
+      const details = {
+        ...sessionDetails(),
+        payoutIdempotencyKeys: "earlier-key",
+      };
 
       // Act & Assert
       expect(() => {
@@ -120,22 +122,8 @@ describe("Session", () => {
 
     test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
       const details = {
-        ...sessionDetails({
-          status: "PAYOUT_PENDING",
-          participations: source.participantList.participations,
-          pendingSettlement: batch,
-        }),
+        ...pendingPayoutDetails(),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: undefined,
       };
@@ -149,22 +137,8 @@ describe("Session", () => {
 
     test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
       const details = {
-        ...sessionDetails({
-          status: "PAYOUT_PENDING",
-          participations: source.participantList.participations,
-          pendingSettlement: batch,
-        }),
+        ...pendingPayoutDetails(),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: ["earlier-key", "key"],
       };
@@ -178,22 +152,8 @@ describe("Session", () => {
 
     test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
       const details = {
-        ...sessionDetails({
-          status: "PAYOUT_PENDING",
-          participations: source.participantList.participations,
-          pendingSettlement: batch,
-        }),
+        ...pendingPayoutDetails(),
         payoutAttemptIds: ["earlier", "out"],
         payoutIdempotencyKeys: undefined,
       };
@@ -215,6 +175,28 @@ describe("Session", () => {
       // Assert
       expect(restoredSession.status).toBe("SETTLED");
       expect(restoredSession.booking.endAt).toEqual(end);
+    });
+
+    test("constructor_WhenFailedPayoutHistoryIsRestored_PreservesAttemptsAndKeys", () => {
+      // Arrange
+      const details = {
+        ...pendingPayoutDetails(),
+        status: "AWAITING_PAYOUT" as const,
+        pendingSettlement: undefined,
+      };
+
+      // Act
+      const restoredSession = new Session(details);
+
+      // Assert
+      expect(restoredSession.status).toBe("AWAITING_PAYOUT");
+      expect(restoredSession.pendingSettlement).toBeUndefined();
+      expect(restoredSession.payoutAttemptIds).toEqual(["out"]);
+      expect(restoredSession.payoutIdempotencyKeys).toEqual(["key"]);
+      expect(
+        restoredSession.participantList.requireParticipation("p-alice").hold
+          ?.state,
+      ).toBe("HELD");
     });
 
     test("constructor_WhenRosterIsDuplicated_ThrowsDomainError", () => {
@@ -425,23 +407,8 @@ describe("Session", () => {
 
     test("constructor_WhenPendingBatchBelongsToAnotherSession_ThrowsDomainError", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
+      const batch = details.pendingSettlement!;
 
       // Act & Assert
       expect(
@@ -455,23 +422,8 @@ describe("Session", () => {
 
     test("constructor_WhenPendingLineUsesForeignWallet_ThrowsDomainError", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
+      const batch = details.pendingSettlement!;
 
       // Act & Assert
       expect(
@@ -488,23 +440,7 @@ describe("Session", () => {
 
     test("constructor_WhenPendingAttemptIsMissingFromHistory_ThrowsDomainError", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
 
       // Act & Assert
       expect(() => new Session({ ...details, payoutAttemptIds: [] })).toThrow(
@@ -514,23 +450,7 @@ describe("Session", () => {
 
     test("constructor_WhenPendingKeyIsMissingFromHistory_ThrowsDomainError", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
 
       // Act & Assert
       expect(
@@ -540,23 +460,8 @@ describe("Session", () => {
 
     test("pendingSettlement_WhenInputsAndOutputsAreMutated_PreservesBatchAndHistory", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
+      const batch = details.pendingSettlement!;
       const restoredSession = new Session(details);
 
       // Act
@@ -586,143 +491,11 @@ describe("Session", () => {
     });
   });
 
-  describe("Settlement retries after reconstruction", () => {
-    test("constructor_WhenFailedPayoutIsRestored_RejectsReusedPayoutId", () => {
-      // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      source.failSettlement("out", end);
-      const details = sessionDetails({
-        status: source.status,
-        participations: source.participantList.participations,
-        nextQueueSequence: source.participantList.nextQueueSequence,
-        pendingSettlement: source.pendingSettlement,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
-      const previousState = sessionState(source);
-
-      // Act
-      const restoredSession = new Session(details);
-
-      // Act & Assert
-      expect(() =>
-        readyBooker().preparePayout(restoredSession, {
-          payoutId: "out",
-          idempotencyKey: "retry-key",
-          now: end,
-        }),
-      ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
-      expect(sessionState(restoredSession)).toEqual(previousState);
-    });
-
-    test("constructor_WhenFailedPayoutIsRestored_RejectsReusedIdempotencyKey", () => {
-      // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      source.failSettlement("out", end);
-      const details = sessionDetails({
-        status: source.status,
-        participations: source.participantList.participations,
-        nextQueueSequence: source.participantList.nextQueueSequence,
-        pendingSettlement: source.pendingSettlement,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
-      const previousState = sessionState(source);
-
-      // Act
-      const restoredSession = new Session(details);
-
-      // Act & Assert
-      expect(() =>
-        readyBooker().preparePayout(restoredSession, {
-          payoutId: "retry",
-          idempotencyKey: "key",
-          now: end,
-        }),
-      ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
-      expect(sessionState(restoredSession)).toEqual(previousState);
-    });
-
-    test("constructor_WhenFailedPayoutIsRestored_AllowsNewPayoutIdentity", () => {
-      // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      source.failSettlement("out", end);
-      const details = sessionDetails({
-        status: source.status,
-        participations: source.participantList.participations,
-        nextQueueSequence: source.participantList.nextQueueSequence,
-        pendingSettlement: source.pendingSettlement,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
-      const previousState = sessionState(source);
-
-      // Act
-      const restoredSession = new Session(details);
-      const retryBatch = readyBooker().preparePayout(restoredSession, {
-        payoutId: "retry",
-        idempotencyKey: "retry-key",
-        now: end,
-      });
-
-      // Assert
-      expect(retryBatch?.payoutId).toBe("retry");
-      expect(retryBatch?.idempotencyKey).toBe("retry-key");
-      expect(restoredSession.status).toBe("PAYOUT_PENDING");
-      expect(restoredSession.pendingSettlement?.payoutId).toBe("retry");
-      expect(restoredSession.payoutAttemptIds).toEqual(["out", "retry"]);
-      expect(restoredSession.payoutIdempotencyKeys).toEqual(["key", "retry-key"]);
-      expect(sessionState(source)).toEqual(previousState);
-    });
-  });
-
   describe("Settlement completion", () => {
     test("completeSettlement_WhenPendingSessionIsRestored_SettlesIndependentlyOfSource", () => {
       // Arrange
-      const source = createTestSession({ committedUserIds: ["alice"] });
-      readyBooker().verifyAttendance(source, {
-        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-        now: end,
-      });
-      const batch = readyBooker().preparePayout(source, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      });
+      const details = pendingPayoutDetails();
+      const source = new Session(details);
       const restoredSession = new Session(details);
 
       // Act
@@ -737,111 +510,6 @@ describe("Session", () => {
       expect(
         source.participantList.requireParticipation("p-alice").hold?.state,
       ).toBe("HELD");
-    });
-
-    test("completeSettlement_WhenCallbackIsStale_LeavesAllHoldsPending", () => {
-      // Arrange
-      const bookingSession = createTestSession({
-        committedUserIds: ["alice", "ben"],
-      });
-      readyBooker().verifyAttendance(bookingSession, {
-        marks: [
-          { participationId: "p-alice", attendance: "ATTENDED" },
-          { participationId: "p-ben", attendance: "ATTENDED" },
-        ],
-        now: end,
-      });
-      readyBooker().preparePayout(bookingSession, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      const previousState = sessionState(bookingSession);
-
-      // Act & Assert
-      expect(() => bookingSession.completeSettlement("stale", end)).toThrow(
-        expect.objectContaining({ code: "STALE_PAYOUT" }),
-      );
-      expect(sessionState(bookingSession)).toEqual(previousState);
-    });
-
-    test("completeSettlement_WhenCompletionDateIsInvalid_LeavesAllHoldsPending", () => {
-      // Arrange
-      const bookingSession = createTestSession({
-        committedUserIds: ["alice", "ben"],
-      });
-      readyBooker().verifyAttendance(bookingSession, {
-        marks: [
-          { participationId: "p-alice", attendance: "ATTENDED" },
-          { participationId: "p-ben", attendance: "ATTENDED" },
-        ],
-        now: end,
-      });
-      readyBooker().preparePayout(bookingSession, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      const previousState = sessionState(bookingSession);
-
-      // Act & Assert
-      expect(() =>
-        bookingSession.completeSettlement("out", new Date(Number.NaN)),
-      ).toThrow(DomainError);
-      expect(sessionState(bookingSession)).toEqual(previousState);
-    });
-
-    test("completeSettlement_WhenSecondHoldFails_PreservesAllHoldsAndAllowsRetry", () => {
-      // Arrange
-      const bookingSession = createTestSession({
-        committedUserIds: ["alice", "ben"],
-      });
-      readyBooker().verifyAttendance(bookingSession, {
-        marks: [
-          { participationId: "p-alice", attendance: "ATTENDED" },
-          { participationId: "p-ben", attendance: "ATTENDED" },
-        ],
-        now: end,
-      });
-      readyBooker().preparePayout(bookingSession, {
-        payoutId: "out",
-        idempotencyKey: "key",
-        now: end,
-      });
-      const previousState = sessionState(bookingSession);
-      const failure = vi
-        .spyOn(
-          bookingSession.participantList.requireParticipation("p-ben"),
-          "settleHold",
-        )
-        .mockImplementationOnce(() => {
-          throw new DomainError("INVALID_STATE", "Second line rejected");
-        });
-
-      // Act & Assert
-      try {
-        expect(() => bookingSession.completeSettlement("out", end)).toThrow(
-          expect.objectContaining({
-            code: "INVALID_STATE",
-            message: "Second line rejected",
-          }),
-        );
-        expect(sessionState(bookingSession)).toEqual(previousState);
-      } finally {
-        failure.mockRestore();
-      }
-
-      // Act
-      const completion = bookingSession.completeSettlement("out", end);
-
-      // Assert
-      expect(completion.instructions).toHaveLength(2);
-      expect(
-        bookingSession.participantList.participations.map(
-          (participation) => participation.hold?.state,
-        ),
-      ).toEqual(["RELEASED", "RELEASED"]);
-      expect(bookingSession.pendingSettlement).toBeUndefined();
     });
   });
 });

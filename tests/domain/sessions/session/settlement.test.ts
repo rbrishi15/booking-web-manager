@@ -1,42 +1,30 @@
-import { Session } from "@/domain";
-import { describe, expect, test } from "vitest";
+import {
+  DomainError,
+  FundHold,
+  Money,
+  Participation,
+  Session,
+  type PayoutLine,
+} from "@/domain";
+import { describe, expect, test, vi } from "vitest";
 import {
   at,
-  createTestUser,
+  before,
   end,
-  readyBooker,
-  createTestSession,
-  sessionDetails,
+  pendingPayoutDetails,
   sessionState,
+  verifiedParticipation,
 } from "./session-fixtures";
 
 describe("Session", () => {
   test("completeSettlement_WhenRestoredBatchOmitsPayableHold_LeavesAllFundsAndHistoryPending", () => {
     // Arrange
-    const source = createTestSession({
-      committedUserIds: ["alice", "ben"],
+    const details = pendingPayoutDetails(["alice", "ben"]);
+    const batch = details.pendingSettlement!;
+    const bookingSession = new Session({
+      ...details,
+      pendingSettlement: { ...batch, lines: batch.lines.slice(0, 1) },
     });
-    readyBooker().verifyAttendance(source, {
-      marks: [
-        { participationId: "p-alice", attendance: "ATTENDED" },
-        { participationId: "p-ben", attendance: "ATTENDED" },
-      ],
-      now: end,
-    });
-    const batch = readyBooker().preparePayout(source, {
-      payoutId: "out",
-      idempotencyKey: "key",
-      now: end,
-    })!;
-    const bookingSession = new Session(
-      sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: { ...batch, lines: batch.lines.slice(0, 1) },
-        payoutAttemptIds: source.payoutAttemptIds,
-        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
-      }),
-    );
     const previousList = bookingSession.participantList;
     const previousState = sessionState(bookingSession);
 
@@ -58,22 +46,7 @@ describe("Session", () => {
 
   test("completeSettlement_WhenCallbackIsStale_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-    });
-    createTestUser({ userId: "alice" })
-      .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
-    readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
-    });
-    readyBooker().preparePayout(bookingSession, {
-      payoutId: "out",
-      idempotencyKey: "key",
-      now: end,
-    });
-
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -83,41 +56,104 @@ describe("Session", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
-  test("completeSettlement_WhenFailedAttemptIsRetriedWithNewIdentity_FinalizesHolds", () => {
+  test("completeSettlement_WhenCompletionDateIsInvalid_LeavesAllHoldsPending", () => {
     // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-    });
-    createTestUser({ userId: "alice" })
-      .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
-    readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
-    });
-    readyBooker().preparePayout(bookingSession, {
-      payoutId: "out",
-      idempotencyKey: "key",
-      now: end,
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.completeSettlement("out", new Date(Number.NaN)),
+    ).toThrow(DomainError);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("completeSettlement_WhenSecondHoldFails_PreservesAllHolds", () => {
+    // Arrange
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
+    const previousState = sessionState(bookingSession);
+    const failure = vi
+      .spyOn(
+        bookingSession.participantList.requireParticipation("p-ben"),
+        "settleHold",
+      )
+      .mockImplementationOnce(() => {
+        throw new DomainError("INVALID_STATE", "Second line rejected");
+      });
+
+    // Act & Assert
+    try {
+      expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+        expect.objectContaining({
+          code: "INVALID_STATE",
+          message: "Second line rejected",
+        }),
+      );
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    } finally {
+      failure.mockRestore();
+    }
+  });
+
+  test("completeSettlement_WhenSecondHoldFailureIsRetried_ReleasesAllHolds", () => {
+    // Arrange
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
+    const failure = vi
+      .spyOn(
+        bookingSession.participantList.requireParticipation("p-ben"),
+        "settleHold",
+      )
+      .mockImplementationOnce(() => {
+        throw new DomainError("INVALID_STATE", "Second line rejected");
+      });
+    try {
+      expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+        expect.objectContaining({ code: "INVALID_STATE" }),
+      );
+    } finally {
+      failure.mockRestore();
+    }
+
+    // Act
+    const completion = bookingSession.completeSettlement("out", end);
+
+    // Assert
+    expect(completion.instructions).toHaveLength(2);
+    expect(
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["RELEASED", "RELEASED"]);
+    expect(bookingSession.pendingSettlement).toBeUndefined();
+  });
+
+  test("completeSettlement_WhenPayoutHasReleaseAndForfeiture_FinalizesBothHolds", () => {
+    // Arrange
+    const details = pendingPayoutDetails(["alice", "ben"]);
+    const alice = withdrawnParticipationWithForfeitureDue("alice", at(2));
+    const ben = verifiedParticipation("ben", "ATTENDED");
+    const bookingSession = new Session({
+      ...details,
+      participations: [alice, ben],
+      pendingSettlement: {
+        ...details.pendingSettlement!,
+        lines: [
+          payoutLineFor(alice.hold!, "FORFEIT"),
+          payoutLineFor(ben.hold!, "RELEASE"),
+        ],
+      },
     });
 
     // Act
-    bookingSession.failSettlement("out", end);
-    const statusAfterFailure = bookingSession.status;
-    const retryBatch = readyBooker().preparePayout(bookingSession, {
-      payoutId: "retry",
-      idempotencyKey: "retry-key",
-      now: end,
-    });
-    const completion = bookingSession.completeSettlement("retry", end);
+    const completion = bookingSession.completeSettlement("out", end);
 
     // Assert
-    expect(statusAfterFailure).toBe("AWAITING_PAYOUT");
-    expect(retryBatch?.payoutId).toBe("retry");
-    expect(retryBatch?.idempotencyKey).toBe("retry-key");
     expect(
       completion.instructions.map((instruction) => instruction.kind),
     ).toEqual(["FORFEIT", "RELEASE"]);
+    expect(
+      completion.instructions.map((instruction) => instruction.payoutId),
+    ).toEqual(["out", "out"]);
     expect(bookingSession.status).toBe("SETTLED");
     expect(
       bookingSession.participantList.participations.map(
@@ -130,4 +166,92 @@ describe("Session", () => {
         .reliabilityOutcome(end)?.value,
     ).toBe(0);
   });
+
+  test("completeSettlement_WhenCurrentAttemptIsARetry_UsesRetryPayoutIdentity", () => {
+    // Arrange
+    const details = pendingPayoutDetails(["alice"]);
+    const bookingSession = new Session({
+      ...details,
+      pendingSettlement: {
+        ...details.pendingSettlement!,
+        payoutId: "retry",
+        idempotencyKey: "retry-key",
+      },
+      payoutAttemptIds: ["out", "retry"],
+      payoutIdempotencyKeys: ["key", "retry-key"],
+    });
+
+    // Act
+    const completion = bookingSession.completeSettlement("retry", end);
+
+    // Assert
+    expect(completion.instructions).toEqual([
+      expect.objectContaining({
+        kind: "RELEASE",
+        participationId: "p-alice",
+        payoutId: "retry",
+      }),
+    ]);
+    const alice =
+      bookingSession.participantList.requireParticipation("p-alice");
+    expect(alice.hold?.payoutId).toBe("retry");
+    expect(alice.hold?.state).toBe("RELEASED");
+    expect(bookingSession.status).toBe("SETTLED");
+    expect(bookingSession.pendingSettlement).toBeUndefined();
+  });
+
+  test("failSettlement_WhenPayoutIsPending_PreservesHoldsAndAttemptHistory", () => {
+    // Arrange
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
+    const previousList = bookingSession.participantList;
+
+    // Act
+    bookingSession.failSettlement("out", end);
+
+    // Assert
+    expect(bookingSession.status).toBe("AWAITING_PAYOUT");
+    expect(bookingSession.pendingSettlement).toBeUndefined();
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
+    expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
+    expect(
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["HELD", "HELD"]);
+  });
 });
+
+function withdrawnParticipationWithForfeitureDue(
+  userId: string,
+  withdrawnAt: Date,
+): Participation {
+  return new Participation({
+    participationId: `p-${userId}`,
+    userId,
+    status: "WITHDRAWN",
+    attendance: "UNVERIFIED",
+    committedAt: before,
+    withdrawnAt,
+    hold: new FundHold({
+      holdId: `h-${userId}`,
+      participationId: `p-${userId}`,
+      holdingAccountId: "platform",
+      walletId: `w-${userId}`,
+      amount: Money.fromCents(500),
+      state: "FORFEITURE_DUE",
+      createdAt: before,
+    }),
+  });
+}
+
+function payoutLineFor(hold: FundHold, kind: PayoutLine["kind"]): PayoutLine {
+  return {
+    holdId: hold.holdId,
+    participationId: hold.participationId,
+    holdingAccountId: hold.holdingAccountId,
+    walletId: hold.walletId,
+    amount: hold.amount,
+    kind,
+  };
+}

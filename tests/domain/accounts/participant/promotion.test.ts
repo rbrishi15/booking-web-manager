@@ -154,70 +154,199 @@ describe("Participant", () => {
     expect(reloadedUser.wallet.getAvailableBalance().toCents()).toBe(500);
   });
 
-  test("promoteFromWaitlist_WhenWaitersTieAndFirstCannotPay_PreservesQueuePriority", () => {
+  test("promoteFromWaitlist_WhenFirstWaiterCannotPay_SkipsThemAndSelectsNextWaiter", () => {
     // Arrange
     const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
+      committedUserIds: ["ben"],
+      waitlistedUserIds: ["cara", "dana", "evan"],
     });
-
-    // Act
-    const waitlistAdmission = createTestUser({
+    const participant = createTestUser({
       userId: "cara",
       availableFundsCents: 0,
-    })
+    }).asParticipant();
+    const queueSequence = bookingSession.participantList.nextQueueSequence;
+
+    // Act
+    const promotion = participant.promoteFromWaitlist(bookingSession, {
+      holdId: "h-cara",
+      now: before,
+    });
+
+    // Assert
+    expect(promotion).toEqual({
+      kind: "SKIPPED",
+      participationId: "p-cara",
+      reason: "INSUFFICIENT_FUNDS",
+      instructions: [],
+    });
+    expect(
+      bookingSession.participantList.requireParticipation("p-cara").status,
+    ).toBe("LEFT_WAITLIST");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+    expect(bookingSession.participantList.nextQueueSequence).toBe(
+      queueSequence,
+    );
+    expect(bookingSession.getAvailableSlots(before)).toBe(1);
+  });
+
+  test("promoteFromWaitlist_WhenFirstTiedWaiterWasSkipped_PromotesNextWaiter", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben"],
+      waitlistedUserIds: ["cara", "dana", "evan"],
+    });
+    createTestUser({ userId: "cara", availableFundsCents: 0 })
       .asParticipant()
-      .join(bookingSession, {
-        participationId: "p-cara",
+      .promoteFromWaitlist(bookingSession, {
         holdId: "h-cara",
         now: before,
       });
-    createTestUser({ userId: "dana" }).asParticipant().join(bookingSession, {
-      participationId: "p-dana",
+    const participant = createTestUser({
+      userId: "dana",
+      availableFundsCents: 500,
+    }).asParticipant();
+
+    // Act
+    const promotion = participant.promoteFromWaitlist(bookingSession, {
       holdId: "h-dana",
       now: before,
     });
+
+    // Assert
+    expect(promotion.kind).toBe("PROMOTED");
+    expect(promotion.participationId).toBe("p-dana");
+    expect(promotion.instructions).toEqual([
+      expect.objectContaining({
+        kind: "LOCK",
+        participationId: "p-dana",
+        holdId: "h-dana",
+      }),
+    ]);
+    expect(promotion.instructions[0]?.amount.toCents()).toBe(500);
+    expect(
+      bookingSession.participantList.requireParticipation("p-dana").status,
+    ).toBe("COMMITTED");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "evan",
+    );
+  });
+
+  test("promoteFromWaitlist_WhenPersonalPlaceWasOfferedToWaitlist_RefundsWithdrawnParticipant", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+      waitlistedUserIds: ["dana", "evan"],
+    });
+    const owner = createTestUser({ userId: "ben" }).asParticipant();
+    owner.withdraw(bookingSession, {
+      participationId: "p-ben",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "ben-replacement",
+    });
+    owner.offerPlaceToWaitlist(bookingSession, {
+      participationId: "p-ben",
+      now: at(9),
+    });
+    const participant = createTestUser({ userId: "dana" }).asParticipant();
+    const queueSequence = bookingSession.participantList.nextQueueSequence;
+
+    // Act
+    const promotion = participant.promoteFromWaitlist(bookingSession, {
+      holdId: "h-dana",
+      now: at(8),
+    });
+
+    // Assert
+    expect(promotion).toMatchObject({
+      kind: "PROMOTED",
+      participationId: "p-dana",
+      refundedParticipationId: "p-ben",
+    });
+    expect(promotion.instructions).toEqual([
+      expect.objectContaining({
+        kind: "LOCK",
+        participationId: "p-dana",
+        holdId: "h-dana",
+      }),
+      expect.objectContaining({
+        kind: "REFUND",
+        participationId: "p-ben",
+        holdId: "h-ben",
+      }),
+    ]);
+    expect(
+      promotion.instructions.map((instruction) => instruction.amount.toCents()),
+    ).toEqual([500, 500]);
+    expect(
+      bookingSession.participantList.requireParticipation("p-ben").hold?.state,
+    ).toBe("REFUNDED");
+    expect(
+      bookingSession.participantList.requireParticipation("p-dana").hold?.state,
+    ).toBe("HELD");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "evan",
+    );
+    expect(bookingSession.participantList.nextQueueSequence).toBe(
+      queueSequence,
+    );
+  });
+
+  test("promoteFromWaitlist_WhenPersonalPlaceWasOfferedAfterLaterWithdrawal_RefundsEarlierWithdrawal", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana"],
+    });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+      });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: before });
-    const freshAdmission = createTestUser({ userId: "fresh" })
-      .asParticipant()
-      .join(bookingSession, {
-        participationId: "p-fresh",
-        holdId: "h-fresh",
-        now: before,
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: at(9),
+        replacementMode: "OPEN_SLOT",
       });
-    const firstPromotion = createTestUser({
-      userId: "cara",
-      availableFundsCents: 0,
-    })
+
+    createTestUser({ userId: "ben" })
       .asParticipant()
-      .promoteFromWaitlist(bookingSession, {
-        holdId: "h-cara",
-        now: before,
+      .offerPlaceToWaitlist(bookingSession, {
+        participationId: "p-ben",
+        now: at(8),
       });
-    const nextWaiterAfterSkip =
-      bookingSession.participantList.nextWaitlisted()?.userId;
-    const secondPromotion = createTestUser({ userId: "dana" })
+
+    // Act
+    const promotion = createTestUser({ userId: "dana" })
       .asParticipant()
       .promoteFromWaitlist(bookingSession, {
         holdId: "h-dana",
-        now: before,
+        now: at(7),
       });
 
     // Assert
-    expect(waitlistAdmission).toMatchObject({
-      kind: "WAITLISTED",
-      instructions: [],
+    expect(promotion).toMatchObject({
+      kind: "PROMOTED",
+      refundedParticipationId: "p-ben",
+      instructions: [
+        { kind: "LOCK", participationId: "p-dana" },
+        { kind: "REFUND", participationId: "p-ben" },
+      ],
     });
-    expect(freshAdmission.kind).toBe("WAITLISTED");
-    expect(firstPromotion).toMatchObject({
-      kind: "SKIPPED",
-      reason: "INSUFFICIENT_FUNDS",
-    });
-    expect(nextWaiterAfterSkip).toBe("dana");
-    expect(secondPromotion.kind).toBe("PROMOTED");
-    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
-      "fresh",
-    );
+    const ben = bookingSession.participantList.findByUserId("ben");
+    const alice = bookingSession.participantList.findByUserId("alice");
+    const dana = bookingSession.participantList.findByUserId("dana");
+    expect(ben?.withdrawnAt).toEqual(at(10));
+    expect(ben?.hold?.state).toBe("REFUNDED");
+    expect(alice?.withdrawnAt).toEqual(at(9));
+    expect(alice?.hold?.state).toBe("AWAITING_REPLACEMENT");
+    expect(dana?.replacesParticipationId).toBe("p-ben");
   });
 });

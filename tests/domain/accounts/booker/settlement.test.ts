@@ -1,10 +1,11 @@
-import { Money } from "@/domain";
+import { Money, Session, type SessionDetails } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   at,
   createTestUser,
   destination,
   end,
+  pendingPayoutDetails,
   readyBooker,
   createTestSession,
   sessionState,
@@ -197,6 +198,43 @@ describe("Booker", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
+  test("preparePayout_WhenFailedAttemptIsRetriedWithNewIdentity_RecordsRetry", () => {
+    // Arrange
+    const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
+    const aliceHold =
+      bookingSession.participantList.requireParticipation("p-alice").hold;
+    const benHold =
+      bookingSession.participantList.requireParticipation("p-ben").hold;
+    bookingSession.failSettlement("out", end);
+    const booker = readyBooker();
+
+    // Act
+    const retryBatch = booker.preparePayout(bookingSession, {
+      payoutId: "retry",
+      idempotencyKey: "retry-key",
+      now: end,
+    });
+
+    // Assert
+    expect(retryBatch?.payoutId).toBe("retry");
+    expect(retryBatch?.idempotencyKey).toBe("retry-key");
+    expect(bookingSession.status).toBe("PAYOUT_PENDING");
+    expect(bookingSession.pendingSettlement?.payoutId).toBe("retry");
+    expect(bookingSession.payoutAttemptIds).toEqual(["out", "retry"]);
+    expect(bookingSession.payoutIdempotencyKeys).toEqual(["key", "retry-key"]);
+    expect(
+      bookingSession.participantList.requireParticipation("p-alice").hold,
+    ).toBe(aliceHold);
+    expect(
+      bookingSession.participantList.requireParticipation("p-ben").hold,
+    ).toBe(benHold);
+    expect(
+      bookingSession.participantList.participations.map(
+        (participation) => participation.hold?.state,
+      ),
+    ).toEqual(["HELD", "HELD"]);
+  });
+
   test("preparePayout_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
     const bookingSession = createTestSession();
@@ -222,7 +260,6 @@ describe("Booker", () => {
       .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
 
     // Act
-    bookingSession.expireReplacements(at(1));
     const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
@@ -309,14 +346,10 @@ describe("Booker", () => {
       now: end,
     };
 
-    const previousState = sessionState(bookingSession);
-
-    // Act & Assert
+    // Establish a rejected foreign attempt before exercising the owner retry.
     expect(() =>
       readyBooker("foreign").preparePayout(bookingSession, command),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
-
-    expect(sessionState(bookingSession)).toEqual(previousState);
 
     // Act
     const batch = readyBooker().preparePayout(bookingSession, command);
@@ -332,5 +365,76 @@ describe("Booker", () => {
     ).toBe("FORFEITURE_DUE");
     expect(bookingSession.payoutAttemptIds).toEqual(["out"]);
     expect(bookingSession.payoutIdempotencyKeys).toEqual(["key"]);
+  });
+
+  test("preparePayout_WhenFailedPayoutHistoryIsRestored_RejectsReusedPayoutId", () => {
+    // Arrange
+    const bookingSession = new Session({
+      ...pendingPayoutDetails(),
+      status: "AWAITING_PAYOUT",
+      pendingSettlement: undefined,
+    });
+    const booker = readyBooker();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      booker.preparePayout(bookingSession, {
+        payoutId: "out",
+        idempotencyKey: "retry-key",
+        now: end,
+      }),
+    ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("preparePayout_WhenFailedPayoutHistoryIsRestored_RejectsReusedIdempotencyKey", () => {
+    // Arrange
+    const bookingSession = new Session({
+      ...pendingPayoutDetails(),
+      status: "AWAITING_PAYOUT",
+      pendingSettlement: undefined,
+    });
+    const booker = readyBooker();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      booker.preparePayout(bookingSession, {
+        payoutId: "retry",
+        idempotencyKey: "key",
+        now: end,
+      }),
+    ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("preparePayout_WhenFailedPayoutHistoryIsRestored_AllowsNewIdentityIndependentlyOfSource", () => {
+    // Arrange
+    const details: SessionDetails = {
+      ...pendingPayoutDetails(),
+      status: "AWAITING_PAYOUT",
+      pendingSettlement: undefined,
+    };
+    const source = new Session(details);
+    const restoredSession = new Session(details);
+    const sourceState = sessionState(source);
+    const booker = readyBooker();
+
+    // Act
+    const retryBatch = booker.preparePayout(restoredSession, {
+      payoutId: "retry",
+      idempotencyKey: "retry-key",
+      now: end,
+    });
+
+    // Assert
+    expect(retryBatch?.payoutId).toBe("retry");
+    expect(retryBatch?.idempotencyKey).toBe("retry-key");
+    expect(restoredSession.status).toBe("PAYOUT_PENDING");
+    expect(restoredSession.pendingSettlement?.payoutId).toBe("retry");
+    expect(restoredSession.payoutAttemptIds).toEqual(["out", "retry"]);
+    expect(restoredSession.payoutIdempotencyKeys).toEqual(["key", "retry-key"]);
+    expect(sessionState(source)).toEqual(sourceState);
   });
 });

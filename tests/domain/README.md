@@ -23,8 +23,12 @@ and [SpecialSkillTest](https://github.com/liang799/SC2002-Project/blob/main/src/
   it. Line count alone is not a reason to split a cohesive entity's tests.
 - Name each test `method_WhenCondition_ExpectedResult`. Use `constructor` for
   construction and the property name for a getter. Use `test` consistently.
-- Give each test one coherent scenario. Several transitions can belong together
-  when they demonstrate a single lifecycle behavior.
+- Give each test one observable domain behavior. Arrange prerequisite transitions
+  before exercising that behavior; split cases that independently check joining,
+  withdrawal, promotion, or payout completion.
+- A domain unit test may use real collaborating entities and value objects.
+  Test the subject's public behavior without replacing those collaborators with
+  mocks merely to reduce the number of objects in the test.
 - Prefer explicitly named tests over field-driven tables so each business rule
   and its important inputs are visible without expanding a table or helper.
 
@@ -34,8 +38,17 @@ Use `// Arrange`, `// Act`, and `// Assert` comments in new and refactored tests
 with blank lines between the phases:
 
 - **Arrange:** create the subject, inputs, and starting state for the scenario.
-- **Act:** perform the behavior under test and capture any result.
+- **Act:** perform the behavior named by the test and capture its result.
 - **Assert:** check the result and relevant observable state.
+
+Use one sequence of these phases, rather than alternating action and assertion
+sections. A focused idempotency test may repeat the same operation in Act.
+For a retry test, the previous attempt establishes the starting state and Act
+performs the retry. If a scenario separately verifies rejection atomicity and
+successful recovery, preserve those checks in separate tests.
+When that starting state requires an earlier rejection, a direct `toThrow`
+assertion in Arrange may establish the precondition; assertions about the
+rejection's effects belong in its dedicated failure test.
 
 Name observed results after what they represent, then assert concrete values.
 
@@ -90,6 +103,34 @@ const bookingSession = createTestSession({
 });
 ```
 
+For payout callback and reconstruction tests, use `pendingPayoutDetails` to
+declare an attendance-verified session with held shares and a pending payout.
+Use `verifiedParticipation` for individual attended or absent participation
+records. These fixtures construct valid state directly; they do not run Booker
+workflows or calculate which shares production code should release or forfeit.
+Keep unusual attendance, withdrawal times, invalid fields, and retry identities
+explicit in the scenario instead of adding a general-purpose state builder.
+
+```ts
+test("completeSettlement_WhenPayoutIsPending_ReleasesHeldShares", () => {
+  // Arrange
+  const session = new Session(pendingPayoutDetails(["alice", "ben"]));
+
+  // Act
+  const completion = session.completeSettlement("out", end);
+
+  // Assert
+  expect(session.status).toBe("SETTLED");
+  expect(session.pendingSettlement).toBeUndefined();
+  expect(
+    session.participantList.participations.map((p) => p.hold?.state),
+  ).toEqual(["RELEASED", "RELEASED"]);
+  expect(
+    completion.instructions.map(({ kind, amount }) => [kind, amount.toCents()]),
+  ).toEqual([["RELEASE", 500], ["RELEASE", 500]]);
+});
+```
+
 Keep actual `Participant.join` calls visible when testing admission, capacity,
 queue changes, or financial instructions, and keep timing-dependent transitions
 explicit. Use `sessionDetails` for special hydration scenarios.
@@ -122,7 +163,10 @@ Examples following this standard are
 [payout-account.test.ts](./accounts/payout-account.test.ts).
 
 When restructuring tests, preserve distinct behaviors, error codes, immutability
-checks, and unchanged-state assertions. Fix scenarios whose setup does not match
-their names. Run the affected files, then `npm test`, `npm run typecheck`, and
+checks, and unchanged-state assertions. Map the old assertions to their new
+cases before removing or consolidating a test; test count alone does not prove
+that coverage was retained. Fix scenarios whose setup does not match their
+names. Run the affected files, then `npm test`, `npm run typecheck`, and
 `npm run lint`. Splitting scenarios may increase the test count without changing
-production behavior.
+production behavior. Report newly exposed production defects separately during
+a tests-only cleanup.

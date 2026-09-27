@@ -52,26 +52,35 @@ describe("RegularGroup", () => {
       ).toThrow(DomainError);
     });
 
-    test("memberships_WhenInputsAndOutputsAreMutated_PreservesMembersAndDates", () => {
+    test("constructor_WhenSourceMembershipsAreMutated_PreservesMembersAndDates", () => {
       // Arrange
-      const group = newGroup();
       const memberships = [
         new GroupMembership({ userId: "owner", joinedAt: now() }),
       ];
       const details = groupDetails({ memberships });
+      const group = new RegularGroup(details);
 
       // Act
-      const constructed = new RegularGroup(details);
       memberships[0]?.joinedAt.setUTCFullYear(2000);
       memberships.pop();
-      group.memberships[0]?.joinedAt.setUTCFullYear(2000);
-      (group.memberships as GroupMembership[]).pop();
 
       // Assert
       expect(group.memberships).toHaveLength(1);
-      expect(constructed.memberships).toHaveLength(1);
       expect(group.memberships[0]?.joinedAt).toEqual(now());
-      expect(constructed.memberships[0]?.joinedAt).toEqual(now());
+    });
+
+    test("memberships_WhenReturnedMembershipsAreMutated_PreservesMembersAndDates", () => {
+      // Arrange
+      const group = newGroup();
+      const returnedMemberships = group.memberships as GroupMembership[];
+
+      // Act
+      returnedMemberships[0]?.joinedAt.setUTCFullYear(2000);
+      returnedMemberships.pop();
+
+      // Assert
+      expect(group.memberships).toHaveLength(1);
+      expect(group.memberships[0]?.joinedAt).toEqual(now());
     });
   });
 

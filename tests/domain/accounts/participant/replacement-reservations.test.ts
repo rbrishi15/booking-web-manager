@@ -8,7 +8,7 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
-  test("offerPlaceToWaitlist_WhenOwnerReleasesPersonalPlace_RefundsOnlyAfterFundedPromotion", () => {
+  test("offerPlaceToWaitlist_WhenOwnerReleasesPersonalPlace_OpensPlaceWithoutRefunding", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -60,105 +60,6 @@ describe("Participant", () => {
     expect(bookingSession.participantList.nextQueueSequence).toBe(
       queueSequence,
     );
-
-    // Act & Assert: the old personal link cannot admit or queue another person.
-    const releasedState = sessionState(bookingSession);
-    expect(() =>
-      createTestUser({ userId: "cara" })
-        .asParticipant()
-        .join(bookingSession, {
-          participationId: "p-cara",
-          holdId: "h-cara",
-          replacementToken: "ben-replacement",
-          now: at(8),
-        }),
-    ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
-    expect(sessionState(bookingSession)).toEqual(releasedState);
-
-    // Act: the first waiter successfully funds the replacement.
-    const promotion = createTestUser({ userId: "dana" })
-      .asParticipant()
-      .promoteFromWaitlist(bookingSession, {
-        holdId: "h-dana",
-        now: at(8),
-      });
-
-    // Assert
-    expect(promotion).toMatchObject({
-      kind: "PROMOTED",
-      participationId: "p-dana",
-      refundedParticipationId: "p-ben",
-    });
-    expect(
-      promotion.instructions.map((instruction) => instruction.kind),
-    ).toEqual(["LOCK", "REFUND"]);
-    expect(
-      bookingSession.participantList.requireParticipation("p-ben").hold?.state,
-    ).toBe("REFUNDED");
-    expect(
-      bookingSession.participantList.requireParticipation("p-dana").hold?.state,
-    ).toBe("HELD");
-    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
-      "evan",
-    );
-    expect(bookingSession.participantList.nextQueueSequence).toBe(
-      queueSequence,
-    );
-  });
-
-  test("offerPlaceToWaitlist_WhenOwnerWithdrewBeforeOpenSlotParticipant_PreservesOriginalRefundPriority", () => {
-    // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-      waitlistedUserIds: ["dana"],
-    });
-    createTestUser({ userId: "ben" })
-      .asParticipant()
-      .withdraw(bookingSession, {
-        participationId: "p-ben",
-        now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
-      });
-    createTestUser({ userId: "alice" })
-      .asParticipant()
-      .withdraw(bookingSession, {
-        participationId: "p-alice",
-        now: at(9),
-        replacementMode: "OPEN_SLOT",
-      });
-
-    // Act
-    createTestUser({ userId: "ben" })
-      .asParticipant()
-      .offerPlaceToWaitlist(bookingSession, {
-        participationId: "p-ben",
-        now: at(8),
-      });
-    const promotion = createTestUser({ userId: "dana" })
-      .asParticipant()
-      .promoteFromWaitlist(bookingSession, {
-        holdId: "h-dana",
-        now: at(7),
-      });
-
-    // Assert
-    expect(promotion).toMatchObject({
-      kind: "PROMOTED",
-      refundedParticipationId: "p-ben",
-      instructions: [
-        { kind: "LOCK", participationId: "p-dana" },
-        { kind: "REFUND", participationId: "p-ben" },
-      ],
-    });
-    const ben = bookingSession.participantList.findByUserId("ben");
-    const alice = bookingSession.participantList.findByUserId("alice");
-    const dana = bookingSession.participantList.findByUserId("dana");
-    expect(ben?.withdrawnAt).toEqual(at(10));
-    expect(ben?.hold?.state).toBe("REFUNDED");
-    expect(alice?.withdrawnAt).toEqual(at(9));
-    expect(alice?.hold?.state).toBe("AWAITING_REPLACEMENT");
-    expect(dana?.replacesParticipationId).toBe("p-ben");
   });
 
   test("offerPlaceToWaitlist_WhenActorIsNotOwner_RejectsWithoutChangingState", () => {

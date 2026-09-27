@@ -11,7 +11,7 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Booker", () => {
-  test("cancel_WhenSecondChildFails_PreservesRosterHoldsAndStatusAndAllowsRetry", () => {
+  test("cancel_WhenSecondChildFails_PreservesParticipantsHoldsAndStatus", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -37,6 +37,34 @@ describe("Booker", () => {
       expect(() => booker.cancel(bookingSession, before)).toThrow(failure);
       expect(cancellation).toHaveBeenCalledOnce();
       expect(sessionState(bookingSession)).toEqual(previousState);
+    } finally {
+      cancellation.mockRestore();
+    }
+  });
+
+  test("cancel_WhenPreviousChildFailureWasResolved_CancelsAndRefunds", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["waiting"],
+    });
+    const booker = readyBooker();
+    const failure = new DomainError(
+      "INVALID_STATE",
+      "Second cancellation failed",
+    );
+    const cancellation = vi
+      .spyOn(
+        bookingSession.participantList.requireParticipation("p-ben"),
+        "cancel",
+      )
+      .mockImplementationOnce(() => {
+        throw failure;
+      });
+
+    // Establish a rejected cancellation before exercising the retry.
+    try {
+      expect(() => booker.cancel(bookingSession, before)).toThrow(failure);
     } finally {
       cancellation.mockRestore();
     }
@@ -148,7 +176,19 @@ describe("Booker", () => {
     );
 
     // Assert
-    expect(removal.instructions[0]?.kind).toBe("REFUND");
+    expect(removal.instructions).toEqual([
+      expect.objectContaining({
+        kind: "REFUND",
+        participationId: "p-alice",
+        holdId: "h-alice",
+        walletId: "w-alice",
+      }),
+    ]);
+    expect(removal.instructions[0]?.amount.toCents()).toBe(500);
+    const removed =
+      bookingSession.participantList.requireParticipation("p-alice");
+    expect(removed.status).toBe("REMOVED");
+    expect(removed.hold?.state).toBe("REFUNDED");
   });
 
   test("cancel_WhenSessionStartsNow_RejectsWithoutChangingState", () => {

@@ -82,7 +82,7 @@ describe("User", () => {
     );
   });
 
-  test("constructor_WhenLoadedDataIsMutated_PreservesProjectionsAndMemberships", () => {
+  test("constructor_WhenSourceDataChanges_PreservesLoadedValues", () => {
     // Arrange
     const wallet = fundedWallet("alice", 700);
     const reliabilityScore = ReliabilityScore.from(80);
@@ -99,18 +99,63 @@ describe("User", () => {
     details.wallet = fundedWallet("alice", 0);
     details.reliabilityScore = ReliabilityScore.from(0);
     memberGroupIds.push("other");
-    (user.memberGroupIds as string[]).push("injected");
 
     // Assert
-    expect(Reflect.set(user, "wallet", fundedWallet("alice", 0))).toBe(false);
-    expect(
-      Reflect.set(user, "reliabilityScore", ReliabilityScore.from(0)),
-    ).toBe(false);
+    expect(user.wallet).toBe(wallet);
     expect(user.wallet.walletId).toBe("w-alice");
     expect(user.wallet.getAvailableBalance().toCents()).toBe(700);
     expect(user.reliabilityScore).toBe(reliabilityScore);
     expect(user.reliabilityScore.toNumber()).toBe(80);
     expect(user.memberGroupIds).toEqual(["group"]);
+  });
+
+  test("memberGroupIds_WhenReturnedArrayChanges_PreservesMemberships", () => {
+    // Arrange
+    const user = new User(
+      createTestUserDetails({
+        userId: "alice",
+        memberGroupIds: ["group"],
+      }),
+    );
+    const memberships = user.memberGroupIds as string[];
+
+    // Act
+    memberships.push("injected");
+
+    // Assert
+    expect(user.memberGroupIds).toEqual(["group"]);
+  });
+
+  test("wallet_WhenReassignmentIsAttempted_PreservesLoadedWallet", () => {
+    // Arrange
+    const wallet = fundedWallet("alice", 700);
+    const user = new User(createTestUserDetails({ userId: "alice", wallet }));
+    const replacement = fundedWallet("alice", 0);
+
+    // Act
+    const assigned = Reflect.set(user, "wallet", replacement);
+
+    // Assert
+    expect(assigned).toBe(false);
+    expect(user.wallet).toBe(wallet);
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(700);
+  });
+
+  test("reliabilityScore_WhenReassignmentIsAttempted_PreservesLoadedScore", () => {
+    // Arrange
+    const reliabilityScore = ReliabilityScore.from(80);
+    const user = new User(
+      createTestUserDetails({ userId: "alice", reliabilityScore }),
+    );
+    const replacement = ReliabilityScore.from(0);
+
+    // Act
+    const assigned = Reflect.set(user, "reliabilityScore", replacement);
+
+    // Assert
+    expect(assigned).toBe(false);
+    expect(user.reliabilityScore).toBe(reliabilityScore);
+    expect(user.reliabilityScore.toNumber()).toBe(80);
   });
 
   test("create_WhenRegistering_EstablishesWalletAndEmptyHistory", () => {

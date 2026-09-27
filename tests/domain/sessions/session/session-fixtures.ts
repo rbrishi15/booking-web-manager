@@ -104,6 +104,60 @@ export function committedParticipation(
   });
 }
 
+export function verifiedParticipation(
+  userId: string,
+  attendance: "ATTENDED" | "ABSENT",
+  verifiedAt = end,
+): Participation {
+  return new Participation({
+    participationId: `p-${userId}`,
+    userId,
+    status: "COMMITTED",
+    attendance,
+    committedAt: before,
+    verifiedAt,
+    verificationMethod: "BOOKER",
+    hold: new FundHold({
+      holdId: `h-${userId}`,
+      participationId: `p-${userId}`,
+      holdingAccountId: "platform",
+      walletId: `w-${userId}`,
+      amount: Money.fromCents(500),
+      state: "HELD",
+      createdAt: before,
+    }),
+  });
+}
+
+/** A fixed release-only payout state; tests declare other outcomes explicitly. */
+export function pendingPayoutDetails(
+  userIds: readonly string[] = ["alice"],
+): SessionDetails {
+  return sessionDetails({
+    status: "PAYOUT_PENDING",
+    participations: userIds.map((userId) =>
+      verifiedParticipation(userId, "ATTENDED"),
+    ),
+    pendingSettlement: {
+      payoutId: "out",
+      sessionId: "s",
+      idempotencyKey: "key",
+      requestedAt: new Date(end),
+      destination: { ...destination },
+      lines: userIds.map((userId) => ({
+        holdId: `h-${userId}`,
+        participationId: `p-${userId}`,
+        holdingAccountId: "platform",
+        walletId: `w-${userId}`,
+        amount: Money.fromCents(500),
+        kind: "RELEASE",
+      })),
+    },
+    payoutAttemptIds: ["out"],
+    payoutIdempotencyKeys: ["key"],
+  });
+}
+
 export function sessionDetails(
   overrides: Partial<SessionDetails> = {},
 ): SessionDetails {

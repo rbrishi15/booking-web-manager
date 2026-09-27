@@ -1,44 +1,48 @@
-import { Booking, Money, User } from "@/domain";
+import { Money } from "@/domain";
 import { describe, expect, test } from "vitest";
-import { createTestUser } from "./user-fixtures";
-
-const start = new Date("2026-10-10T10:00:00Z");
-const end = new Date("2026-10-10T12:00:00Z");
-const before = new Date("2026-10-08T10:00:00Z");
+import {
+  at,
+  before,
+  createTestSession,
+  createTestUser,
+} from "../sessions/session/session-fixtures";
 
 describe("Participant", () => {
   test("withdraw_WhenCommittedBeforeRefundCutoff_RefundsParticipant", () => {
     // Arrange
-    const owner = createTestUser({ userId: "owner" });
-    const participant = createTestUser({ userId: "participant" });
-    const session = sessionOwnedBy(owner);
+    const participant = createTestUser({
+      userId: "participant",
+    }).asParticipant();
+    const session = createTestSession({ committedUserIds: ["participant"] });
 
     // Act
-    const admission = participant.asParticipant().join(session, {
-      participationId: "participation",
-      holdId: "hold",
-      now: before,
-    });
-    const withdrawal = participant.asParticipant().withdraw(session, {
-      participationId: admission.participationId,
-      now: new Date(start.getTime() - 31 * 3_600_000),
+    const withdrawal = participant.withdraw(session, {
+      participationId: "p-participant",
+      now: at(31),
     });
 
     // Assert
-    expect(admission.kind).toBe("COMMITTED");
     expect(withdrawal.kind).toBe("REFUNDED");
-    expect(
-      session.participantList.requireParticipation("participation").userId,
-    ).toBe(participant.userId);
-    expect(
-      session.participantList.requireParticipation("participation").status,
-    ).toBe("WITHDRAWN");
+    const withdrawn =
+      session.participantList.requireParticipation("p-participant");
+    expect(withdrawn.userId).toBe(participant.userId);
+    expect(withdrawn.status).toBe("WITHDRAWN");
+    expect(withdrawn.hold?.state).toBe("REFUNDED");
+    expect(withdrawal.instructions).toEqual([
+      expect.objectContaining({
+        kind: "REFUND",
+        participationId: "p-participant",
+        holdId: "h-participant",
+        walletId: "w-participant",
+      }),
+    ]);
+    expect(withdrawal.instructions[0]?.amount.toCents()).toBe(500);
   });
 
   test("join_WhenUserHasFunds_LocksShareFromLoadedWallet", () => {
     // Arrange
     const participantUser = createTestUser({ userId: "participant" });
-    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
+    const session = createTestSession();
 
     // Act
     const admission = participantUser.asParticipant().join(session, {
@@ -69,7 +73,7 @@ describe("Participant", () => {
       userId: "participant",
       availableFundsCents: 0,
     });
-    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
+    const session = createTestSession();
     const participant = participantUser.asParticipant();
     participantUser.deactivate({
       availableBalance: Money.fromCents(0),
@@ -97,7 +101,7 @@ describe("Participant", () => {
       userId: "participant",
       availableFundsCents: 0,
     });
-    const session = sessionOwnedBy(createTestUser({ userId: "owner" }));
+    const session = createTestSession();
 
     participantUser.deactivate({
       availableBalance: Money.fromCents(0),
@@ -120,29 +124,3 @@ describe("Participant", () => {
     expect(session.participantList.participations).toEqual([]);
   });
 });
-
-function sessionOwnedBy(owner: User) {
-  owner.beginPayoutSetup({
-    payoutAccountId: "payout-account",
-    providerAccountReference: "provider-account",
-  });
-  owner.completePayoutSetup("bank-account");
-
-  return owner.asBooker().createSession({
-    sessionId: "session",
-    booking: new Booking({
-      venueName: "Court",
-      region: "North",
-      sport: "Badminton",
-      startAt: start,
-      endAt: end,
-      totalCost: Money.fromCents(1_000),
-    }),
-    totalSlots: 2,
-    minimumHeadcount: 2,
-    roomToken: "room",
-    holdingAccountId: "platform",
-    visibility: "PUBLIC",
-    now: before,
-  });
-}

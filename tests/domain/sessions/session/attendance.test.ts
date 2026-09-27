@@ -1,22 +1,26 @@
+import { Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
   end,
   hour,
-  readyBooker,
   createTestSession,
+  sessionDetails,
   sessionState,
+  verifiedParticipation,
 } from "./session-fixtures";
 
 describe("Session", () => {
   test("autoVerifyAttendance_WhenOneMillisecondBeforeDue_RejectsWithoutChangingState", () => {
     // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-    });
-    readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-alice", attendance: "ABSENT" }],
-      now: end,
-    });
+    const source = createTestSession({ committedUserIds: ["ben"] });
+    const bookingSession = new Session(
+      sessionDetails({
+        participations: [
+          verifiedParticipation("alice", "ABSENT"),
+          ...source.participantList.participations,
+        ],
+      }),
+    );
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -30,13 +34,15 @@ describe("Session", () => {
 
   test("autoVerifyAttendance_WhenExactlySeventyTwoHoursAfterEnd_VerifiesOnlyRemainingParticipants", () => {
     // Arrange
-    const bookingSession = createTestSession({
-      committedUserIds: ["alice", "ben"],
-    });
-    readyBooker().verifyAttendance(bookingSession, {
-      marks: [{ participationId: "p-alice", attendance: "ABSENT" }],
-      now: end,
-    });
+    const source = createTestSession({ committedUserIds: ["ben"] });
+    const bookingSession = new Session(
+      sessionDetails({
+        participations: [
+          verifiedParticipation("alice", "ABSENT"),
+          ...source.participantList.participations,
+        ],
+      }),
+    );
 
     // Act
     bookingSession.autoVerifyAttendance(new Date(end.getTime() + 72 * hour));

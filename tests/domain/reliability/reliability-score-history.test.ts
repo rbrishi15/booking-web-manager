@@ -35,40 +35,37 @@ describe("ReliabilityScore", () => {
   test("fromHistory_WhenLateWithdrawalIsFinalized_CountsOneNegativeOutcome", () => {
     // Arrange
     const end = recentEnd;
-    const hold = FundHold.create({
+    const forfeitedHold = new FundHold({
       holdId: "h",
       participationId: "p",
       holdingAccountId: "platform",
       walletId: "w",
       amount: Money.fromCents(100),
+      state: "FORFEITED",
       createdAt: new Date(end.getTime() - 2 * day),
+      settledAt: end,
+      payoutId: "payout",
     });
-    const committed = Participation.createCommitted({
+    const finalizedWithdrawal = new Participation({
       participationId: "p",
       userId: "alice",
+      status: "WITHDRAWN",
+      attendance: "UNVERIFIED",
       committedAt: new Date(end.getTime() - 2 * day),
-      hold,
+      withdrawnAt: new Date(end.getTime() - day),
+      replacementMode: "OPEN_SLOT",
+      hold: forfeitedHold,
     });
+    const history = [
+      { participation: attended("attended", end), endAt: end },
+      { participation: finalizedWithdrawal, endAt: end },
+    ];
 
     // Act
-    const awaitingReplacement = hold.awaitReplacement();
-    const withdrawn = committed.withdraw(
-      awaitingReplacement,
-      new Date(end.getTime() - day),
-    );
-    const finalized = withdrawn
-      .expireReplacement(end)
-      .settleHold("FORFEIT", "payout", end);
-    const outcome = finalized.reliabilityOutcome(asOf)?.value;
-    const score = ReliabilityScore.fromHistory(
-      "alice",
-      [{ participation: finalized, endAt: end }],
-      asOf,
-    ).toNumber();
+    const score = ReliabilityScore.fromHistory("alice", history, asOf);
 
     // Assert
-    expect(outcome).toBe(0);
-    expect(score).toBe(0);
+    expect(score.toNumber()).toBe(50);
   });
 
   test("fromHistory_WhenClockAdvances_PreservesRelativeWeights", () => {
