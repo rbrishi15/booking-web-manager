@@ -1,0 +1,184 @@
+import {
+  Email,
+  ReliabilityScore,
+  User,
+  type UserDetails,
+  Wallet,
+} from "@/domain";
+import { describe, expect, test } from "vitest";
+import {
+  fundedWallet,
+  createTestUserDetails,
+  userLoadedAt,
+} from "./user-fixtures";
+
+describe("User", () => {
+  test("constructor_WhenMembershipsAreMissing_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      memberGroupIds: undefined,
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenMembershipsAreNull_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      memberGroupIds: null,
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenWalletBelongsToAnotherUser_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      wallet: new Wallet({
+        walletId: "w-alice",
+        userId: "other",
+        transactions: [],
+      }),
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenMembershipIdIsBlank_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      memberGroupIds: [" "],
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenMembershipsAreNotAnArray_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      memberGroupIds: new Set(["group"]),
+    } as unknown as UserDetails;
+
+    // Act & Assert
+    expect(() => new User(details)).toThrow(
+      expect.objectContaining({ code: "INVALID_INPUT" }),
+    );
+  });
+
+  test("constructor_WhenSourceDataChanges_PreservesLoadedValues", () => {
+    // Arrange
+    const wallet = fundedWallet("alice", 700);
+    const reliabilityScore = ReliabilityScore.from(80);
+    const memberGroupIds = ["group"];
+    const details = {
+      ...createTestUserDetails({ userId: "alice" }),
+      wallet,
+      reliabilityScore,
+      memberGroupIds,
+    };
+    const user = new User(details);
+
+    // Act
+    details.wallet = fundedWallet("alice", 0);
+    details.reliabilityScore = ReliabilityScore.from(0);
+    memberGroupIds.push("other");
+
+    // Assert
+    expect(user.wallet).toBe(wallet);
+    expect(user.wallet.walletId).toBe("w-alice");
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(700);
+    expect(user.reliabilityScore).toBe(reliabilityScore);
+    expect(user.reliabilityScore.toNumber()).toBe(80);
+    expect(user.memberGroupIds).toEqual(["group"]);
+  });
+
+  test("memberGroupIds_WhenReturnedArrayChanges_PreservesMemberships", () => {
+    // Arrange
+    const user = new User(
+      createTestUserDetails({
+        userId: "alice",
+        memberGroupIds: ["group"],
+      }),
+    );
+    const memberships = user.memberGroupIds as string[];
+
+    // Act
+    memberships.push("injected");
+
+    // Assert
+    expect(user.memberGroupIds).toEqual(["group"]);
+  });
+
+  test("wallet_WhenReassignmentIsAttempted_PreservesLoadedWallet", () => {
+    // Arrange
+    const wallet = fundedWallet("alice", 700);
+    const user = new User(createTestUserDetails({ userId: "alice", wallet }));
+    const replacement = fundedWallet("alice", 0);
+
+    // Act
+    const assigned = Reflect.set(user, "wallet", replacement);
+
+    // Assert
+    expect(assigned).toBe(false);
+    expect(user.wallet).toBe(wallet);
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(700);
+  });
+
+  test("reliabilityScore_WhenReassignmentIsAttempted_PreservesLoadedScore", () => {
+    // Arrange
+    const reliabilityScore = ReliabilityScore.from(80);
+    const user = new User(
+      createTestUserDetails({ userId: "alice", reliabilityScore }),
+    );
+    const replacement = ReliabilityScore.from(0);
+
+    // Act
+    const assigned = Reflect.set(user, "reliabilityScore", replacement);
+
+    // Assert
+    expect(assigned).toBe(false);
+    expect(user.reliabilityScore).toBe(reliabilityScore);
+    expect(user.reliabilityScore.toNumber()).toBe(80);
+  });
+
+  test("create_WhenRegistering_EstablishesWalletAndEmptyHistory", () => {
+    // Arrange
+    const details = {
+      userId: "new-user",
+      email: new Email("new@example.com"),
+      walletId: "new-wallet",
+      now: userLoadedAt,
+    };
+
+    // Act
+    const user = User.create(details);
+
+    // Assert
+    expect(user.wallet.userId).toBe(user.userId);
+    expect(user.email?.toString()).toBe("new@example.com");
+    expect(user.wallet.walletId).toBe("new-wallet");
+    expect(user.wallet.transactions).toEqual([]);
+    expect(user.wallet.getAvailableBalance().toCents()).toBe(0);
+    expect(user.reliabilityScore.toNumber()).toBe(
+      ReliabilityScore.fromHistory(user.userId, [], userLoadedAt).toNumber(),
+    );
+    expect(user.memberGroupIds).toEqual([]);
+  });
+});
