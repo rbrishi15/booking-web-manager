@@ -28,22 +28,27 @@ export function validateSessionDetails(details: SessionDetails): void {
     requireId(details.invitedGroupId, "invitedGroupId");
   if (details.pendingSettlement !== undefined)
     validateSettlementBatch(details.pendingSettlement);
-  if (details.payoutAttemptIds !== undefined)
-    DomainError.require(
-      Array.isArray(details.payoutAttemptIds) &&
-        new Set(details.payoutAttemptIds).size ===
-          details.payoutAttemptIds.length,
-      "DUPLICATE_ID",
-      "Payout attempt IDs must be unique",
-    );
-  if (details.payoutIdempotencyKeys !== undefined)
-    DomainError.require(
-      Array.isArray(details.payoutIdempotencyKeys) &&
-        new Set(details.payoutIdempotencyKeys).size ===
-          details.payoutIdempotencyKeys.length,
-      "DUPLICATE_ID",
-      "Payout idempotency keys must be unique",
-    );
+  DomainError.require(
+    Array.isArray(details.payoutAttemptIds),
+    "INVALID_INPUT",
+    "A session needs its payout attempt history",
+  );
+  DomainError.require(
+    Array.isArray(details.payoutIdempotencyKeys),
+    "INVALID_INPUT",
+    "A session needs its payout idempotency key history",
+  );
+  DomainError.require(
+    new Set(details.payoutAttemptIds).size === details.payoutAttemptIds.length,
+    "DUPLICATE_ID",
+    "Payout attempt IDs must be unique",
+  );
+  DomainError.require(
+    new Set(details.payoutIdempotencyKeys).size ===
+      details.payoutIdempotencyKeys.length,
+    "DUPLICATE_ID",
+    "Payout idempotency keys must be unique",
+  );
   validateNextQueueSequence(participations, details.nextQueueSequence);
 }
 

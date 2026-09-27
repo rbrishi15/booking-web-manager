@@ -51,52 +51,74 @@ describe("Session", () => {
       expect(constructed.participantList.nextQueueSequence).toBe(1);
     });
 
-    test("constructor_WhenBothHistoriesAreOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenBothHistoriesAreOmittedWithoutPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const details = sessionDetails({
+      const details = {
+        ...sessionDetails(),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: undefined,
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual([]);
-      expect(restored.payoutIdempotencyKeys).toEqual([]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error Verify omitted histories fail at the runtime construction boundary.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
-    test("constructor_WhenAttemptHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenAttemptHistoryIsOmittedWithoutPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const details = sessionDetails({
+      const details = {
+        ...sessionDetails(),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: ["earlier-key"],
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual([]);
-      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key"]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error Verify omitted attempt history fails at the runtime construction boundary.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
-    test("constructor_WhenKeyHistoryIsOmittedWithoutPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenKeyHistoryIsOmittedWithoutPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
-      const details = sessionDetails({
+      const details = {
+        ...sessionDetails(),
         payoutAttemptIds: ["earlier"],
         payoutIdempotencyKeys: undefined,
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual(["earlier"]);
-      expect(restored.payoutIdempotencyKeys).toEqual([]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error Verify omitted key history fails at the runtime construction boundary.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
-    test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenAttemptHistoryIsNotAnArray_ThrowsInvalidInput", () => {
+      // Arrange
+      const details = { ...sessionDetails(), payoutAttemptIds: "earlier" };
+
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error Verify the required history collection is rejected before Set conversion.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+    });
+
+    test("constructor_WhenKeyHistoryIsNotAnArray_ThrowsInvalidInput", () => {
+      // Arrange
+      const details = { ...sessionDetails(), payoutIdempotencyKeys: "earlier-key" };
+
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error Verify the required history collection is rejected before Set conversion.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+    });
+
+    test("constructor_WhenBothHistoriesAreOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
@@ -108,23 +130,24 @@ describe("Session", () => {
         idempotencyKey: "key",
         now: end,
       })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
+      const details = {
+        ...sessionDetails({
+          status: "PAYOUT_PENDING",
+          participations: source.participantList.participations,
+          pendingSettlement: batch,
+        }),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: undefined,
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual(["out"]);
-      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error A pending batch must not fill omitted histories at runtime.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
-    test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenAttemptHistoryIsOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
@@ -136,23 +159,24 @@ describe("Session", () => {
         idempotencyKey: "key",
         now: end,
       })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
+      const details = {
+        ...sessionDetails({
+          status: "PAYOUT_PENDING",
+          participations: source.participantList.participations,
+          pendingSettlement: batch,
+        }),
         payoutAttemptIds: undefined,
         payoutIdempotencyKeys: ["earlier-key", "key"],
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual(["out"]);
-      expect(restored.payoutIdempotencyKeys).toEqual(["earlier-key", "key"]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error A pending batch must not fill omitted attempt history at runtime.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
-    test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_DefaultsOnlyMissingHistory", () => {
+    test("constructor_WhenKeyHistoryIsOmittedWithPendingPayout_ThrowsInvalidInput", () => {
       // Arrange
       const source = createTestSession({ committedUserIds: ["alice"] });
       readyBooker().verifyAttendance(source, {
@@ -164,20 +188,21 @@ describe("Session", () => {
         idempotencyKey: "key",
         now: end,
       })!;
-      const details = sessionDetails({
-        status: "PAYOUT_PENDING",
-        participations: source.participantList.participations,
-        pendingSettlement: batch,
+      const details = {
+        ...sessionDetails({
+          status: "PAYOUT_PENDING",
+          participations: source.participantList.participations,
+          pendingSettlement: batch,
+        }),
         payoutAttemptIds: ["earlier", "out"],
         payoutIdempotencyKeys: undefined,
-      });
+      };
 
-      // Act
-      const restored = new Session(details);
-
-      // Assert
-      expect(restored.payoutAttemptIds).toEqual(["earlier", "out"]);
-      expect(restored.payoutIdempotencyKeys).toEqual(["key"]);
+      // Act & Assert
+      expect(() => {
+        // @ts-expect-error A pending batch must not fill omitted key history at runtime.
+        return new Session(details);
+      }).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     });
 
     test("constructor_WhenSessionIsSettled_RestoresStatusAndEndTime", () => {
@@ -558,6 +583,123 @@ describe("Session", () => {
       ).toBe(500);
       expect(restoredSession.payoutAttemptIds).toEqual(["out"]);
       expect(restoredSession.payoutIdempotencyKeys).toEqual(["key"]);
+    });
+  });
+
+  describe("Settlement retries after reconstruction", () => {
+    test("constructor_WhenFailedPayoutIsRestored_RejectsReusedPayoutId", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      source.failSettlement("out", end);
+      const details = sessionDetails({
+        status: source.status,
+        participations: source.participantList.participations,
+        nextQueueSequence: source.participantList.nextQueueSequence,
+        pendingSettlement: source.pendingSettlement,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+      const previousState = sessionState(source);
+
+      // Act
+      const restoredSession = new Session(details);
+
+      // Act & Assert
+      expect(() =>
+        readyBooker().prepareSettlement(restoredSession, {
+          payoutId: "out",
+          idempotencyKey: "retry-key",
+          now: end,
+        }),
+      ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+      expect(sessionState(restoredSession)).toEqual(previousState);
+    });
+
+    test("constructor_WhenFailedPayoutIsRestored_RejectsReusedIdempotencyKey", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      source.failSettlement("out", end);
+      const details = sessionDetails({
+        status: source.status,
+        participations: source.participantList.participations,
+        nextQueueSequence: source.participantList.nextQueueSequence,
+        pendingSettlement: source.pendingSettlement,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+      const previousState = sessionState(source);
+
+      // Act
+      const restoredSession = new Session(details);
+
+      // Act & Assert
+      expect(() =>
+        readyBooker().prepareSettlement(restoredSession, {
+          payoutId: "retry",
+          idempotencyKey: "key",
+          now: end,
+        }),
+      ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
+      expect(sessionState(restoredSession)).toEqual(previousState);
+    });
+
+    test("constructor_WhenFailedPayoutIsRestored_AllowsNewPayoutIdentity", () => {
+      // Arrange
+      const source = createTestSession({ committedUserIds: ["alice"] });
+      readyBooker().verifyAttendance(source, {
+        marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
+        now: end,
+      });
+      readyBooker().prepareSettlement(source, {
+        payoutId: "out",
+        idempotencyKey: "key",
+        now: end,
+      });
+      source.failSettlement("out", end);
+      const details = sessionDetails({
+        status: source.status,
+        participations: source.participantList.participations,
+        nextQueueSequence: source.participantList.nextQueueSequence,
+        pendingSettlement: source.pendingSettlement,
+        payoutAttemptIds: source.payoutAttemptIds,
+        payoutIdempotencyKeys: source.payoutIdempotencyKeys,
+      });
+      const previousState = sessionState(source);
+
+      // Act
+      const restoredSession = new Session(details);
+      const retryBatch = readyBooker().prepareSettlement(restoredSession, {
+        payoutId: "retry",
+        idempotencyKey: "retry-key",
+        now: end,
+      });
+
+      // Assert
+      expect(retryBatch?.payoutId).toBe("retry");
+      expect(retryBatch?.idempotencyKey).toBe("retry-key");
+      expect(restoredSession.status).toBe("PAYOUT_PENDING");
+      expect(restoredSession.pendingSettlement?.payoutId).toBe("retry");
+      expect(restoredSession.payoutAttemptIds).toEqual(["out", "retry"]);
+      expect(restoredSession.payoutIdempotencyKeys).toEqual(["key", "retry-key"]);
+      expect(sessionState(source)).toEqual(previousState);
     });
   });
 

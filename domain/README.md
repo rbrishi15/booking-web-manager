@@ -73,6 +73,15 @@ Nested arguments are domain objects, such as a `Booking` and `Participation`
 children for a `Session`. Repository adapters construct these objects directly
 and own the mapping between storage values and domain properties.
 
+`SessionDetails` requires explicit `payoutAttemptIds` and
+`payoutIdempotencyKeys` arrays. Repositories must supply the complete histories,
+including failed attempts; the constructor cannot verify their completeness.
+Empty arrays mean there have been no attempts, and the creation workflow supplies
+them for new sessions. Missing histories are rejected rather than inferred from
+the pending payout. These histories preserve the rule that payout IDs and
+idempotency keys cannot be reused after a failed attempt, following ADR-0002's
+complete-state construction contract.
+
 `UserDetails` requires a `Wallet`, `ReliabilityScore`, and membership IDs.
 `WalletDetails` requires wallet/user IDs and a complete array of committed
 `LedgerTransaction` objects. It validates entry types, matching wallet IDs,

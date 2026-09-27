@@ -40,8 +40,8 @@ export interface SessionDetails {
   readonly participations: readonly Participation[];
   readonly nextQueueSequence: number;
   readonly pendingSettlement?: SettlementBatch;
-  readonly payoutAttemptIds?: readonly UUID[];
-  readonly payoutIdempotencyKeys?: readonly string[];
+  readonly payoutAttemptIds: readonly UUID[];
+  readonly payoutIdempotencyKeys: readonly string[];
 }
 
 /** Prepared settlement values recorded together; this is not an actor command. */
@@ -107,16 +107,8 @@ export class Session {
       details.pendingSettlement === undefined
         ? undefined
         : { batch: cloneBatch(details.pendingSettlement) };
-    this.#payoutAttemptIds = new Set(
-      details.payoutAttemptIds ??
-        (details.pendingSettlement ? [details.pendingSettlement.payoutId] : []),
-    );
-    this.#payoutIdempotencyKeys = new Set(
-      details.payoutIdempotencyKeys ??
-        (details.pendingSettlement
-          ? [details.pendingSettlement.idempotencyKey]
-          : []),
-    );
+    this.#payoutAttemptIds = new Set(details.payoutAttemptIds);
+    this.#payoutIdempotencyKeys = new Set(details.payoutIdempotencyKeys);
     validateSessionConfiguration({
       status: this.#status,
       visibility: this.#visibility,
