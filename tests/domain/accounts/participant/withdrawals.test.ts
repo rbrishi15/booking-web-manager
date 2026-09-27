@@ -61,6 +61,43 @@ describe("Participant", () => {
     expect(bookingSession.getAvailableSlots(at(40))).toBe(0);
   });
 
+  test("withdraw_WhenParticipantAlreadyInvitedSomeone_RejectsSecondInvitation", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["ben", "alex"],
+    });
+    const ben = createTestUser({ userId: "ben" }).asParticipant();
+    ben.withdraw(bookingSession, {
+      participationId: "p-ben",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "invite-cara",
+      replacementInviteeId: "cara",
+    });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      ben.withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(9),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "invite-dana",
+        replacementInviteeId: "dana",
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(
+      bookingSession.participantList.personalReplacementFor("invite-cara")
+        ?.replacementInviteeId,
+    ).toBe("cara");
+    expect(
+      bookingSession.participantList.personalReplacementFor("invite-dana"),
+    ).toBeUndefined();
+    expect(bookingSession.participantList.reservedCount).toBe(1);
+    expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
+  });
+
   test("withdraw_WhenNamedRecipientIsMissing_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
