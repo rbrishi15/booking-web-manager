@@ -161,8 +161,8 @@ or compatibility getters are introduced.
 
 ## Session command calculations
 
-Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, `leaveWaitlist`,
-and `offerPlaceToWaitlist`. Each action performs the workflow: authorize,
+Participant actions are `join`, `promoteFromWaitlist`, `withdraw`, and
+`leaveWaitlist`. Each action performs the workflow: authorize,
 read session facts, calculate immutable child changes and financial instructions,
 record the complete change, then return the result. Joining and promotion prepare
 the entrant and any replacement refund together. Promotion preserves `NONE`,
@@ -247,14 +247,15 @@ for the source diagram and policy questions separate from that boundary issue.
 
 The user confirmed the session queue waitlist on 27 September 2026. A departing
 participant has two choices: invite one named person to take their one place,
-or open it to groups / the public waitlist. See
+or open it to groups / the public waitlist. The choice is strictly either/or
+at withdrawal and cannot be changed afterward. See
 [ADR-0006](../docs/adr/0006-personal-replacement-reservations.md) for the confirmed
 scope and its distinction from unresolved financial and rejoining proposals.
 
 `Participant.withdraw` accepts `replacementMode: "INVITE_LINK"` with a
 `replacementToken` and one `replacementInviteeId`, or
-`replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot behavior. A personal
-invitation reserves the departing person's one place after early or late
+`replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
+behavior. A personal invitation reserves the departing person's one place after early or late
 withdrawal. The token identifies the invitation, but only the named recipient
 may accept it; sharing the token does not transfer that authority.
 
@@ -284,11 +285,11 @@ retain the session's existing visibility/membership rules and FIFO order, and
 select the oldest eligible `OPEN_SLOT` late withdrawal for a replacement refund.
 The confirmation introduces no new group-selection or invitation-delivery system.
 
-`Participant.offerPlaceToWaitlist(session, { participationId, now })` lets the
-owning participant release an active personal reservation before start. It
-clears the token and named recipient, retains the original withdrawal time and
-hold state, and returns no financial instructions. It does not itself promote
-the next waiter or refund an awaiting share.
+There is no action or recording transition to switch a withdrawn participant's
+allocation choice. The earlier `offerPlaceToWaitlist` workflow is removed:
+choosing a named replacement cannot later expose that place to ordinary
+admission. This restriction concerns the departing participant's place; an
+already-waitlisted named invitee can still accept it as described above.
 
 The repository supplies domain behavior only for this flow. It has no
 departure-choice UI, invitation delivery, application coordinator, or persistence

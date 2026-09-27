@@ -15,7 +15,6 @@ import {
 import { requireId, validDate } from "../sessions/session/session-validation";
 import { DomainError } from "../shared/errors";
 import type {
-  FinancialResult,
   ParticipantJoinResult,
   PromotionResult,
   WithdrawalResult,
@@ -46,11 +45,6 @@ export interface LeaveWaitlistCommand {
   readonly now?: Date;
 }
 
-export interface ParticipantPlaceOfferCommand {
-  readonly participationId: UUID;
-  readonly now: Date;
-}
-
 export interface PromotionCommand {
   readonly holdId: UUID;
   readonly now: Date;
@@ -71,7 +65,7 @@ interface CommitmentTerms {
 
 /**
  * User's participant role. Coordinates admission, promotion, withdrawal,
- * waitlist departure, and place offers using this user's loaded facts.
+ * and waitlist departure using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  * Each workflow prepares its result and immutable child changes before asking
  * Session to record them together. Session never calls back into this role.
@@ -336,23 +330,6 @@ export class Participant {
     return change.result;
   }
 
-  offerPlaceToWaitlist(
-    session: Session,
-    command: ParticipantPlaceOfferCommand,
-  ): FinancialResult {
-    assertOpenBefore(session.status, session.booking, command.now);
-    const existing = session.participantList.requireParticipation(
-      command.participationId,
-    );
-    const change = this.preparePlaceOffer(existing);
-    session.recordParticipationTransition(
-      existing,
-      change.participation,
-      command.now,
-    );
-    return change.result;
-  }
-
   private assertAccess(
     session: Session,
     command: ParticipantJoinCommand,
@@ -503,21 +480,5 @@ export class Participant {
       "Only the participant can leave the waitlist",
     );
     return participation.leaveWaitlist();
-  }
-
-  /** Offering a place changes its availability without refunding its held share. */
-  private preparePlaceOffer(participation: Participation): {
-    participation: Participation;
-    result: FinancialResult;
-  } {
-    DomainError.require(
-      participation.userId === this.userId,
-      "UNAUTHORIZED",
-      "Only the participant can offer their place to the waitlist",
-    );
-    return {
-      participation: participation.offerPlaceToWaitlist(),
-      result: { instructions: [] },
-    };
   }
 }

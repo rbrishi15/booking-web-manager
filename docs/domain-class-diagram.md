@@ -48,7 +48,10 @@ abbreviated.
   `session.participantList` exposes only ParticipantListView queries; the focused
   diagram shows those selected queries on the implementation and omits the
   separate view interface. Private maps and candidate-building methods are omitted.
-  Only active commitments are limited by `totalSlots` (at most eight).
+  Active commitments plus reserved replacement seats are limited by `totalSlots`
+  (at most eight). Departure chooses either one named replacement or the ordinary
+  waitlist; that choice cannot change after withdrawal. See
+  [ADR-0006](./adr/0006-personal-replacement-reservations.md).
   Waitlisted participation has no hold; a commitment requires one.
 - ParticipantList is not another aggregate root. Session records a fully checked
   candidate list together with its status or settlement changes. The list owns

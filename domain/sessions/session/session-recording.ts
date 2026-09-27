@@ -313,17 +313,7 @@ export function validateParticipationTransition(
     assertRefund(before, after, now);
     return;
   }
-  DomainError.require(
-    before.status === "WITHDRAWN" &&
-      after.status === "WITHDRAWN" &&
-      (before.hold?.state === "AWAITING_REPLACEMENT" ||
-        before.hold?.state === "REFUNDED") &&
-      after.hold === before.hold &&
-      before.replacementMode === "INVITE_LINK" &&
-      after.replacementMode === "OPEN_SLOT" &&
-      after.replacementToken === undefined &&
-      after.replacementInviteeId === undefined &&
-      sameDate(before.withdrawnAt, after.withdrawnAt),
+  throw new DomainError(
     "INVALID_STATE",
     "This participation transition is not permitted",
   );

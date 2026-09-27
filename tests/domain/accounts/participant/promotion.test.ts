@@ -360,7 +360,7 @@ describe("Participant", () => {
     );
   });
 
-  test("promoteFromWaitlist_WhenPersonalPlaceWasOfferedToWaitlist_RefundsWithdrawnParticipant", () => {
+  test("promoteFromWaitlist_WhenParticipantChoosesOpenWaitlist_AdmitsFirstWaiterAndRefundsTheirShare", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["ben", "alex"],
@@ -370,13 +370,7 @@ describe("Participant", () => {
     owner.withdraw(bookingSession, {
       participationId: "p-ben",
       now: at(10),
-      replacementMode: "INVITE_LINK",
-      replacementToken: "ben-replacement",
-      replacementInviteeId: "cara",
-    });
-    owner.offerPlaceToWaitlist(bookingSession, {
-      participationId: "p-ben",
-      now: at(9),
+      replacementMode: "OPEN_SLOT",
     });
     const participant = createTestUser({ userId: "dana" }).asParticipant();
     const queueSequence = bookingSession.participantList.nextQueueSequence;
@@ -414,6 +408,10 @@ describe("Participant", () => {
     expect(
       bookingSession.participantList.requireParticipation("p-dana").hold?.state,
     ).toBe("HELD");
+    expect(
+      bookingSession.participantList.requireParticipation("p-dana")
+        .replacesParticipationId,
+    ).toBe("p-ben");
     expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
       "evan",
     );
@@ -422,7 +420,7 @@ describe("Participant", () => {
     );
   });
 
-  test("promoteFromWaitlist_WhenPersonalPlaceWasOfferedAfterLaterWithdrawal_RefundsEarlierWithdrawal", () => {
+  test("promoteFromWaitlist_WhenTwoParticipantsChooseOpenWaitlist_RefundsEarlierWithdrawal", () => {
     // Arrange
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
@@ -433,9 +431,7 @@ describe("Participant", () => {
       .withdraw(bookingSession, {
         participationId: "p-ben",
         now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
-        replacementInviteeId: "cara",
+        replacementMode: "OPEN_SLOT",
       });
     createTestUser({ userId: "alice" })
       .asParticipant()
@@ -443,13 +439,6 @@ describe("Participant", () => {
         participationId: "p-alice",
         now: at(9),
         replacementMode: "OPEN_SLOT",
-      });
-
-    createTestUser({ userId: "ben" })
-      .asParticipant()
-      .offerPlaceToWaitlist(bookingSession, {
-        participationId: "p-ben",
-        now: at(8),
       });
 
     // Act

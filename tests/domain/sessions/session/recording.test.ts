@@ -326,6 +326,84 @@ describe("Session", () => {
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
+  test("recordParticipationTransition_WhenEarlyPersonalChoiceChangesToOpen_RejectsWithoutChanges", () => {
+    // Arrange
+    const source = createTestSession({ committedUserIds: ["alice"] });
+    const committed = source.participantList.requireParticipation("p-alice");
+    const withdrawn = committed.withdraw(
+      committed.hold!.refund(at(40)),
+      at(40),
+      "INVITE_LINK",
+      "alice-invite",
+      "ben",
+    );
+    const bookingSession = new Session(
+      sessionDetails({ participations: [withdrawn] }),
+    );
+    const changedChoice = new Participation({
+      participationId: withdrawn.participationId,
+      userId: withdrawn.userId,
+      status: "WITHDRAWN",
+      attendance: withdrawn.attendance,
+      committedAt: withdrawn.committedAt,
+      withdrawnAt: withdrawn.withdrawnAt,
+      replacementMode: "OPEN_SLOT",
+      hold: withdrawn.hold,
+    });
+    const previousList = bookingSession.participantList;
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordParticipationTransition(
+        withdrawn,
+        changedChoice,
+        at(39),
+      ),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("recordParticipationTransition_WhenLateOpenChoiceChangesToPersonal_RejectsWithoutChanges", () => {
+    // Arrange
+    const source = createTestSession({ committedUserIds: ["alice"] });
+    const committed = source.participantList.requireParticipation("p-alice");
+    const withdrawn = committed.withdraw(
+      committed.hold!.awaitReplacement(),
+      at(10),
+      "OPEN_SLOT",
+    );
+    const bookingSession = new Session(
+      sessionDetails({ participations: [withdrawn] }),
+    );
+    const changedChoice = new Participation({
+      participationId: withdrawn.participationId,
+      userId: withdrawn.userId,
+      status: "WITHDRAWN",
+      attendance: withdrawn.attendance,
+      committedAt: withdrawn.committedAt,
+      withdrawnAt: withdrawn.withdrawnAt,
+      replacementMode: "INVITE_LINK",
+      replacementToken: "alice-invite",
+      replacementInviteeId: "ben",
+      hold: withdrawn.hold,
+    });
+    const previousList = bookingSession.participantList;
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordParticipationTransition(
+        withdrawn,
+        changedChoice,
+        at(9),
+      ),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(bookingSession.participantList).toBe(previousList);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
   test("recordParticipationTransition_WhenSourceIsStale_RejectsWithoutChangingState", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });

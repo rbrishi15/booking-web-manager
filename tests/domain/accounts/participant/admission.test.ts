@@ -555,39 +555,6 @@ describe("Participant", () => {
       expect(bookingSession.getAvailableSlots(at(18))).toBe(0);
     });
 
-    test("join_WhenPersonalPlaceWasOfferedToWaitlist_RejectsOldReplacementLink", () => {
-      // Arrange
-      const bookingSession = createTestSession({
-        committedUserIds: ["ben", "alex"],
-        waitlistedUserIds: ["dana", "evan"],
-      });
-      const owner = createTestUser({ userId: "ben" }).asParticipant();
-      owner.withdraw(bookingSession, {
-        participationId: "p-ben",
-        now: at(10),
-        replacementMode: "INVITE_LINK",
-        replacementToken: "ben-replacement",
-        replacementInviteeId: "cara",
-      });
-      owner.offerPlaceToWaitlist(bookingSession, {
-        participationId: "p-ben",
-        now: at(9),
-      });
-      const participant = createTestUser({ userId: "cara" }).asParticipant();
-      const previousState = sessionState(bookingSession);
-
-      // Act & Assert
-      expect(() =>
-        participant.join(bookingSession, {
-          participationId: "p-cara",
-          holdId: "h-cara",
-          replacementToken: "ben-replacement",
-          now: at(8),
-        }),
-      ).toThrow(expect.objectContaining({ code: "INVALID_ACCESS" }));
-      expect(sessionState(bookingSession)).toEqual(previousState);
-    });
-
     test("join_WhenPersonalReplacementLinkWasUsedAndOrdinarySlotIsAvailable_RejectsWithoutChangingState", () => {
       // Arrange
       const bookingSession = createTestSession({ committedUserIds: ["ben"] });

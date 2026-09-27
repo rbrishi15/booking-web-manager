@@ -370,22 +370,6 @@ export class Participation {
     });
   }
 
-  offerPlaceToWaitlist(): Participation {
-    DomainError.require(
-      this.#status === "WITHDRAWN" &&
-        (this.#hold?.state === "AWAITING_REPLACEMENT" ||
-          this.#hold?.state === "REFUNDED") &&
-        this.#replacementMode === "INVITE_LINK",
-      "INVALID_STATE",
-      "Only a place awaiting a personal replacement can be offered to the waitlist",
-    );
-    return this.withChanges({
-      replacementMode: "OPEN_SLOT",
-      replacementToken: undefined,
-      replacementInviteeId: undefined,
-    });
-  }
-
   remove(hold: FundHold): Participation {
     DomainError.require(
       this.status === "COMMITTED",

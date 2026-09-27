@@ -16,7 +16,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md) — current role routing is defined by ADR-0009.
 - [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md) — admission routing updated by ADR-0007 and ADR-0009.
 - [ADR-0005: Domain unit-test structure](./adr/0005-domain-unit-test-structure.md).
-- [ADR-0006: Named personal replacements and the session waitlist](./adr/0006-personal-replacement-reservations.md) — queue and one-person replacement choice confirmed on 27 September 2026.
+- [ADR-0006: Named personal replacements and the session waitlist](./adr/0006-personal-replacement-reservations.md) — queue and mutually exclusive departure choices confirmed on 27 September 2026: one named replacement or the groups/public waitlist, with no switching after withdrawal.
 - [ADR-0007: Participant behavior and the Session roster](./adr/0007-participant-behavior-and-session-roster.md) — callback routing superseded by ADR-0009.
 - [ADR-0008: Booker behavior and the Session lifecycle](./adr/0008-booker-behavior-and-session-lifecycle.md) — callback routing superseded by ADR-0009.
 - [ADR-0009: Role workflows and Session recording](./adr/0009-role-workflows-and-session-recording.md).
@@ -24,4 +24,4 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 
 Product decisions and remaining discussion:
 
-- [Waitlists and replacements: confirmed scope, historical options, and remaining policy questions](./discussions/waitlist-and-replacement-options.md). The waitlist and two departure choices are confirmed; unrelated financial and rejoining proposals remain under review.
+- [Waitlists and replacements: confirmed scope, historical options, and remaining policy questions](./discussions/waitlist-and-replacement-options.md). The waitlist and fixed either/or departure choice are confirmed; unrelated financial and rejoining proposals remain under review.

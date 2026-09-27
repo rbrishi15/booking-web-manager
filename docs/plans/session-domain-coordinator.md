@@ -1,6 +1,7 @@
 # Session as a smaller domain coordinator
 
-Status: implemented. Product-policy proposals remain awaiting product-owner review.
+Status: implemented historical extraction. Product-policy status below describes
+the discussion at that time.
 
 This records the earlier internal extraction. Its preserved public Session API
 and placement of role calculations are superseded by
@@ -10,6 +11,13 @@ and placement of role calculations are superseded by
 [domain guide](../../domain/README.md#session-command-calculations) for current
 responsibilities. The historical validation results below describe that
 extraction, not subsequent changes.
+
+**Current policy:** [ADR-0006](../adr/0006-personal-replacement-reservations.md)
+records the 27 September confirmation of the session queue and fixed either/or
+departure choice. A participant chooses one named replacement or the
+groups/public waitlist at withdrawal and cannot switch afterward. The historical
+offer-to-waitlist action and proposal-only status mentioned below are superseded;
+the switching proposal is rejected and its action removed.
 
 ## Implemented scope
 

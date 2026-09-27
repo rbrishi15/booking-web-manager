@@ -333,7 +333,7 @@ describe("Participation", () => {
       expect(committed.hold?.state).toBe("HELD");
     });
 
-    test("offerPlaceToWaitlist_WhenEarlyWithdrawalHasPersonalInvitation_ClearsInvitationAndKeepsRefund", () => {
+    test("withdraw_WhenPersonalInvitationAlreadyChosen_RejectsSwitchToOpenPlace", () => {
       // Arrange
       const committed = new Participation(participationDetails());
       const withdrawn = committed.withdraw(
@@ -344,39 +344,39 @@ describe("Participation", () => {
         "ben",
       );
 
-      // Act
-      const opened = withdrawn.offerPlaceToWaitlist();
-
-      // Assert
-      expect(opened.replacementMode).toBe("OPEN_SLOT");
-      expect(opened.replacementToken).toBeUndefined();
-      expect(opened.replacementInviteeId).toBeUndefined();
-      expect(opened.hold).toBe(withdrawn.hold);
-      expect(opened.hold?.state).toBe("REFUNDED");
+      // Act & Assert
+      expect(() =>
+        withdrawn.withdraw(withdrawn.hold!, settledAt, "OPEN_SLOT"),
+      ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+      expect(withdrawn.replacementMode).toBe("INVITE_LINK");
+      expect(withdrawn.replacementToken).toBe("token");
       expect(withdrawn.replacementInviteeId).toBe("ben");
+      expect(withdrawn.hold?.state).toBe("REFUNDED");
     });
 
-    test("offerPlaceToWaitlist_WhenLateWithdrawalHasPersonalInvitation_ClearsInvitationAndKeepsHeldFunds", () => {
+    test("withdraw_WhenOpenPlaceAlreadyChosen_RejectsSwitchToPersonalInvitation", () => {
       // Arrange
       const committed = new Participation(participationDetails());
       const withdrawn = committed.withdraw(
         committed.hold!.awaitReplacement(),
         settledAt,
-        "INVITE_LINK",
-        "token",
-        "ben",
+        "OPEN_SLOT",
       );
 
-      // Act
-      const opened = withdrawn.offerPlaceToWaitlist();
-
-      // Assert
-      expect(opened.replacementMode).toBe("OPEN_SLOT");
-      expect(opened.replacementToken).toBeUndefined();
-      expect(opened.replacementInviteeId).toBeUndefined();
-      expect(opened.hold).toBe(withdrawn.hold);
-      expect(opened.hold?.state).toBe("AWAITING_REPLACEMENT");
-      expect(withdrawn.replacementInviteeId).toBe("ben");
+      // Act & Assert
+      expect(() =>
+        withdrawn.withdraw(
+          withdrawn.hold!,
+          settledAt,
+          "INVITE_LINK",
+          "token",
+          "ben",
+        ),
+      ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+      expect(withdrawn.replacementMode).toBe("OPEN_SLOT");
+      expect(withdrawn.replacementToken).toBeUndefined();
+      expect(withdrawn.replacementInviteeId).toBeUndefined();
+      expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
     });
 
     test("cancel_WhenWithdrawalHasPersonalInvitation_ClearsReservationMetadata", () => {

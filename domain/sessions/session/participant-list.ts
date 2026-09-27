@@ -187,16 +187,6 @@ export class ParticipantList implements ParticipantListView {
       "INVALID_STATE",
       "The participation is not the current owned record",
     );
-    if (
-      existing.status === "WITHDRAWN" &&
-      existing.replacementMode === "INVITE_LINK"
-    )
-      DomainError.require(
-        existing.replacementToken !== undefined &&
-          this.personalReplacementFor(existing.replacementToken) === existing,
-        "INVALID_STATE",
-        "Only an unclaimed replacement seat may be offered to the waitlist",
-      );
     validateParticipationTransition(existing, replacement, now);
     return this.withReplacements([replacement]);
   }

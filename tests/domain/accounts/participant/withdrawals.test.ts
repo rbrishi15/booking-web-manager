@@ -10,6 +10,78 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("withdraw_WhenParticipantChoseInvitation_RejectsSwitchToWaitlistAndKeepsReservedSeat", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana"],
+    });
+    const participant = createTestUser({ userId: "alice" }).asParticipant();
+    participant.withdraw(bookingSession, {
+      participationId: "p-alice",
+      now: at(10),
+      replacementMode: "INVITE_LINK",
+      replacementToken: "alice-replacement",
+      replacementInviteeId: "cara",
+    });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      participant.withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: at(9),
+        replacementMode: "OPEN_SLOT",
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    const withdrawn =
+      bookingSession.participantList.requireParticipation("p-alice");
+    expect(withdrawn.replacementMode).toBe("INVITE_LINK");
+    expect(withdrawn.replacementToken).toBe("alice-replacement");
+    expect(withdrawn.replacementInviteeId).toBe("cara");
+    expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+  });
+
+  test("withdraw_WhenParticipantChoseWaitlist_RejectsSwitchToInvitationAndKeepsOpenSeat", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana"],
+    });
+    const participant = createTestUser({ userId: "alice" }).asParticipant();
+    participant.withdraw(bookingSession, {
+      participationId: "p-alice",
+      now: at(10),
+      replacementMode: "OPEN_SLOT",
+    });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      participant.withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: at(9),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "alice-replacement",
+        replacementInviteeId: "cara",
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    const withdrawn =
+      bookingSession.participantList.requireParticipation("p-alice");
+    expect(withdrawn.replacementMode).toBe("OPEN_SLOT");
+    expect(withdrawn.replacementToken).toBeUndefined();
+    expect(withdrawn.replacementInviteeId).toBeUndefined();
+    expect(bookingSession.getAvailableSlots(at(9))).toBe(1);
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+  });
+
   test("withdraw_WhenOneMillisecondBeforeRefundCutoff_RefundsHold", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });

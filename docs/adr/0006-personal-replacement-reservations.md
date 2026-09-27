@@ -2,7 +2,7 @@
 
 - Status: Accepted for the confirmed scope below; separate financial proposals remain under review
 - Date: 2026-09-27
-- Supersedes: the proposal-only status of this ADR and the 26 September proposal to defer the joining waitlist
+- Supersedes: the proposal-only status of this ADR, the 26 September proposal to defer the joining waitlist, and the proposal to release a personal place to the waitlist
 
 ## Confirmed scope
 
@@ -11,6 +11,12 @@ choices when a participant leaves: invite someone to replace them, or open the
 place to groups / the public waitlist. The user clarified that the invitation
 is for **one named person**. The place is like an airplane seat: one departing
 participant can invite one person to take that one place.
+
+The user further clarified that these choices are **strictly either/or at
+withdrawal**. A participant cannot invite someone and then open that same place
+to the waitlist, and cannot change the allocation choice after withdrawing.
+This rejects the earlier offer-to-waitlist proposal. It does not prevent a named
+invitee who is already queued from accepting their own reserved place.
 
 The personal choice therefore reserves one place for its named invitee. It
 cannot become a bearer link that anyone can claim, invite several people to
@@ -58,11 +64,12 @@ receives no second refund. This is the financial behavior implemented alongside
 the confirmed allocation rule, not a new blanket approval of the financial
 proposals recorded in the discussion.
 
-The existing `offerPlaceToWaitlist` action releases a personal reservation to
-ordinary admission before start. It clears its token and named recipient,
-preserves the original withdrawal time and hold state, and returns no financial
-instructions. Releasing capacity alone does not issue a refund or promote a
-waiter.
+Withdrawal records either `INVITE_LINK` for one named person or `OPEN_SLOT` for
+ordinary admission. That choice cannot be changed afterward. The earlier
+`offerPlaceToWaitlist` action and the transition that converted a personal
+reservation to `OPEN_SLOT` are removed. The rejected switch is not a deferred
+workflow; session cancellation, start timing, and existing financial rules
+remain separate.
 
 ## Integration boundary
 

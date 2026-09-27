@@ -59,6 +59,10 @@ one place.
 A withdrawing participant's place held for their named personal replacement,
 unavailable to ordinary admission while that invitation remains active.
 
+**Departure choice**:
+The participant's fixed choice at withdrawal between one named personal
+replacement and opening their place to the groups/public waitlist.
+
 **Successful replacement**:
 A replacement who has successfully joined with their full booking share held.
 An agreement alone is not a successful replacement.
@@ -70,7 +74,3 @@ accept.
 **Open-slot replacement**:
 A participant who fills an ordinary opening without targeting a specific
 withdrawing participant.
-
-**Offering a personal place to the waitlist**:
-Making a previously reserved place available for ordinary admission through the
-session's group/public access rules and joining waitlist.

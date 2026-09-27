@@ -11,6 +11,14 @@ implementation and query interface with an internal immutable ParticipantList.
 The role workflows, authorization boundary, and recording decisions here remain
 accepted.
 
+**Current policy:** [ADR-0006](./0006-personal-replacement-reservations.md)
+records the 27 September confirmation of the queue and fixed either/or departure
+choice. References below to replacement offers or provisional policy describe
+this refactor's original behavior; the offer-to-waitlist action is subsequently
+removed. A withdrawing participant chooses one named replacement or the
+groups/public waitlist and cannot switch afterward. The role and recording
+responsibility boundaries remain accepted.
+
 ## Context
 
 The earlier refactors moved individual decisions into Participant and Booker,

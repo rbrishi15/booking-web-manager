@@ -61,7 +61,6 @@ export {
   type PromotionCommand,
   type LeaveWaitlistCommand,
   type ParticipantJoinCommand,
-  type ParticipantPlaceOfferCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
 export {
