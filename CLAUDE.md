@@ -73,7 +73,8 @@ without a corresponding lock, or vice versa.
 
 ### 6. Every wallet-mutating request carries an idempotency key.
 
-A repeat key returns the original result without re-executing.
+A repeat key with the same operation scope and canonical request returns the
+original result without re-executing. Reusing it with different intent fails.
 
 ---
 
@@ -82,8 +83,8 @@ A repeat key returns the original result without re-executing.
 ```
 /domain          Pure TypeScript. No framework imports, no DB, no HTTP.
                  Business rules, policy engines, interfaces.
-/use-cases       Shared ports and contracts for future use-case coordinators;
-                 use-case implementations are not present yet.
+/use-cases       Framework-independent coordinators and shared transaction ports;
+                 UC2-05 withdrawal, replacement acceptance, and expiry.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
 /components/ui   Shared design system. Request changes, don't add directly.
@@ -92,6 +93,9 @@ A repeat key returns the original result without re-executing.
 
 The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
 `/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
+
+When changing UC2-05 orchestration or its transaction adapters, read the
+[use-case guide](./use-cases/README.md) for replay, rollback, and integration boundaries.
 
 Actor-driven session workflows enter through `User`'s Participant or Booker
 role, which performs actor authorization and prepares the complete change.

@@ -76,8 +76,11 @@ fixtures, and assertions.
 
 Use-case acceptance tests are organised in
 [tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
-`test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
-that folder's README for the convention.
+`test.todo(...)` stubs. UC2-05 now exercises the
+[session coordinators](./use-cases/README.md) with a transactional test adapter;
+production transaction and session-repository adapters remain outstanding.
+Fill in your UC's test as you build the feature; see that folder's README for
+the convention.
 
 ## Contributing
 

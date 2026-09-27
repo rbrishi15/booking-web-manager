@@ -21,6 +21,12 @@ the switching proposal is rejected and its action removed. Replacement-link
 checks are also historical: current personal invitations address one user ID
 and require explicit `Participant.acceptReplacement` acceptance, without tokens.
 
+**Current integration, 28 September 2026:** the separate UC2-05
+[application coordinators](../../use-cases/README.md) now implement withdrawal,
+explicit acceptance, queue processing, and replacement expiry through transaction
+ports. This historical extraction plan does not describe those later workflows.
+Production application transaction and session-repository adapters remain open.
+
 ## Implemented scope
 
 `Session` remains the public command entry point and owner of its state. Detailed

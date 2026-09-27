@@ -27,12 +27,19 @@ use case and follows this path:
 4. Connect framework and infrastructure adapters through explicit ports and
    transaction boundaries.
 
-The top-level [`/use-cases`](../../use-cases/) directory is the reserved,
-framework-independent boundary for those coordinators. At present it contains
-only [`use-cases/shared`](../../use-cases/shared/), which holds reusable ports,
-contracts, transaction types, and coordination helpers. Capability-specific
-use-case implementations are added only when a concrete use case requires
-them; the empty capability space is intentional.
+The top-level [`/use-cases`](../../use-cases/) directory is the
+framework-independent boundary for those coordinators. At this decision's date
+it contained only [`use-cases/shared`](../../use-cases/shared/), with reusable
+ports, contracts, transaction types, and coordination helpers. Capability-specific
+implementations are added when a concrete use case requires them; the initial
+empty capability space was intentional.
+
+**Current implementation, 28 September 2026:** UC2-05 now has
+`WithdrawFromSession`, `AcceptReplacement`, and `ExpireSessionReplacements`
+coordinators in `use-cases/sessions`. The [use-case guide](../../use-cases/README.md)
+records their interfaces, descriptor-based transaction/replay contract, and
+remaining production adapter work. The illustrative full session directory
+below remains a target, not a list of implemented coordinators.
 
 Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in

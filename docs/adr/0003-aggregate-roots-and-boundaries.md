@@ -11,6 +11,12 @@ and persistence boundaries remain accepted. Current routing is defined by
 run actor workflows, while Session validates and records prepared child changes.
 The original routing below is retained as decision history.
 
+**Current integration, 28 September 2026:** the UC2-05
+[session coordinators](../../use-cases/README.md) now load these aggregates and
+commit withdrawal, acceptance, and expiry effects through the shared UnitOfWork
+contract. Production application transaction and session-repository adapters
+remain outstanding; this does not change aggregate ownership.
+
 ## Context
 
 The domain contains entities, value objects, role views, and derived facts.

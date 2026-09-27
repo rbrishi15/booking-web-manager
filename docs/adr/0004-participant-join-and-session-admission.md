@@ -10,6 +10,13 @@ hydration, refresh, and unit-of-work contracts remain accepted. The original
 delegation code and sequence diagram below are decision history; Participant now
 runs admission and supplies prepared immutable children to Session for recording.
 
+**Current integration, 28 September 2026:** UC2-05's
+[withdrawal and replacement coordinators](../../use-cases/README.md) use the
+complete-user loading and refresh contract with a scoped, request-bound
+UnitOfWork descriptor. Their transactional test adapter verifies orchestration;
+production transaction and session-repository adapters are still outstanding.
+The earlier ordinary-admission sequence below remains decision history.
+
 ## Context
 
 `User` represents a person in the booking domain. Admission needs that user's
