@@ -149,6 +149,8 @@ npm test                       # vitest
 npm run test:concurrency       # the 20-commits-8-slots test
 npx supabase start             # local Postgres
 npx supabase migration new <name>
+npx supabase db reset           # reapply every local migration from scratch
+npx supabase db push --linked  # push to the hosted project directly (main does this for you on merge)
 npx supabase gen types typescript --local > lib/database.types.ts
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
