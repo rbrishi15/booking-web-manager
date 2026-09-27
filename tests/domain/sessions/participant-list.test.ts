@@ -87,8 +87,7 @@ describe("ParticipantList", () => {
     const withdrawnBen = ben.withdraw(
       ben.hold!.awaitReplacement(),
       at(10),
-      "INVITE_LINK",
-      "ben-replacement",
+      "OPEN_SLOT",
     );
     const list = new Session(
       sessionDetails({
@@ -109,5 +108,31 @@ describe("ParticipantList", () => {
     expect(list.findByUserId("ben")).toBe(oldestReplacement);
     expect(list.committedCount).toBe(0);
     expect(list.nextWaitlisted()).toBeUndefined();
+  });
+
+  test("oldestAwaitingReplacement_WhenOlderWithdrawalReservesNamedSeat_SelectsOpenWithdrawal", () => {
+    // Arrange
+    const source = createTestSession();
+    const alice = committedParticipation(source, "alice");
+    const ben = committedParticipation(source, "ben");
+    const personal = alice.withdraw(
+      alice.hold!.awaitReplacement(),
+      at(10),
+      "INVITE_LINK",
+      "alice-invite",
+      "cara",
+    );
+    const open = ben.withdraw(ben.hold!.awaitReplacement(), at(9), "OPEN_SLOT");
+    const list = new Session(
+      sessionDetails({ participations: [personal, open] }),
+    ).participantList;
+
+    // Act
+    const replacement = list.oldestAwaitingReplacement();
+
+    // Assert
+    expect(replacement).toBe(open);
+    expect(list.reservedCount).toBe(1);
+    expect(list.personalReplacementFor("alice-invite")).toBe(personal);
   });
 });

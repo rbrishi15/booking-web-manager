@@ -498,10 +498,17 @@ describe("Participant", () => {
     });
   });
   describe("Replacement admission", () => {
-    test("join_WhenEntrantUsesNewerReplacementLink_RefundsOldestWithdrawal", () => {
+    test("join_WhenNamedInviteeAcceptsNewerInvitation_RefundsOnlyTheirInviter", () => {
       // Arrange
       const bookingSession = createTestSession({
-        committedUserIds: ["alice", "ben"],
+        committedUserIds: ["alice"],
+      });
+      readyBooker().changeVisibility(bookingSession, "PRIVATE", before);
+      createTestUser({ userId: "ben" }).asParticipant().join(bookingSession, {
+        participationId: "p-ben",
+        holdId: "h-ben",
+        roomToken: "room",
+        now: before,
       });
 
       createTestUser({ userId: "alice" })
@@ -511,6 +518,7 @@ describe("Participant", () => {
           now: at(20),
           replacementMode: "INVITE_LINK",
           replacementToken: "old",
+          replacementInviteeId: "donna",
         });
       createTestUser({ userId: "ben" })
         .asParticipant()
@@ -519,9 +527,8 @@ describe("Participant", () => {
           now: at(19),
           replacementMode: "INVITE_LINK",
           replacementToken: "new",
+          replacementInviteeId: "cara",
         });
-      readyBooker().changeVisibility(bookingSession, "PRIVATE", at(18));
-
       // Act
       const replacement = createTestUser({ userId: "cara" })
         .asParticipant()
@@ -533,14 +540,19 @@ describe("Participant", () => {
         });
 
       // Assert
-      expect(replacement.refundedParticipationId).toBe("p-alice");
+      expect(replacement.refundedParticipationId).toBe("p-ben");
       expect(replacement.instructions.map((i) => i.kind)).toEqual([
         "LOCK",
         "REFUND",
       ]);
       expect(
-        bookingSession.participantList.findByUserId("ben")?.hold?.state,
+        bookingSession.participantList.findByUserId("alice")?.hold?.state,
       ).toBe("AWAITING_REPLACEMENT");
+      expect(
+        bookingSession.participantList.findByUserId("cara")
+          ?.replacesParticipationId,
+      ).toBe("p-ben");
+      expect(bookingSession.getAvailableSlots(at(18))).toBe(0);
     });
 
     test("join_WhenPersonalPlaceWasOfferedToWaitlist_RejectsOldReplacementLink", () => {
@@ -555,6 +567,7 @@ describe("Participant", () => {
         now: at(10),
         replacementMode: "INVITE_LINK",
         replacementToken: "ben-replacement",
+        replacementInviteeId: "cara",
       });
       owner.offerPlaceToWaitlist(bookingSession, {
         participationId: "p-ben",
@@ -586,6 +599,7 @@ describe("Participant", () => {
           now: at(10),
           replacementMode: "INVITE_LINK",
           replacementToken: "ben-replacement",
+          replacementInviteeId: "cara",
         });
       const replacement = createTestUser({ userId: "cara" })
         .asParticipant()
@@ -630,6 +644,7 @@ describe("Participant", () => {
           now: at(10),
           replacementMode: "INVITE_LINK",
           replacementToken: "ben-replacement",
+          replacementInviteeId: "cara",
         });
       createTestUser({ userId: "cara" })
         .asParticipant()

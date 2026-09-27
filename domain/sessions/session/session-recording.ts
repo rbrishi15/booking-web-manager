@@ -51,7 +51,8 @@ function assertReplacementUnchanged(
   DomainError.require(
     sameDate(before.withdrawnAt, after.withdrawnAt) &&
       before.replacementMode === after.replacementMode &&
-      before.replacementToken === after.replacementToken,
+      before.replacementToken === after.replacementToken &&
+      before.replacementInviteeId === after.replacementInviteeId,
     "INVALID_INPUT",
     "This transition cannot change replacement details",
   );
@@ -112,11 +113,11 @@ function assertFullRoster(
     assertIdentity(before.requireParticipation(next.participationId), next);
 }
 
-/** Checks a prepared enrollment and its coupled refund without constructing either. */
+/** Checks enrollment and its completed replacement, including any newly due refund. */
 export function validateAdmission(
   roster: ParticipantList,
   admission: Participation,
-  refunded: Participation | undefined,
+  completedReplacement: Participation | undefined,
   totalSlots: number,
   now: Date,
 ): void {
@@ -127,6 +128,24 @@ export function validateAdmission(
   );
   const existing = roster.findByUserId(admission.userId);
   const waiter = roster.nextWaitlisted();
+  const target =
+    admission.replacesParticipationId === undefined
+      ? undefined
+      : roster.findParticipation(admission.replacesParticipationId);
+  const personalReplacement =
+    target?.replacementToken === undefined
+      ? undefined
+      : roster.personalReplacementFor(target.replacementToken);
+  if (personalReplacement !== undefined)
+    DomainError.require(
+      personalReplacement.replacementInviteeId === admission.userId,
+      "INVALID_STATE",
+      "Only the named invitee may take a reserved replacement seat",
+    );
+  const ordinarySlots = Math.max(
+    0,
+    totalSlots - roster.committedCount - roster.reservedCount,
+  );
   if (existing !== undefined) {
     DomainError.require(
       existing.participationId === admission.participationId,
@@ -163,8 +182,7 @@ export function validateAdmission(
   );
   if (admission.status === "WAITLISTED") {
     DomainError.require(
-      Math.max(0, totalSlots - roster.committedCount) === 0 ||
-        waiter !== undefined,
+      ordinarySlots === 0 || waiter !== undefined,
       "INVALID_STATE",
       "An available place without a queue requires a commitment",
     );
@@ -184,19 +202,21 @@ export function validateAdmission(
       "A waitlist entry must have fresh waitlist metadata",
     );
     DomainError.require(
-      refunded === undefined,
+      completedReplacement === undefined,
       "INVALID_STATE",
       "Waitlisting cannot refund a replacement",
     );
     return;
   }
   DomainError.require(
-    Math.max(0, totalSlots - roster.committedCount) > 0,
+    personalReplacement !== undefined || ordinarySlots > 0,
     "CAPACITY_EXCEEDED",
     "There is no available slot",
   );
   DomainError.require(
-    waiter === undefined || waiter === existing,
+    personalReplacement !== undefined ||
+      waiter === undefined ||
+      waiter === existing,
     "WAITLIST_NOT_HEAD",
     "Only the first waiter may take the available place",
   );
@@ -214,35 +234,41 @@ export function validateAdmission(
       "INVALID_INPUT",
       "A direct commitment cannot carry a queue position",
     );
-  const awaiting = roster.oldestAwaitingReplacement();
+  const awaiting = personalReplacement ?? roster.oldestAwaitingReplacement();
   DomainError.require(
     admission.replacesParticipationId === awaiting?.participationId,
     "INVALID_STATE",
-    "A commitment must replace the oldest awaiting withdrawal",
+    "A commitment must replace its reserved seat or the oldest open withdrawal",
   );
   if (awaiting === undefined) {
     DomainError.require(
-      refunded === undefined,
+      completedReplacement === undefined,
       "INVALID_STATE",
       "There is no replacement to refund",
     );
     return;
   }
   DomainError.require(
-    refunded !== undefined &&
-      refunded.participationId === awaiting.participationId,
+    completedReplacement !== undefined &&
+      completedReplacement.participationId === awaiting.participationId,
     "INVALID_STATE",
-    "The oldest awaiting withdrawal must be refunded with the commitment",
+    "The replaced participation must be recorded with the commitment",
   );
-  assertEnrollmentUnchanged(awaiting, refunded);
-  assertAttendanceUnchanged(awaiting, refunded);
-  assertReplacementUnchanged(awaiting, refunded);
+  assertEnrollmentUnchanged(awaiting, completedReplacement);
+  assertAttendanceUnchanged(awaiting, completedReplacement);
+  assertReplacementUnchanged(awaiting, completedReplacement);
   DomainError.require(
-    refunded.status === "WITHDRAWN",
+    completedReplacement.status === "WITHDRAWN",
     "INVALID_STATE",
-    "A replacement refund must retain the withdrawal",
+    "A completed replacement must retain the withdrawal",
   );
-  assertRefund(awaiting, refunded, now);
+  if (awaiting.hold?.state === "REFUNDED") {
+    DomainError.require(
+      completedReplacement.hold === awaiting.hold,
+      "INVALID_STATE",
+      "An early withdrawal must retain its existing refund",
+    );
+  } else assertRefund(awaiting, completedReplacement, now);
 }
 
 export function validateParticipationTransition(
@@ -290,11 +316,13 @@ export function validateParticipationTransition(
   DomainError.require(
     before.status === "WITHDRAWN" &&
       after.status === "WITHDRAWN" &&
-      before.hold?.state === "AWAITING_REPLACEMENT" &&
+      (before.hold?.state === "AWAITING_REPLACEMENT" ||
+        before.hold?.state === "REFUNDED") &&
       after.hold === before.hold &&
       before.replacementMode === "INVITE_LINK" &&
       after.replacementMode === "OPEN_SLOT" &&
       after.replacementToken === undefined &&
+      after.replacementInviteeId === undefined &&
       sameDate(before.withdrawnAt, after.withdrawnAt),
     "INVALID_STATE",
     "This participation transition is not permitted",

@@ -145,10 +145,125 @@ describe("Participation", () => {
       const details = participationDetails({
         replacementMode: "INVITE_LINK",
         replacementToken: "token",
+        replacementInviteeId: "ben",
       });
 
       // Act & Assert
       expect(() => new Participation(details)).toThrow(DomainError);
+    });
+
+    test("constructor_WhenInvitationHasNoNamedInvitee_RejectsBearerInvitation", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "token",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenInvitationHasBlankNamedInvitee_RejectsInvitation", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "token",
+        replacementInviteeId: " ",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenInvitationHasNoToken_RejectsInvitation", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "INVITE_LINK",
+        replacementInviteeId: "ben",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenInvitationHasBlankToken_RejectsInvitation", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "INVITE_LINK",
+        replacementToken: " ",
+        replacementInviteeId: "ben",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenInvitationNamesWithdrawingParticipant_RejectsSelfReplacement", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "token",
+        replacementInviteeId: "user",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenOpenPlaceHasNamedInvitee_RejectsReservationMetadata", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementMode: "OPEN_SLOT",
+        replacementInviteeId: "ben",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenTokenHasNoReplacementMode_RejectsReservationMetadata", () => {
+      // Arrange
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails()).awaitReplacement(),
+        replacementToken: "token",
+      });
+
+      // Act & Assert
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
     });
   });
 
@@ -175,12 +290,126 @@ describe("Participation", () => {
       expect(queued.hold).toBeUndefined();
     });
 
+    test("withdraw_WhenEarlyWithdrawalInvitesOneNamedPerson_PreservesInvitationWithRefund", () => {
+      // Arrange
+      const committed = new Participation(participationDetails());
+
+      // Act
+      const withdrawn = committed.withdraw(
+        committed.hold!.refund(settledAt),
+        settledAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
+      );
+
+      // Assert
+      expect(withdrawn.status).toBe("WITHDRAWN");
+      expect(withdrawn.hold?.state).toBe("REFUNDED");
+      expect(withdrawn.replacementMode).toBe("INVITE_LINK");
+      expect(withdrawn.replacementToken).toBe("token");
+      expect(withdrawn.replacementInviteeId).toBe("ben");
+      expect(committed.status).toBe("COMMITTED");
+      expect(committed.replacementInviteeId).toBeUndefined();
+    });
+
+    test("withdraw_WhenLateWithdrawalInvitesOneNamedPerson_PreservesInvitationWhileAwaitingReplacement", () => {
+      // Arrange
+      const committed = new Participation(participationDetails());
+
+      // Act
+      const withdrawn = committed.withdraw(
+        committed.hold!.awaitReplacement(),
+        settledAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
+      );
+
+      // Assert
+      expect(withdrawn.status).toBe("WITHDRAWN");
+      expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
+      expect(withdrawn.replacementInviteeId).toBe("ben");
+      expect(committed.hold?.state).toBe("HELD");
+    });
+
+    test("offerPlaceToWaitlist_WhenEarlyWithdrawalHasPersonalInvitation_ClearsInvitationAndKeepsRefund", () => {
+      // Arrange
+      const committed = new Participation(participationDetails());
+      const withdrawn = committed.withdraw(
+        committed.hold!.refund(settledAt),
+        settledAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
+      );
+
+      // Act
+      const opened = withdrawn.offerPlaceToWaitlist();
+
+      // Assert
+      expect(opened.replacementMode).toBe("OPEN_SLOT");
+      expect(opened.replacementToken).toBeUndefined();
+      expect(opened.replacementInviteeId).toBeUndefined();
+      expect(opened.hold).toBe(withdrawn.hold);
+      expect(opened.hold?.state).toBe("REFUNDED");
+      expect(withdrawn.replacementInviteeId).toBe("ben");
+    });
+
+    test("offerPlaceToWaitlist_WhenLateWithdrawalHasPersonalInvitation_ClearsInvitationAndKeepsHeldFunds", () => {
+      // Arrange
+      const committed = new Participation(participationDetails());
+      const withdrawn = committed.withdraw(
+        committed.hold!.awaitReplacement(),
+        settledAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
+      );
+
+      // Act
+      const opened = withdrawn.offerPlaceToWaitlist();
+
+      // Assert
+      expect(opened.replacementMode).toBe("OPEN_SLOT");
+      expect(opened.replacementToken).toBeUndefined();
+      expect(opened.replacementInviteeId).toBeUndefined();
+      expect(opened.hold).toBe(withdrawn.hold);
+      expect(opened.hold?.state).toBe("AWAITING_REPLACEMENT");
+      expect(withdrawn.replacementInviteeId).toBe("ben");
+    });
+
+    test("cancel_WhenWithdrawalHasPersonalInvitation_ClearsReservationMetadata", () => {
+      // Arrange
+      const committed = new Participation(participationDetails());
+      const withdrawn = committed.withdraw(
+        committed.hold!.awaitReplacement(),
+        createdAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
+      );
+
+      // Act
+      const cancelled = withdrawn.cancel(withdrawn.hold!.refund(settledAt));
+
+      // Assert
+      expect(cancelled.status).toBe("CANCELLED");
+      expect(cancelled.replacementMode).toBeUndefined();
+      expect(cancelled.replacementToken).toBeUndefined();
+      expect(cancelled.replacementInviteeId).toBeUndefined();
+      expect(withdrawn.replacementInviteeId).toBe("ben");
+    });
+
     test("refundReplacement_WhenReplacementIsFound_ReturnsNewChild", () => {
       // Arrange
       const committed = new Participation(participationDetails());
       const withdrawn = committed.withdraw(
         committed.hold!.awaitReplacement(),
         createdAt,
+        "INVITE_LINK",
+        "token",
+        "ben",
       );
 
       // Act
@@ -191,6 +420,8 @@ describe("Participation", () => {
       expect(committed.hold?.state).toBe("HELD");
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
       expect(finalized.hold?.state).toBe("REFUNDED");
+      expect(finalized.replacementToken).toBe("token");
+      expect(finalized.replacementInviteeId).toBe("ben");
     });
   });
 
@@ -202,6 +433,9 @@ describe("Participation", () => {
           status: "WITHDRAWN",
           withdrawnAt: createdAt,
           hold: new FundHold(holdDetails({ state: "AWAITING_REPLACEMENT" })),
+          replacementMode: "INVITE_LINK",
+          replacementToken: "token",
+          replacementInviteeId: "ben",
         }),
       );
 
@@ -211,6 +445,8 @@ describe("Participation", () => {
       // Assert
       expect(expired).not.toBe(withdrawn);
       expect(expired.hold?.state).toBe("FORFEITURE_DUE");
+      expect(expired.replacementToken).toBe("token");
+      expect(expired.replacementInviteeId).toBe("ben");
       expect(withdrawn.hold?.state).toBe("AWAITING_REPLACEMENT");
     });
 

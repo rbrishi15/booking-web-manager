@@ -207,6 +207,7 @@ export function sessionState(s: Session) {
       withdrawnAt: p.withdrawnAt,
       replacementMode: p.replacementMode,
       replacementToken: p.replacementToken,
+      replacementInviteeId: p.replacementInviteeId,
       replacesParticipationId: p.replacesParticipationId,
       verifiedAt: p.verifiedAt,
       verificationMethod: p.verificationMethod,

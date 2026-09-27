@@ -14,6 +14,93 @@ import {
 } from "./session-fixtures";
 
 describe("Session", () => {
+  test("recordAdmission_WhenOnlySeatIsReserved_RejectsOrdinaryAdmissionWithoutChanges", () => {
+    // Arrange
+    const source = createTestSession({ committedUserIds: ["alice", "ben"] });
+    const alice = source.participantList.requireParticipation("p-alice");
+    const reserved = alice.withdraw(
+      alice.hold!.awaitReplacement(),
+      at(10),
+      "INVITE_LINK",
+      "alice-invite",
+      "cara",
+    );
+    const bookingSession = new Session(
+      sessionDetails({
+        participations: [
+          reserved,
+          source.participantList.requireParticipation("p-ben"),
+        ],
+      }),
+    );
+    const admission = committedParticipation(bookingSession, "dana", at(9));
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordAdmission(admission, undefined, at(9)),
+    ).toThrow(expect.objectContaining({ code: "CAPACITY_EXCEEDED" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("recordAdmission_WhenPreparedReplacementNamesWrongRecipient_RejectsWithoutChanges", () => {
+    // Arrange
+    const source = createTestSession({ committedUserIds: ["alice"] });
+    const alice = source.participantList.requireParticipation("p-alice");
+    const reserved = alice.withdraw(
+      alice.hold!.awaitReplacement(),
+      at(10),
+      "INVITE_LINK",
+      "alice-invite",
+      "cara",
+    );
+    const bookingSession = new Session(
+      sessionDetails({ participations: [reserved] }),
+    );
+    const candidate = committedParticipation(bookingSession, "dana", at(9));
+    const admission = Participation.createCommitted({
+      participationId: candidate.participationId,
+      userId: candidate.userId,
+      committedAt: at(9),
+      hold: candidate.hold!,
+      replacesParticipationId: reserved.participationId,
+    });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      bookingSession.recordAdmission(
+        admission,
+        reserved.refundReplacement(at(9)),
+        at(9),
+      ),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("constructor_WhenReservedSeatsAndCommitmentsExceedCapacity_RejectsState", () => {
+    // Arrange
+    const source = createTestSession();
+    const alice = committedParticipation(source, "alice");
+    const reserved = alice.withdraw(
+      alice.hold!.refund(before),
+      before,
+      "INVITE_LINK",
+      "alice-invite",
+      "dana",
+    );
+    const participations = [
+      reserved,
+      committedParticipation(source, "ben"),
+      committedParticipation(source, "cara"),
+    ];
+
+    // Act & Assert
+    expect(() => new Session(sessionDetails({ participations }))).toThrow(
+      expect.objectContaining({ code: "CAPACITY_EXCEEDED" }),
+    );
+  });
+
   test("recordAdmission_WhenHoldIdIsDuplicated_PreservesListAndQueries", () => {
     // Arrange
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });

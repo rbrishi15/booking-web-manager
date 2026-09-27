@@ -131,13 +131,17 @@ for construction, mapping, and encapsulation conventions.
 ## Participant list queries
 
 Read participation state through `session.participantList`, a public
-`ParticipantListView`. Its readonly `participations`, `nextQueueSequence`, and
-`committedCount` properties describe the current collection. Use
+`ParticipantListView`. Its readonly `participations`, `nextQueueSequence`,
+`committedCount`, and `reservedCount` properties describe the current collection.
+Reserved count covers active, unconsumed named places. Use
 `requireParticipation(id)` for a required record, `findByUserId(id)` for an
 optional user lookup, `nextWaitlisted()` for the first waiter, and
-`oldestAwaitingReplacement()` for the existing refund-priority selection.
+`oldestAwaitingReplacement()` for the oldest eligible open-slot late withdrawal.
+`personalReplacementFor(token)` finds an active personal reservation by token;
+`personalReplacementForInvitee(userId)` finds it by its named recipient.
 The next waiter's identity is `session.participantList.nextWaitlisted()?.userId`.
-`Session.getAvailableSlots(now)` retains the session's timing rules.
+`Session.getAvailableSlots(now)` applies the session's timing rules and excludes
+places reserved for named personal replacements from ordinary capacity.
 A captured view retains that list state; read the getter again after a successful
 recording operation to obtain the new state.
 
@@ -178,7 +182,7 @@ all returning `void`:
 
 | Operation | Prepared input |
 | --- | --- |
-| `recordAdmission(admission, refundedReplacement, now)` | New, re-entering, or promoted participation and optional replacement refund. |
+| `recordAdmission(admission, completedReplacement, now)` | New, re-entering, or promoted participation and its optional replaced participation, including any newly due refund. |
 | `recordParticipationTransition(existing, replacement, now?)` | An existing participation and its permitted successor. |
 | `recordCancellation(cancelled, now)` | The complete cancelled roster. |
 | `recordAttendance(verifiedSubset, now)` | The subset of manually verified participations. |
@@ -215,8 +219,8 @@ tests do not establish database concurrency guarantees.
 `Money` is an immutable signed SGD-cent value object. It uses safe integer cents,
 BigInt-backed arithmetic checks, and floor division for the per-slot booking
 share. `Booking` is an immutable value object requiring a positive total cost and
-`startAt < endAt`. A session has at most eight ordinary commitments; the booker
-does not receive a reserved place.
+`startAt < endAt`. A session has at most eight commitments, including accepted
+personal replacements; the booker does not receive a reserved place.
 
 Financial operation amounts are positive and wallet balances are nonnegative at
 the server boundary. A `Wallet` stores no balance field. Its synchronous
@@ -226,7 +230,7 @@ leave spendable funds unchanged because those funds were already locked.
 The result is independent of entry order; an out-of-range result throws.
 Transaction collections are defensively copied, and entries are immutable.
 
-## Participation and reliability
+## Participation
 
 Participation status describes enrollment (`WAITLISTED`, `COMMITTED`,
 `LEFT_WAITLIST`, `WITHDRAWN`, `REMOVED`, `CANCELLED`), while attendance and hold
@@ -239,15 +243,61 @@ replacement holds become `FORFEITURE_DUE`. See the
 [product discussion](../docs/discussions/waitlist-and-replacement-options.md)
 for the source diagram and policy questions separate from that boundary issue.
 
-The working copy also contains a **provisional**
-`Participant.offerPlaceToWaitlist(session, { participationId, now })` action.
-It lets the owning participant change an awaiting personal replacement to an
-open-slot replacement before start and invalidates the personal link. It
-preserves the held share and original withdrawal time and returns no financial
-instructions; a refund still requires a subsequently funded replacement. This
-command and its tests implement a discussion assumption, not a requirement
-approved by the product owner. Personal reservation priority and other waitlist policies
-remain under review in the discussion above.
+## Named replacements and the joining waitlist
+
+The user confirmed the session queue waitlist on 27 September 2026. A departing
+participant has two choices: invite one named person to take their one place,
+or open it to groups / the public waitlist. See
+[ADR-0006](../docs/adr/0006-personal-replacement-reservations.md) for the confirmed
+scope and its distinction from unresolved financial and rejoining proposals.
+
+`Participant.withdraw` accepts `replacementMode: "INVITE_LINK"` with a
+`replacementToken` and one `replacementInviteeId`, or
+`replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot behavior. A personal
+invitation reserves the departing person's one place after early or late
+withdrawal. The token identifies the invitation, but only the named recipient
+may accept it; sharing the token does not transfer that authority.
+
+The application enters explicit acceptance through the named user's participant
+role and supplies `replacementToken` to `join`. A matching token supplies
+invitation access, including for a private session, while the user must still
+meet eligibility and funding requirements. An existing waiter can accept their
+personal invitation from any queue position; everyone else's ordinary order
+remains unchanged.
+
+An otherwise-authorized join by the named recipient also consumes their
+reservation without requiring the token. FIFO promotion does the same when
+that recipient is the queue head, including when their reservation is the only
+vacancy. Promotion still selects the FIFO head; direct personal acceptance is
+available through `join`. This keeps an invitee's reserved place from being
+stranded after they enter through another allowed path.
+
+Successful acceptance consumes the reservation through
+`replacesParticipationId`, locks the entrant's full share, and refunds the
+specific late withdrawal being replaced. A previously refunded early
+withdrawal receives no second refund and does not consume another withdrawal's
+refund opportunity. Failed attempts preserve the reservation, funds, and any
+existing queue position.
+
+Ordinary joining and promotion for other people use only unreserved capacity,
+retain the session's existing visibility/membership rules and FIFO order, and
+select the oldest eligible `OPEN_SLOT` late withdrawal for a replacement refund.
+The confirmation introduces no new group-selection or invitation-delivery system.
+
+`Participant.offerPlaceToWaitlist(session, { participationId, now })` lets the
+owning participant release an active personal reservation before start. It
+clears the token and named recipient, retains the original withdrawal time and
+hold state, and returns no financial instructions. It does not itself promote
+the next waiter or refund an awaiting share.
+
+The repository supplies domain behavior only for this flow. It has no
+departure-choice UI, invitation delivery, application coordinator, or persistence
+adapter. A future coordinator must load the authenticated user, persist the
+recipient with the invitation, and commit admission, reservation consumption,
+and ledger instructions in one transaction. Domain atomicity does not establish
+database concurrency guarantees.
+
+## Reliability calculation
 
 `Participation.reliabilityOutcome(asOf)` derives at most one finalized outcome:
 verified attendance (manual or automatic) or a finalized late-withdrawal hold

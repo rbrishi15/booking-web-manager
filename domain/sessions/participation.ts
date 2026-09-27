@@ -19,6 +19,7 @@ export interface ParticipationDetails {
   readonly withdrawnAt?: Date;
   readonly replacementMode?: ReplacementMode;
   readonly replacementToken?: string;
+  readonly replacementInviteeId?: UUID;
   readonly verifiedAt?: Date;
   readonly verificationMethod?: VerificationMethod;
   readonly replacesParticipationId?: UUID;
@@ -49,6 +50,7 @@ export class Participation {
   readonly #withdrawnAt?: Date;
   readonly #replacementMode?: ReplacementMode;
   readonly #replacementToken?: string;
+  readonly #replacementInviteeId?: UUID;
   readonly #verifiedAt?: Date;
   readonly #verificationMethod?: VerificationMethod;
   readonly #replacesParticipationId?: UUID;
@@ -183,7 +185,8 @@ export class Participation {
     if (details.status !== "WITHDRAWN")
       DomainError.require(
         details.replacementMode === undefined &&
-          details.replacementToken === undefined,
+          details.replacementToken === undefined &&
+          details.replacementInviteeId === undefined,
         "INVALID_INPUT",
         "Replacement details belong only to a withdrawn participation",
       );
@@ -193,18 +196,27 @@ export class Participation {
         "INVALID_INPUT",
         "A replacement token cannot be empty",
       );
-    if (details.replacementMode === "INVITE_LINK")
+    if (details.replacementMode === "INVITE_LINK") {
       DomainError.require(
-        details.replacementToken !== undefined,
+        details.replacementToken !== undefined &&
+          details.replacementInviteeId !== undefined,
         "INVALID_INPUT",
-        "An invitation replacement needs a token",
+        "An invitation replacement needs a token and one named invitee",
       );
-    if (details.replacementMode === "OPEN_SLOT")
+      requireId(details.replacementInviteeId, "replacementInviteeId");
       DomainError.require(
-        details.replacementToken === undefined,
+        details.replacementInviteeId !== details.userId,
         "INVALID_INPUT",
-        "An open-slot replacement cannot have an invitation token",
+        "A participant cannot invite themselves as their replacement",
       );
+    } else {
+      DomainError.require(
+        details.replacementToken === undefined &&
+          details.replacementInviteeId === undefined,
+        "INVALID_INPUT",
+        "Only an invitation replacement can have a token or named invitee",
+      );
+    }
     if (details.replacesParticipationId !== undefined) {
       requireId(details.replacesParticipationId, "replacesParticipationId");
       DomainError.require(
@@ -230,6 +242,7 @@ export class Participation {
     this.#withdrawnAt = withdrawnAt;
     this.#replacementMode = details.replacementMode;
     this.#replacementToken = details.replacementToken;
+    this.#replacementInviteeId = details.replacementInviteeId;
     this.#verifiedAt = verifiedAt;
     this.#verificationMethod = details.verificationMethod;
     this.#replacesParticipationId = details.replacesParticipationId;
@@ -330,6 +343,7 @@ export class Participation {
     at: Date,
     replacementMode?: ReplacementMode,
     replacementToken?: string,
+    replacementInviteeId?: UUID,
   ): Participation {
     DomainError.require(
       this.status === "COMMITTED",
@@ -346,23 +360,12 @@ export class Participation {
       "INVALID_STATE",
       "Withdrawal needs a refunded or awaiting-replacement hold",
     );
-    if (replacementMode === "INVITE_LINK")
-      DomainError.require(
-        replacementToken !== undefined && replacementToken.trim() !== "",
-        "INVALID_INPUT",
-        "An invitation replacement needs a token",
-      );
-    if (replacementMode !== "INVITE_LINK")
-      DomainError.require(
-        replacementToken === undefined,
-        "INVALID_INPUT",
-        "An open-slot replacement cannot have an invitation token",
-      );
     return this.withChanges({
       status: "WITHDRAWN",
       withdrawnAt: at,
       replacementMode,
       replacementToken,
+      replacementInviteeId,
       hold: hold,
     });
   }
@@ -370,7 +373,8 @@ export class Participation {
   offerPlaceToWaitlist(): Participation {
     DomainError.require(
       this.#status === "WITHDRAWN" &&
-        this.#hold?.state === "AWAITING_REPLACEMENT" &&
+        (this.#hold?.state === "AWAITING_REPLACEMENT" ||
+          this.#hold?.state === "REFUNDED") &&
         this.#replacementMode === "INVITE_LINK",
       "INVALID_STATE",
       "Only a place awaiting a personal replacement can be offered to the waitlist",
@@ -378,6 +382,7 @@ export class Participation {
     return this.withChanges({
       replacementMode: "OPEN_SLOT",
       replacementToken: undefined,
+      replacementInviteeId: undefined,
     });
   }
 
@@ -439,6 +444,7 @@ export class Participation {
       status: "CANCELLED",
       replacementMode: undefined,
       replacementToken: undefined,
+      replacementInviteeId: undefined,
       hold: hold ?? this.hold,
     });
   }
@@ -580,6 +586,9 @@ export class Participation {
   get replacementToken(): string | undefined {
     return this.#replacementToken;
   }
+  get replacementInviteeId(): UUID | undefined {
+    return this.#replacementInviteeId;
+  }
   get verifiedAt(): Date | undefined {
     return copyOptionalDate(this.#verifiedAt, "verifiedAt");
   }
@@ -608,6 +617,7 @@ export class Participation {
       withdrawnAt: this.#withdrawnAt,
       replacementMode: this.#replacementMode,
       replacementToken: this.#replacementToken,
+      replacementInviteeId: this.#replacementInviteeId,
       verifiedAt: this.#verifiedAt,
       verificationMethod: this.#verificationMethod,
       replacesParticipationId: this.#replacesParticipationId,

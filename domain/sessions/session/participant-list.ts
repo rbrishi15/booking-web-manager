@@ -12,6 +12,7 @@ import {
 } from "./session-recording";
 import {
   type ParticipantListTerms,
+  personalReplacementReservations,
   validateParticipantList,
 } from "./participant-list-validation";
 
@@ -20,10 +21,13 @@ export interface ParticipantListView {
   readonly participations: readonly Participation[];
   readonly nextQueueSequence: number;
   readonly committedCount: number;
+  readonly reservedCount: number;
   requireParticipation(id: UUID): Participation;
   findByUserId(userId: UUID): Participation | undefined;
   nextWaitlisted(): Participation | undefined;
   oldestAwaitingReplacement(): Participation | undefined;
+  personalReplacementFor(token: string): Participation | undefined;
+  personalReplacementForInvitee(userId: UUID): Participation | undefined;
 }
 
 interface ParticipantListDetails {
@@ -74,6 +78,22 @@ export class ParticipantList implements ParticipantListView {
     return count;
   }
 
+  get reservedCount(): number {
+    return personalReplacementReservations(this.participations).length;
+  }
+
+  personalReplacementFor(token: string): Participation | undefined {
+    return personalReplacementReservations(this.participations).find(
+      (p) => p.replacementToken === token,
+    );
+  }
+
+  personalReplacementForInvitee(userId: UUID): Participation | undefined {
+    return personalReplacementReservations(this.participations).find(
+      (p) => p.replacementInviteeId === userId,
+    );
+  }
+
   requireParticipation(id: UUID): Participation {
     const participation = this.#byId.get(id);
     if (participation === undefined)
@@ -109,6 +129,7 @@ export class ParticipantList implements ParticipantListView {
     for (const participation of this.#byId.values()) {
       if (
         participation.status !== "WITHDRAWN" ||
+        participation.replacementMode === "INVITE_LINK" ||
         participation.hold?.state !== "AWAITING_REPLACEMENT"
       )
         continue;
@@ -125,14 +146,14 @@ export class ParticipantList implements ParticipantListView {
 
   withAdmission(
     admission: Participation,
-    refundedReplacement: Participation | undefined,
+    completedReplacement: Participation | undefined,
     now: Date,
     expectedShare: Money,
   ): ParticipantList {
     validateAdmission(
       this,
       admission,
-      refundedReplacement,
+      completedReplacement,
       this.#terms.totalSlots,
       now,
     );
@@ -144,8 +165,8 @@ export class ParticipantList implements ParticipantListView {
       );
     const next = new Map(this.#byId);
     next.set(admission.participationId, admission);
-    if (refundedReplacement !== undefined)
-      next.set(refundedReplacement.participationId, refundedReplacement);
+    if (completedReplacement !== undefined)
+      next.set(completedReplacement.participationId, completedReplacement);
     return new ParticipantList(
       {
         participations: [...next.values()],
@@ -166,6 +187,16 @@ export class ParticipantList implements ParticipantListView {
       "INVALID_STATE",
       "The participation is not the current owned record",
     );
+    if (
+      existing.status === "WITHDRAWN" &&
+      existing.replacementMode === "INVITE_LINK"
+    )
+      DomainError.require(
+        existing.replacementToken !== undefined &&
+          this.personalReplacementFor(existing.replacementToken) === existing,
+        "INVALID_STATE",
+        "Only an unclaimed replacement seat may be offered to the waitlist",
+      );
     validateParticipationTransition(existing, replacement, now);
     return this.withReplacements([replacement]);
   }

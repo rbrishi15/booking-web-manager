@@ -10,6 +10,133 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("promoteFromWaitlist_WhenFirstWaiterOwnsTheOnlyReservedVacancy_ConsumesTheirInvitation", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["cara", "dana"],
+    });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+        replacementInviteeId: "cara",
+      });
+    const queueSequence = bookingSession.participantList.nextQueueSequence;
+
+    // Act
+    const promotion = createTestUser({ userId: "cara" })
+      .asParticipant()
+      .promoteFromWaitlist(bookingSession, {
+        holdId: "h-cara",
+        now: at(9),
+      });
+
+    // Assert
+    expect(promotion.kind).toBe("PROMOTED");
+    expect(promotion.refundedParticipationId).toBe("p-ben");
+    expect(
+      promotion.instructions.map((instruction) => instruction.kind),
+    ).toEqual(["LOCK", "REFUND"]);
+    expect(
+      bookingSession.participantList.requireParticipation("p-cara")
+        .replacesParticipationId,
+    ).toBe("p-ben");
+    expect(bookingSession.participantList.committedCount).toBe(2);
+    expect(bookingSession.getAvailableSlots(at(9))).toBe(0);
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+    expect(bookingSession.participantList.nextQueueSequence).toBe(
+      queueSequence,
+    );
+  });
+
+  test("promoteFromWaitlist_WhenOnlyVacancyIsReserved_RejectsWithoutMovingTheQueue", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana", "evan"],
+    });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+        replacementInviteeId: "cara",
+      });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() =>
+      createTestUser({ userId: "dana" })
+        .asParticipant()
+        .promoteFromWaitlist(bookingSession, {
+          holdId: "h-dana",
+          now: at(9),
+        }),
+    ).toThrow(expect.objectContaining({ code: "CAPACITY_EXCEEDED" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "dana",
+    );
+  });
+
+  test("promoteFromWaitlist_WhenAnOlderWithdrawalIsReserved_RefundsOnlyTheOpenWithdrawal", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+      waitlistedUserIds: ["dana", "evan"],
+    });
+    createTestUser({ userId: "ben" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-ben",
+        now: at(10),
+        replacementMode: "INVITE_LINK",
+        replacementToken: "ben-replacement",
+        replacementInviteeId: "cara",
+      });
+    createTestUser({ userId: "alice" })
+      .asParticipant()
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: at(9),
+        replacementMode: "OPEN_SLOT",
+      });
+
+    // Act
+    const promotion = createTestUser({ userId: "dana" })
+      .asParticipant()
+      .promoteFromWaitlist(bookingSession, {
+        holdId: "h-dana",
+        now: at(8),
+      });
+
+    // Assert
+    expect(promotion.kind).toBe("PROMOTED");
+    expect(promotion.refundedParticipationId).toBe("p-alice");
+    expect(
+      promotion.instructions.map((instruction) => instruction.kind),
+    ).toEqual(["LOCK", "REFUND"]);
+    expect(
+      bookingSession.participantList.requireParticipation("p-dana")
+        .replacesParticipationId,
+    ).toBe("p-alice");
+    expect(
+      bookingSession.participantList.requireParticipation("p-ben").hold?.state,
+    ).toBe("AWAITING_REPLACEMENT");
+    expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe(
+      "evan",
+    );
+    expect(bookingSession.getAvailableSlots(at(8))).toBe(0);
+  });
+
   test("promoteFromWaitlist_WhenQueueIsEmpty_ReturnsNoneBeforeValidatingHoldId", () => {
     // Arrange
     const bookingSession = createTestSession();
@@ -245,6 +372,7 @@ describe("Participant", () => {
       now: at(10),
       replacementMode: "INVITE_LINK",
       replacementToken: "ben-replacement",
+      replacementInviteeId: "cara",
     });
     owner.offerPlaceToWaitlist(bookingSession, {
       participationId: "p-ben",
@@ -307,6 +435,7 @@ describe("Participant", () => {
         now: at(10),
         replacementMode: "INVITE_LINK",
         replacementToken: "ben-replacement",
+        replacementInviteeId: "cara",
       });
     createTestUser({ userId: "alice" })
       .asParticipant()
