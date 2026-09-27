@@ -30,18 +30,12 @@ export class Booking {
     if (endAt <= startAt) {
       throw new RangeError("Booking endAt must be after startAt");
     }
-    if (!(details.totalCost instanceof Money)) {
-      throw new RangeError("Booking totalCost must be Money");
-    }
     if (details.totalCost.toCents() <= 0) {
       throw new RangeError("Booking totalCost must be positive");
     }
     if (
-      typeof details.venueName !== "string" ||
       details.venueName.trim() === "" ||
-      typeof details.region !== "string" ||
       details.region.trim() === "" ||
-      typeof details.sport !== "string" ||
       details.sport.trim() === ""
     ) {
       throw new RangeError("Booking venue, region, and sport are required");

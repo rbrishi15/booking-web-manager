@@ -1,15 +1,15 @@
 import { copyDate, copyOptionalDate } from "../shared/date";
-import { DomainError, requireDomain } from "../shared/errors";
+import { DomainError } from "../shared/errors";
 import type {
   PayoutDestination,
   PayoutRequestedIntent,
-  SettlementBatch,
+  PayoutBatch,
 } from "../shared/operations";
 import type { PayoutStatus } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import { Money } from "./money";
 
-export interface PayoutDetails {
+export interface PayoutAttemptDetails {
   readonly payoutId: UUID;
   readonly sessionId: UUID;
   readonly payoutAccountId: UUID;
@@ -22,11 +22,11 @@ export interface PayoutDetails {
   readonly failureReason?: string;
   readonly providerReference?: string;
   readonly destination: PayoutDestination;
-  readonly lines: readonly SettlementBatch["lines"][number][];
+  readonly lines: readonly PayoutBatch["lines"][number][];
 }
 
 /**
- * Aggregate root: Payout.
+ * Aggregate root: PayoutAttempt.
  * Owns one provider attempt's status and outcome, with fixed settlement lines,
  * amount, destination, and idempotency key. Completion and failure commands enter
  * through this root; terminal outcomes are retained and retries use a new root.
@@ -34,7 +34,7 @@ export interface PayoutDetails {
  * coordinator combines both roots' changes and the resulting ledger effects.
  * See docs/adr/0003-aggregate-roots-and-boundaries.md.
  */
-export class Payout {
+export class PayoutAttempt {
   readonly #payoutId: UUID;
   readonly #sessionId: UUID;
   readonly #payoutAccountId: UUID;
@@ -47,25 +47,20 @@ export class Payout {
   #failureReason?: string;
   #providerReference?: string;
   readonly #destination: PayoutDestination;
-  readonly #lines: readonly SettlementBatch["lines"][number][];
+  readonly #lines: readonly PayoutBatch["lines"][number][];
 
-  constructor(details: PayoutDetails) {
-    requireDomain(
+  constructor(details: PayoutAttemptDetails) {
+    DomainError.require(
       ["REQUESTED", "COMPLETED", "FAILED"].includes(details.status),
       "INVALID_INPUT",
       "Unknown payout status",
     );
-    requireDomain(
-      details.amount instanceof Money,
-      "INVALID_INPUT",
-      "Payout amount must be Money",
-    );
-    requireDomain(
+    DomainError.require(
       Array.isArray(details.lines),
       "INVALID_INPUT",
       "A payout needs settlement lines",
     );
-    requireDomain(
+    DomainError.require(
       details.destination !== undefined && details.destination !== null,
       "INVALID_INPUT",
       "A payout needs a destination",
@@ -85,40 +80,46 @@ export class Payout {
       (sum, line) => sum.add(line.amount),
       Money.fromCents(0),
     );
-    requireDomain(
+    DomainError.require(
       details.amount.equals(amount),
       "INVALID_INPUT",
       "Payout amount must equal its settlement lines",
     );
-    requireDomain(
+    DomainError.require(
       details.payoutAccountId === details.destination.payoutAccountId,
       "INVALID_INPUT",
       "Payout account must match its destination",
     );
     if (details.status === "COMPLETED") {
       validateText(details.providerReference, "providerReference");
-      requireDomain(
+      const hasCompletedOutcome =
         details.completedAt !== undefined &&
-          details.failedAt === undefined &&
-          details.failureReason === undefined,
+        details.failedAt === undefined &&
+        details.failureReason === undefined;
+      DomainError.require(
+        hasCompletedOutcome,
         "INVALID_INPUT",
         "A completed payout needs only completedAt",
       );
     } else if (details.status === "FAILED") {
       validateText(details.failureReason, "failureReason");
-      requireDomain(
+      const hasFailedOutcome =
         details.failedAt !== undefined &&
-          details.completedAt === undefined &&
-          details.providerReference === undefined,
+        details.completedAt === undefined &&
+        details.providerReference === undefined;
+      DomainError.require(
+        hasFailedOutcome,
         "INVALID_INPUT",
         "A failed payout needs failedAt and a reason",
       );
     } else {
-      requireDomain(
+      const hasNoOutcome =
         details.completedAt === undefined &&
-          details.failedAt === undefined &&
-          details.failureReason === undefined &&
-          details.providerReference === undefined,
+        details.failedAt === undefined &&
+        details.failureReason === undefined &&
+        details.providerReference === undefined;
+      DomainError.require(
+        hasNoOutcome,
         "INVALID_INPUT",
         "A requested payout cannot contain an outcome",
       );
@@ -139,13 +140,13 @@ export class Payout {
     this.#lines = details.lines.map((line) => ({ ...line }));
   }
 
-  static create(batch: SettlementBatch): Payout {
+  static create(batch: PayoutBatch): PayoutAttempt {
     validateBatch(batch);
     const amount = batch.lines.reduce(
       (sum, line) => sum.add(line.amount),
       Money.fromCents(0),
     );
-    return new Payout({
+    return new PayoutAttempt({
       payoutId: batch.payoutId,
       sessionId: batch.sessionId,
       payoutAccountId: batch.destination.payoutAccountId,
@@ -245,17 +246,17 @@ export class Payout {
   get destination(): PayoutDestination {
     return { ...this.#destination };
   }
-  get lines(): readonly SettlementBatch["lines"][number][] {
+  get lines(): readonly PayoutBatch["lines"][number][] {
     return this.#lines.map((line) => ({ ...line }));
   }
 }
 
-function validateBatch(batch: SettlementBatch): void {
+function validateBatch(batch: PayoutBatch): void {
   validateText(batch.payoutId, "payoutId");
   validateText(batch.sessionId, "sessionId");
   validateText(batch.idempotencyKey, "idempotencyKey");
   copyDate(batch.requestedAt, "requestedAt");
-  requireDomain(
+  DomainError.require(
     batch.destination !== undefined && batch.destination !== null,
     "INVALID_INPUT",
     "A payout needs a destination",
@@ -267,34 +268,32 @@ function validateBatch(batch: SettlementBatch): void {
     "providerAccountReference",
   );
   validateText(batch.destination.bankAccountReference, "bankAccountReference");
-  requireDomain(
+  DomainError.require(
     Array.isArray(batch.lines) && batch.lines.length > 0,
     "INVALID_INPUT",
     "A payout batch must contain at least one line",
   );
   const ids = new Set(batch.lines.map((line) => line.holdId));
-  requireDomain(
+  DomainError.require(
     ids.size === batch.lines.length,
     "DUPLICATE_ID",
     "A payout batch cannot repeat a hold",
   );
-  for (const line of batch.lines)
-    requireDomain(
-      typeof line.holdId === "string" &&
-        line.holdId.trim() !== "" &&
-        typeof line.participationId === "string" &&
-        line.participationId.trim() !== "" &&
-        typeof line.holdingAccountId === "string" &&
-        line.holdingAccountId.trim() !== "" &&
-        typeof line.walletId === "string" &&
-        line.walletId.trim() !== "" &&
-        line.amount instanceof Money &&
-        line.amount.toCents() > 0,
+  for (const line of batch.lines) {
+    const hasValidPayoutLineDetails =
+      line.holdId.trim() !== "" &&
+      line.participationId.trim() !== "" &&
+      line.holdingAccountId.trim() !== "" &&
+      line.walletId.trim() !== "" &&
+      line.amount.toCents() > 0;
+    DomainError.require(
+      hasValidPayoutLineDetails,
       "INVALID_INPUT",
       "A payout line must be positive",
     );
+  }
   for (const line of batch.lines)
-    requireDomain(
+    DomainError.require(
       line.kind === "RELEASE" || line.kind === "FORFEIT",
       "INVALID_INPUT",
       "Unknown payout line kind",
@@ -305,8 +304,8 @@ function validateText(
   value: string | undefined,
   name: string,
 ): asserts value is string {
-  requireDomain(
-    typeof value === "string" && value.trim() !== "",
+  DomainError.require(
+    value !== undefined && value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
   );
