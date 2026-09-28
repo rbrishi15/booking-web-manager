@@ -9,6 +9,7 @@ interface InfoNoteProps {
 }
 
 
+/** Displays an informational note with an optional decorative icon. */
 export function InfoNote({ children, icon = false, className }: InfoNoteProps) {
   return (
     <div

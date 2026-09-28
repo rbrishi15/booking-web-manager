@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 
+/** Renders the groups placeholder and its create-group button. */
 export default function GroupsPage() {
   return (
     <>

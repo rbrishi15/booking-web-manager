@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: "Sports venue booking coordination",
 };
 
+/** Wraps every page in the document shell with the Inter font and base theme styles. */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

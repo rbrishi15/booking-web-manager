@@ -9,6 +9,7 @@ interface EmptyStateProps {
 }
 
 
+/** Renders an empty-content placeholder with an optional description and action. */
 export function EmptyState({ title, description, action, className }: EmptyStateProps) {
   return (
     <div

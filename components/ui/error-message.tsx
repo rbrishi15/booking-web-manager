@@ -7,6 +7,7 @@ interface ErrorMessageProps {
 }
 
 
+/** Displays an error with alert semantics so assistive technology can announce it. */
 export function ErrorMessage({ children, className }: ErrorMessageProps) {
   return (
     <div

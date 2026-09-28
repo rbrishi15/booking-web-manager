@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 
+/** Renders the settings placeholder and its public-profile button. */
 export default function ProfilePage() {
   return (
     <>

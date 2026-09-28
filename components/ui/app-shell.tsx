@@ -40,6 +40,7 @@ interface AppShellProps {
   readonly children: React.ReactNode;
 }
 
+/** Returns uppercase initials from the first two name parts, or "?" for a blank name. */
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
@@ -47,6 +48,7 @@ function initials(name: string): string {
 }
 
 
+/** Renders active-route navigation and account details, with optional logout and navigation callbacks. */
 function SidebarContents({
   user,
   logoutAction,
@@ -125,6 +127,7 @@ function SidebarContents({
 }
 
 
+/** Frames page content with a desktop sidebar and a mobile menu that closes on navigation. */
 export function AppShell({ user, logoutAction, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 

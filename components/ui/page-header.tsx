@@ -7,6 +7,7 @@ interface PageHeaderProps {
 }
 
 
+/** Renders a page title with optional breadcrumb text and actions in a wrapping header. */
 export function PageHeader({ breadcrumb, title, actions }: PageHeaderProps) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-4 border-b bg-card px-4 py-5 md:px-8 md:py-6">

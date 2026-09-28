@@ -7,6 +7,7 @@ interface LoadingSpinnerProps {
 }
 
 
+/** Displays a loading status and label, animating the spinner when reduced motion is not requested. */
 export function LoadingSpinner({ label = "Loading…", className }: LoadingSpinnerProps) {
   return (
     <div

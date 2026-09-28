@@ -32,6 +32,12 @@ interface ConfirmDialogProps {
 }
 
 
+/**
+ * Requests confirmation with an optional amount in integer SGD cents.
+ * The trigger must render a focusable element that accepts Radix trigger props and a ref.
+ * Disables action buttons and prevents closing while confirmation is pending;
+ * closes on success and displays an error on failure.
+ */
 export function ConfirmDialog({
   trigger,
   title,
@@ -47,6 +53,7 @@ export function ConfirmDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Runs the confirmation callback, displays failures, and always clears pending state. */
   async function handleConfirm() {
     setPending(true);
     setError(null);
