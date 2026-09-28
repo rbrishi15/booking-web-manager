@@ -59,7 +59,7 @@ function SidebarContents({
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full flex-col gap-6 p-5">
+    <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       {/* Logo */}
       <Link href="/discover" onClick={onNavigate} className="text-2xl font-bold tracking-tight">
         Booking.

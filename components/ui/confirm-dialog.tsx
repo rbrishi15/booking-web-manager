@@ -11,11 +11,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ErrorMessage } from "@/components/ui/error-message";
 import { Money } from "@/components/ui/money";
 
 interface ConfirmDialogProps {
 
-  readonly trigger: React.ReactNode;
+  readonly trigger: React.ReactElement;
   readonly title: string;
   readonly description: React.ReactNode;
  
@@ -84,9 +85,7 @@ export function ConfirmDialog({
           </div>
         )}
 
-        {error !== null && (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-        )}
+        {error !== null && <ErrorMessage>{error}</ErrorMessage>}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>

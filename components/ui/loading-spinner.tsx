@@ -13,7 +13,7 @@ export function LoadingSpinner({ label = "Loading…", className }: LoadingSpinn
       role="status"
       className={cn("flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground", className)}
     >
-      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
       {label}
     </div>
   );
