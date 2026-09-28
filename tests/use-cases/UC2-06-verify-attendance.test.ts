@@ -4,9 +4,6 @@ import { describe, test } from "vitest";
 describe("UC2-06 Verify Attendance", () => {
   test.todo("releases held funds to the booker on manual verification");
   test.todo(
-    "settles unreplaced late withdrawals marked FORFEITURE_DUE by UC2-05 and pays the booker exactly once",
-  );
-  test.todo(
     "auto-verifies and releases funds 72h after session end (not start) if unverified",
   );
 });

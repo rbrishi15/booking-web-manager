@@ -198,7 +198,7 @@ support that choice; they are not supplied by the domain implementation alone.
 | Which remaining rows in section 4 are approved or changed? | Switching proposals are rejected and link/token proposals are superseded. The scope above does not imply approval of unrelated financial rules or invitation expiry policy. | Switching rejected; links superseded; remaining policies reviewed separately |
 | Should the completion example show $20 or $30 available? | User proposes $20 available and $0 held after paying the $10 share. The original diagram shows $30; reconcile with the product owner. | Pending |
 
-## 7. Current domain and coordinator capability
+## 7. Current domain capability and remaining work
 
 The domain implements the confirmed named replacement and ordinary waitlist
 allocation. `DIRECT_INVITE` stores one `replacementInviteeId`; there is no
@@ -233,21 +233,11 @@ existing queue position unchanged.
 No invitation-decline or invitation-cancellation workflow is added. Existing
 session cancellation and start rules remain unchanged.
 
-UC2-05 now has `WithdrawFromSession`, `AcceptReplacement`, and
-`ExpireSessionReplacements` [coordinators](../../use-cases/README.md). They load
-authoritative state and commit domain changes with their ledger instructions
-through the shared unit-of-work contract. An open-slot withdrawal immediately
-processes ordinary vacancies through the FIFO queue; explicit acceptance also
-processes remaining vacancies. An invited queue head blocks ordinary promotion.
-Expiry runs only at or after session start and marks unmatched holds
-`FORFEITURE_DUE`, with no ledger forfeiture or payment to the booker. Booker
-payout and final financial settlement remain UC2-06 work.
-
-There is no departure-choice UI, invitation delivery, production application
-UnitOfWork, session-repository adapter, or expiry scheduler for this flow.
-Future adapters must obtain actor IDs from authentication and honor the
-transaction rollback and request-bound replay contract. The transactional test
-adapter verifies orchestration, not production database concurrency guarantees.
+There is no departure-choice UI, invitation delivery, application coordinator,
+or persistence adapter for this flow in the repository. A future application
+must load the authenticated user's identity and persist participation changes
+and financial instructions atomically; the domain does not itself authenticate
+requests, deliver invitations, or guarantee concurrent database writes.
 
 The inclusive 30-hour correction and proposed return after late withdrawal
 remain unimplemented. Current admission rejects rejoining after withdrawal,

@@ -9,11 +9,6 @@ The current implementation's [domain UML class diagram](./domain-class-diagram.m
 is available as [PlantUML source](./domain-class-diagram.puml) and a
 [scalable SVG](./assets/domain-class-diagram.svg).
 
-The [use-case guide](../use-cases/README.md) describes the implemented UC2-05
-withdrawal, replacement acceptance, and expiry coordinators, their transaction
-contract, and remaining production integration work. Booker payout remains
-UC2-06 settlement work.
-
 Architecture decisions are recorded in [`docs/adr`](./adr):
 
 - [ADR-0001: Use-case-driven development](./adr/0001-use-case-driven-development.md).

@@ -56,34 +56,10 @@ export interface DomainTransaction {
   readonly payoutIntents: DurablePayoutIntentPort;
 }
 
-export interface UnitOfWorkRequest {
-  readonly idempotencyKey: string;
-  /** Identifies the operation, such as "UC2-05:withdraw". */
-  readonly scope: string;
-  /** Caller intent only; generated IDs and execution time are not request inputs. */
-  readonly request: unknown;
-}
-
-/**
- * Commits repository changes, ledger writes, durable intents and the successful
- * result atomically. A rejected callback rolls all of them back, including its
- * idempotency claim, so a failed request can be retried with the same key.
- *
- * A successful key replays its original result without invoking work again.
- * Reusing it with a different scope or canonical request must be rejected;
- * object property order does not change request identity. Implementations must
- * include both scope and request when checking replay identity, and serialize
- * concurrent uses of the same key. Results must survive a JSON round trip.
- * Transaction reads observe earlier writes and isolate tentative domain objects
- * so a failed command cannot mutate committed state through an object alias.
- * Conflicting session or wallet changes must serialize or abort for a complete
- * transaction retry; different request keys must not allow overspending or
- * allocating the same capacity twice.
- * External API calls must never run inside work.
- */
+/** Implementations provide transaction rollback and idempotent replay semantics. */
 export interface UnitOfWork {
   execute<T>(
-    request: UnitOfWorkRequest,
+    idempotencyKey: string,
     work: (transaction: DomainTransaction) => Promise<T>,
   ): Promise<T>;
 }

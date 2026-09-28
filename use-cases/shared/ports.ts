@@ -7,5 +7,4 @@ export type {
   LedgerWriter,
   Repository,
   UnitOfWork,
-  UnitOfWorkRequest,
 } from "./contracts";

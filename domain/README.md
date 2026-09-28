@@ -1,12 +1,10 @@
 # Domain model
 
 The domain is framework independent TypeScript. It imports no Next.js, database,
-HTTP, or payment SDK code. [Use-case coordinators](../use-cases/README.md) load
-authoritative state, invoke domain roles, and commit returned financial
-instructions in one unit of work through `/use-cases/shared` contracts.
-UC2-05 supplies withdrawal, explicit replacement acceptance, and replacement
-expiry coordinators; production transaction and session-repository adapters
-remain outstanding.
+HTTP, or payment SDK code. Shared contracts in `/use-cases/shared` define the
+boundary for future coordinators that will load authoritative state, invoke
+aggregate commands, and commit returned financial instructions in one unit of
+work.
 
 ## Aggregate roots
 
@@ -208,16 +206,14 @@ lock/refund instruction construction remains in the internal
 setters, callback-based mutations, revision mechanism, or public workflow plans;
 aggregate ownership is unchanged.
 
-Use-case coordinators load Session and the complete User through transaction
-repositories, invoke the appropriate role, then save the session and apply its
-returned financial instructions in the same unit of work. UC2-05 now implements
-this collaboration for withdrawal and replacement acceptance. It does not call
-internal helpers or save child changes independently. Its system expiry
-coordinator invokes Session directly. Automatic verification and payout
-callbacks retain their domain entry points; their application integration and
-booker payout remain UC2-06 work. A future payout dispatcher calls the provider
-outside the transaction. Domain atomicity and transactional test doubles do not
-establish production database concurrency guarantees.
+A future use case loads Session and the complete User through its transaction
+repositories, invokes the appropriate Participant or Booker action, then saves
+the session and applies its returned financial instructions in the same unit of
+work. It does not call internal helpers or save child changes independently.
+Automatic verification, replacement expiry, and payout callbacks invoke Session
+directly. Payout dispatch calls the provider outside the transaction. This split
+adds no use-case, database, or payment-provider implementation; domain atomicity
+tests do not establish database concurrency guarantees.
 
 ## Money and booking
 
@@ -262,9 +258,6 @@ scope and its distinction from unresolved financial and rejoining proposals.
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
 behavior. A direct invitation reserves the departing person's one place after
 early or late withdrawal. There is no replacement link or token.
-The application-facing `WithdrawFromSession` interface requires an explicit
-`withdrawAndInvite` or `withdrawAndOpenToWaitlist` operation even though the
-domain method retains its open-slot default.
 
 The application loads the authenticated named user's participant role and calls
 `acceptReplacement(session, { participationId, holdId, now })`. The user's ID
@@ -298,19 +291,12 @@ already-waitlisted named invitee can still accept it as described above.
 There is no new action to decline or cancel a personal invitation. Existing
 session cancellation and start rules still apply.
 
-The [UC2-05 coordinators](../use-cases/README.md) load authoritative users and
-sessions and commit withdrawal or acceptance with its ledger instructions.
-Open-slot withdrawal immediately processes the FIFO queue over unreserved
-vacancies; explicit acceptance also processes remaining vacancies. An invited
-queue head blocks ordinary promotion. Expiry at or after start only marks
-unmatched holds `FORFEITURE_DUE`; it does not append a forfeiture entry or pay
-the booker. Those settlement effects remain UC2-06 work.
-
-There is no departure-choice UI, invitation delivery, production application
-UnitOfWork, session-repository adapter, or scheduler for this flow. Future
-adapters must persist the invitation recipient and satisfy the unit-of-work
-rollback and scoped request-replay contract. The transactional test adapter
-proves orchestration behavior, not production database concurrency guarantees.
+The repository supplies domain behavior only for this flow. It has no
+departure-choice UI, invitation delivery, application coordinator, or persistence
+adapter. A future coordinator must load the authenticated user, persist the
+recipient with the invitation, and commit admission, reservation consumption,
+and ledger instructions in one transaction. Domain atomicity does not establish
+database concurrency guarantees.
 
 ## Reliability calculation
 

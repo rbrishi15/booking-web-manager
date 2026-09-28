@@ -35,8 +35,8 @@ financial, rejoining, completion-balance, and cutoff questions remain separate.
 ## Domain representation and consequences
 
 `DIRECT_INVITE` replaces `INVITE_LINK` and stores one `replacementInviteeId`;
-there is no `replacementToken`. The `AcceptReplacement` coordinator loads the
-invitee's authoritative `User` and calls its participant role's
+there is no `replacementToken`. A future application loads the authenticated
+invitee's `User` and calls its participant role's
 `acceptReplacement(session, { participationId, holdId, now })` action. The user's
 identity authorizes their unique active pending reservation, including access
 to a private session. Eligibility and funding checks still apply. The invitation
@@ -78,23 +78,11 @@ session cancellation, start timing, and existing financial rules remain separate
 Aggregate ownership remains as described in
 [ADR-0003](./0003-aggregate-roots-and-boundaries.md), with current role workflows
 and recording boundaries in [ADR-0009](./0009-role-workflows-and-session-recording.md).
-Participant and Session supply the domain behavior. As of 28 September 2026,
-UC2-05's [application coordinators](../../use-cases/README.md) load authoritative
-state and commit withdrawal or explicit acceptance with the resulting ledger
-instructions. Open-slot withdrawal processes ordinary vacancies through the
-FIFO queue immediately; acceptance also processes remaining vacancies. A queue
-head with a pending direct invitation blocks ordinary promotion.
-
-The expiry coordinator rejects execution before start, then marks unmatched
-holds `FORFEITURE_DUE` at or after start without writing a forfeiture entry or
-paying the booker. Those settlement effects remain UC2-06 work. All coordinators
-use the shared unit-of-work descriptor with request-bound replay and rollback.
-
-The repository still has no departure-choice UI, invitation delivery, production
-application UnitOfWork, session-repository adapter, or expiry scheduler for this
-flow. Future adapters must persist the invitation's recipient and honor the
-transaction contract. The transactional test adapter verifies orchestration;
-domain checks and those tests do not establish database concurrency safety.
+Participant and Session supply the domain behavior. This repository has no
+departure-choice UI, invitation delivery, application coordinator, or persistence
+adapter for the flow. Future adapters must persist the invitation's recipient
+and commit acceptance, reservation consumption, and ledger instructions in one
+transaction. Domain checks alone do not establish database concurrency safety.
 
 The existing exactly-30-hour refund discrepancy and the proposal to rejoin
 after a late withdrawal are unchanged by this decision.

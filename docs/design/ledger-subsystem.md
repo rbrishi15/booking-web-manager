@@ -401,18 +401,12 @@ network round trip; under concurrent load the session row becomes a queue.
 | REQ-20, REQ-21 booking share | `bookingShare` | `allocation.test.ts` |
 | UC1-05 wallet | ledger schema, read adapter | `ledger-operations.test.ts` |
 | UC2-04 commit | `LOCK`, atomic transaction, row locks | `ledger-concurrency.test.ts`, `.db.test.ts` |
-| UC2-05 withdraw / accept replacement | `REFUND`, replacement/promotion `LOCK`; expiry only marks domain `FORFEITURE_DUE` | `ledger-operations.test.ts`; coordinator coverage in `UC2-05-withdraw-from-session.test.ts` |
+| UC2-05 withdraw | `REFUND`, `FORFEIT` | `ledger-operations.test.ts` |
 | UC2-06 verify attendance | `RELEASE`, `FORFEIT` | `ledger-operations.test.ts` |
 | UC1-08 withdraw funds | `PAYOUT`, `payout_payables` | `ledger-operations.test.ts` |
 | Safety: no negative balance | `wallet_balances_never_negative` | both concurrency tests |
 | Safety: idempotency | `idempotency_keys`, UNIQUE index | `ledger-operations.test.ts` |
 | Observability | `reconcile_ledger()`, hourly pg_cron | `ledger-concurrency.db.test.ts` |
-
-UC2-05's [application coordinators](../../use-cases/README.md) do not append a
-`FORFEIT` entry or pay the booker when replacements expire. Final `FORFEIT` /
-`RELEASE` effects and payout remain UC2-06 settlement work. The existing ledger
-subsystem does not by itself supply the new coordinators' production application
-UnitOfWork or session-repository adapter.
 
 ---
 
