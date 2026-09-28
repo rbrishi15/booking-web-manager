@@ -10,13 +10,33 @@ and ledger instructions together.
 
 The production coordinators live in `use-cases/sessions`:
 
-| Coordinator | `execute` input | Result |
+| Coordinator operation | Input | Result |
 | --- | --- | --- |
-| [WithdrawFromSession](./sessions/WithdrawFromSession.ts) | `actorId`, `sessionId`, `idempotencyKey`, and `replacementMode: "OPEN_SLOT"` or `replacementMode: "DIRECT_INVITE"` with one `replacementInviteeId` | `kind: "REFUNDED"` or `"AWAITING_REPLACEMENT"`, with `participationId` |
-| [AcceptReplacement](./sessions/AcceptReplacement.ts) | `actorId`, `sessionId`, `idempotencyKey` | `kind: "COMMITTED"`, with `participationId` and an optional `refundedParticipationId` |
-| [ExpireSessionReplacements](./sessions/ExpireSessionReplacements.ts) | `sessionId`, `idempotencyKey` | `expiredParticipationIds` |
+| [WithdrawFromSession.withdrawAndInvite](./sessions/WithdrawFromSession.ts) | One `replacementInviteeId`, then a `WithdrawFromSessionRequest` | `kind: "REFUNDED"` or `"AWAITING_REPLACEMENT"`, with `participationId` |
+| [WithdrawFromSession.withdrawAndOpenToWaitlist](./sessions/WithdrawFromSession.ts) | A `WithdrawFromSessionRequest` | `kind: "REFUNDED"` or `"AWAITING_REPLACEMENT"`, with `participationId` |
+| [AcceptReplacement.execute](./sessions/AcceptReplacement.ts) | `actorId`, `sessionId`, `idempotencyKey` | `kind: "COMMITTED"`, with `participationId` and an optional `refundedParticipationId` |
+| [ExpireSessionReplacements.execute](./sessions/ExpireSessionReplacements.ts) | `sessionId`, `idempotencyKey` | `expiredParticipationIds` |
 
-The classes and command/result types are exported from [sessions/index.ts](./sessions/index.ts).
+The classes and request/command/result types are exported from
+[sessions/index.ts](./sessions/index.ts). `WithdrawFromSessionRequest` contains
+only the authenticated actor, session, and caller-supplied idempotency key:
+
+```ts
+const withdrawal = new WithdrawFromSession(dependencies);
+const benLeaving: WithdrawFromSessionRequest = {
+  actorId: "ben",
+  sessionId: "s",
+  idempotencyKey: "ben-withdrawal",
+};
+
+await withdrawal.withdrawAndInvite("cara", benLeaving);
+```
+
+For a waitlist withdrawal, call `withdrawal.withdrawAndOpenToWaitlist(benLeaving)`.
+Each method withdraws the participant and records that fixed choice. Both share
+one transaction implementation, retaining the existing private mode-based
+request identity for replay. The public withdrawal interface has no `execute`
+method or mode selector.
 
 Actor IDs must come from a trusted authentication boundary. Callers do not
 supply participation IDs, balances, hold IDs, timestamps, or ledger instructions.

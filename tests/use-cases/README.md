@@ -9,11 +9,19 @@ what makes a UC traceable to its test from a commit message, a PR title, or
 
 ## Coordinator tests
 
-UC2-05 exercises the production `WithdrawFromSession`, `AcceptReplacement`, and
-`ExpireSessionReplacements` coordinators through their `execute` methods. The
+UC2-05 exercises the production `WithdrawFromSession` coordinator through
+`withdrawAndInvite(replacementInviteeId, request)` and
+`withdrawAndOpenToWaitlist(request)`. `AcceptReplacement` and
+`ExpireSessionReplacements` retain their `execute` methods. The
 [use-case guide](../../use-cases/README.md) describes their inputs, outputs, and
 transaction contract. Keep business state transitions in the real domain
 objects, with test adapters supplying repositories, the ledger, and UnitOfWork.
+
+Use the same public operations as application callers. Name withdrawal request
+context for its role in the scenario, such as `benLeaving`, and keep the action
+visible at the call site: `withdrawal.withdrawAndInvite("cara", benLeaving)`.
+The request supplies `actorId`, `sessionId`, and `idempotencyKey`; the operation
+expresses the departure choice.
 
 The transactional test adapter supplies isolated state, rollback, and replay
 semantics to verify orchestration. Its passing tests do not establish production

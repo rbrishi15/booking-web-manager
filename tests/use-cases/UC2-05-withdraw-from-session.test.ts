@@ -3,7 +3,7 @@ import {
   AcceptReplacement,
   ExpireSessionReplacements,
   WithdrawFromSession,
-  type WithdrawFromSessionCommand,
+  type WithdrawFromSessionRequest,
 } from "@/use-cases/sessions";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -19,7 +19,7 @@ import { TestUnitOfWork } from "./support/transactional-test-unit-of-work";
 // Owner: Yajie (Wyjessie) — /app/commit
 describe("UC2-05 Withdraw from Session", () => {
   describe("Withdrawal", () => {
-    test("execute_WhenMoreThanThirtyHoursRemain_RefundsTheSavedWithdrawal", async () => {
+    test("withdrawAndOpenToWaitlist_WhenMoreThanThirtyHoursRemain_RefundsTheSavedWithdrawal", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -31,11 +31,10 @@ describe("UC2-05 Withdraw from Session", () => {
       );
 
       // Act
-      const result = await useCase.execute({
+      const result = await useCase.withdrawAndOpenToWaitlist({
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -60,7 +59,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ]);
     });
 
-    test("execute_WhenExactlyThirtyHoursRemain_AwaitsReplacementWithoutRefund", async () => {
+    test("withdrawAndOpenToWaitlist_WhenExactlyThirtyHoursRemain_AwaitsReplacementWithoutRefund", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -71,11 +70,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       const result = await new WithdrawFromSession(
         dependenciesAt(unitOfWork, refundCutoff),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -94,7 +92,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(unitOfWork.ledgerInstructions).toEqual([]);
     });
 
-    test("execute_WhenOneMillisecondBeforeRefundCutoff_RefundsTheHold", async () => {
+    test("withdrawAndOpenToWaitlist_WhenOneMillisecondBeforeRefundCutoff_RefundsTheHold", async () => {
       // Arrange
       const refundCutoff = hoursBeforeSessionStart(30);
       const oneMillisecondBeforeRefundCutoff = new Date(
@@ -108,11 +106,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       const result = await new WithdrawFromSession(
         dependenciesAt(unitOfWork, oneMillisecondBeforeRefundCutoff),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -125,7 +122,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toBe(500);
     });
 
-    test("execute_WhenDirectInviteeIsInactiveAndUnfunded_ReservesTheirPlaceWithoutPromotingTheQueue", async () => {
+    test("withdrawAndInvite_WhenDirectInviteeIsInactiveAndUnfunded_ReservesTheirPlaceWithoutPromotingTheQueue", async () => {
       // Arrange
       const session = createTestSession({
         committedUserIds: ["ben", "alex"],
@@ -149,12 +146,12 @@ describe("UC2-05 Withdraw from Session", () => {
       );
 
       // Act
-      const result = await new WithdrawFromSession(dependencies).execute({
+      const result = await new WithdrawFromSession(
+        dependencies,
+      ).withdrawAndInvite("cara", {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "invite-cara",
-        replacementMode: "DIRECT_INVITE",
-        replacementInviteeId: "cara",
       });
 
       // Assert
@@ -172,7 +169,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(dependencies.ids.next).not.toHaveBeenCalled();
     });
 
-    test("execute_WhenAnOpenPlaceHasAFundedQueueHead_PromotesFIFOAndReturnsTheFinalRefund", async () => {
+    test("withdrawAndOpenToWaitlist_WhenAnOpenPlaceHasAFundedQueueHead_PromotesFIFOAndReturnsTheFinalRefund", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [
@@ -192,11 +189,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       const result = await new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -233,7 +229,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ]);
     });
 
-    test("execute_WhenQueueHeadsAreIneligible_SkipsThemBeforePromotingTheNextEligibleUser", async () => {
+    test("withdrawAndOpenToWaitlist_WhenQueueHeadsAreIneligible_SkipsThemBeforePromotingTheNextEligibleUser", async () => {
       // Arrange
       const roster = createTestSession({
         committedUserIds: ["ben", "alex"],
@@ -270,11 +266,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       await new WithdrawFromSession(
         dependenciesAt(unitOfWork, hoursBeforeSessionStart(10)),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -310,7 +305,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toBe(0);
     });
 
-    test("execute_WhenAnOlderOpenWithdrawalExists_RefundsItBeforeTheCurrentWithdrawal", async () => {
+    test("withdrawAndOpenToWaitlist_WhenAnOlderOpenWithdrawalExists_RefundsItBeforeTheCurrentWithdrawal", async () => {
       // Arrange
       const benWithdrawalTime = hoursBeforeSessionStart(11);
       const alexWithdrawalTime = hoursBeforeSessionStart(10);
@@ -336,11 +331,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       const result = await new WithdrawFromSession(
         dependenciesAt(unitOfWork, alexWithdrawalTime),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "alex",
         sessionId: "s",
         idempotencyKey: "withdraw-alex",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -367,7 +361,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toBe(0);
     });
 
-    test("execute_WhenTheQueueHeadHasAPersonalInvitation_LeavesTheQueueAndReservationUntouched", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheQueueHeadHasAPersonalInvitation_LeavesTheQueueAndReservationUntouched", async () => {
       // Arrange
       const invitationTime = hoursBeforeSessionStart(11);
       const withdrawalTime = hoursBeforeSessionStart(10);
@@ -396,11 +390,10 @@ describe("UC2-05 Withdraw from Session", () => {
       // Act
       await new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
-      ).execute({
+      ).withdrawAndOpenToWaitlist({
         actorId: "alex",
         sessionId: "s",
         idempotencyKey: "withdraw-alex",
-        replacementMode: "OPEN_SLOT",
       });
 
       // Assert
@@ -415,7 +408,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(unitOfWork.ledgerInstructions).toEqual([]);
     });
 
-    test("execute_WhenChangingDirectInvitationToOpenPlace_RejectsWithoutChangingStoredState", async () => {
+    test("withdrawAndOpenToWaitlist_WhenChangingDirectInvitationToOpenPlace_RejectsWithoutChangingStoredState", async () => {
       // Arrange
       const withdrawalTime = hoursBeforeSessionStart(10);
       const unitOfWork = new TestUnitOfWork({
@@ -425,31 +418,29 @@ describe("UC2-05 Withdraw from Session", () => {
           createTestUser({ userId: "cara" }),
         ],
       });
-      const useCase = new WithdrawFromSession(
+      const withdrawal = new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
       );
-      await useCase.execute({
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "invite-cara",
-        replacementMode: "DIRECT_INVITE",
-        replacementInviteeId: "cara",
-      });
+      };
+      const benTryingToOpenTheSamePlace: WithdrawFromSessionRequest = {
+        ...benLeaving,
+        idempotencyKey: "change-to-open",
+      };
+      await withdrawal.withdrawAndInvite("cara", benLeaving);
       const previousState = storedState(unitOfWork, ["ben", "cara"]);
 
       // Act & Assert
       await expect(
-        useCase.execute({
-          actorId: "ben",
-          sessionId: "s",
-          idempotencyKey: "change-to-open",
-          replacementMode: "OPEN_SLOT",
-        }),
+        withdrawal.withdrawAndOpenToWaitlist(benTryingToOpenTheSamePlace),
       ).rejects.toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
       expect(storedState(unitOfWork, ["ben", "cara"])).toEqual(previousState);
     });
 
-    test("execute_WhenChangingOpenPlaceToDirectInvitation_RejectsWithoutChangingStoredState", async () => {
+    test("withdrawAndInvite_WhenChangingOpenPlaceToDirectInvitation_RejectsWithoutChangingStoredState", async () => {
       // Arrange
       const withdrawalTime = hoursBeforeSessionStart(10);
       const unitOfWork = new TestUnitOfWork({
@@ -459,31 +450,29 @@ describe("UC2-05 Withdraw from Session", () => {
           createTestUser({ userId: "cara" }),
         ],
       });
-      const useCase = new WithdrawFromSession(
+      const withdrawal = new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
       );
-      await useCase.execute({
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "open-place",
-        replacementMode: "OPEN_SLOT",
-      });
+      };
+      const benTryingToInviteForTheSamePlace: WithdrawFromSessionRequest = {
+        ...benLeaving,
+        idempotencyKey: "change-to-personal",
+      };
+      await withdrawal.withdrawAndOpenToWaitlist(benLeaving);
       const previousState = storedState(unitOfWork, ["ben", "cara"]);
 
       // Act & Assert
       await expect(
-        useCase.execute({
-          actorId: "ben",
-          sessionId: "s",
-          idempotencyKey: "change-to-personal",
-          replacementMode: "DIRECT_INVITE",
-          replacementInviteeId: "cara",
-        }),
+        withdrawal.withdrawAndInvite("cara", benTryingToInviteForTheSamePlace),
       ).rejects.toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
       expect(storedState(unitOfWork, ["ben", "cara"])).toEqual(previousState);
     });
 
-    test("execute_WhenTheActorIsMissing_RejectsWithoutChangingStoredState", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheActorIsMissing_RejectsWithoutChangingStoredState", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -495,17 +484,16 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "withdraw-ben",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
       expect(storedState(unitOfWork, [])).toEqual(previousState);
     });
 
-    test("execute_WhenTheSessionIsMissing_RejectsWithoutChangingStoredState", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheSessionIsMissing_RejectsWithoutChangingStoredState", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         users: [createTestUser({ userId: "ben" })],
@@ -517,17 +505,16 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "withdraw-ben",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
       expect(storedState(unitOfWork, ["ben"])).toEqual(previousState);
     });
 
-    test("execute_WhenTheNamedRecipientDoesNotExist_RejectsWithoutChangingStoredState", async () => {
+    test("withdrawAndInvite_WhenTheNamedRecipientDoesNotExist_RejectsWithoutChangingStoredState", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -540,18 +527,16 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndInvite("missing", {
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "invite-missing",
-          replacementMode: "DIRECT_INVITE",
-          replacementInviteeId: "missing",
         }),
       ).rejects.toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
       expect(storedState(unitOfWork, ["ben"])).toEqual(previousState);
     });
 
-    test("execute_WhenTheActorHasNoParticipation_RejectsWithoutChangingAnotherPersonsPlace", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheActorHasNoParticipation_RejectsWithoutChangingAnotherPersonsPlace", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -564,11 +549,10 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "cara",
           sessionId: "s",
           idempotencyKey: "withdraw-cara",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
       expect(storedState(unitOfWork, ["cara"])).toEqual(previousState);
@@ -708,7 +692,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(dependencies.ids.next).toHaveBeenCalledTimes(1);
     });
 
-    test("execute_WhenTheInviterWasAlreadyRefunded_LocksTheRecipientShareWithoutAnotherRefund", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheInviterWasAlreadyRefunded_LocksTheRecipientShareWithoutAnotherRefund", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -720,12 +704,10 @@ describe("UC2-05 Withdraw from Session", () => {
       const withdrawalTime = hoursBeforeSessionStart(31);
       const acceptanceTime = hoursBeforeSessionStart(29);
       const dependencies = dependenciesAt(unitOfWork, withdrawalTime);
-      await new WithdrawFromSession(dependencies).execute({
+      await new WithdrawFromSession(dependencies).withdrawAndInvite("cara", {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "invite-cara",
-        replacementMode: "DIRECT_INVITE",
-        replacementInviteeId: "cara",
       });
       dependencies.clock.now.mockReturnValue(acceptanceTime);
 
@@ -1141,7 +1123,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(storedState(unitOfWork, ["ben"])).toEqual(previousState);
     });
 
-    test("execute_WhenTheWithdrawnHoldWasRefunded_LeavesItsTerminalStateAndFundsUnchanged", async () => {
+    test("withdrawAndOpenToWaitlist_WhenTheWithdrawnHoldWasRefunded_LeavesItsTerminalStateAndFundsUnchanged", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -1152,12 +1134,10 @@ describe("UC2-05 Withdraw from Session", () => {
       });
       const withdrawalTime = hoursBeforeSessionStart(31);
       const dependencies = dependenciesAt(unitOfWork, withdrawalTime);
-      await new WithdrawFromSession(dependencies).execute({
+      await new WithdrawFromSession(dependencies).withdrawAndInvite("cara", {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "invite-cara",
-        replacementMode: "DIRECT_INVITE",
-        replacementInviteeId: "cara",
       });
       const previousState = storedState(unitOfWork, ["ben", "cara"]);
       dependencies.clock.now.mockReturnValue(sessionStartsAt);
@@ -1180,7 +1160,7 @@ describe("UC2-05 Withdraw from Session", () => {
   });
 
   describe("Atomicity and replay", () => {
-    test("execute_WhenWithdrawalIsReplayed_ReturnsPlainOriginalResultWithoutRunningWorkAgain", async () => {
+    test("withdrawAndOpenToWaitlist_WhenWithdrawalIsReplayed_ReturnsPlainOriginalResultWithoutRunningWorkAgain", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [
@@ -1197,18 +1177,17 @@ describe("UC2-05 Withdraw from Session", () => {
       const withdrawalTime = hoursBeforeSessionStart(10);
       const dependencies = dependenciesAt(unitOfWork, withdrawalTime);
       const useCase = new WithdrawFromSession(dependencies);
-      const command: WithdrawFromSessionCommand = {
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       };
-      const first = await useCase.execute(command);
+      const first = await useCase.withdrawAndOpenToWaitlist(benLeaving);
       const previousState = storedState(unitOfWork, ["ben", "dana"]);
       dependencies.clock.now.mockReturnValue(sessionStartsAt);
 
       // Act
-      const replay = await useCase.execute(command);
+      const replay = await useCase.withdrawAndOpenToWaitlist(benLeaving);
 
       // Assert
       expect(replay).toEqual({ kind: "REFUNDED", participationId: "p-ben" });
@@ -1263,7 +1242,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(unitOfWork.workCalls).toBe(1);
     });
 
-    test("execute_WhenTheSameKeyChangesTheInvitationRecipient_RejectsTheConflictWithoutChangingState", async () => {
+    test("withdrawAndInvite_WhenTheSameKeyChangesTheInvitationRecipient_RejectsTheConflictWithoutChangingState", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [createTestSession({ committedUserIds: ["ben", "alex"] })],
@@ -1276,24 +1255,17 @@ describe("UC2-05 Withdraw from Session", () => {
       const withdrawalTime = hoursBeforeSessionStart(10);
       const dependencies = dependenciesAt(unitOfWork, withdrawalTime);
       const useCase = new WithdrawFromSession(dependencies);
-      await useCase.execute({
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "invite",
-        replacementMode: "DIRECT_INVITE",
-        replacementInviteeId: "cara",
-      });
+      };
+      await useCase.withdrawAndInvite("cara", benLeaving);
       const previousState = storedState(unitOfWork, ["ben", "cara", "dana"]);
 
       // Act & Assert
       await expect(
-        useCase.execute({
-          actorId: "ben",
-          sessionId: "s",
-          idempotencyKey: "invite",
-          replacementMode: "DIRECT_INVITE",
-          replacementInviteeId: "dana",
-        }),
+        useCase.withdrawAndInvite("dana", benLeaving),
       ).rejects.toThrow(
         expect.objectContaining({ code: "IDEMPOTENCY_CONFLICT" }),
       );
@@ -1301,6 +1273,46 @@ describe("UC2-05 Withdraw from Session", () => {
         previousState,
       );
       expect(dependencies.clock.now).toHaveBeenCalledTimes(1);
+    });
+
+    test("withdrawAndOpenToWaitlist_WhenTheSameKeyPreviouslyInvitedSomeone_RejectsTheConflictWithoutRunningWorkAgain", async () => {
+      // Arrange
+      const unitOfWork = new TestUnitOfWork({
+        sessions: [
+          createTestSession({
+            committedUserIds: ["ben", "alex"],
+            waitlistedUserIds: ["dana"],
+          }),
+        ],
+        users: [
+          createTestUser({ userId: "ben" }),
+          createTestUser({ userId: "cara" }),
+          createTestUser({ userId: "dana" }),
+        ],
+      });
+      const withdrawalTime = hoursBeforeSessionStart(10);
+      const dependencies = dependenciesAt(unitOfWork, withdrawalTime);
+      const withdrawal = new WithdrawFromSession(dependencies);
+      const benLeaving: WithdrawFromSessionRequest = {
+        actorId: "ben",
+        sessionId: "s",
+        idempotencyKey: "withdraw-ben",
+      };
+      await withdrawal.withdrawAndInvite("cara", benLeaving);
+      const previousState = storedState(unitOfWork, ["ben", "cara", "dana"]);
+
+      // Act & Assert
+      await expect(
+        withdrawal.withdrawAndOpenToWaitlist(benLeaving),
+      ).rejects.toThrow(
+        expect.objectContaining({ code: "IDEMPOTENCY_CONFLICT" }),
+      );
+      expect(storedState(unitOfWork, ["ben", "cara", "dana"])).toEqual(
+        previousState,
+      );
+      expect(dependencies.clock.now).toHaveBeenCalledTimes(1);
+      expect(dependencies.ids.next).not.toHaveBeenCalled();
+      expect(unitOfWork.workCalls).toBe(1);
     });
 
     test("execute_WhenAnotherScopeUsedTheSameRequest_RejectsWithoutRunningAcceptance", async () => {
@@ -1344,7 +1356,7 @@ describe("UC2-05 Withdraw from Session", () => {
       expect(unitOfWork.workCalls).toBe(1);
     });
 
-    test("execute_WhenSessionSaveFails_RollsBackWithdrawalPromotionAndLedgerWrites", async () => {
+    test("withdrawAndOpenToWaitlist_WhenSessionSaveFails_RollsBackWithdrawalPromotionAndLedgerWrites", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [
@@ -1367,17 +1379,16 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "withdraw-ben",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toBe(failure);
       expect(storedState(unitOfWork, ["ben", "dana"])).toEqual(previousState);
     });
 
-    test("execute_WhenRetryingAfterSessionSaveFailure_ReusesTheKeyAndCommitsExactlyOnce", async () => {
+    test("withdrawAndOpenToWaitlist_WhenRetryingAfterSessionSaveFailure_ReusesTheKeyAndCommitsExactlyOnce", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [
@@ -1397,16 +1408,17 @@ describe("UC2-05 Withdraw from Session", () => {
       const useCase = new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
       );
-      const command: WithdrawFromSessionCommand = {
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       };
-      await expect(useCase.execute(command)).rejects.toBe(failure);
+      await expect(useCase.withdrawAndOpenToWaitlist(benLeaving)).rejects.toBe(
+        failure,
+      );
 
       // Act
-      const result = await useCase.execute(command);
+      const result = await useCase.withdrawAndOpenToWaitlist(benLeaving);
 
       // Assert
       expect(result).toEqual({ kind: "REFUNDED", participationId: "p-ben" });
@@ -1427,7 +1439,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toBe("COMMITTED");
     });
 
-    test("execute_WhenALaterLedgerAppendFails_RollsBackEarlierPromotionSkippedWaiterAndWithdrawal", async () => {
+    test("withdrawAndOpenToWaitlist_WhenALaterLedgerAppendFails_RollsBackEarlierPromotionSkippedWaiterAndWithdrawal", async () => {
       // Arrange
       const session = createTestSession({
         totalSlots: 4,
@@ -1457,11 +1469,10 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "withdraw-ben",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toBe(failure);
       expect(
@@ -1469,7 +1480,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toEqual(previousState);
     });
 
-    test("execute_WhenRetryingAfterALaterLedgerFailure_CommitsAllPromotionsWithTheSameKey", async () => {
+    test("withdrawAndOpenToWaitlist_WhenRetryingAfterALaterLedgerFailure_CommitsAllPromotionsWithTheSameKey", async () => {
       // Arrange
       const session = createTestSession({
         totalSlots: 4,
@@ -1491,16 +1502,17 @@ describe("UC2-05 Withdraw from Session", () => {
       const useCase = new WithdrawFromSession(
         dependenciesAt(unitOfWork, withdrawalTime),
       );
-      const command: WithdrawFromSessionCommand = {
+      const benLeaving: WithdrawFromSessionRequest = {
         actorId: "ben",
         sessionId: "s",
         idempotencyKey: "withdraw-ben",
-        replacementMode: "OPEN_SLOT",
       };
-      await expect(useCase.execute(command)).rejects.toBe(failure);
+      await expect(useCase.withdrawAndOpenToWaitlist(benLeaving)).rejects.toBe(
+        failure,
+      );
 
       // Act
-      const result = await useCase.execute(command);
+      const result = await useCase.withdrawAndOpenToWaitlist(benLeaving);
 
       // Assert
       expect(result.kind).toBe("REFUNDED");
@@ -1662,7 +1674,7 @@ describe("UC2-05 Withdraw from Session", () => {
       ).toEqual([500, 500, 0, 0]);
     });
 
-    test("execute_WhenAQueuedUserCannotBeLoaded_RollsBackTheAlreadyStagedWithdrawalRefund", async () => {
+    test("withdrawAndOpenToWaitlist_WhenAQueuedUserCannotBeLoaded_RollsBackTheAlreadyStagedWithdrawalRefund", async () => {
       // Arrange
       const unitOfWork = new TestUnitOfWork({
         sessions: [
@@ -1680,11 +1692,10 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Act & Assert
       await expect(
-        useCase.execute({
+        useCase.withdrawAndOpenToWaitlist({
           actorId: "ben",
           sessionId: "s",
           idempotencyKey: "withdraw-ben",
-          replacementMode: "OPEN_SLOT",
         }),
       ).rejects.toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
       expect(storedState(unitOfWork, ["ben"])).toEqual(previousState);

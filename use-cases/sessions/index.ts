@@ -10,6 +10,6 @@ export {
 } from "./ExpireSessionReplacements";
 export {
   WithdrawFromSession,
-  type WithdrawFromSessionCommand,
+  type WithdrawFromSessionRequest,
   type WithdrawFromSessionResult,
 } from "./WithdrawFromSession";

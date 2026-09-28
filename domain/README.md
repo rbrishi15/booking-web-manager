@@ -262,8 +262,9 @@ scope and its distinction from unresolved financial and rejoining proposals.
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
 behavior. A direct invitation reserves the departing person's one place after
 early or late withdrawal. There is no replacement link or token.
-The application-facing `WithdrawFromSession` command requires an explicit
-choice even though the domain method retains its open-slot default.
+The application-facing `WithdrawFromSession` interface requires an explicit
+`withdrawAndInvite` or `withdrawAndOpenToWaitlist` operation even though the
+domain method retains its open-slot default.
 
 The application loads the authenticated named user's participant role and calls
 `acceptReplacement(session, { participationId, holdId, now })`. The user's ID

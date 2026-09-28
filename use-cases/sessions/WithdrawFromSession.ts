@@ -3,11 +3,13 @@ import type { UseCaseDependencies } from "../shared/dependencies";
 import { appendInstructions, requireAggregate } from "../shared/helpers";
 import { promoteWaitlist } from "./promote-waitlist";
 
-export type WithdrawFromSessionCommand = {
+export interface WithdrawFromSessionRequest {
   readonly actorId: UUID;
   readonly sessionId: UUID;
   readonly idempotencyKey: string;
-} & (
+}
+
+type WithdrawalChoice =
   | {
       readonly replacementMode: "OPEN_SLOT";
       readonly replacementInviteeId?: never;
@@ -15,8 +17,7 @@ export type WithdrawFromSessionCommand = {
   | {
       readonly replacementMode: "DIRECT_INVITE";
       readonly replacementInviteeId: UUID;
-    }
-);
+    };
 
 export interface WithdrawFromSessionResult {
   readonly kind: "REFUNDED" | "AWAITING_REPLACEMENT";
@@ -27,36 +28,48 @@ export interface WithdrawFromSessionResult {
 export class WithdrawFromSession {
   constructor(private readonly dependencies: UseCaseDependencies) {}
 
-  execute(
-    command: WithdrawFromSessionCommand,
+  withdrawAndInvite(
+    replacementInviteeId: UUID,
+    request: WithdrawFromSessionRequest,
+  ): Promise<WithdrawFromSessionResult> {
+    return this.withdraw(request, {
+      replacementMode: "DIRECT_INVITE",
+      replacementInviteeId,
+    });
+  }
+
+  withdrawAndOpenToWaitlist(
+    request: WithdrawFromSessionRequest,
+  ): Promise<WithdrawFromSessionResult> {
+    return this.withdraw(request, { replacementMode: "OPEN_SLOT" });
+  }
+
+  private withdraw(
+    request: WithdrawFromSessionRequest,
+    choice: WithdrawalChoice,
   ): Promise<WithdrawFromSessionResult> {
     const { unitOfWork, clock, ids } = this.dependencies;
     return unitOfWork.execute(
       {
-        idempotencyKey: command.idempotencyKey,
+        idempotencyKey: request.idempotencyKey,
         scope: "UC2-05:withdraw",
         request: {
-          actorId: command.actorId,
-          sessionId: command.sessionId,
-          replacementMode: command.replacementMode,
-          replacementInviteeId: command.replacementInviteeId,
+          actorId: request.actorId,
+          sessionId: request.sessionId,
+          replacementMode: choice.replacementMode,
+          replacementInviteeId: choice.replacementInviteeId,
         },
       },
       async (transaction) => {
         const now = clock.now();
-        DomainError.require(
-          command.replacementMode !== undefined,
-          "INVALID_INPUT",
-          "A withdrawal requires a replacement choice",
-        );
         const session = await requireAggregate(
           transaction.sessions,
-          command.sessionId,
+          request.sessionId,
           "Session",
         );
         const user = await requireAggregate(
           transaction.users,
-          command.actorId,
+          request.actorId,
           "User",
         );
         const participation = session.participantList.findByUserId(user.userId);
@@ -65,21 +78,21 @@ export class WithdrawFromSession {
           "NOT_FOUND",
           "Participation was not found",
         );
-        if (command.replacementMode === "DIRECT_INVITE")
+        if (choice.replacementMode === "DIRECT_INVITE")
           await requireAggregate(
             transaction.users,
-            command.replacementInviteeId,
+            choice.replacementInviteeId,
             "Replacement invitee",
           );
 
         const result = user.asParticipant().withdraw(session, {
           participationId: participation.participationId,
           now,
-          replacementMode: command.replacementMode,
-          replacementInviteeId: command.replacementInviteeId,
+          replacementMode: choice.replacementMode,
+          replacementInviteeId: choice.replacementInviteeId,
         });
         await appendInstructions(transaction, result.instructions);
-        if (command.replacementMode === "OPEN_SLOT")
+        if (choice.replacementMode === "OPEN_SLOT")
           await promoteWaitlist(transaction, session, ids, now);
         await transaction.sessions.save(session);
 
