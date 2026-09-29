@@ -77,6 +77,8 @@ formats. The interfaces define those contracts; the adapter implementations
 perform the translation. Business rules stay in the domain and workflow
 coordination stays in use cases. See the
 [anti-corruption layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer).
+See [`lib/README.md`](./lib/README.md) for adapter placement and how the existing
+ledger module provides persistence translation alongside other infrastructure.
 
 Stripe calls run outside database transactions. Settlement records a durable
 payout intent in its unit of work; a dispatcher calls Stripe after commit.
