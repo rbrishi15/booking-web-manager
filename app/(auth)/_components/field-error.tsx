@@ -15,3 +15,12 @@ export function FieldError({ id, messages }: FieldErrorProps) {
     </p>
   );
 }
+
+/**
+ * Builds an aria-describedby value from only the ids whose elements are on screen,
+ * e.g. describedBy(hasError && "email-error"). Returns undefined when there are none.
+ */
+export function describedBy(...ids: ReadonlyArray<string | false | undefined>): string | undefined {
+  const present = ids.filter((id): id is string => typeof id === "string" && id !== "");
+  return present.length > 0 ? present.join(" ") : undefined;
+}

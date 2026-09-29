@@ -7,9 +7,22 @@ export const HOME_PATH = "/discover";
  */
 export function safeRedirectPath(value: unknown): string {
   if (typeof value !== "string" || value === "") return HOME_PATH;
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return HOME_PATH;
-  if (value.startsWith("/login") || value.startsWith("/register")) return HOME_PATH;
+  // Browsers ignore tabs/newlines in URLs and treat "\" like "/", so "/\t/evil.example"
+  // could become "//evil.example" (another website). Reject them outright.
+  if (hasUnsafeCharacters(value)) return HOME_PATH;
+  if (!value.startsWith("/") || value.startsWith("//")) return HOME_PATH;
+  const pathname = value.split(/[?#]/, 1)[0] ?? "";
+  if (isAuthPage(pathname)) return HOME_PATH;
   return value;
+}
+
+/** True if the text contains a backslash or an invisible control character (tab, newline, etc.). */
+function hasUnsafeCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code < 0x20 || code === 0x7f || character === "\\") return true;
+  }
+  return false;
 }
 
 /** Pages anyone can open without logging in: Landing, Register and Log in (dialog map). */

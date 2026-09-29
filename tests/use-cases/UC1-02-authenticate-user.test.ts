@@ -35,6 +35,7 @@ describe("UC1-02 Authenticate User", () => {
     test.each([
       ["/profile", "/profile"],
       ["/groups/join/abc123", "/groups/join/abc123"],
+      ["/login-help", "/login-help"],
     ] as const)("returns to %s", (next, expected) => {
       // Act
       const result = safeRedirectPath(next);
@@ -49,7 +50,10 @@ describe("UC1-02 Authenticate User", () => {
       ["https://evil.example"],
       ["//evil.example"],
       ["/\\evil.example"],
+      ["/\t/evil.example"],
+      ["/\n/evil.example"],
       ["/login"],
+      ["/login?next=/profile"],
       ["/register"],
     ] as const)("sends %j to Home instead", (next) => {
       // Act

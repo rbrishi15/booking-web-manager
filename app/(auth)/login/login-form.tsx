@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FieldError } from "../_components/field-error";
+import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
 import { logIn, type LoginState } from "./actions";
 
@@ -26,6 +26,7 @@ export function LoginForm({ next }: LoginFormProps) {
   // Submit without React's automatic form reset, so the email stays filled in after an error.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return; // already sending: ignore a second Enter/click
     const formData = new FormData(event.currentTarget);
     startTransition(() => formAction(formData));
   }
@@ -47,7 +48,7 @@ export function LoginForm({ next }: LoginFormProps) {
           autoComplete="email"
           placeholder="name@example.com"
           aria-invalid={errors.email !== undefined}
-          aria-describedby="email-error"
+          aria-describedby={describedBy(errors.email !== undefined && "email-error")}
         />
         <FieldError id="email-error" messages={errors.email} />
       </div>
@@ -60,7 +61,7 @@ export function LoginForm({ next }: LoginFormProps) {
           autoComplete="current-password"
           placeholder="Enter your password"
           aria-invalid={errors.password !== undefined}
-          aria-describedby="password-error"
+          aria-describedby={describedBy(errors.password !== undefined && "password-error")}
         />
         <FieldError id="password-error" messages={errors.password} />
       </div>

@@ -8,7 +8,7 @@ import { InfoNote } from "@/components/ui/info-note";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { FieldError } from "../_components/field-error";
+import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
 import { REGIONS, SPORTS } from "../schemas";
 import { registerUser, type RegisterState } from "./actions";
@@ -30,6 +30,7 @@ export function RegisterForm() {
   // Submit without React's automatic form reset, so fields keep what the user typed after an error.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return; // already sending: ignore a second Enter/click
     const formData = new FormData(event.currentTarget);
     startTransition(() => formAction(formData));
   }
@@ -66,7 +67,7 @@ export function RegisterForm() {
           autoComplete="name"
           placeholder="Marcus Lim"
           aria-invalid={errors.displayName !== undefined}
-          aria-describedby="displayName-error"
+          aria-describedby={describedBy(errors.displayName !== undefined && "displayName-error")}
         />
         <FieldError id="displayName-error" messages={errors.displayName} />
       </div>
@@ -79,7 +80,7 @@ export function RegisterForm() {
             name="region"
             defaultValue=""
             aria-invalid={errors.region !== undefined}
-            aria-describedby="region-error"
+            aria-describedby={describedBy(errors.region !== undefined && "region-error")}
             className={selectClassName}
           >
             <option value="" disabled>
@@ -101,7 +102,7 @@ export function RegisterForm() {
             name="sport"
             defaultValue=""
             aria-invalid={errors.sport !== undefined}
-            aria-describedby="sport-error"
+            aria-describedby={describedBy(errors.sport !== undefined && "sport-error")}
             className={selectClassName}
           >
             <option value="" disabled>
@@ -126,7 +127,7 @@ export function RegisterForm() {
           autoComplete="email"
           placeholder="name@example.com"
           aria-invalid={errors.email !== undefined}
-          aria-describedby="email-error"
+          aria-describedby={describedBy(errors.email !== undefined && "email-error")}
         />
         <FieldError id="email-error" messages={errors.email} />
       </div>
@@ -141,7 +142,10 @@ export function RegisterForm() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           aria-invalid={errors.password !== undefined}
-          aria-describedby="password-strength password-error"
+          aria-describedby={describedBy(
+            password.length > 0 && "password-strength",
+            errors.password !== undefined && "password-error",
+          )}
         />
         <div className="flex gap-1.5" aria-hidden>
           {[1, 2, 3, 4].map((bar) => (

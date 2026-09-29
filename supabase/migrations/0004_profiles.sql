@@ -1,4 +1,12 @@
 -- 0004_profiles: user profile and sign-up bootstrap (UC1-01, UC1-03, UC1-04).
+--
+-- Rollback (manual, in this order):
+--   drop trigger if exists on_auth_user_created on auth.users;
+--   drop function if exists public.handle_new_user();
+--   drop table if exists public.profiles;
+-- Data note: dropping profiles loses display names, preferences and account_status
+-- (including INACTIVE flags), so export them first. While profiles rows exist, the
+-- on delete restrict foreign key blocks hard-deleting their auth users (audit NFR).
 
 -- ---------------------------------------------------------------------------
 -- 1. The profiles table: one row per registered user
@@ -70,6 +78,9 @@ begin
   return new;
 end;
 $fn$;
+
+-- Only the trigger may run this privileged function; API roles cannot call it directly.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 create trigger on_auth_user_created
   after insert on auth.users

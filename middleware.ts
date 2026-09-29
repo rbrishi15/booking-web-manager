@@ -44,12 +44,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // UC1-04: a deactivated account is signed out and cannot use the app.
-  const { data: profile } = await supabase
+  // If the status can't be checked, sign out too (fail closed) rather than risk letting it through.
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("account_status")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (profile?.account_status === "INACTIVE") {
+  if (profileError !== null || profile?.account_status === "INACTIVE") {
     await supabase.auth.signOut();
     return redirectKeepingCookies(new URL("/login", request.url), response);
   }

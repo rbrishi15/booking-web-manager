@@ -46,11 +46,17 @@ export async function logIn(_previous: LoginState, formData: FormData): Promise<
   }
 
   // 3. UC1-04: a deleted (INACTIVE) account must not be able to log in.
-  const { data: profile } = await supabase
+  // If the status can't be checked, refuse rather than risk letting an inactive account in.
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("account_status")
     .eq("user_id", data.user.id)
     .maybeSingle();
+  if (profileError !== null) {
+    console.error("UC1-02 profile check failed:", profileError.code, profileError.message);
+    await supabase.auth.signOut();
+    return { status: "error", message: "We couldn't verify your account. Please try again." };
+  }
   if (profile?.account_status === "INACTIVE") {
     await supabase.auth.signOut();
     return { status: "error", message: "This account is no longer active." };

@@ -78,7 +78,7 @@ export async function registerUser(
   if (data.session === null) {
     return {
       status: "check-email",
-      message: `Account created. We sent a confirmation link to ${email}. Open it, then log in.`,
+      message: "Account created. Check your email for a confirmation link, then log in.",
     };
   }
 
