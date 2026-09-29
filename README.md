@@ -9,6 +9,89 @@ NTU SC2006 group project, Group 3.
 See [CLAUDE.md](./CLAUDE.md) for the full architecture, non-negotiable rules,
 directory ownership and conventions. See [docs/](./docs) for the SRS.
 
+## Architecture direction
+
+Build from the inside out: **domain → use cases → interface adapters → React**.
+The intended request flow is:
+
+```mermaid
+flowchart TD
+    UI["React UI<br/>Screens, forms and optional hooks"]
+    API["Next.js route handler<br/>HTTP interface adapter"]
+    UC["Use case<br/>Coordinates the workflow"]
+    Domain["Domain core<br/>Business rules and state transitions"]
+    Data["Database interface adapters<br/>Repositories, ledger and transactions"]
+    DB[("Supabase / Postgres")]
+
+    UI -->|HTTP request| API
+    API -->|Invokes| UC
+    UC -->|Calls| Domain
+    UC -->|Through injected persistence ports| Data
+    Data -->|Reads and writes| DB
+
+    classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef core fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef persistence fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    class UI,API presentation
+    class UC,Domain core
+    class Data,DB persistence
+```
+
+These arrows show **runtime calls**. Source-code dependencies point inward:
+use cases import the domain and define the persistence ports they need;
+database adapters implement those ports. The domain and use cases do not import
+Next.js, React, database clients or concrete adapters.
+
+- **Domain (`/domain`)** owns business rules and valid state transitions.
+- **Use cases (`/use-cases`)** load authoritative state through ports, call the
+  domain, and coordinate persistence, transactions and idempotency.
+- **Interface adapters** connect the application to HTTP and storage. Next.js
+  route handlers authenticate requests, validate inputs, invoke use cases and
+  map results to HTTP responses. Database adapters implement repository, ledger
+  and unit-of-work ports, including storage mapping and concurrency protection.
+  Backend wiring supplies these adapters to the use cases.
+- **React UI** handles rendering, user input, loading and error states. Extract
+  hooks when screen coordination needs reuse; a separate presenter or UI
+  interface layer is not required for simple screens.
+
+The route handler, use case, domain and database adapters run in the Next.js
+backend. Keep the use-case implementation in `/use-cases`, separate from the
+route handler, so it can be tested without HTTP or Next.js. The request flow
+above describes browser interactions; Server Components can call read-only
+use cases directly without an HTTP round trip to the application's own API,
+following the [Next.js data-fetching guidance](https://nextjs.org/docs/app/guides/backend-for-frontend#server-components).
+
+This is the target architecture. The domain and shared use-case ports already
+exist, as do ledger adapters in `/lib/money`; feature coordinators and their
+HTTP/UI integration are still to be implemented. See
+[ADR-0001](./docs/adr/0001-use-case-driven-development.md).
+
+### Example: commit to a session (UC2-04)
+
+Suppose an eligible participant has **SGD 20.00** available and commits to an
+available place with a **SGD 10.00** booking share. An illustrative implementation
+would work as follows:
+
+1. **React** displays “Commit SGD 10.00” and submits the session ID with an
+   idempotency key. It displays the amount but does not decide what to charge.
+2. **The Next.js route handler** obtains the authenticated user's identity,
+   validates the request and invokes `CommitToSession` with plain inputs.
+3. **The use case** opens a unit of work, loads the user and session through
+   transaction-scoped repositories, and calls
+   `user.asParticipant().join(session, command)`.
+4. **The domain** checks eligibility, capacity and funds using the authoritative
+   booking share of **1,000 cents**, records admission in the session, and
+   returns the financial instructions for the hold.
+5. **The use case and database adapters** save the session and append the
+   ledger instructions in the same transaction. The participant now has
+   **1,000 cents available** and **1,000 cents held**. Both writes succeed or
+   neither does; replaying the same request does not hold funds twice.
+6. **The route handler and React** map the result to a response and show the
+   confirmation. If funds are insufficient, the request returns an error and
+   leaves participation and held funds unchanged.
+
+`CommitToSession` is an example of a future coordinator, not an existing class.
+
 ## Team
 
 | Member | GitHub | Area |
