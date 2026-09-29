@@ -82,8 +82,8 @@ A repeat key returns the original result without re-executing.
 ```
 /domain          Pure TypeScript. No framework imports, no DB, no HTTP.
                  Business rules, policy engines, interfaces.
-/use-cases       Shared ports and contracts for future use-case coordinators;
-                 use-case implementations are not present yet.
+/use-cases       Framework-independent coordinators, organized by use case;
+                 shared ports and transaction contracts live in /shared.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
 /components/ui   Shared design system. Request changes, don't add directly.

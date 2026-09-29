@@ -2,9 +2,11 @@
 
 The domain is framework independent TypeScript. It imports no Next.js, database,
 HTTP, or payment SDK code. Shared contracts in `/use-cases/shared` define the
-boundary for future coordinators that will load authoritative state, invoke
-aggregate commands, and commit returned financial instructions in one unit of
-work.
+boundary for coordinators that load authoritative state, invoke aggregate
+commands, and persist their results in one unit of work. UC2-02 is implemented
+by [CreateSession](../use-cases/sessions/CreateSession.ts); its application
+contract and remaining adapter work are documented in the
+[session use-case guide](../use-cases/sessions/README.md).
 
 ## Aggregate roots
 
@@ -211,9 +213,9 @@ repositories, invokes the appropriate Participant or Booker action, then saves
 the session and applies its returned financial instructions in the same unit of
 work. It does not call internal helpers or save child changes independently.
 Automatic verification, replacement expiry, and payout callbacks invoke Session
-directly. Payout dispatch calls the provider outside the transaction. This split
-adds no use-case, database, or payment-provider implementation; domain atomicity
-tests do not establish database concurrency guarantees.
+directly. Payout dispatch calls the provider outside the transaction. These
+domain workflows require separate application and infrastructure integration;
+domain atomicity tests do not establish database concurrency guarantees.
 
 ## Money and booking
 

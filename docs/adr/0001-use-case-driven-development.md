@@ -27,12 +27,13 @@ use case and follows this path:
 4. Connect framework and infrastructure adapters through explicit ports and
    transaction boundaries.
 
-The top-level [`/use-cases`](../../use-cases/) directory is the reserved,
-framework-independent boundary for those coordinators. At present it contains
-only [`use-cases/shared`](../../use-cases/shared/), which holds reusable ports,
-contracts, transaction types, and coordination helpers. Capability-specific
-use-case implementations are added only when a concrete use case requires
-them; the empty capability space is intentional.
+The top-level [`/use-cases`](../../use-cases/) directory is the
+framework-independent boundary for those coordinators.
+[`use-cases/shared`](../../use-cases/shared/) holds reusable ports, contracts,
+transaction types, and coordination helpers. Capability-specific implementations
+are added when a concrete use case requires them. UC2-02 now has a
+[CreateSession coordinator](../../use-cases/sessions/CreateSession.ts) that
+loads the booker and saves the domain-created session in one unit of work.
 
 Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in
@@ -73,8 +74,8 @@ For example, `use-cases/sessions/DiscoverSessions.ts` would coordinate the
 inputs and query ports needed to discover sessions, while `domain/sessions`
 would continue to own session invariants and state transitions. Supabase and
 Stripe remain external adapters; they are not imported directly by the use-case
-coordinator. This is an illustrative target structure, not a claim that every
-file above currently exists.
+coordinator. CreateSession is implemented; the remaining coordinators in this
+illustrative structure are future work.
 
 ## What belongs in `/use-cases`
 
