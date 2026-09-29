@@ -13,65 +13,103 @@ directory ownership and conventions. See [docs/](./docs) for the SRS.
 
 We propose [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 as the implementation structure: domain rules and use-case workflows stay
-independent of React, Next.js and database implementations. This makes those
-rules and workflows testable through plain TypeScript interfaces while adapters
-handle HTTP and persistence. This framing is proposed and has not yet been
+independent of React, Next.js, external APIs and database implementations. These
+rules and workflows can be tested through plain TypeScript interfaces while
+adapters handle HTTP and persistence. This framing is proposed and has not yet been
 vetted against the course's expectations; the supplementary section below maps
 it to the required use-case-driven design and BCE responsibilities.
 
 Build from the inside out: **domain → use cases → interface adapters → React**.
-The intended request flow is:
+The intended request and external integration flow is:
 
 ```mermaid
 flowchart TD
     UI["React UI<br/>Screens, forms and optional hooks"]
     API["Next.js route handler<br/>HTTP interface adapter"]
-    UC["Use case<br/>Coordinates the workflow"]
+    UC["Application workflows<br/>Use cases and payment dispatch"]
     Domain["Domain core<br/>Business rules and state transitions"]
-    Data["Database interface adapters<br/>Repositories, ledger and transactions"]
-    DB[("Supabase / Postgres")]
+
+    subgraph ACL["External interface adapters — anti-corruption layer"]
+        Data["Supabase and database adapters<br/>Auth, API data and persistence mapping"]
+        Payments["Stripe adapters<br/>Payment requests and webhook mapping"]
+    end
+
+    SupabaseAPI["Supabase API<br/>Auth and Data API"]
+    StripeAPI["Stripe API<br/>Payment Intents and Connect"]
+    DB[("Supabase Postgres")]
 
     UI -->|HTTP request| API
     API -->|Invokes| UC
     UC -->|Calls| Domain
-    UC -->|Through injected persistence ports| Data
-    Data -->|Reads and writes| DB
+    UC -->|Through injected application ports| Data
+    UC <-->|Payment ports and translated events| Payments
+    Data -->|Auth and data requests| SupabaseAPI
+    Data -->|Atomic SQL transactions| DB
+    SupabaseAPI -->|Data API reads and writes| DB
+    Payments <-->|API requests and signed webhooks| StripeAPI
 
     classDef presentation fill:#dbeafe,stroke:#2563eb,color:#172554
     classDef core fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef persistence fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef adapter fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef external fill:#ffedd5,stroke:#ea580c,color:#7c2d12
     class UI,API presentation
     class UC,Domain core
-    class Data,DB persistence
+    class Data,Payments adapter
+    class SupabaseAPI,StripeAPI,DB external
 ```
 
-These arrows show **runtime calls**. Source-code dependencies point inward:
-use cases import the domain and define the persistence ports they need;
-database adapters implement those ports. The domain and use cases do not import
-Next.js, React, database clients or concrete adapters.
+These arrows show **runtime calls and incoming events**. Source-code dependencies
+point inward: use cases import the domain and define the application ports they
+need; adapters implement those ports. The domain and use cases do not import
+Next.js, React, Stripe, Supabase clients or concrete adapters.
+
+The two planned external API integrations highlighted here are:
+
+| External API | Role in the project |
+| --- | --- |
+| [Stripe API](https://docs.stripe.com/api) | PayNow wallet top-ups through Payment Intents, Connect payout setup and payment dispatch, with signed webhook notifications. |
+| [Supabase API](https://supabase.com/docs/guides/api) | Authentication and application data access through Supabase Auth and the Data API. The API is shown separately from its Postgres database. |
+
+The external interface adapters form the **anti-corruption layer**: they
+translate provider payloads, identifiers, statuses and errors into the
+application's own contracts, and translate outgoing requests back into provider
+formats. The interfaces define those contracts; the adapter implementations
+perform the translation. Business rules stay in the domain and workflow
+coordination stays in use cases. See the
+[anti-corruption layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer).
+
+Stripe calls run outside database transactions. Settlement records a durable
+payout intent in its unit of work; a dispatcher calls Stripe after commit.
+Stripe SDK calls remain in `/app/wallet`, `/app/payouts` and
+`/app/api/webhooks`. The webhook adapter verifies signatures and deduplicates
+events before applying their effects; only this path credits inbound wallet
+funds. Commitment and fund holds use the SQL transaction path through the
+persistence adapters, preserving atomicity across both writes.
 
 - **Domain (`/domain`)** owns business rules and valid state transitions.
 - **Use cases (`/use-cases`)** load authoritative state through ports, call the
   domain, and coordinate persistence, transactions and idempotency.
-- **Interface adapters** connect the application to HTTP and storage. Next.js
-  route handlers authenticate requests, validate inputs, invoke use cases and
-  map results to HTTP responses. Database adapters implement repository, ledger
+- **Interface adapters** connect the application to HTTP, external APIs and
+  storage. Next.js route handlers authenticate requests, validate inputs, invoke
+  use cases and map results to HTTP responses. Database adapters implement repository, ledger
   and unit-of-work ports, including storage mapping and concurrency protection.
-  Backend wiring supplies these adapters to the use cases.
+  Stripe and Supabase adapters isolate provider-specific formats behind the
+  anti-corruption layer. Backend wiring supplies adapters through application
+  ports.
 - **React UI** handles rendering, user input, loading and error states. Extract
   hooks when screen coordination needs reuse; a separate presenter or UI
   interface layer is not required for simple screens.
 
-The route handler, use case, domain and database adapters run in the Next.js
-backend. Keep the use-case implementation in `/use-cases`, separate from the
-route handler, so it can be tested without HTTP or Next.js. The request flow
+The route handler, application workflows, domain and external adapters run in
+the Next.js backend. Keep the use-case implementation in `/use-cases`, separate
+from the route handler, so it can be tested without HTTP or Next.js. The request flow
 above describes browser interactions; Server Components can call read-only
 use cases directly without an HTTP round trip to the application's own API,
 following the [Next.js data-fetching guidance](https://nextjs.org/docs/app/guides/backend-for-frontend#server-components).
 
 This is the proposed target architecture. The domain and shared use-case ports
-already exist, as do ledger adapters in `/lib/money`; feature coordinators and their
-HTTP/UI integration are still to be implemented. See
+already exist, as do ledger adapters in `/lib/money`; feature coordinators,
+provider API integration and their HTTP/UI wiring are still to be implemented. See
 [ADR-0001](./docs/adr/0001-use-case-driven-development.md).
 
 ### Example: commit to a session (UC2-04)
@@ -98,7 +136,9 @@ would work as follows:
    confirmation. If funds are insufficient, the request returns an error and
    leaves participation and held funds unchanged.
 
-`CommitToSession` is an example of a future coordinator, not an existing class.
+This commitment workflow uses existing wallet funds; Stripe is used separately
+for top-ups and payouts. `CommitToSession` is an example of a future coordinator,
+not an existing class.
 
 ### Supplement: use-case-driven design and BCE
 
@@ -119,7 +159,7 @@ the design, tests and implementation. This follows the accepted
 
 | BCE role | Responsibility | Mapping to the proposed implementation |
 | --- | --- | --- |
-| **Boundary** | Handles interaction with actors and translates inputs and outputs. | The React commitment screen and Next.js HTTP adapter together implement the user-facing interaction. External-service adapters handle interaction with other systems. |
+| **Boundary** | Handles interaction with actors and translates inputs and outputs. | The React commitment screen and Next.js HTTP adapter implement the user-facing interaction. Stripe and Supabase API adapters form the anti-corruption layer for external-system interaction. |
 | **Control** | Coordinates the steps needed to complete a use case. | `CommitToSession` loads state, invokes domain behavior and coordinates atomic persistence through ports. |
 | **Entity** | Holds domain state and enforces business rules. | `User`, `Session`, `Participation` and `FundHold` supply the domain behavior used by the commitment workflow. |
 
