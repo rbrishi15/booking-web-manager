@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { HOME_PATH, safeRedirectPath } from "@/app/(auth)/redirect-path";
 import { loginSchema } from "@/app/(auth)/schemas";
 
 // Owner: Joseph (Jolingoes) — /app/(auth)
@@ -28,5 +29,34 @@ describe("UC1-02 Authenticate User", () => {
 
     // Assert
     expect(result.success).toBe(true);
+  });
+
+  describe("redirect after log-in", () => {
+    test.each([
+      ["/profile", "/profile"],
+      ["/groups/join/abc123", "/groups/join/abc123"],
+    ] as const)("returns to %s", (next, expected) => {
+      // Act
+      const result = safeRedirectPath(next);
+
+      // Assert
+      expect(result).toBe(expected);
+    });
+
+    test.each([
+      [undefined],
+      [""],
+      ["https://evil.example"],
+      ["//evil.example"],
+      ["/\\evil.example"],
+      ["/login"],
+      ["/register"],
+    ] as const)("sends %j to Home instead", (next) => {
+      // Act
+      const result = safeRedirectPath(next);
+
+      // Assert
+      expect(result).toBe(HOME_PATH);
+    });
   });
 });

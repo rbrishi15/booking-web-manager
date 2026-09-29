@@ -2,10 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { HOME_PATH } from "../redirect-path";
 import { registerSchema } from "../schemas";
 
-/** Dialog map: Register → submit()[valid] → Home & Discover (Neoh's page). */
-const HOME_PATH = "/discover";
+
 
 type RegisterField = "displayName" | "email" | "password" | "region" | "sport";
 

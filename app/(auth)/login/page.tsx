@@ -1,8 +1,16 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AuthFrame, AuthHeading, AuthPanel } from "../_components/auth-frame";
+import { LoginForm } from "./login-form";
 
-/** UC1-02 Authenticate User (mockup 03). The form is added in Step 19. */
-export default function LoginPage() {
+interface LoginPageProps {
+  /** e.g. /login?next=/profile after being sent here from a locked page (Step 20). */
+  readonly searchParams: Promise<{ next?: string | string[] }>;
+}
+
+/** UC1-02 Authenticate User (mockup 03). */
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { next } = await searchParams;
+
   return (
     <AuthFrame
       prompt="New to Booking.?"
@@ -31,7 +39,7 @@ export default function LoginPage() {
         title="Log in"
         description="Use the email address linked to your wallet."
       />
-      <p className="text-muted-foreground">Form coming in Step 19.</p>
+      <LoginForm next={typeof next === "string" ? next : undefined} />
     </AuthFrame>
   );
 }
