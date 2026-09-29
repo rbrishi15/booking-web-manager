@@ -20,17 +20,20 @@ export interface SessionConfig {
   invitedGroupId?: UUID;
 }
 
-/** Validated business input; the caller supplies the authenticated booker ID. */
+/** Validated details of the venue booking being shared. */
+export interface SessionBooking {
+  venueName: string;
+  region: Region;
+  sport: Sport;
+  startAt: Date;
+  endAt: Date;
+  totalCostCents: number;
+}
+
+/** Parsed business values; the caller supplies the authenticated booker ID. */
 export interface CreateSessionInput {
   bookerId: UUID;
-  booking: {
-    venueName: string;
-    region: Region;
-    sport: Sport;
-    startAt: Date;
-    endAt: Date;
-    totalCostCents: number;
-  };
+  booking: SessionBooking;
   config: SessionConfig;
 }
 
@@ -56,33 +59,36 @@ export class CreateSessions {
    * Creates and persists the booker's session. The injected transaction is
    * scoped to one logical submission; domain rules are checked during creation.
    */
-  async forBooker(input: CreateSessionInput): Promise<CreateSessionResult> {
+  async forBooker(
+    bookerId: UUID,
+    bookingDetails: SessionBooking,
+    config: SessionConfig,
+  ): Promise<CreateSessionResult> {
     const { transaction, clock, ids, holdingAccountId } = this.dependencies;
-    const { bookerId } = input;
 
     return transaction.runForBooker(bookerId, async (repositories) => {
       const user = await requireAggregate(repositories.users, bookerId, "User");
       const booking = new Booking({
-        venueName: input.booking.venueName,
-        region: input.booking.region,
-        sport: input.booking.sport,
-        startAt: input.booking.startAt,
-        endAt: input.booking.endAt,
-        totalCost: Money.fromCents(input.booking.totalCostCents),
+        venueName: bookingDetails.venueName,
+        region: bookingDetails.region,
+        sport: bookingDetails.sport,
+        startAt: bookingDetails.startAt,
+        endAt: bookingDetails.endAt,
+        totalCost: Money.fromCents(bookingDetails.totalCostCents),
       });
       const session = user.asBooker().createSession({
         sessionId: ids.next(),
         roomToken: ids.next(),
         holdingAccountId,
         booking,
-        totalSlots: input.config.totalSlots,
-        minimumHeadcount: input.config.minimumHeadcount,
-        visibility: input.config.visibility,
+        totalSlots: config.totalSlots,
+        minimumHeadcount: config.minimumHeadcount,
+        visibility: config.visibility,
         minimumReliability:
-          input.config.minimumReliability === undefined
+          config.minimumReliability === undefined
             ? undefined
-            : ReliabilityScore.from(input.config.minimumReliability),
-        invitedGroupId: input.config.invitedGroupId,
+            : ReliabilityScore.from(config.minimumReliability),
+        invitedGroupId: config.invitedGroupId,
         now: clock.now(),
       });
 

@@ -5,6 +5,7 @@ import {
   CreateSessions,
   type CreateSessionInput,
   type SessionConfig,
+  type SessionBooking,
 } from "@/use-cases/sessions/CreateSessions";
 import { describe, expect, test } from "vitest";
 import {
@@ -25,57 +26,57 @@ const holdingAccountId = "00000000-0000-4000-8000-000000000001";
 
 // Owner: Neoh (liang799) — /app/sessions
 describe("UC2-02 Create Session", () => {
-  test(
-    "computes each participant's share server-side, never trusting a client-supplied amount",
-    async () => {
-      // Arrange
-      const { createSessions, unitOfWork } = sessionCreationScenario();
-      const request = {
-        ...creationInput(),
+  test("computes each participant's share server-side, never trusting a client-supplied amount", async () => {
+    // Arrange
+    const { createSessions, unitOfWork } = sessionCreationScenario();
+    const request = {
+      ...creationInput(),
+      config: {
+        ...creationInput().config,
         bookingShareCents: 1,
         bookingShare: 1,
         share: 1,
-      };
+      },
+    };
 
-      // Act
-      const result = await createSessions.forBooker(request);
+    // Act
+    const result = await createSessions.forBooker(
+      request.bookerId,
+      request.booking,
+      request.config,
+    );
 
-      // Assert
-      expect(result.bookingShareCents).toBe(333);
-      expect(
-        unitOfWork.requireSession(result.sessionId).bookingShare.toCents(),
-      ).toBe(333);
-    },
-  );
-  test(
-    "computes the share in integer cents via Math.floor(totalCents / slots), never float division",
-    async () => {
-      // Arrange
-      const { createSessions, unitOfWork } = sessionCreationScenario();
-      const input: CreateSessionInput = {
-        bookerId,
-        booking: {
-          venueName: "Jurong East Sports Hall",
-          region: "West",
-          sport: "Badminton",
-          startAt: sessionStartsAt,
-          endAt: sessionEndsAt,
-          totalCostCents: 1001,
-        },
-        config: { totalSlots: 3, minimumHeadcount: 2 },
-      };
+    // Assert
+    expect(result.bookingShareCents).toBe(333);
+    expect(
+      unitOfWork.requireSession(result.sessionId).bookingShare.toCents(),
+    ).toBe(333);
+  });
+  test("computes the share in integer cents via Math.floor(totalCents / slots), never float division", async () => {
+    // Arrange
+    const { createSessions, unitOfWork } = sessionCreationScenario();
+    const booking: SessionBooking = {
+      venueName: "Jurong East Sports Hall",
+      region: "West",
+      sport: "Badminton",
+      startAt: sessionStartsAt,
+      endAt: sessionEndsAt,
+      totalCostCents: 1001,
+    };
 
-      // Act
-      const result = await createSessions.forBooker(input);
+    // Act
+    const result = await createSessions.forBooker(bookerId, booking, {
+      totalSlots: 3,
+      minimumHeadcount: 2,
+    });
 
-      // Assert
-      const session = unitOfWork.requireSession(result.sessionId);
-      expect(session.booking.totalCost.toCents()).toBe(1001);
-      expect(session.totalSlots).toBe(3);
-      expect(session.bookingShare.toCents()).toBe(333);
-      expect(result.bookingShareCents).toBe(333);
-    },
-  );
+    // Assert
+    const session = unitOfWork.requireSession(result.sessionId);
+    expect(session.booking.totalCost.toCents()).toBe(1001);
+    expect(session.totalSlots).toBe(3);
+    expect(session.bookingShare.toCents()).toBe(333);
+    expect(result.bookingShareCents).toBe(333);
+  });
 
   test("persists supplied booking details and optional session settings", async () => {
     // Arrange
@@ -87,7 +88,11 @@ describe("UC2-02 Create Session", () => {
     });
 
     // Act
-    const result = await createSessions.forBooker(request);
+    const result = await createSessions.forBooker(
+      request.bookerId,
+      request.booking,
+      request.config,
+    );
 
     // Assert
     const session = unitOfWork.requireSession(result.sessionId);
@@ -111,16 +116,24 @@ describe("UC2-02 Create Session", () => {
     const { createSessions, unitOfWork } = sessionCreationScenario();
     const request = {
       ...creationInput(),
-      sessionId: otherBookerId,
-      roomToken: "client-token",
-      holdingAccountId: otherBookerId,
-      actorUserId: otherBookerId,
-      status: "SETTLED",
-      participations: [{ userId: otherBookerId }],
+      config: {
+        ...creationInput().config,
+        sessionId: otherBookerId,
+        roomToken: "client-token",
+        holdingAccountId: otherBookerId,
+        actorUserId: otherBookerId,
+        bookerId: otherBookerId,
+        status: "SETTLED",
+        participations: [{ userId: otherBookerId }],
+      },
     };
 
     // Act
-    const result = await createSessions.forBooker(request);
+    const result = await createSessions.forBooker(
+      request.bookerId,
+      request.booking,
+      request.config,
+    );
 
     // Assert
     expect(result).toEqual({
@@ -140,12 +153,13 @@ describe("UC2-02 Create Session", () => {
 
   test("rejects a missing booker without persisting a session", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
     unitOfWork.users.clear();
 
     // Act & Assert
     await expect(
-      createSessions.forBooker(creationInput()),
+      createSessions.forBooker(bookerId, booking, config),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(unitOfWork.sessions.size).toBe(0);
   });
@@ -157,10 +171,19 @@ describe("UC2-02 Create Session", () => {
       bookerId,
       createTestUser({ userId: bookerId, accountStatus: "INACTIVE" }),
     );
-    const request = { ...creationInput(), accountStatus: "ACTIVE" };
+    const request = {
+      ...creationInput(),
+      config: { ...creationInput().config, accountStatus: "ACTIVE" },
+    };
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toMatchObject({
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toMatchObject({
       code: "INACTIVE_ACCOUNT",
     });
     expect(unitOfWork.sessions.size).toBe(0);
@@ -182,11 +205,20 @@ describe("UC2-02 Create Session", () => {
     );
     const request = {
       ...creationInput(),
-      payoutAccount: { setupStatus: "COMPLETE" },
+      config: {
+        ...creationInput().config,
+        payoutAccount: { setupStatus: "COMPLETE" },
+      },
     };
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toMatchObject({
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toMatchObject({
       code: "PAYOUT_ACCOUNT_NOT_READY",
     });
     expect(unitOfWork.sessions.size).toBe(0);
@@ -196,10 +228,19 @@ describe("UC2-02 Create Session", () => {
     // Arrange
     const { createSessions, unitOfWork, setTime } = sessionCreationScenario();
     setTime(sessionStartsAt);
-    const request = { ...creationInput(), now: hoursBeforeSessionStart(48) };
+    const request = {
+      ...creationInput(),
+      config: { ...creationInput().config, now: hoursBeforeSessionStart(48) },
+    };
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toMatchObject({
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toMatchObject({
       code: "SESSION_STARTED",
     });
     expect(unitOfWork.sessions.size).toBe(0);
@@ -212,9 +253,13 @@ describe("UC2-02 Create Session", () => {
     request.booking.endAt = sessionStartsAt;
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toThrow(
-      "Booking endAt must be after startAt",
-    );
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toThrow("Booking endAt must be after startAt");
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
@@ -225,9 +270,13 @@ describe("UC2-02 Create Session", () => {
     request.booking.venueName = " ";
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toThrow(
-      "Booking venue, region, and sport are required",
-    );
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toThrow("Booking venue, region, and sport are required");
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
@@ -238,30 +287,39 @@ describe("UC2-02 Create Session", () => {
     request.booking.totalCostCents = 0;
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toThrow(
-      "Booking totalCost must be positive",
-    );
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toThrow("Booking totalCost must be positive");
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
   test("rejects capacity beyond the domain limit without persisting a session", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
 
     // Act & Assert
     await expect(
-      createSessions.forBooker(creationInput({ totalSlots: 9 })),
+      createSessions.forBooker(bookerId, booking, { ...config, totalSlots: 9 }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
   test("rejects minimum headcount greater than capacity", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
 
     // Act & Assert
     await expect(
-      createSessions.forBooker(creationInput({ minimumHeadcount: 4 })),
+      createSessions.forBooker(bookerId, booking, {
+        ...config,
+        minimumHeadcount: 4,
+      }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(unitOfWork.sessions.size).toBe(0);
   });
@@ -273,7 +331,13 @@ describe("UC2-02 Create Session", () => {
     request.booking.totalCostCents = 2;
 
     // Act & Assert
-    await expect(createSessions.forBooker(request)).rejects.toMatchObject({
+    await expect(
+      createSessions.forBooker(
+        request.bookerId,
+        request.booking,
+        request.config,
+      ),
+    ).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
     expect(unitOfWork.sessions.size).toBe(0);
@@ -287,8 +351,16 @@ describe("UC2-02 Create Session", () => {
     const input = creationInput();
 
     // Act
-    const first = await firstAttempt.forBooker(input);
-    const replay = await retry.forBooker(input);
+    const first = await firstAttempt.forBooker(
+      input.bookerId,
+      input.booking,
+      input.config,
+    );
+    const replay = await retry.forBooker(
+      input.bookerId,
+      input.booking,
+      input.config,
+    );
 
     // Assert
     expect(replay).toEqual(first);
@@ -298,12 +370,21 @@ describe("UC2-02 Create Session", () => {
 
   test("a retried submission returns the original result after the session starts", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { forSubmission, unitOfWork, setTime } = sessionCreationScenario();
-    const first = await forSubmission("same-submission").forBooker(creationInput());
+    const first = await forSubmission("same-submission").forBooker(
+      bookerId,
+      booking,
+      config,
+    );
     setTime(sessionStartsAt);
 
     // Act
-    const replay = await forSubmission("same-submission").forBooker(creationInput());
+    const replay = await forSubmission("same-submission").forBooker(
+      bookerId,
+      booking,
+      config,
+    );
 
     // Assert
     expect(replay).toEqual(first);
@@ -312,12 +393,21 @@ describe("UC2-02 Create Session", () => {
 
   test("a retried submission with changed configuration returns the original creation", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { forSubmission, unitOfWork } = sessionCreationScenario();
-    const first = await forSubmission("same-submission").forBooker(creationInput());
+    const first = await forSubmission("same-submission").forBooker(
+      bookerId,
+      booking,
+      config,
+    );
     const changedInput = creationInput({ totalSlots: 2 });
 
     // Act
-    const replay = await forSubmission("same-submission").forBooker(changedInput);
+    const replay = await forSubmission("same-submission").forBooker(
+      changedInput.bookerId,
+      changedInput.booking,
+      changedInput.config,
+    );
 
     // Assert
     expect(replay).toEqual(first);
@@ -330,10 +420,18 @@ describe("UC2-02 Create Session", () => {
     // Arrange
     const { forSubmission, unitOfWork } = sessionCreationScenario();
     const input = creationInput();
-    const first = await forSubmission("first-submission").forBooker(input);
+    const first = await forSubmission("first-submission").forBooker(
+      input.bookerId,
+      input.booking,
+      input.config,
+    );
 
     // Act
-    const second = await forSubmission("second-submission").forBooker(input);
+    const second = await forSubmission("second-submission").forBooker(
+      input.bookerId,
+      input.booking,
+      input.config,
+    );
 
     // Assert
     expect(second.sessionId).not.toBe(first.sessionId);
@@ -344,20 +442,28 @@ describe("UC2-02 Create Session", () => {
 
   test("isolates the same submission identity between different bookers", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { forSubmission, unitOfWork } = sessionCreationScenario();
     unitOfWork.users.set(otherBookerId, readyBookerUser(otherBookerId));
-    const first = await forSubmission("same-submission").forBooker(creationInput());
+    const first = await forSubmission("same-submission").forBooker(
+      bookerId,
+      booking,
+      config,
+    );
 
     // Act
-    const second = await forSubmission("same-submission").forBooker({
-      ...creationInput(),
-      bookerId: otherBookerId,
-    });
+    const second = await forSubmission("same-submission").forBooker(
+      otherBookerId,
+      booking,
+      config,
+    );
 
     // Assert
     expect(second.sessionId).not.toBe(first.sessionId);
     expect(unitOfWork.requireSession(first.sessionId).bookerId).toBe(bookerId);
-    expect(unitOfWork.requireSession(second.sessionId).bookerId).toBe(otherBookerId);
+    expect(unitOfWork.requireSession(second.sessionId).bookerId).toBe(
+      otherBookerId,
+    );
     expect(unitOfWork.sessions.size).toBe(2);
   });
 
@@ -372,21 +478,28 @@ describe("UC2-02 Create Session", () => {
     const createSessions = forSubmission(parsed.submission.idempotencyKey);
 
     // Act
-    const created = await createSessions.forBooker(parsed.input);
+    const created = await createSessions.forBooker(
+      parsed.input.bookerId,
+      parsed.input.booking,
+      parsed.input.config,
+    );
 
     // Assert
-    expect(unitOfWork.requireSession(created.sessionId).bookerId).toBe(bookerId);
+    expect(unitOfWork.requireSession(created.sessionId).bookerId).toBe(
+      bookerId,
+    );
     expect(unitOfWork.sessions.size).toBe(1);
   });
 
   test("a failed save leaves no committed session", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
     unitOfWork.failNextSave = true;
 
     // Act & Assert
     await expect(
-      createSessions.forBooker(creationInput()),
+      createSessions.forBooker(bookerId, booking, config),
     ).rejects.toThrow("Session save failed");
     expect(unitOfWork.sessions.size).toBe(0);
   });
@@ -397,25 +510,34 @@ describe("UC2-02 Create Session", () => {
     const input = creationInput();
     unitOfWork.failNextSave = true;
     await expect(
-      forSubmission("retried-submission").forBooker(input),
+      forSubmission("retried-submission").forBooker(
+        input.bookerId,
+        input.booking,
+        input.config,
+      ),
     ).rejects.toThrow("Session save failed");
 
     // Act
-    const created = await forSubmission("retried-submission").forBooker(input);
+    const created = await forSubmission("retried-submission").forBooker(
+      input.bookerId,
+      input.booking,
+      input.config,
+    );
 
     // Assert
-    expect(unitOfWork.requireSession(created.sessionId).bookingShare.toCents()).toBe(
-      333,
-    );
+    expect(
+      unitOfWork.requireSession(created.sessionId).bookingShare.toCents(),
+    ).toBe(333);
     expect(unitOfWork.sessions.size).toBe(1);
   });
 
   test("creates a session without moving funds or requesting a payout", async () => {
     // Arrange
+    const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
 
     // Act
-    await createSessions.forBooker(creationInput());
+    await createSessions.forBooker(bookerId, booking, config);
 
     // Assert
     expect(unitOfWork.ledgerInstructions).toEqual([]);
@@ -423,7 +545,9 @@ describe("UC2-02 Create Session", () => {
   });
 });
 
-function creationInput(config: Partial<SessionConfig> = {}): CreateSessionInput {
+function creationInput(
+  config: Partial<SessionConfig> = {},
+): CreateSessionInput {
   return {
     bookerId,
     booking: {
@@ -444,7 +568,8 @@ function sessionCreationScenario() {
   const clock = { now: () => new Date(now) };
   let sequence = 0;
   const ids = {
-    next: () => `50000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
+    next: () =>
+      `50000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
   };
   const forSubmission = (idempotencyKey: string) =>
     new CreateSessions({

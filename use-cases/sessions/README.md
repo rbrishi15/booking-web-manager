@@ -2,15 +2,16 @@
 
 ## UC2-02 Create Session
 
-[`CreateSessions.forBooker({ bookerId, booking, config })`](./CreateSessions.ts)
+[`CreateSessions.forBooker(bookerId, booking, config)`](./CreateSessions.ts)
 loads the complete User inside the transaction, constructs the Booking, calls
 `user.asBooker().createSession(...)`, and saves the new Session. Business rules
 and booking-share calculation remain in the domain. Creation moves no funds and
 returns `{ sessionId, roomToken, bookingShareCents }`.
 
-`CreateSessionInput` is a plain TypeScript DTO. Its `bookerId` comes from
-authentication; `booking` contains venue name, resolved region, sport, `Date`
-start/end values, and integer `totalCostCents`. `SessionConfig` groups
+`CreateSessionInput` groups the parser's plain TypeScript output. Its `bookerId`
+comes from authentication; its `booking` is a `SessionBooking` containing venue
+name, resolved region, sport, `Date` start/end values, and integer
+`totalCostCents`. `SessionConfig` groups
 `totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`, and
 `invitedGroupId`. The module maps these fields explicitly into domain inputs.
 Client-supplied shares, identities, account facts, or lifecycle fields cannot
@@ -40,7 +41,8 @@ const createSessions = new CreateSessions({
   holdingAccountId,
 });
 
-const result = await createSessions.forBooker(input);
+const { bookerId, booking, config } = input;
+const result = await createSessions.forBooker(bookerId, booking, config);
 ```
 
 The constructor accepts a [`SessionCreationTransaction`](./session-creation-transaction.ts),

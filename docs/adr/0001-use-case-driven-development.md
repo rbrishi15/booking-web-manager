@@ -33,7 +33,7 @@ framework-independent boundary for those coordinators.
 transaction types, and coordination helpers. Capability-specific implementations
 are added when a concrete use case requires them. UC2-02 now has a
 [CreateSessions module](../../use-cases/sessions/CreateSessions.ts) whose
-`forBooker({ bookerId, booking, config })` action loads the booker and saves the
+`forBooker(bookerId, booking, config)` action loads the booker and saves the
 domain-created session through a creation-specific transaction capability. An
 app-owned adapter captures submission retry metadata and delegates to the shared
 unit of work; the business input contains no idempotency key.

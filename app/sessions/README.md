@@ -14,7 +14,8 @@ validates the authenticated user ID separately from the raw
 `{ idempotencyKey, booking, config }` request with Zod. It returns the plain
 business `input` with the trusted `bookerId`, plus `submission` retry metadata.
 A controller obtains the user ID from authentication, converts wire timestamps
-to Dates, and parses before calling `CreateSessions.forBooker(input)`.
+to Dates, and parses before passing `input.bookerId`, `input.booking`, and
+`input.config` to `CreateSessions.forBooker(bookerId, booking, config)`.
 
 [RequestSessionCreationTransaction](./request-session-creation-transaction.ts)
 captures the submission key, namespaces it by UC2-02 and booker, and delegates to
