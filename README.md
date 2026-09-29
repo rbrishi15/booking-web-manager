@@ -9,6 +9,25 @@ NTU SC2006 group project, Group 3.
 See [CLAUDE.md](./CLAUDE.md) for the full architecture, non-negotiable rules,
 directory ownership and conventions. See [docs/](./docs) for the SRS.
 
+## How session creation fits together
+
+[`use-case-config/sessions.ts`](./use-case-config/sessions.ts) connects the
+session HTTP handler to authentication, transactions, IDs, and the clock:
+
+```text
+Request → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
+        → load User → Booker creates Session → commit → Response
+```
+
+The app layer handles HTTP and parsing; `/use-cases` coordinates persistence;
+`/domain` owns eligibility and booking-share rules. Infrastructure adapters in
+`/lib` implement application contracts. The outer `/use-case-config` module
+assembles these pieces without putting framework dependencies into the core.
+See the [configuration guide](./use-case-config/README.md) for a complete test
+example and the dependencies a real server must supply. The handler is tested
+as a function; route mounting, production authentication and database adapters,
+and session UI remain future work.
+
 ## Team
 
 | Member | GitHub | Area |

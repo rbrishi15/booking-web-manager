@@ -35,8 +35,15 @@ are added when a concrete use case requires them. UC2-02 now has a
 [CreateSessions module](../../use-cases/sessions/CreateSessions.ts) whose
 `forBooker(bookerId, booking, config)` action loads the booker and saves the
 domain-created session through a creation-specific transaction capability. An
-app-owned adapter captures submission retry metadata and delegates to the shared
+adapter in `/lib/sessions` captures submission retry metadata and delegates to the shared
 unit of work; the business input contains no idempotency key.
+
+The outer [`/use-case-config`](../../use-case-config/README.md) folder assembles
+app HTTP handlers, lib adapters, and use-case modules with plain functions and
+constructors. Its session factory returns a configured Request-to-Response
+handler. This folder can import those pieces; `/use-cases` and `/domain` keep
+their dependencies inward and do not import configuration, app handlers, or lib
+adapters. Request parsing and response mapping remain in `/app`.
 
 Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in

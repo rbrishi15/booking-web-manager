@@ -1,4 +1,4 @@
-import { RequestSessionCreationTransaction } from "@/app/sessions/request-session-creation-transaction";
+import { RequestSessionCreationTransaction } from "@/lib/sessions/request-session-creation-transaction";
 import { describe, expect, test } from "vitest";
 import { CreateSessionUnitOfWork } from "../../use-cases/support/create-session-unit-of-work";
 

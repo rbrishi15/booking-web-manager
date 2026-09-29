@@ -22,6 +22,8 @@ export class CreateSessionUnitOfWork implements UnitOfWork {
   readonly ledgerInstructions: FinancialInstruction[] = [];
   readonly payoutRequests: PayoutRequestedIntent[] = [];
   failNextSave = false;
+  nextSaveError?: Error;
+  nextUserLoadError?: Error;
 
   constructor(users: readonly User[]) {
     this.users = new Map(users.map((user) => [user.userId, user]));
@@ -41,13 +43,25 @@ export class CreateSessionUnitOfWork implements UnitOfWork {
     const stagedPayoutRequests: PayoutRequestedIntent[] = [];
     const result = await work({
       users: {
-        get: async (id) => this.users.get(id) ?? null,
+        get: async (id) => {
+          if (this.nextUserLoadError) {
+            const error = this.nextUserLoadError;
+            this.nextUserLoadError = undefined;
+            throw error;
+          }
+          return this.users.get(id) ?? null;
+        },
         save: unsupported,
       },
       sessions: {
         get: async (id) => staged.get(id) ?? this.sessions.get(id) ?? null,
         save: async (session) => {
           staged.set(session.sessionId, session);
+          if (this.nextSaveError) {
+            const error = this.nextSaveError;
+            this.nextSaveError = undefined;
+            throw error;
+          }
           if (this.failNextSave) {
             this.failNextSave = false;
             throw new Error("Session save failed");

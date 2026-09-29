@@ -20,7 +20,11 @@ describe("UC2-02 Create Session input", () => {
     expect(parsed).toEqual({
       input: {
         bookerId: actorUserId,
-        booking: request.booking,
+        booking: {
+          ...request.booking,
+          startAt: new Date(request.booking.startAt),
+          endAt: new Date(request.booking.endAt),
+        },
         config: request.config,
       },
       submission: { idempotencyKey: request.idempotencyKey },
@@ -92,7 +96,11 @@ describe("UC2-02 Create Session input", () => {
     expect(parsed).toEqual({
       input: {
         bookerId: actorUserId,
-        booking: request.booking,
+        booking: {
+          ...request.booking,
+          startAt: new Date(request.booking.startAt),
+          endAt: new Date(request.booking.endAt),
+        },
         config: request.config,
       },
       submission: { idempotencyKey: request.idempotencyKey },
@@ -157,7 +165,7 @@ describe("UC2-02 Create Session input", () => {
   test("rejects an invalid start date", () => {
     // Arrange
     const request = creationRequest();
-    request.booking.startAt = new Date("invalid");
+    request.booking.startAt = "invalid";
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -166,18 +174,32 @@ describe("UC2-02 Create Session input", () => {
   test("rejects an invalid end date", () => {
     // Arrange
     const request = creationRequest();
-    request.booking.endAt = new Date("invalid");
+    request.booking.endAt = "invalid";
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
   });
 
-  test("rejects timestamp strings without coercing them to dates", () => {
+  test("converts timezone offsets into the correct Date instants", () => {
+    // Arrange
+    const request = creationRequest();
+    request.booking.startAt = "2026-10-01T18:00:00+08:00";
+    request.booking.endAt = "2026-10-01T20:00:00+08:00";
+
+    // Act
+    const parsed = parseCreateSessionInput(actorUserId, request);
+
+    // Assert
+    expect(parsed.input.booking.startAt).toEqual(new Date("2026-10-01T10:00:00Z"));
+    expect(parsed.input.booking.endAt).toEqual(new Date("2026-10-01T12:00:00Z"));
+  });
+
+  test("rejects Date objects instead of accepting non-JSON timestamp inputs", () => {
     // Arrange
     const request = creationRequest();
     const input = {
       ...request,
-      booking: { ...request.booking, startAt: "2026-10-01T10:00:00Z" },
+      booking: { ...request.booking, startAt: new Date(request.booking.startAt) },
     };
 
     // Act & Assert
@@ -189,11 +211,45 @@ describe("UC2-02 Create Session input", () => {
     const request = creationRequest();
     const input = {
       ...request,
-      booking: { ...request.booking, endAt: request.booking.endAt.getTime() },
+      booking: {
+        ...request.booking,
+        endAt: new Date(request.booking.endAt).getTime(),
+      },
     };
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, input)).toThrow(ZodError);
+  });
+
+  test.each([
+    "2026-10-01T10:00:00",
+    "2026-10-01",
+    "2026-02-29T10:00:00Z",
+    "2026-02-30T10:00:00+08:00",
+    "2026-04-31T10:00:00Z",
+    "2026-13-01T10:00:00Z",
+    "2026-10-01T24:00:00Z",
+    "2026-10-01T10:00:00+99:99",
+  ])("rejects invalid or unzoned timestamp %s", (startAt) => {
+    // Arrange
+    const request = creationRequest();
+    request.booking.startAt = startAt;
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
+  });
+
+  test("accepts a real leap-day timestamp", () => {
+    // Arrange
+    const request = creationRequest();
+    request.booking.startAt = "2028-02-29T10:00:00Z";
+    request.booking.endAt = "2028-02-29T12:00:00Z";
+
+    // Act
+    const parsed = parseCreateSessionInput(actorUserId, request);
+
+    // Assert
+    expect(parsed.input.booking.startAt).toEqual(new Date("2028-02-29T10:00:00Z"));
   });
 
   test("rejects a request that is not an object", () => {
@@ -310,7 +366,11 @@ describe("UC2-02 Create Session input", () => {
     const parsed = parseCreateSessionInput(actorUserId, request);
 
     // Assert
-    expect(parsed.input.booking).toEqual(request.booking);
+    expect(parsed.input.booking).toEqual({
+      ...request.booking,
+      startAt: new Date(request.booking.startAt),
+      endAt: new Date(request.booking.endAt),
+    });
     expect(parsed.input.config).toEqual(request.config);
   });
 });
@@ -323,8 +383,8 @@ function creationRequest() {
       venueName: "Jurong East Sports Hall",
       region: "West",
       sport: "Badminton",
-      startAt: new Date("2026-10-01T10:00:00Z"),
-      endAt: new Date("2026-10-01T12:00:00Z"),
+      startAt: "2026-10-01T10:00:00Z",
+      endAt: "2026-10-01T12:00:00Z",
       totalCostCents: 1001,
     },
     config,

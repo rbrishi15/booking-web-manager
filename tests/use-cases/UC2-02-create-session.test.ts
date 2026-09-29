@@ -1,5 +1,5 @@
 import { parseCreateSessionInput } from "@/app/sessions/create-session-input";
-import { RequestSessionCreationTransaction } from "@/app/sessions/request-session-creation-transaction";
+import { RequestSessionCreationTransaction } from "@/lib/sessions/request-session-creation-transaction";
 import { PayoutAccount } from "@/domain";
 import {
   CreateSessions,
@@ -258,7 +258,10 @@ describe("UC2-02 Create Session", () => {
         request.booking,
         request.config,
       ),
-    ).rejects.toThrow("Booking endAt must be after startAt");
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Booking endAt must be after startAt",
+    });
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
@@ -275,7 +278,10 @@ describe("UC2-02 Create Session", () => {
         request.booking,
         request.config,
       ),
-    ).rejects.toThrow("Booking venue, region, and sport are required");
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Booking venue, region, and sport are required",
+    });
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
@@ -292,7 +298,10 @@ describe("UC2-02 Create Session", () => {
         request.booking,
         request.config,
       ),
-    ).rejects.toThrow("Booking totalCost must be positive");
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Booking totalCost must be positive",
+    });
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
@@ -471,6 +480,11 @@ describe("UC2-02 Create Session", () => {
     const { forSubmission, unitOfWork } = sessionCreationScenario();
     const parsed = parseCreateSessionInput(bookerId, {
       ...creationInput(),
+      booking: {
+        ...creationInput().booking,
+        startAt: sessionStartsAt.toISOString(),
+        endAt: sessionEndsAt.toISOString(),
+      },
       bookerId: otherBookerId,
       idempotencyKey: "authenticated-submission",
     });

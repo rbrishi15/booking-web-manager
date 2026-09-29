@@ -1,11 +1,12 @@
 import { z } from "zod";
-
-/** Request metadata used to identify retries of one logical submission. */
-export interface SessionCreationSubmission {
-  readonly idempotencyKey: string;
-}
+import type { SessionCreationSubmission } from "@/lib/sessions/request-session-creation-transaction";
 
 const uuid = z.string().uuid();
+const timestamp = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value))
+  .pipe(z.date());
 const requestSchema = z.object({
   idempotencyKey: z.string().refine((key) => key.trim() !== "", {
     message: "An idempotency key is required",
@@ -14,8 +15,8 @@ const requestSchema = z.object({
     venueName: z.string(),
     region: z.string(),
     sport: z.string(),
-    startAt: z.date(),
-    endAt: z.date(),
+    startAt: timestamp,
+    endAt: timestamp,
     totalCostCents: z.number().int().safe(),
   }),
   config: z.object({
@@ -34,9 +35,10 @@ export function parseCreateSessionInput(
 ) {
   const bookerId = uuid.parse(actorUserId);
   const { booking, config, idempotencyKey } = requestSchema.parse(request);
+  const submission: SessionCreationSubmission = { idempotencyKey };
 
   return {
     input: { bookerId, booking, config },
-    submission: { idempotencyKey },
+    submission,
   };
 }

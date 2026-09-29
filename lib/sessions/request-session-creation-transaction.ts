@@ -4,7 +4,11 @@ import type {
   SessionCreationTransaction,
 } from "@/use-cases/sessions/session-creation-transaction";
 import type { UnitOfWork } from "@/use-cases/shared/contracts";
-import type { SessionCreationSubmission } from "./create-session-input";
+
+/** Identifies retries of one logical session-creation submission. */
+export interface SessionCreationSubmission {
+  readonly idempotencyKey: string;
+}
 
 /**
  * Binds creation to one logical submission. Rebuild it with the same key for a

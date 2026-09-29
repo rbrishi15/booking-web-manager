@@ -84,14 +84,22 @@ A repeat key returns the original result without re-executing.
                  Business rules, policy engines, interfaces.
 /use-cases       Framework-independent coordinators, organized by use case;
                  shared ports and transaction contracts live in /shared.
+/use-case-config Connects app handlers, use cases, and adapters with explicit
+                 dependencies; see its README when wiring a use case.
+/lib/sessions    Session infrastructure adapters implementing use-case contracts.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
 /components/ui   Shared design system. Request changes, don't add directly.
 /supabase        Migrations (numbered, serialised) and RLS policies.
 ```
 
-The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
-`/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
+Core dependencies point inward: `/use-cases` → `/domain` → nothing. App handlers
+and lib adapters depend on core contracts. The outer `/use-case-config` folder
+may import app handlers, lib adapters, and use cases to assemble them; core
+modules never import outward. `/domain` must never import from `/app`, `next`,
+`@supabase/*` or `stripe`. When wiring HTTP to a use case, read the
+[configuration guide](./use-case-config/README.md) for dependency lifetimes and
+the tested session-creation example.
 
 Actor-driven session workflows enter through `User`'s Participant or Booker
 role, which performs actor authorization and prepares the complete change.

@@ -1,5 +1,6 @@
 import {
   Booking,
+  DomainError,
   Money,
   ReliabilityScore,
   type Region,
@@ -61,14 +62,28 @@ export class CreateSessions {
 
     return transaction.runForBooker(bookerId, async (repositories) => {
       const user = await requireAggregate(repositories.users, bookerId, "User");
-      const booking = new Booking({
-        venueName: bookingDetails.venueName,
-        region: bookingDetails.region,
-        sport: bookingDetails.sport,
-        startAt: bookingDetails.startAt,
-        endAt: bookingDetails.endAt,
-        totalCost: Money.fromCents(bookingDetails.totalCostCents),
-      });
+      let booking: Booking;
+      let minimumReliability: ReliabilityScore | undefined;
+      try {
+        booking = new Booking({
+          venueName: bookingDetails.venueName,
+          region: bookingDetails.region,
+          sport: bookingDetails.sport,
+          startAt: bookingDetails.startAt,
+          endAt: bookingDetails.endAt,
+          totalCost: Money.fromCents(bookingDetails.totalCostCents),
+        });
+        minimumReliability =
+          config.minimumReliability === undefined
+            ? undefined
+            : ReliabilityScore.from(config.minimumReliability);
+      } catch (error) {
+        // Only request-derived values are input failures; repository errors propagate.
+        if (error instanceof RangeError) {
+          throw new DomainError("INVALID_INPUT", error.message);
+        }
+        throw error;
+      }
       const session = user.asBooker().createSession({
         sessionId: ids.next(),
         roomToken: ids.next(),
@@ -77,10 +92,7 @@ export class CreateSessions {
         totalSlots: config.totalSlots,
         minimumHeadcount: config.minimumHeadcount,
         visibility: config.visibility,
-        minimumReliability:
-          config.minimumReliability === undefined
-            ? undefined
-            : ReliabilityScore.from(config.minimumReliability),
+        minimumReliability,
         invitedGroupId: config.invitedGroupId,
         now: clock.now(),
       });
