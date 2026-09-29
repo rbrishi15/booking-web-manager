@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { passwordStrength } from "@/app/(auth)/register/password-strength";
 import { registerSchema } from "@/app/(auth)/schemas";
 
 // Owner: Joseph (Jolingoes) — /app/(auth)
@@ -67,6 +68,23 @@ describe("UC1-01 Register User", () => {
     expect(result.success).toBe(true);
     expect(result.data?.displayName).toBe("Marcus Lim");
     expect(result.data?.email).toBe("marcus@example.com");
+  });
+
+  describe("password strength hint", () => {
+    test.each([
+      ["", 0],
+      ["short", 1],
+      ["password", 1],
+      ["password1", 2],
+      ["Password1", 3],
+      ["Password1!", 4],
+    ] as const)("scores %j as %i bars", (password, expectedScore) => {
+      // Act
+      const result = passwordStrength(password);
+
+      // Assert
+      expect(result.score).toBe(expectedScore);
+    });
   });
 });
 

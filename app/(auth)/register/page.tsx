@@ -1,4 +1,5 @@
 import { AuthFrame, AuthHeading, AuthPanel } from "../_components/auth-frame";
+import { RegisterForm } from "./register-form";
 
 const STEPS = [
   { title: "Join a session", text: "See the exact per-player share before committing." },
@@ -6,7 +7,7 @@ const STEPS = [
   { title: "Play and settle", text: "Verified attendance releases the held amount." },
 ] as const;
 
-/** UC1-01 Register User (mockup 02). The form is added in Step 18. */
+/** UC1-01 Register User (mockup 02). */
 export default function RegisterPage() {
   return (
     <AuthFrame
@@ -41,7 +42,7 @@ export default function RegisterPage() {
         title="Register"
         description="Set your location and preferred sport to find relevant sessions."
       />
-      <p className="text-muted-foreground">Form coming in Step 18.</p>
+      <RegisterForm />
     </AuthFrame>
   );
 }
