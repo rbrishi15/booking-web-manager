@@ -83,10 +83,12 @@ ledger module provides persistence translation alongside other infrastructure.
 Stripe calls run outside database transactions. Settlement records a durable
 payout intent in its unit of work; a dispatcher calls Stripe after commit.
 Stripe SDK calls remain in `/app/wallet`, `/app/payouts` and
-`/app/api/webhooks`. The webhook adapter verifies signatures and deduplicates
-events before applying their effects; only this path credits inbound wallet
-funds. Commitment and fund holds use the SQL transaction path through the
-persistence adapters, preserving atomicity across both writes.
+`/app/api/webhooks`. The webhook handler currently returns `501 Not Implemented`.
+Signature verification, event deduplication and inbound-wallet crediting are
+planned behavior. Once implemented, webhook handling is intended to be the only
+path that credits inbound wallet funds. Commitment and fund holds use the SQL
+transaction path through the persistence adapters, preserving atomicity across
+both writes.
 
 - **Domain (`/domain`)** owns business rules and valid state transitions.
 - **Use cases (`/use-cases`)** load authoritative state through ports, call the
