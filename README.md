@@ -86,9 +86,9 @@ Stripe SDK calls remain in `/app/wallet`, `/app/payouts` and
 `/app/api/webhooks`. The webhook handler currently returns `501 Not Implemented`.
 Signature verification, event deduplication and inbound-wallet crediting are
 planned behavior. Once implemented, webhook handling is intended to be the only
-path that credits inbound wallet funds. Commitment and fund holds use the SQL
-transaction path through the persistence adapters, preserving atomicity across
-both writes.
+path that credits inbound wallet funds. Once `CommitToSession` is implemented,
+commitment and fund holds are intended to share one SQL transaction through the
+persistence adapters, so both writes succeed or neither does.
 
 - **Domain (`/domain`)** owns business rules and valid state transitions.
 - **Use cases (`/use-cases`)** load authoritative state through ports, call the
