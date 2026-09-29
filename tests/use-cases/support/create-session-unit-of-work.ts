@@ -1,10 +1,15 @@
-import type { Session, User, UUID } from "@/domain";
+import type {
+  FinancialInstruction,
+  PayoutRequestedIntent,
+  Session,
+  User,
+  UUID,
+} from "@/domain";
 import type {
   DomainTransaction,
   Repository,
   UnitOfWork,
 } from "@/use-cases/shared/contracts";
-import { vi } from "vitest";
 
 /**
  * Creation-only transaction fake: stages new sessions and caches successful
@@ -13,9 +18,9 @@ import { vi } from "vitest";
 export class CreateSessionUnitOfWork implements UnitOfWork {
   readonly sessions = new Map<UUID, Session>();
   readonly users: Map<UUID, User>;
-  readonly replayResults = new Map<string, unknown>();
-  readonly ledgerAppend = vi.fn(unsupported);
-  readonly payoutIntentAppend = vi.fn(unsupported);
+  readonly #replayResults = new Map<string, unknown>();
+  readonly ledgerInstructions: FinancialInstruction[] = [];
+  readonly payoutRequests: PayoutRequestedIntent[] = [];
   failNextSave = false;
 
   constructor(users: readonly User[]) {
@@ -26,12 +31,14 @@ export class CreateSessionUnitOfWork implements UnitOfWork {
     key: string,
     work: (transaction: DomainTransaction) => Promise<T>,
   ): Promise<T> {
-    if (this.replayResults.has(key)) {
+    if (this.#replayResults.has(key)) {
       // UnitOfWork binds the cached result type to the caller's operation key.
-      return structuredClone(this.replayResults.get(key)) as T;
+      return structuredClone(this.#replayResults.get(key)) as T;
     }
 
     const staged = new Map<UUID, Session>();
+    const stagedInstructions: FinancialInstruction[] = [];
+    const stagedPayoutRequests: PayoutRequestedIntent[] = [];
     const result = await work({
       users: {
         get: async (id) => this.users.get(id) ?? null,
@@ -50,12 +57,22 @@ export class CreateSessionUnitOfWork implements UnitOfWork {
       groups: unusedRepository(),
       payouts: unusedRepository(),
       deactivationInput: { get: unsupported },
-      ledger: { append: this.ledgerAppend },
-      payoutIntents: { append: this.payoutIntentAppend },
+      ledger: {
+        append: async (instructions) => {
+          stagedInstructions.push(...instructions);
+        },
+      },
+      payoutIntents: {
+        append: async (intent) => {
+          stagedPayoutRequests.push(intent);
+        },
+      },
     });
     const replayResult = structuredClone(result);
     for (const [id, session] of staged) this.sessions.set(id, session);
-    this.replayResults.set(key, replayResult);
+    this.ledgerInstructions.push(...stagedInstructions);
+    this.payoutRequests.push(...stagedPayoutRequests);
+    this.#replayResults.set(key, replayResult);
     return result;
   }
 

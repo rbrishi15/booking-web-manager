@@ -32,8 +32,11 @@ framework-independent boundary for those coordinators.
 [`use-cases/shared`](../../use-cases/shared/) holds reusable ports, contracts,
 transaction types, and coordination helpers. Capability-specific implementations
 are added when a concrete use case requires them. UC2-02 now has a
-[CreateSession coordinator](../../use-cases/sessions/CreateSession.ts) that
-loads the booker and saves the domain-created session in one unit of work.
+[CreateSessions module](../../use-cases/sessions/CreateSessions.ts) whose
+`forBooker({ bookerId, booking, config })` action loads the booker and saves the
+domain-created session through a creation-specific transaction capability. An
+app-owned adapter captures submission retry metadata and delegates to the shared
+unit of work; the business input contains no idempotency key.
 
 Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in
@@ -60,7 +63,7 @@ use-cases/
 │   └── ports.ts
 └── sessions/
     ├── DiscoverSessions.ts
-    ├── CreateSession.ts
+    ├── CreateSessions.ts
     ├── ManageSession.ts
     ├── ToggleSessionVisibility.ts
     ├── RemoveParticipant.ts
@@ -74,7 +77,7 @@ For example, `use-cases/sessions/DiscoverSessions.ts` would coordinate the
 inputs and query ports needed to discover sessions, while `domain/sessions`
 would continue to own session invariants and state transitions. Supabase and
 Stripe remain external adapters; they are not imported directly by the use-case
-coordinator. CreateSession is implemented; the remaining coordinators in this
+coordinator. CreateSessions is implemented; the remaining coordinators in this
 illustrative structure are future work.
 
 ## What belongs in `/use-cases`

@@ -1,6 +1,10 @@
 import { z } from "zod";
-import type { UUID } from "@/domain";
-import type { CreateSessionRequest } from "@/use-cases/sessions/CreateSession";
+import type { CreateSessionInput } from "@/use-cases/sessions/CreateSessions";
+
+/** Request metadata used to identify retries of one logical submission. */
+export interface SessionCreationSubmission {
+  readonly idempotencyKey: string;
+}
 
 const uuid = z.string().uuid();
 const requestSchema = z.object({
@@ -15,20 +19,25 @@ const requestSchema = z.object({
     endAt: z.date(),
     totalCostCents: z.number().int().safe(),
   }),
-  totalSlots: z.number().finite(),
-  minimumHeadcount: z.number().finite(),
-  visibility: z.enum(["PRIVATE", "PUBLIC"]).optional(),
-  minimumReliability: z.number().finite().optional(),
-  invitedGroupId: uuid.optional(),
+  config: z.object({
+    totalSlots: z.number().finite(),
+    minimumHeadcount: z.number().finite(),
+    visibility: z.enum(["PRIVATE", "PUBLIC"]).optional(),
+    minimumReliability: z.number().finite().optional(),
+    invitedGroupId: uuid.optional(),
+  }),
 });
 
-/** Parse adapter input; the actor must come from authentication, not the body. */
+/** Parse business input separately from submission metadata and trusted identity. */
 export function parseCreateSessionInput(
   actorUserId: unknown,
   request: unknown,
-): { actorUserId: UUID; request: CreateSessionRequest } {
+): { input: CreateSessionInput; submission: SessionCreationSubmission } {
+  const bookerId = uuid.parse(actorUserId);
+  const { booking, config, idempotencyKey } = requestSchema.parse(request);
+
   return {
-    actorUserId: uuid.parse(actorUserId),
-    request: requestSchema.parse(request),
+    input: { bookerId, booking, config },
+    submission: { idempotencyKey },
   };
 }

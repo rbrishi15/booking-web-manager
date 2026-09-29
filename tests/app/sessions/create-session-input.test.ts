@@ -1,5 +1,5 @@
 import { parseCreateSessionInput } from "@/app/sessions/create-session-input";
-import type { CreateSessionRequest } from "@/use-cases/sessions/CreateSession";
+import type { CreateSessionInput } from "@/use-cases/sessions/CreateSessions";
 import { describe, expect, test } from "vitest";
 import { ZodError } from "zod";
 
@@ -9,35 +9,48 @@ const invitedGroupId = "33333333-3333-4333-8333-333333333333";
 
 // Owner: Neoh (liang799) — /app/sessions
 describe("UC2-02 Create Session input", () => {
-  test("returns the separately supplied actor and a validated request", () => {
+  test("separates submission metadata from input with the authenticated booker", () => {
     // Arrange
     const request = creationRequest();
 
     // Act
-    const input = parseCreateSessionInput(actorUserId, request);
+    const parsed = parseCreateSessionInput(actorUserId, request);
 
     // Assert
-    expect(input).toEqual({ actorUserId, request });
-    expect(input.request).not.toHaveProperty("visibility");
-    expect(input.request).not.toHaveProperty("minimumReliability");
-    expect(input.request).not.toHaveProperty("invitedGroupId");
+    expect(parsed).toEqual({
+      input: {
+        bookerId: actorUserId,
+        booking: request.booking,
+        config: request.config,
+      },
+      submission: { idempotencyKey: request.idempotencyKey },
+    });
+    expect(parsed.input).not.toHaveProperty("idempotencyKey");
+    expect(parsed.input.config).not.toHaveProperty("visibility");
+    expect(parsed.input.config).not.toHaveProperty("minimumReliability");
+    expect(parsed.input.config).not.toHaveProperty("invitedGroupId");
   });
 
   test("preserves optional settings and the untrimmed idempotency key", () => {
     // Arrange
+    const baseRequest = creationRequest();
     const request = {
-      ...creationRequest(),
+      ...baseRequest,
       idempotencyKey: "  create-session  ",
-      visibility: "PUBLIC",
-      minimumReliability: 75,
-      invitedGroupId,
+      config: {
+        ...baseRequest.config,
+        visibility: "PUBLIC",
+        minimumReliability: 75,
+        invitedGroupId,
+      },
     };
 
     // Act
-    const input = parseCreateSessionInput(actorUserId, request);
+    const parsed = parseCreateSessionInput(actorUserId, request);
 
     // Assert
-    expect(input).toEqual({ actorUserId, request });
+    expect(parsed.input.config).toEqual(request.config);
+    expect(parsed.submission).toEqual({ idempotencyKey: "  create-session  " });
   });
 
   test("strips client-supplied identities, shares, and unknown nested fields", () => {
@@ -62,13 +75,28 @@ describe("UC2-02 Create Session input", () => {
         bookingShareCents: 1,
         unexpected: { value: true },
       },
+      config: {
+        ...request.config,
+        bookerId: otherUserId,
+        bookingShareCents: 1,
+        idempotencyKey: "forged-submission",
+        unexpected: { value: true },
+      },
+      submission: { idempotencyKey: "forged-submission" },
     };
 
     // Act
-    const input = parseCreateSessionInput(actorUserId, untrustedRequest);
+    const parsed = parseCreateSessionInput(actorUserId, untrustedRequest);
 
     // Assert
-    expect(input).toEqual({ actorUserId, request });
+    expect(parsed).toEqual({
+      input: {
+        bookerId: actorUserId,
+        booking: request.booking,
+        config: request.config,
+      },
+      submission: { idempotencyKey: request.idempotencyKey },
+    });
     expect(untrustedRequest.actorUserId).toBe(otherUserId);
     expect(untrustedRequest.booking).toHaveProperty("unexpected");
   });
@@ -91,7 +119,8 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects a malformed invited-group UUID", () => {
     // Arrange
-    const request = { ...creationRequest(), invitedGroupId: "not-a-uuid" };
+    const request = creationRequest();
+    request.config.invitedGroupId = "not-a-uuid";
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -180,6 +209,30 @@ describe("UC2-02 Create Session input", () => {
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
   });
 
+  test("requires grouped config instead of top-level capacity fields", () => {
+    // Arrange
+    const request = creationRequest();
+    const ungroupedRequest = {
+      idempotencyKey: request.idempotencyKey,
+      booking: request.booking,
+      totalSlots: 3,
+      minimumHeadcount: 2,
+    };
+
+    // Act & Assert
+    expect(() =>
+      parseCreateSessionInput(actorUserId, ungroupedRequest),
+    ).toThrow(ZodError);
+  });
+
+  test("rejects config without required capacity fields", () => {
+    // Arrange
+    const request = { ...creationRequest(), config: {} };
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
+  });
+
   test("rejects a booking field with the wrong type", () => {
     // Arrange
     const request = creationRequest();
@@ -194,7 +247,11 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects a numeric string instead of coercing capacity", () => {
     // Arrange
-    const request = { ...creationRequest(), totalSlots: "3" };
+    const baseRequest = creationRequest();
+    const request = {
+      ...baseRequest,
+      config: { ...baseRequest.config, totalSlots: "3" },
+    };
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -202,7 +259,8 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects non-finite capacity", () => {
     // Arrange
-    const request = { ...creationRequest(), totalSlots: Infinity };
+    const request = creationRequest();
+    request.config.totalSlots = Infinity;
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -210,7 +268,8 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects non-finite minimum headcount", () => {
     // Arrange
-    const request = { ...creationRequest(), minimumHeadcount: NaN };
+    const request = creationRequest();
+    request.config.minimumHeadcount = NaN;
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -218,7 +277,8 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects non-finite minimum reliability", () => {
     // Arrange
-    const request = { ...creationRequest(), minimumReliability: Infinity };
+    const request = creationRequest();
+    request.config.minimumReliability = Infinity;
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -226,7 +286,11 @@ describe("UC2-02 Create Session input", () => {
 
   test("rejects unsupported visibility values", () => {
     // Arrange
-    const request = { ...creationRequest(), visibility: "UNLISTED" };
+    const baseRequest = creationRequest();
+    const request = {
+      ...baseRequest,
+      config: { ...baseRequest.config, visibility: "UNLISTED" },
+    };
 
     // Act & Assert
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
@@ -238,19 +302,22 @@ describe("UC2-02 Create Session input", () => {
     request.booking.venueName = " ";
     request.booking.totalCostCents = 0;
     request.booking.endAt = request.booking.startAt;
-    request.totalSlots = 9.5;
-    request.minimumHeadcount = -1;
-    request.minimumReliability = 101;
+    request.config.totalSlots = 9.5;
+    request.config.minimumHeadcount = -1;
+    request.config.minimumReliability = 101;
 
     // Act
-    const input = parseCreateSessionInput(actorUserId, request);
+    const parsed = parseCreateSessionInput(actorUserId, request);
 
     // Assert
-    expect(input).toEqual({ actorUserId, request });
+    expect(parsed.input.booking).toEqual(request.booking);
+    expect(parsed.input.config).toEqual(request.config);
   });
 });
 
-function creationRequest(): CreateSessionRequest {
+function creationRequest(): Omit<CreateSessionInput, "bookerId"> & {
+  idempotencyKey: string;
+} {
   return {
     idempotencyKey: "create-session",
     booking: {
@@ -261,7 +328,6 @@ function creationRequest(): CreateSessionRequest {
       endAt: new Date("2026-10-01T12:00:00Z"),
       totalCostCents: 1001,
     },
-    totalSlots: 3,
-    minimumHeadcount: 2,
+    config: { totalSlots: 3, minimumHeadcount: 2 },
   };
 }

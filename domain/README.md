@@ -4,7 +4,7 @@ The domain is framework independent TypeScript. It imports no Next.js, database,
 HTTP, or payment SDK code. Shared contracts in `/use-cases/shared` define the
 boundary for coordinators that load authoritative state, invoke aggregate
 commands, and persist their results in one unit of work. UC2-02 is implemented
-by [CreateSession](../use-cases/sessions/CreateSession.ts); its application
+by [CreateSessions](../use-cases/sessions/CreateSessions.ts); its application
 contract and remaining adapter work are documented in the
 [session use-case guide](../use-cases/sessions/README.md).
 
