@@ -221,7 +221,12 @@ domain atomicity tests do not establish database concurrency guarantees.
 
 `Money` is an immutable signed SGD-cent value object. It uses safe integer cents,
 BigInt-backed arithmetic checks, and floor division for the per-slot booking
-share. `Booking` is an immutable value object requiring a positive total cost and
+share. `toDollars()` returns an exact decimal string with two fractional digits
+(for example, `Money.fromCents(333).toDollars()` returns `"3.33"`). Arithmetic and
+persistence continue to use integer cents; currency symbols and locale formatting
+belong at the render layer.
+
+`Booking` is an immutable value object requiring a positive total cost and
 `startAt < endAt`. A session has at most eight commitments, including accepted
 personal replacements; the booker does not receive a reserved place.
 
