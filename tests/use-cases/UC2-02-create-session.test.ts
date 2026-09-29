@@ -4,7 +4,6 @@ import {
   type CreateSessionRequest,
 } from "@/use-cases/sessions/CreateSession";
 import { describe, expect, test, vi } from "vitest";
-import { ZodError } from "zod";
 import {
   createTestUser,
   readyBookerUser,
@@ -273,83 +272,6 @@ describe("UC2-02 Create Session", () => {
       code: "INVALID_INPUT",
     });
     expect(unitOfWork.sessions.size).toBe(0);
-  });
-
-  test("rejects fractional cents at the input boundary", async () => {
-    // Arrange
-    const { createSession, unitOfWork, ids } = setup();
-    const request = creationRequest();
-    request.booking.totalCostCents = 1001.5;
-
-    // Act & Assert
-    await expect(createSession.execute(bookerId, request)).rejects.toBeInstanceOf(
-      ZodError,
-    );
-    expect(unitOfWork.sessions.size).toBe(0);
-    expect(ids.next).not.toHaveBeenCalled();
-  });
-
-  test("rejects cents outside the safe integer range", async () => {
-    // Arrange
-    const { createSession, unitOfWork } = setup();
-    const request = creationRequest();
-    request.booking.totalCostCents = Number.MAX_SAFE_INTEGER + 1;
-
-    // Act & Assert
-    await expect(createSession.execute(bookerId, request)).rejects.toBeInstanceOf(
-      ZodError,
-    );
-    expect(unitOfWork.sessions.size).toBe(0);
-  });
-
-  test("rejects invalid dates at the input boundary", async () => {
-    // Arrange
-    const { createSession, unitOfWork } = setup();
-    const request = creationRequest();
-    request.booking.startAt = new Date("invalid");
-
-    // Act & Assert
-    await expect(createSession.execute(bookerId, request)).rejects.toBeInstanceOf(
-      ZodError,
-    );
-    expect(unitOfWork.sessions.size).toBe(0);
-  });
-
-  test("rejects an invalid actor UUID before generating identifiers", async () => {
-    // Arrange
-    const { createSession, ids } = setup();
-
-    // Act & Assert
-    await expect(
-      createSession.execute("not-a-uuid", creationRequest()),
-    ).rejects.toBeInstanceOf(ZodError);
-    expect(ids.next).not.toHaveBeenCalled();
-  });
-
-  test("rejects an invalid invited-group UUID", async () => {
-    // Arrange
-    const { createSession, unitOfWork } = setup();
-
-    // Act & Assert
-    await expect(
-      createSession.execute(
-        bookerId,
-        creationRequest({ invitedGroupId: "not-a-uuid" }),
-      ),
-    ).rejects.toBeInstanceOf(ZodError);
-    expect(unitOfWork.sessions.size).toBe(0);
-  });
-
-  test("rejects a blank idempotency key", async () => {
-    // Arrange
-    const { createSession, unitOfWork } = setup();
-
-    // Act & Assert
-    await expect(
-      createSession.execute(bookerId, creationRequest({ idempotencyKey: " " })),
-    ).rejects.toBeInstanceOf(ZodError);
-    expect(unitOfWork.sessions.size).toBe(0);
-    expect(unitOfWork.replayResults.size).toBe(0);
   });
 
   test("replays the original result without creating another session", async () => {

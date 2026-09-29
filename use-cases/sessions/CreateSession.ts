@@ -1,29 +1,32 @@
-import { z } from "zod";
-import { Booking, Money, ReliabilityScore, type UUID } from "@/domain";
+import {
+  Booking,
+  Money,
+  ReliabilityScore,
+  type Region,
+  type Sport,
+  type UUID,
+  type Visibility,
+} from "@/domain";
 import type { UseCaseDependencies } from "../shared/dependencies";
 import { requireAggregate } from "../shared/helpers";
 
-const uuid = z.string().uuid();
-const requestSchema = z.object({
-  idempotencyKey: z.string().refine((key) => key.trim() !== "", {
-    message: "An idempotency key is required",
-  }),
-  booking: z.object({
-    venueName: z.string(),
-    region: z.string(),
-    sport: z.string(),
-    startAt: z.date(),
-    endAt: z.date(),
-    totalCostCents: z.number().int().safe(),
-  }),
-  totalSlots: z.number().finite(),
-  minimumHeadcount: z.number().finite(),
-  visibility: z.enum(["PRIVATE", "PUBLIC"]).optional(),
-  minimumReliability: z.number().finite().optional(),
-  invitedGroupId: uuid.optional(),
-});
-
-export type CreateSessionRequest = z.input<typeof requestSchema>;
+/** Validated application input; transport parsing belongs to the caller. */
+export interface CreateSessionRequest {
+  idempotencyKey: string;
+  booking: {
+    venueName: string;
+    region: Region;
+    sport: Sport;
+    startAt: Date;
+    endAt: Date;
+    totalCostCents: number;
+  };
+  totalSlots: number;
+  minimumHeadcount: number;
+  visibility?: Visibility;
+  minimumReliability?: number;
+  invitedGroupId?: UUID;
+}
 
 export interface CreateSessionResult {
   readonly sessionId: UUID;
@@ -38,12 +41,11 @@ export interface CreateSessionDependencies extends UseCaseDependencies {
 
 /** UC2-02: load the booker, apply domain creation rules, and save atomically. */
 export class CreateSession {
-  constructor(private readonly dependencies: CreateSessionDependencies) {
-    uuid.parse(dependencies.holdingAccountId);
-  }
+  constructor(private readonly dependencies: CreateSessionDependencies) {}
 
   /**
-   * actorUserId must come from authentication, independently of the request.
+   * The caller validates the DTO and supplies actorUserId from authentication,
+   * independently of the request. Domain rules are checked during creation.
    * A repeated actor/key returns the original creation result; use a new key
    * for a new session. The transaction adapter owns rollback and replay storage.
    */
@@ -51,34 +53,32 @@ export class CreateSession {
     actorUserId: UUID,
     request: CreateSessionRequest,
   ): Promise<CreateSessionResult> {
-    const userId = uuid.parse(actorUserId);
-    const input = requestSchema.parse(request);
     const { unitOfWork, clock, ids, holdingAccountId } = this.dependencies;
-    const key = JSON.stringify(["UC2-02", userId, input.idempotencyKey]);
+    const key = JSON.stringify(["UC2-02", actorUserId, request.idempotencyKey]);
 
     return unitOfWork.execute(key, async (transaction) => {
-      const user = await requireAggregate(transaction.users, userId, "User");
+      const user = await requireAggregate(transaction.users, actorUserId, "User");
       const booking = new Booking({
-        venueName: input.booking.venueName,
-        region: input.booking.region,
-        sport: input.booking.sport,
-        startAt: input.booking.startAt,
-        endAt: input.booking.endAt,
-        totalCost: Money.fromCents(input.booking.totalCostCents),
+        venueName: request.booking.venueName,
+        region: request.booking.region,
+        sport: request.booking.sport,
+        startAt: request.booking.startAt,
+        endAt: request.booking.endAt,
+        totalCost: Money.fromCents(request.booking.totalCostCents),
       });
       const session = user.asBooker().createSession({
-        sessionId: uuid.parse(ids.next()),
-        roomToken: uuid.parse(ids.next()),
+        sessionId: ids.next(),
+        roomToken: ids.next(),
         holdingAccountId,
         booking,
-        totalSlots: input.totalSlots,
-        minimumHeadcount: input.minimumHeadcount,
-        visibility: input.visibility,
+        totalSlots: request.totalSlots,
+        minimumHeadcount: request.minimumHeadcount,
+        visibility: request.visibility,
         minimumReliability:
-          input.minimumReliability === undefined
+          request.minimumReliability === undefined
             ? undefined
-            : ReliabilityScore.from(input.minimumReliability),
-        invitedGroupId: input.invitedGroupId,
+            : ReliabilityScore.from(request.minimumReliability),
+        invitedGroupId: request.invitedGroupId,
         now: clock.now(),
       });
 

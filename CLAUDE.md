@@ -175,7 +175,8 @@ creation and cannot be changed.
 
 - Server-side computation for anything financial. Never trust a client-supplied
   amount, refund figure or settlement outcome.
-- Validate at the boundary with Zod; the domain layer assumes valid input.
+- Validate external input with Zod in `/app`, then pass plain TypeScript DTOs
+  into `/use-cases`. Keep business invariants in `/domain`.
 - Waitlist promotion is strictly FIFO on `joined_at`, using
   `SELECT ... FOR UPDATE SKIP LOCKED`.
 - Cancel sessions through `user.asBooker().cancel(session, now)` and retain their

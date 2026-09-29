@@ -85,6 +85,7 @@ illustrative structure are future work.
 - Cross-aggregate sequencing, idempotency coordination, and durable intent
   creation.
 - Shared contracts and ports under `/use-cases/shared/`.
+- Plain TypeScript input DTOs consumed after validation at the app boundary.
 
 ## What does not belong in `/use-cases`
 
@@ -92,6 +93,8 @@ illustrative structure are future work.
   in `/domain`.
 - Next.js pages, route handlers, HTTP DTO parsing, authentication plumbing, or
   UI concerns; those belong in `/app` and `/components`.
+- Zod input schemas and parsing; `/app` validates external input and maps it to
+  application-owned DTOs before invoking a use case.
 - Supabase queries, Stripe calls, payment-provider adapters, or other external
   API clients; those belong in their infrastructure/integration boundaries.
 - Database migrations, schema definitions, or ledger implementations.

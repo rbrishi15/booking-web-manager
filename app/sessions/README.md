@@ -9,6 +9,11 @@ Supabase Realtime wiring lives here to meet the 3-second slot propagation
 requirement.
 
 UC2-02's framework-independent [CreateSession coordinator](../../use-cases/sessions/README.md)
-and acceptance tests are implemented. This app directory still needs the
-authenticated server boundary, production repositories and transaction adapter,
-and UI before session creation is available to users.
+and acceptance tests are implemented. [parseCreateSessionInput](./create-session-input.ts)
+validates the authenticated actor ID and request with Zod at the app boundary and
+returns the application's plain TypeScript DTO. A controller must obtain the
+actor ID from authentication separately from the request, convert wire timestamps
+to Dates, parse the input, and pass the result to `CreateSession.execute`.
+
+Route handlers, authentication wiring, production repositories and transaction
+adapter, and UI remain to be implemented before session creation is available to users.
