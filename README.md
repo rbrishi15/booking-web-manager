@@ -9,7 +9,15 @@ NTU SC2006 group project, Group 3.
 See [CLAUDE.md](./CLAUDE.md) for the full architecture, non-negotiable rules,
 directory ownership and conventions. See [docs/](./docs) for the SRS.
 
-## Architecture direction
+## Architecture direction: Clean Architecture
+
+We propose [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+as the implementation structure: domain rules and use-case workflows stay
+independent of React, Next.js and database implementations. This makes those
+rules and workflows testable through plain TypeScript interfaces while adapters
+handle HTTP and persistence. This framing is proposed and has not yet been
+vetted against the course's expectations; the supplementary section below maps
+it to the required use-case-driven design and BCE responsibilities.
 
 Build from the inside out: **domain → use cases → interface adapters → React**.
 The intended request flow is:
@@ -61,8 +69,8 @@ above describes browser interactions; Server Components can call read-only
 use cases directly without an HTTP round trip to the application's own API,
 following the [Next.js data-fetching guidance](https://nextjs.org/docs/app/guides/backend-for-frontend#server-components).
 
-This is the target architecture. The domain and shared use-case ports already
-exist, as do ledger adapters in `/lib/money`; feature coordinators and their
+This is the proposed target architecture. The domain and shared use-case ports
+already exist, as do ledger adapters in `/lib/money`; feature coordinators and their
 HTTP/UI integration are still to be implemented. See
 [ADR-0001](./docs/adr/0001-use-case-driven-development.md).
 
@@ -91,6 +99,48 @@ would work as follows:
    leaves participation and held funds unchanged.
 
 `CommitToSession` is an example of a future coordinator, not an existing class.
+
+### Supplement: use-case-driven design and BCE
+
+The course requires **use-case-driven design** and **Boundary–Control–Entity
+(BCE)**. These provide the development process and responsibility model for the
+same features described above. Clean Architecture adds explicit implementation
+rules about dependencies and the separation of framework and storage code.
+
+**Use-case-driven design** starts with an SRS use case and its success and
+alternative scenarios. Those scenarios guide the collaborating objects and
+acceptance tests. For UC2-04, cover successful commitment, insufficient funds,
+a full session and an idempotent retry; then identify the boundary, control and
+entities needed to realise those scenarios. Keep the UC ID traceable through
+the design, tests and implementation. This follows the accepted
+[ADR-0001](./docs/adr/0001-use-case-driven-development.md).
+
+**BCE** assigns responsibilities within each use-case collaboration:
+
+| BCE role | Responsibility | Mapping to the proposed implementation |
+| --- | --- | --- |
+| **Boundary** | Handles interaction with actors and translates inputs and outputs. | The React commitment screen and Next.js HTTP adapter together implement the user-facing interaction. External-service adapters handle interaction with other systems. |
+| **Control** | Coordinates the steps needed to complete a use case. | `CommitToSession` loads state, invokes domain behavior and coordinates atomic persistence through ports. |
+| **Entity** | Holds domain state and enforces business rules. | `User`, `Session`, `Participation` and `FundHold` supply the domain behavior used by the commitment workflow. |
+
+The boundary mapping groups responsibilities across browser and server; it
+does not require one class containing both. A Next.js route handler handles
+the HTTP boundary, while the use-case coordinator carries the BCE control
+responsibility. Entity business rules remain in the domain; controls sequence
+the workflow. This distinction follows the
+[BCE responsibility model](https://www.cs.sjsu.edu/~pearce/modules/topics/reqs/analysis/advanced/index.htm).
+
+Database adapters implement the control's persistence ports and map domain
+objects to storage. They are implementation details in the architecture diagram;
+BCE entities represent domain concepts with behavior, rather than database rows.
+React components and optional hooks handle screen state without requiring an
+additional UI interface or presenter layer.
+
+Design therefore starts with a **use case and its BCE collaboration**.
+Implementation can proceed **inside out**, building domain behavior, the
+use-case control, adapters and finally the React interaction. The course-facing
+explanation and the Clean Architecture introduction describe the same design
+at different levels of detail.
 
 ## Team
 
