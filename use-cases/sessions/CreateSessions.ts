@@ -30,13 +30,6 @@ export interface SessionBooking {
   totalCostCents: number;
 }
 
-/** Parsed business values; the caller supplies the authenticated booker ID. */
-export interface CreateSessionInput {
-  bookerId: UUID;
-  booking: SessionBooking;
-  config: SessionConfig;
-}
-
 export interface CreateSessionResult {
   readonly sessionId: UUID;
   readonly roomToken: string;

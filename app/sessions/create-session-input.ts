@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { CreateSessionInput } from "@/use-cases/sessions/CreateSessions";
 
 /** Request metadata used to identify retries of one logical submission. */
 export interface SessionCreationSubmission {
@@ -32,7 +31,7 @@ const requestSchema = z.object({
 export function parseCreateSessionInput(
   actorUserId: unknown,
   request: unknown,
-): { input: CreateSessionInput; submission: SessionCreationSubmission } {
+) {
   const bookerId = uuid.parse(actorUserId);
   const { booking, config, idempotencyKey } = requestSchema.parse(request);
 

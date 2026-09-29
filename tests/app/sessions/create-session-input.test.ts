@@ -1,5 +1,5 @@
 import { parseCreateSessionInput } from "@/app/sessions/create-session-input";
-import type { CreateSessionInput } from "@/use-cases/sessions/CreateSessions";
+import type { SessionConfig } from "@/use-cases/sessions/CreateSessions";
 import { describe, expect, test } from "vitest";
 import { ZodError } from "zod";
 
@@ -315,9 +315,8 @@ describe("UC2-02 Create Session input", () => {
   });
 });
 
-function creationRequest(): Omit<CreateSessionInput, "bookerId"> & {
-  idempotencyKey: string;
-} {
+function creationRequest() {
+  const config: SessionConfig = { totalSlots: 3, minimumHeadcount: 2 };
   return {
     idempotencyKey: "create-session",
     booking: {
@@ -328,6 +327,6 @@ function creationRequest(): Omit<CreateSessionInput, "bookerId"> & {
       endAt: new Date("2026-10-01T12:00:00Z"),
       totalCostCents: 1001,
     },
-    config: { totalSlots: 3, minimumHeadcount: 2 },
+    config,
   };
 }

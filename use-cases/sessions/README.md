@@ -8,10 +8,9 @@ loads the complete User inside the transaction, constructs the Booking, calls
 and booking-share calculation remain in the domain. Creation moves no funds and
 returns `{ sessionId, roomToken, bookingShareCents }`.
 
-`CreateSessionInput` groups the parser's plain TypeScript output. Its `bookerId`
-comes from authentication; its `booking` is a `SessionBooking` containing venue
-name, resolved region, sport, `Date` start/end values, and integer
-`totalCostCents`. `SessionConfig` groups
+`bookerId` comes from authentication. `SessionBooking` contains venue name,
+resolved region, sport, `Date` start/end values, and integer `totalCostCents`.
+`SessionConfig` groups
 `totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`, and
 `invitedGroupId`. The module maps these fields explicitly into domain inputs.
 Client-supplied shares, identities, account facts, or lifecycle fields cannot

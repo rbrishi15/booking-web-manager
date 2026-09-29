@@ -3,7 +3,6 @@ import { RequestSessionCreationTransaction } from "@/app/sessions/request-sessio
 import { PayoutAccount } from "@/domain";
 import {
   CreateSessions,
-  type CreateSessionInput,
   type SessionConfig,
   type SessionBooking,
 } from "@/use-cases/sessions/CreateSessions";
@@ -545,9 +544,7 @@ describe("UC2-02 Create Session", () => {
   });
 });
 
-function creationInput(
-  config: Partial<SessionConfig> = {},
-): CreateSessionInput {
+function creationInput(config: Partial<SessionConfig> = {}) {
   return {
     bookerId,
     booking: {
