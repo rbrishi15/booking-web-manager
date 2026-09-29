@@ -1,0 +1,76 @@
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { HOME_PATH, isAuthPage, isPublicPath } from "@/app/(auth)/redirect-path";
+
+/**
+ * Runs before every page. Refreshes the Supabase login cookie, sends logged-out
+ * visitors to /login, keeps logged-in users off /login and /register, and signs
+ * out deactivated accounts (UC1-04).
+ */
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
+          response = NextResponse.next({ request });
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  // getUser() checks the login with Supabase and refreshes an expiring cookie.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { pathname, search } = request.nextUrl;
+
+  // API routes answer for themselves (e.g. 401), never with a redirect to a page.
+  if (pathname.startsWith("/api")) return response;
+
+  if (user === null) {
+    if (isPublicPath(pathname)) return response;
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", `${pathname}${search}`);
+    return redirectKeepingCookies(loginUrl, response);
+  }
+
+  // UC1-04: a deactivated account is signed out and cannot use the app.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("account_status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (profile?.account_status === "INACTIVE") {
+    await supabase.auth.signOut();
+    return redirectKeepingCookies(new URL("/login", request.url), response);
+  }
+
+  if (isAuthPage(pathname)) {
+    return redirectKeepingCookies(new URL(HOME_PATH, request.url), response);
+  }
+
+  return response;
+}
+
+/** A redirect that still carries any login cookies Supabase just refreshed or cleared. */
+function redirectKeepingCookies(url: URL, from: NextResponse): NextResponse {
+  const redirect = NextResponse.redirect(url);
+  for (const cookie of from.cookies.getAll()) redirect.cookies.set(cookie);
+  return redirect;
+}
+
+export const config = {
+  // Skip Next.js internals, images, and the Stripe webhook (Stripe never logs in).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
+};

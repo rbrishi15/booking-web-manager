@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { HOME_PATH, safeRedirectPath } from "@/app/(auth)/redirect-path";
+import { HOME_PATH, isAuthPage, isPublicPath, safeRedirectPath } from "@/app/(auth)/redirect-path";
 import { loginSchema } from "@/app/(auth)/schemas";
 
 // Owner: Joseph (Jolingoes) — /app/(auth)
@@ -57,6 +57,34 @@ describe("UC1-02 Authenticate User", () => {
 
       // Assert
       expect(result).toBe(HOME_PATH);
+    });
+  });
+
+  describe("which pages need a login", () => {
+    test.each(["/", "/login", "/register"])("%s is open to logged-out visitors", (path) => {
+      // Act
+      const result = isPublicPath(path);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    test.each(["/profile", "/groups", "/discover", "/wallet", "/groups/join/abc123"])(
+      "%s requires a login",
+      (path) => {
+        // Act
+        const result = isPublicPath(path);
+
+        // Assert
+        expect(result).toBe(false);
+      },
+    );
+
+    test("logged-in users are kept off the login and register pages only", () => {
+      // Act + Assert
+      expect(isAuthPage("/login")).toBe(true);
+      expect(isAuthPage("/register")).toBe(true);
+      expect(isAuthPage("/")).toBe(false);
     });
   });
 });
