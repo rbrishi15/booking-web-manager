@@ -185,6 +185,20 @@ creation and cannot be changed.
   irreversible action.
 - Responsive from 390px.
 
+### Commit messages
+
+Use semantic commit messages. For breaking changes, add `!` immediately before
+the colon (`feat!:` or `feat(sessions)!:`) and include a `BREAKING CHANGE:` footer
+describing the change.
+
+Example with both `!` and a `BREAKING CHANGE` footer:
+
+```text
+feat!: drop support for Node 6
+
+BREAKING CHANGE: use JavaScript features not available in Node 6.
+```
+
 ---
 
 ## Key timings
