@@ -64,12 +64,21 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 begin
+  -- Sign-up metadata comes from the browser, so it may not match what the form sends.
+  -- Clamp the name to the column's limit and only expand real JSON arrays, so odd
+  -- metadata never makes sign-up fail (same rules as the backfill below).
   insert into public.profiles (user_id, display_name, preferred_sports, preferred_regions)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'display_name', ''),
-    coalesce(array(select jsonb_array_elements_text(new.raw_user_meta_data -> 'preferred_sports')), '{}'),
-    coalesce(array(select jsonb_array_elements_text(new.raw_user_meta_data -> 'preferred_regions')), '{}')
+    left(coalesce(new.raw_user_meta_data ->> 'display_name', ''), 60),
+    case when jsonb_typeof(new.raw_user_meta_data -> 'preferred_sports') = 'array'
+      then array(select jsonb_array_elements_text(new.raw_user_meta_data -> 'preferred_sports'))
+      else '{}'
+    end,
+    case when jsonb_typeof(new.raw_user_meta_data -> 'preferred_regions') = 'array'
+      then array(select jsonb_array_elements_text(new.raw_user_meta_data -> 'preferred_regions'))
+      else '{}'
+    end
   );
 
   -- Wallet identity only; migration 0001's trigger adds the SGD 0.00 balance row.

@@ -155,6 +155,19 @@ describe("UC1-02 Authenticate User", () => {
       expect(supabase.auth.signOut).toHaveBeenCalledOnce();
     });
 
+    test("signs out a login with no profile row", async () => {
+      // Arrange
+      const supabase = fakeSupabase({ user: MARCUS, profile: missingProfile });
+      vi.mocked(createServerClient).mockReturnValue(supabase as never);
+
+      // Act
+      const response = await middleware(new NextRequest("http://localhost/profile"));
+
+      // Assert
+      expect(response.headers.get("location")).toBe("http://localhost/login");
+      expect(supabase.auth.signOut).toHaveBeenCalledOnce();
+    });
+
     test("signs out a login whose account status can't be checked", async () => {
       // Arrange
       const supabase = fakeSupabase({ user: MARCUS, profile: failedProfileLookup });
