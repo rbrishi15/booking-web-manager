@@ -1,5 +1,10 @@
 import { Money } from "@/domain";
-import type { AccountStanding, DeleteAccountPorts, ProfileSnapshot } from "@/use-cases/accounts/delete-account";
+import {
+  AccountNotActiveError,
+  type AccountStanding,
+  type DeleteAccountPorts,
+  type ProfileSnapshot,
+} from "@/use-cases/accounts/delete-account";
 import { createAdminClient } from "./admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -16,17 +21,13 @@ function textList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-/** PostgREST's "that table doesn't exist" errors (newer and older versions). */
-function isMissingTable(error: { code?: string }): boolean {
-  return error.code === "PGRST205" || error.code === "42P01";
-}
-
 /**
- * Counts rows in a table owned by another member's migration (e.g. Neoh's 0005).
- * A table that isn't in the database yet means nobody can have that obligation, so it counts 0.
- * Any other error stops the deletion (fail closed).
+ * Counts rows in a table owned by another member's migration (sessions and regular_groups
+ * come from Neoh's 0005). Any error stops the deletion (fail closed), including "table not
+ * found": PostgREST's schema cache can report that for a table that does exist, and treating
+ * it as "no obligations" could let an account with outstanding sessions or groups be deleted.
  */
-async function countIfTableExists(
+async function countRows(
   admin: AdminClient,
   table: string,
   filter: (query: ReturnType<ReturnType<AdminClient["from"]>["select"]>) => PromiseLike<{
@@ -35,10 +36,7 @@ async function countIfTableExists(
   }>,
 ): Promise<number> {
   const { count, error } = await filter(admin.from(table).select("*", { count: "exact", head: true }));
-  if (error !== null) {
-    if (isMissingTable(error)) return 0;
-    throw error;
-  }
+  if (error !== null) throw error;
   return count ?? 0;
 }
 
@@ -80,13 +78,13 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
       }
 
       // Sessions and groups live in Neoh's migration 0005 (sessions, regular_groups).
-      const unsettledOwnedSessions = await countIfTableExists(admin, "sessions", (query) =>
+      const unsettledOwnedSessions = await countRows(admin, "sessions", (query) =>
         query.eq("booker_id", userId).not("status", "in", "(SETTLED,CANCELLED)"),
       );
-      const pendingPayouts = await countIfTableExists(admin, "sessions", (query) =>
+      const pendingPayouts = await countRows(admin, "sessions", (query) =>
         query.eq("booker_id", userId).in("status", ["AWAITING_PAYOUT", "PAYOUT_PENDING"]),
       );
-      const activeOwnedGroups = await countIfTableExists(admin, "regular_groups", (query) =>
+      const activeOwnedGroups = await countRows(admin, "regular_groups", (query) =>
         query.eq("owner_id", userId).eq("status", "ACTIVE"),
       );
 
@@ -110,14 +108,18 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
       if (readError !== null) throw readError;
 
       // Blank the personal details and mark INACTIVE. Login and middleware now refuse the account.
+      // Only an ACTIVE profile is claimed, in one UPDATE: if two deletions run at once, only one
+      // of them can claim it, and only that one may later restore it.
       const { error, count } = await admin
         .from("profiles")
         .update(
           { display_name: "", preferred_sports: [], preferred_regions: [], account_status: "INACTIVE" },
           { count: "exact" },
         )
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("account_status", "ACTIVE");
       if (error !== null) throw error;
+      if (count === 0) throw new AccountNotActiveError(userId);
       if (count !== 1) throw new Error(`UC1-04: expected one profile row for ${userId}, updated ${count}`);
 
       return {
@@ -129,16 +131,22 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
     },
 
     async restoreProfile(snapshot) {
-      const { error } = await admin
+      // Only undo our own deactivation: the profile must still be INACTIVE.
+      const { error, count } = await admin
         .from("profiles")
-        .update({
-          display_name: snapshot.displayName,
-          preferred_sports: [...snapshot.preferredSports],
-          preferred_regions: [...snapshot.preferredRegions],
-          account_status: "ACTIVE",
-        })
-        .eq("user_id", snapshot.userId);
+        .update(
+          {
+            display_name: snapshot.displayName,
+            preferred_sports: [...snapshot.preferredSports],
+            preferred_regions: [...snapshot.preferredRegions],
+            account_status: "ACTIVE",
+          },
+          { count: "exact" },
+        )
+        .eq("user_id", snapshot.userId)
+        .eq("account_status", "INACTIVE");
       if (error !== null) throw error;
+      if (count !== 1) throw new Error(`UC1-04: expected to restore one profile for ${snapshot.userId}, updated ${count}`);
     },
 
     async deleteLogin(userId) {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Money } from "@/domain";
 import {
+  AccountNotActiveError,
   deleteAccount,
   type AccountStanding,
   type DeleteAccountPorts,
@@ -28,7 +29,10 @@ function clearStanding(overrides: Partial<AccountStanding> = {}): AccountStandin
  * In-memory ports that record every step. `standings` are returned by successive loadStanding calls
  * (the last one repeats), so a test can make something change between the first check and the re-check.
  */
-function fakePorts(standings: AccountStanding[], options: { readonly loginFails?: boolean } = {}) {
+function fakePorts(
+  standings: AccountStanding[],
+  options: { readonly loginFails?: boolean; readonly claimedElsewhere?: boolean } = {},
+) {
   const steps: string[] = [];
   const profile = { displayName: "Marcus Lim", status: "ACTIVE" };
   let loads = 0;
@@ -43,6 +47,7 @@ function fakePorts(standings: AccountStanding[], options: { readonly loginFails?
     },
     deactivateProfile: async (userId): Promise<ProfileSnapshot> => {
       steps.push("deactivate");
+      if (options.claimedElsewhere === true) throw new AccountNotActiveError(userId);
       const snapshot = { userId, displayName: profile.displayName, preferredSports: ["Tennis"], preferredRegions: [] };
       profile.displayName = "";
       profile.status = "INACTIVE";
@@ -123,6 +128,19 @@ describe("UC1-04 Delete Account", () => {
       // Assert
       expect(result).toEqual({ status: "BLOCKED", standing: toppedUp });
       expect(steps).toEqual(["check", "deactivate", "check", "restore"]);
+      expect(profile).toEqual({ displayName: "Marcus Lim", status: "ACTIVE" });
+    });
+
+    test("a second deletion that finds the account already claimed changes nothing", async () => {
+      // Arrange: another deletion of the same account deactivated it first.
+      const { ports, steps, profile } = fakePorts([clearStanding()], { claimedElsewhere: true });
+
+      // Act
+      const attempt = deleteAccount(ports, COMMAND);
+
+      // Assert: this attempt never restores a profile it didn't deactivate.
+      await expect(attempt).rejects.toBeInstanceOf(AccountNotActiveError);
+      expect(steps).toEqual(["check", "deactivate"]);
       expect(profile).toEqual({ displayName: "Marcus Lim", status: "ACTIVE" });
     });
 

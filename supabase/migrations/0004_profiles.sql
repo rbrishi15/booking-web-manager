@@ -97,6 +97,15 @@ select
 from auth.users as u
 on conflict (user_id) do nothing;
 
+-- Wallets too: the sign-up trigger only runs for new users, so an account created
+-- before this migration may have no wallet. Create only the missing ones; existing
+-- wallets and their balances are left untouched. 0001's trigger gives each new
+-- wallet its SGD 0.00 balance row (REQ-5). Safe to re-run.
+insert into public.wallets (user_id)
+select u.id
+from auth.users as u
+on conflict (user_id) do nothing;
+
 -- Only the trigger may run this privileged function; API roles cannot call it directly.
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 

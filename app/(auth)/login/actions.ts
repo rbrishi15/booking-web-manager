@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { getAccountStatus } from "@/lib/supabase/account-status";
 import { createClient } from "@/lib/supabase/server";
 import { safeRedirectPath } from "../redirect-path";
 import { loginSchema } from "../schemas";
@@ -47,26 +48,18 @@ export async function logIn(_previous: LoginState, formData: FormData): Promise<
 
   // 3. UC1-04: a deleted (INACTIVE) account must not be able to log in.
   // If the status can't be checked, refuse rather than risk letting an inactive account in.
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("account_status")
-    .eq("user_id", data.user.id)
-    .maybeSingle();
-  if (profileError !== null) {
-    console.error("UC1-02 profile check failed:", profileError.code, profileError.message);
+  const account = await getAccountStatus(supabase, data.user.id);
+  if (account.kind !== "active") {
     await supabase.auth.signOut();
+    if (account.kind === "inactive") return { status: "error", message: "This account is no longer active." };
+    if (account.kind === "lookup-failed") {
+      console.error("UC1-02 profile check failed:", account.code, account.message);
+    } else {
+      console.error("UC1-02 no profile row for user", data.user.id);
+    }
     return { status: "error", message: "We couldn't verify your account. Please try again." };
-  }
-  if (profile === null) {
-    console.error("UC1-02 no profile row for user", data.user.id);
-    await supabase.auth.signOut();
-    return { status: "error", message: "We couldn't verify your account. Please try again." };
-  }
-  if (profile.account_status === "INACTIVE") {
-    await supabase.auth.signOut();
-    return { status: "error", message: "This account is no longer active." };
   }
 
-  // 4. Logged in: go where the user was heading, or Home & Discover.
+  // 4. Logged in: go where the user was heading, or Home (HOME_PATH).
   redirect(safeRedirectPath(formData.get("next")));
 }
