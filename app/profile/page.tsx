@@ -80,7 +80,7 @@ export default async function ProfilePage() {
             <SettingsRow
               code="DA"
               title="Delete account"
-              description="Permanently delete your account and all data"
+              description="Remove your personal details and close your account"
               href="/profile/delete"
               tone="danger"
             />
