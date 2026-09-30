@@ -15,7 +15,29 @@ export default async function DeleteAccountPage() {
   if (user === null) redirect("/login");
 
   // Flow step 2: check the wallet and commitments before offering deletion.
-  const standing = await supabaseDeleteAccountPorts().loadStanding(user.id);
+  // If they can't be checked, don't offer deletion at all (fail closed).
+  const standing = await supabaseDeleteAccountPorts()
+    .loadStanding(user.id)
+    .catch((error: unknown) => {
+      console.error("UC1-04 standing check failed:", error);
+      return null;
+    });
+  if (standing === null) {
+    return (
+      <>
+        <PageHeader breadcrumb="Settings" title="Delete account" />
+        <div className="space-y-4 p-4 md:p-8">
+          <Link href="/profile" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            ← Back to settings
+          </Link>
+          <ErrorMessage className="max-w-2xl">
+            We couldn&apos;t check your wallet, sessions and groups right now, so your account can&apos;t be deleted yet.
+            Please try again later.
+          </ErrorMessage>
+        </div>
+      </>
+    );
+  }
   const allowed = canDeactivate({ userId: user.id, email: user.email, now: new Date() }, standing);
 
   return (

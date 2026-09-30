@@ -17,12 +17,24 @@ export interface ProfileSnapshot {
 /** What the use case needs from the outside world. lib/supabase/account-admin.ts provides the real one. */
 export interface DeleteAccountPorts {
   loadStanding(userId: UUID): Promise<AccountStanding>;
-  /** Blank the personal details and mark the account INACTIVE. Returns what was there before. */
+  /**
+   * Blank the personal details and mark the account INACTIVE, only if it is still ACTIVE.
+   * Returns what was there before. If the account is no longer ACTIVE (e.g. another deletion
+   * claimed it first), throws AccountNotActiveError and changes nothing.
+   */
   deactivateProfile(userId: UUID): Promise<ProfileSnapshot>;
-  /** Undo deactivateProfile: put the details back and mark the account ACTIVE again. */
+  /** Undo this attempt's deactivateProfile: put the details back and mark the account ACTIVE again. */
   restoreProfile(snapshot: ProfileSnapshot): Promise<void>;
   /** Remove the login for good (the user row itself is kept for audit). */
   deleteLogin(userId: UUID): Promise<void>;
+}
+
+/** deactivateProfile found the account already INACTIVE: another deletion claimed it first. */
+export class AccountNotActiveError extends Error {
+  constructor(readonly userId: UUID) {
+    super(`UC1-04: account ${userId} is not ACTIVE`);
+    this.name = "AccountNotActiveError";
+  }
 }
 
 export interface DeleteAccountCommand {
@@ -67,6 +79,8 @@ export async function deleteAccount(
   if (!canDeactivate(command, standing)) return { status: "BLOCKED", standing };
 
   // 1. Deactivate first: an INACTIVE account can't log in or start anything new.
+  // If another deletion claimed the account first, this throws before anything changes,
+  // so this attempt never restores a profile it didn't deactivate.
   const snapshot = await ports.deactivateProfile(command.userId);
   try {
     // 2. Check again, in case money, a commitment or a group arrived between the first check and now.
