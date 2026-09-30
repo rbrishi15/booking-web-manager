@@ -28,8 +28,9 @@ creation does not verify a venue receipt or reserve a venue.
 
 [`createSessionHandler`](../../use-case-config/sessions.ts) composes the app HTTP
 handler and creates a module for each submission. See the
-[configuration guide](../../use-case-config/README.md) for dependency setup and a
-complete test example. Direct application callers continue to use
+[configuration guide](../../use-case-config/README.md) for dependency setup and the
+[centralized HTTP handler tests](../../tests/use-case-config/sessions.test.ts) for
+executable examples. Direct application callers continue to use
 `createSessions.forBooker(bookerId, booking, config)` with Date-valued booking details.
 
 The constructor accepts a [`SessionCreationTransaction`](./session-creation-transaction.ts),

@@ -12,7 +12,9 @@ UC2-02 has a [CreateSessions module](../../use-cases/sessions/README.md), an
 HTTP function [`handleCreateSession`](./create-session-handler.ts), and tests.
 Use [`createSessionHandler`](../../use-case-config/sessions.ts) to connect the
 HTTP function to authentication and application dependencies; the
-[configuration guide](../../use-case-config/README.md) includes a complete example.
+[configuration guide](../../use-case-config/README.md) explains setup. Executable
+examples live in the
+[centralized HTTP handler tests](../../tests/use-case-config/sessions.test.ts).
 
 The handler authenticates before parsing JSON. [parseCreateSessionInput](./create-session-input.ts)
 validates the authenticated user ID separately from the raw

@@ -18,13 +18,13 @@ visibility. This folder configures the dependencies used to carry out those choi
 
 ## Dependencies
 
-| Dependency | Contract | Example below | Future server value |
-| --- | --- | --- | --- |
-| `authenticate` | `(Request) => Promise<UUID \| null>` | Returns a fixture user's ID | Reads the authenticated server session; returns `null` when absent |
-| `unitOfWork` | Shared `UnitOfWork` | Existing creation-only in-memory fake | Database adapter with atomic commit, rollback, and replay |
-| `clock` | `now(): Date` | Fixed time | Current server time |
-| `ids` | `next(): UUID` | Node's `randomUUID` | Cryptographically random UUIDs, including private room tokens |
-| `holdingAccountId` | `UUID` | Fixture account ID | Existing platform holding account from validated server configuration |
+| Dependency | Contract | Future server value |
+| --- | --- | --- |
+| `authenticate` | `(Request) => Promise<UUID \| null>` | Reads the authenticated server session; returns `null` when absent |
+| `unitOfWork` | Shared `UnitOfWork` | Database adapter with atomic commit, rollback, and replay |
+| `clock` | `now(): Date` | Current server time |
+| `ids` | `next(): UUID` | Cryptographically random UUIDs, including private room tokens |
+| `holdingAccountId` | `UUID` | Existing platform holding account from validated server configuration |
 
 Production authentication and database adapters have not been implemented.
 The final column describes substitutions to supply later; it does not name
@@ -41,57 +41,19 @@ const handleRequest = createSessionHandler({
 });
 ```
 
-## Complete test example
+## Setup
 
-This uses existing test adapters and fixtures. It calls a configured function
-directly and does not require a running HTTP server or a mounted route.
+Supply the dependencies above, then pass the incoming HTTP `Request` to the
+configured handler:
 
 ```ts
-import { randomUUID } from "node:crypto";
-import { expect, test } from "vitest";
-import { createSessionHandler } from "@/use-case-config/sessions";
-import { readyBookerUser } from "@/tests/domain/accounts/user-fixtures";
-import { CreateSessionUnitOfWork } from "@/tests/use-cases/support/create-session-unit-of-work";
-
-test("creates one session when the same submission is retried", async () => {
-  const bookerId = "11111111-1111-4111-8111-111111111111";
-  const unitOfWork = new CreateSessionUnitOfWork([readyBookerUser(bookerId)]);
-  const handleRequest = createSessionHandler({
-    authenticate: async () => bookerId,
-    unitOfWork,
-    clock: { now: () => new Date("2030-09-01T00:00:00Z") },
-    ids: { next: randomUUID },
-    holdingAccountId: "00000000-0000-4000-8000-000000000001",
-  });
-  const request = () => new Request("https://example.test/sessions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      idempotencyKey: "first-booking-room",
-      booking: {
-        venueName: "Jurong East Sports Hall",
-        region: "West",
-        sport: "Badminton",
-        startAt: "2030-10-01T10:00:00+08:00",
-        endAt: "2030-10-01T12:00:00+08:00",
-        totalCostCents: 1001,
-      },
-      config: { totalSlots: 3, minimumHeadcount: 2 },
-    }),
-  });
-
-  const response = await handleRequest(request());
-  const created = await response.json();
-  expect(response.status).toBe(201);
-  expect(created.bookingShareCents).toBe(333);
-  expect(unitOfWork.requireSession(created.sessionId).bookerId).toBe(bookerId);
-
-  const replay = await handleRequest(request());
-  expect(replay.status).toBe(201);
-  expect(await replay.json()).toEqual(created);
-  expect(unitOfWork.sessions.size).toBe(1);
-});
+const handleRequest = createSessionHandler(dependencies);
+const response = await handleRequest(request);
 ```
+
+See the [centralized HTTP handler tests](../tests/use-case-config/sessions.test.ts)
+for executable examples using fake authentication and the in-memory unit of
+work, including creation, retries, and errors.
 
 ## Dependency lifetimes
 
