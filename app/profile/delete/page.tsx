@@ -61,8 +61,8 @@ export default async function DeleteAccountPage() {
           ) : (
             <div className="space-y-4">
               <ErrorMessage>
-                You must complete your active sessions and use or withdraw your remaining funds before deleting your
-                account.
+                You must complete your active sessions, use or withdraw your remaining funds, and archive any groups
+                you own before deleting your account.
               </ErrorMessage>
               <Button asChild variant="outline">
                 <Link href="/wallet">Go to wallet</Link>
