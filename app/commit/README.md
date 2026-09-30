@@ -12,7 +12,8 @@ exits from the `held` state belong here.
 ## UC2-04 Commit to Session
 
 [`handleCommitToSession`](./commit-to-session-handler.ts) is the HTTP
-boundary. It authenticates the request, validates
+boundary. Like every handler here, it uses the shared
+[`handleAuthenticatedJson`](./http.ts): it authenticates the request, validates
 `{ sessionId, idempotencyKey, roomToken? }` with Zod
 ([parser](./commit-to-session-input.ts)), and calls
 [`CommitToSession.forParticipant`](../../use-cases/sessions/CommitToSession.ts).
@@ -101,3 +102,23 @@ Once every committed participant is verified the session becomes
 `RELEASE` lines and absent or forfeiture-due shares `FORFEIT` lines of the
 booker's payout, and the payout flow (`/app/payouts`) writes those ledger lines
 when the provider confirms.
+
+## HTTP handlers
+
+All handlers take the acting user from authentication and require an
+idempotency key; Zod strips any other field, so a body cannot name another user
+or supply an amount. Known domain errors map to 4xx responses with their code
+(403 for access and authorization, 404 for missing records, 409 for state
+conflicts such as insufficient funds or an unfinished session) and anything else
+to an opaque 500.
+
+| Handler | Body | Success |
+| --- | --- | --- |
+| [`handleCommitToSession`](./commit-to-session-handler.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
+| [`handleWithdrawFromSession`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
+| [`handleAcceptReplacement`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 201 |
+| [`handleLeaveWaitlist`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 200 |
+| [`handleVerifyAttendance`](./verify-attendance-handler.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
+
+Promotion, forfeiture expiry and auto-verification have no HTTP handler; the
+scheduler calls them.

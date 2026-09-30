@@ -1,4 +1,4 @@
-import { type AttendanceMark, PayoutAccount, Session } from "@/domain";
+import { type AttendanceMark, Session } from "@/domain";
 import { AutoVerifyAttendance } from "@/use-cases/sessions/AutoVerifyAttendance";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
 import { VerifyAttendance } from "@/use-cases/sessions/VerifyAttendance";
@@ -185,7 +185,7 @@ async function verificationScenario() {
     users: [
       createTestUserDetails({
         userId: "booker",
-        payoutAccount: booker.payoutAccount as PayoutAccount,
+        payoutAccount: booker.payoutAccount,
       }),
       createTestUserDetails({ userId: "alice" }),
       createTestUserDetails({ userId: "bob" }),

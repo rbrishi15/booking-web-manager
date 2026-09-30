@@ -1,12 +1,10 @@
 import type { CommitToSessionRequest } from "@/use-cases/sessions/CommitToSession";
 import { z } from "zod";
+import { idempotencyKey, uuid } from "./http";
 
-const uuid = z.string().uuid();
 const requestSchema = z.object({
   sessionId: uuid,
-  idempotencyKey: z.string().refine((key) => key.trim() !== "", {
-    message: "An idempotency key is required",
-  }),
+  idempotencyKey,
   roomToken: z.string().min(1).optional(),
 });
 
