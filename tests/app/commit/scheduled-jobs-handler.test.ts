@@ -100,6 +100,7 @@ function handlerScenario(
             forfeitureDue: [],
             promoted: [],
             autoVerified: [],
+            verificationReminders: [],
             failures: [],
           };
         },

@@ -14,3 +14,23 @@ import type { UUID } from "@/domain";
 export interface DueSessionQuery {
   dueSessionIds(now: Date, limit: number): Promise<readonly UUID[]>;
 }
+
+export interface VerificationReminder {
+  readonly sessionId: UUID;
+  readonly bookerId: UUID;
+}
+
+/**
+ * Claims sessions whose booker should be reminded to verify attendance: the
+ * session has ended, is still open for verification, and has not been
+ * reminded. Claiming marks the reminder as sent in the same statement (for
+ * example `UPDATE ... SET verification_reminded_at = now ... RETURNING`), so
+ * each booker is reminded at most once per session even across concurrent
+ * or repeated sweeps.
+ */
+export interface VerificationReminderQuery {
+  claimVerificationReminders(
+    now: Date,
+    limit: number,
+  ): Promise<readonly VerificationReminder[]>;
+}

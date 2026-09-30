@@ -3,6 +3,7 @@ import { AutoVerifyAttendance } from "@/use-cases/sessions/AutoVerifyAttendance"
 import { ExpireReplacements } from "@/use-cases/sessions/ExpireReplacements";
 import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
 import { RunScheduledSessionJobs } from "@/use-cases/sessions/RunScheduledSessionJobs";
+import type { VerificationReminder } from "@/use-cases/sessions/scheduling-ports";
 import { describe, expect, test } from "vitest";
 import {
   createTestUser,
@@ -16,6 +17,7 @@ import {
   sessionStartsAt,
 } from "../domain/sessions/session/session-fixtures";
 import { InMemoryUnitOfWork } from "./support/in-memory-unit-of-work";
+import { RecordingNotifier } from "./support/recording-notifier";
 
 describe("Scheduled session jobs (UC2-05, UC2-06)", () => {
   test("marks unreplaced late withdrawals forfeiture-due once the session starts", async () => {
@@ -134,6 +136,41 @@ describe("Scheduled session jobs (UC2-05, UC2-06)", () => {
     // Assert
     expect(requests).toEqual([{ now, limit: 25 }]);
   });
+
+  test("reminds each claimed booker to verify attendance", async () => {
+    // Arrange
+    const { runner, notifier } = sweepScenario([], hoursAfterSessionEnd(1), {
+      reminders: [
+        { sessionId: "s1", bookerId: "booker-1" },
+        { sessionId: "s2", bookerId: "booker-2" },
+      ],
+    });
+
+    // Act
+    const report = await runner.run("run-1");
+
+    // Assert
+    expect(report.verificationReminders).toEqual(["s1", "s2"]);
+    expect(notifier.deliveries()).toEqual([
+      ["VERIFICATION_REMINDER", "booker-1"],
+      ["VERIFICATION_REMINDER", "booker-2"],
+    ]);
+  });
+
+  test("records a failed reminder claim without failing the sweep", async () => {
+    // Arrange
+    const session = rosterSession("s1", { committed: ["alice", "bob"] });
+    const { runner } = sweepScenario([session], hoursAfterSessionEnd(72), {
+      failReminderClaim: true,
+    });
+
+    // Act
+    const report = await runner.run("run-1");
+
+    // Assert
+    expect(report.failures).toEqual([{ job: "VERIFICATION_REMINDERS" }]);
+    expect(report.autoVerified).toEqual(["p-alice", "p-bob"]);
+  });
 });
 
 /** A two-slot, 1000-cent session: each share is 500 cents. */
@@ -179,6 +216,8 @@ function sweepScenario(
   now: Date,
   options: {
     missingUsers?: readonly string[];
+    reminders?: readonly VerificationReminder[];
+    failReminderClaim?: boolean;
     batchSize?: number;
     onQuery?: (now: Date, limit: number) => void;
   } = {},
@@ -194,10 +233,12 @@ function sweepScenario(
     sessions,
   });
   let nextId = 0;
+  const notifier = new RecordingNotifier();
   const dependencies = {
     unitOfWork,
     clock: { now: () => now },
     ids: { next: () => `id-${++nextId}` },
+    notifier,
   };
   const runner = new RunScheduledSessionJobs({
     dueSessions: {
@@ -206,11 +247,18 @@ function sweepScenario(
         return sessions.map((session) => session.sessionId);
       },
     },
+    verificationReminders: {
+      claimVerificationReminders: async () => {
+        if (options.failReminderClaim) throw new Error("database unavailable");
+        return options.reminders ?? [];
+      },
+    },
+    notifier,
     expireReplacements: new ExpireReplacements(dependencies),
     promote: new PromoteFromWaitlist(dependencies),
     autoVerify: new AutoVerifyAttendance(dependencies),
     clock: dependencies.clock,
     batchSize: options.batchSize ?? 50,
   });
-  return { runner, unitOfWork };
+  return { runner, unitOfWork, notifier };
 }

@@ -142,3 +142,28 @@ and an unset secret authorizes nothing. Each call starts a new run.
 Not yet built: the Postgres `DueSessionQuery` adapter (it needs the sessions
 schema; it should select with `FOR UPDATE SKIP LOCKED`) and the schedule itself,
 either a `pg_cron` + `pg_net` migration or a Vercel Cron entry.
+
+## Notifications
+
+Use cases report events through the
+[`CommitmentNotifier`](../../use-cases/sessions/commitment-notifications.ts)
+port, always **after** their unit of work commits (rule #4) and best-effort: a
+failed notification never undoes or fails a committed change. A retried request
+replays its result and notifies again, so delivery is at-least-once.
+
+| Notification | Recipient | Sent by |
+| --- | --- | --- |
+| `PROMOTED` | Promoted participant | `PromoteFromWaitlist` |
+| `REPLACEMENT_INVITATION` | Named invitee | `WithdrawFromSession` (`DIRECT_INVITE`) |
+| `FORFEITURE_WARNING` | Late withdrawer | `WithdrawFromSession` (awaiting replacement) |
+| `FORFEITURE_DUE` | Late withdrawer | `ExpireReplacements` at session start |
+| `VERIFICATION_REMINDER` | Booker | Scheduled sweep, via a `VerificationReminderQuery` claim so each booker is reminded at most once per session |
+
+[`WebPushNotifier`](../../lib/commit/web-push-notifier.ts) is the Web Push
+adapter. It holds the notification text, sends to every subscription the
+recipient registered, and removes subscriptions the push service reports as
+expired. It takes a `PushSubscriptionStore` and a `PushSender`.
+
+Not yet built: the `web-push` dependency behind `PushSender` (VAPID keys are
+already in `.env.example`), a `push_subscriptions` table and its store, the
+subscribe endpoint, and the service worker that displays payloads.
