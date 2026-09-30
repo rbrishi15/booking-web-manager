@@ -84,3 +84,20 @@ If that fails, the committed withdrawal is kept and the result reports
 The 30-hour boundary follows CLAUDE.md and the domain: exactly 30 hours is a
 late withdrawal. The product-owner diagram includes exactly 30 hours in the
 refund window; that discrepancy is tracked in the waitlist discussion document.
+
+## UC2-06 Verify Attendance
+
+- [`VerifyAttendance`](../../use-cases/sessions/VerifyAttendance.ts) records the
+  booker's marks after the session ends. `Booker.verifyAttendance` rejects
+  anyone but the session's booker.
+- [`AutoVerifyAttendance`](../../use-cases/sessions/AutoVerifyAttendance.ts) is
+  the scheduler's job: 72 hours after the session **ends**, every committed
+  participant still unverified is marked attended. Booker marks are kept. A run
+  that is not due, or finds the session no longer open, changes nothing and
+  says why.
+
+Once every committed participant is verified the session becomes
+`AWAITING_PAYOUT`. Verification itself moves no money: attended shares become
+`RELEASE` lines and absent or forfeiture-due shares `FORFEIT` lines of the
+booker's payout, and the payout flow (`/app/payouts`) writes those ledger lines
+when the provider confirms.
