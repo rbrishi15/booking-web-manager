@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { initials } from "@/components/ui/initials";
 import { toFivePoint } from "@/components/ui/reliability-badge";
 import {
   Sheet,
@@ -38,13 +39,6 @@ interface AppShellProps {
   
   readonly logoutAction?: () => Promise<void>;
   readonly children: React.ReactNode;
-}
-
-/** Returns uppercase initials from the first two name parts, or "?" for a blank name. */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
-  return letters.join("") || "?";
 }
 
 
