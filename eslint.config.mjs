@@ -9,6 +9,7 @@ export default tseslint.config(
       "coverage/**",
       "lib/database.types.ts",
       "node_modules/**",
+      "storybook-static/**",
     ],
   },
   eslint.configs.recommended,
