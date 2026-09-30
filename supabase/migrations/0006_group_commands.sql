@@ -2,6 +2,8 @@
 -- transaction (UC1-06). Requires 0005 (regular_groups, group_memberships, sessions).
 --
 -- Rollback (manual, in this order):
+--   drop trigger if exists sessions_lock_invited_group on sessions;
+--   drop function if exists public.lock_invited_group();
 --   drop function if exists public.save_regular_group(uuid, uuid, text, text, boolean, text, integer, jsonb, uuid[]);
 --   alter table regular_groups drop column if exists version;
 
@@ -63,8 +65,10 @@ begin
   end if;
 
   -- Archiving waits until the group's linked sessions are settled (RegularGroup.archive).
-  -- Checked again here, while the row is locked, in case a linked session appeared after the
-  -- command counted them.
+  -- Checked again here, in case a linked session appeared after the command counted them.
+  -- The row is locked by the UPDATE above, and a session being created with this group
+  -- invited waits for that lock or holds it first (trigger in section 3), so this check
+  -- can't miss a linked session that is being created at the same moment.
   if p_status = 'ARCHIVED' and exists (
     select 1
       from sessions
@@ -93,3 +97,34 @@ revoke execute on function public.save_regular_group(uuid, uuid, text, text, boo
   from public, anon, authenticated;
 grant execute on function public.save_regular_group(uuid, uuid, text, text, boolean, text, integer, jsonb, uuid[])
   to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 3. A session invited from a group locks that group while it is created
+-- ---------------------------------------------------------------------------
+
+-- Before a session with invited_group_id is inserted (or re-pointed), take a share lock
+-- on the group's row until the session's transaction ends. save_regular_group's UPDATE
+-- needs a conflicting lock, so an archive and a linked session creation can't overlap:
+-- if the session comes first, the archive waits and then refuses (GRP01).
+-- This only locks. Whether a session may invite an archived or unknown group is session
+-- creation's rule, which 0005 deliberately leaves to the domain.
+-- security definer: FOR SHARE needs UPDATE privilege on regular_groups, which only the
+-- owner and the service role have (0005 revokes it from API roles).
+create function public.lock_invited_group() returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+begin
+  if new.invited_group_id is not null then
+    perform 1 from regular_groups where group_id = new.invited_group_id for share;
+  end if;
+  return new;
+end;
+$fn$;
+
+revoke execute on function public.lock_invited_group() from public, anon, authenticated;
+
+create trigger sessions_lock_invited_group
+  before insert or update of invited_group_id on sessions
+  for each row execute function public.lock_invited_group();

@@ -75,6 +75,7 @@ interface SaveArgs {
 
 describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group against Postgres", () => {
   let client: PgClient;
+  let connect: () => Promise<PgClient>;
   let groupNumber = 0;
   let groupId: string;
 
@@ -112,8 +113,12 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
   beforeAll(async () => {
     const connectionString = requireDisposableDatabase(DATABASE_URL as string);
     const pg = (await import(DRIVER)) as PgModule;
-    client = new pg.Client({ connectionString });
-    await client.connect();
+    connect = async () => {
+      const connection = new pg.Client({ connectionString });
+      await connection.connect();
+      return connection;
+    };
+    client = await connect();
 
     // Fresh schemas. A test database has no Supabase Auth, so stand in for the parts 0004 uses.
     await client.query("drop schema if exists public cascade");
@@ -189,16 +194,46 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
   test("refuses to archive a group with an unsettled linked session", async () => {
     // Arrange: an OPEN session invited from this group.
     await save({ groupId, expectedVersion: null, added: [OWNER] });
-    await client.query(
-      `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at, total_cost_cents,
-         total_slots, minimum_headcount, booking_share_cents, room_token, holding_account_id, invited_group_id)
-       values (gen_random_uuid(), $1, 'Court 1', 'West', 'Tennis', now() + interval '2 days',
-         now() + interval '2 days 2 hours', 1000, 4, 2, 250, gen_random_uuid()::text, $2, $3)`,
-      [OWNER, PLATFORM_HOLDING_ACCOUNT, groupId],
-    );
+    await insertLinkedSession(client, groupId);
 
     // Act & Assert
     await expect(save({ groupId, expectedVersion: 0, status: "ARCHIVED" })).rejects.toMatchObject({ code: "GRP01" });
     expect((await groupState(groupId)).group?.status).toBe("ACTIVE");
   });
+
+  test("refuses to archive while a linked session is being created at the same moment", async () => {
+    // Arrange: a second connection has inserted a session invited from this group but not committed yet.
+    await save({ groupId, expectedVersion: null, added: [OWNER] });
+    const creator = await connect();
+    try {
+      await creator.query("begin");
+      await insertLinkedSession(creator, groupId);
+
+      // Act: the owner archives now, and the session commits a moment later.
+      const archiveOutcome = save({ groupId, expectedVersion: 0, status: "ARCHIVED" }).then(
+        () => "ARCHIVED",
+        (error: { code?: string }) => error.code,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await creator.query("commit");
+
+      // Assert: the archive waited for the session and then saw it.
+      expect(await archiveOutcome).toBe("GRP01");
+      expect((await groupState(groupId)).group?.status).toBe("ACTIVE");
+    } finally {
+      await creator.query("rollback").catch(() => undefined);
+      await creator.end();
+    }
+  });
 });
+
+/** An OPEN session invited from the group, as #24's session creation stores it. */
+async function insertLinkedSession(connection: PgClient, invitedGroupId: string): Promise<void> {
+  await connection.query(
+    `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at, total_cost_cents,
+       total_slots, minimum_headcount, booking_share_cents, room_token, holding_account_id, invited_group_id)
+     values (gen_random_uuid(), $1, 'Court 1', 'West', 'Tennis', now() + interval '2 days',
+       now() + interval '2 days 2 hours', 1000, 4, 2, 250, gen_random_uuid()::text, $2, $3)`,
+    [OWNER, PLATFORM_HOLDING_ACCOUNT, invitedGroupId],
+  );
+}
