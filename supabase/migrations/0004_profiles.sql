@@ -85,8 +85,15 @@ insert into public.profiles (user_id, display_name, preferred_sports, preferred_
 select
   u.id,
   left(coalesce(u.raw_user_meta_data ->> 'display_name', ''), 60),
-  coalesce(array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_sports')), '{}'),
-  coalesce(array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_regions')), '{}')
+  -- Old metadata may hold null, text or an object here; only expand real JSON arrays.
+  case when jsonb_typeof(u.raw_user_meta_data -> 'preferred_sports') = 'array'
+    then array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_sports'))
+    else '{}'
+  end,
+  case when jsonb_typeof(u.raw_user_meta_data -> 'preferred_regions') = 'array'
+    then array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_regions'))
+    else '{}'
+  end
 from auth.users as u
 on conflict (user_id) do nothing;
 
