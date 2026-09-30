@@ -71,8 +71,9 @@ begin
      where invited_group_id = p_group_id
        and status not in ('SETTLED', 'CANCELLED')
   ) then
-    raise exception 'GROUP_CHANGED: group % has unsettled linked sessions', p_group_id
-      using errcode = '40001';
+    -- Its own SQLSTATE (not 40001): nobody else changed the group, and retrying won't help.
+    raise exception 'ACTIVE_OBLIGATIONS: group % has unsettled linked sessions', p_group_id
+      using errcode = 'GRP01';
   end if;
 
   insert into group_memberships (group_id, user_id, joined_at)

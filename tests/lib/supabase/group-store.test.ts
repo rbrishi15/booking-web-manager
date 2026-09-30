@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { RegularGroup } from "@/domain";
+import { DomainError, RegularGroup } from "@/domain";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GroupChangedError, supabaseGroupStore } from "@/lib/supabase/group-store";
 
@@ -123,6 +123,24 @@ describe("supabaseGroupStore (UC1-06)", () => {
 
     // Act & Assert
     await expect(groups.save(group)).rejects.toBeInstanceOf(GroupChangedError);
+  });
+
+  test("reports ACTIVE_OBLIGATIONS when the database refuses to archive a group with unsettled sessions", async () => {
+    // Arrange: save_regular_group's own SQLSTATE for "linked session still unsettled".
+    fakeAdmin({
+      select: { data: groupRow(4), error: null },
+      rpc: { data: null, error: { code: "GRP01", message: "ACTIVE_OBLIGATIONS" } },
+    });
+    const { groups } = supabaseGroupStore();
+    const group = (await groups.get(GROUP_ID))!;
+    group.archive({ actorId: OWNER, unsettledLinkedSessions: 0 });
+
+    // Act
+    const attempt = groups.save(group);
+
+    // Assert: the owner is told about the sessions, not that someone else changed the group.
+    await expect(attempt).rejects.toBeInstanceOf(DomainError);
+    await expect(attempt).rejects.toMatchObject({ code: "ACTIVE_OBLIGATIONS" });
   });
 
   test("counts the group's linked sessions that are not settled or cancelled", async () => {

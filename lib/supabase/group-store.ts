@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { GroupMembership, RegularGroup, type GroupStatus, type UUID } from "@/domain";
+import { DomainError, GroupMembership, RegularGroup, type GroupStatus, type UUID } from "@/domain";
 import { ManageGroup, type GroupQueries } from "@/use-cases/groups/manage-group";
 import type { Repository } from "@/use-cases/shared/contracts";
 import { createAdminClient } from "./admin";
@@ -46,6 +46,8 @@ interface LoadedGroup {
 
 /** Postgres "serialization failure": save_regular_group found a newer version than this request read. */
 const GROUP_CHANGED = "40001";
+/** save_regular_group refused to archive: a linked session is still unsettled (0006's own SQLSTATE). */
+const UNSETTLED_LINKED_SESSIONS = "GRP01";
 
 /** Someone else changed the group after this request read it; saving would overwrite their change. */
 export class GroupChangedError extends Error {
@@ -103,6 +105,9 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
       });
       if (error !== null) {
         if (error.code === GROUP_CHANGED) throw new GroupChangedError();
+        if (error.code === UNSETTLED_LINKED_SESSIONS) {
+          throw new DomainError("ACTIVE_OBLIGATIONS", "A group with unsettled linked sessions cannot be archived");
+        }
         throw error;
       }
       remember(group, version as number);

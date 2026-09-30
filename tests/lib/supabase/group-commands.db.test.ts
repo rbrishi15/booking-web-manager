@@ -198,7 +198,7 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
     );
 
     // Act & Assert
-    await expect(save({ groupId, expectedVersion: 0, status: "ARCHIVED" })).rejects.toMatchObject({ code: "40001" });
+    await expect(save({ groupId, expectedVersion: 0, status: "ARCHIVED" })).rejects.toMatchObject({ code: "GRP01" });
     expect((await groupState(groupId)).group?.status).toBe("ACTIVE");
   });
 });
