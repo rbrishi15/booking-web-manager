@@ -406,4 +406,102 @@ describe("Participant", () => {
     ).toThrow(expect.objectContaining({ code: "SESSION_STARTED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
+
+  test("previewWithdrawal_WhenMoreThan30HoursBeforeStart_ShowsFullRefundWithoutChangingState", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const previousState = sessionState(bookingSession);
+
+    // Act
+    const preview = createTestUser({ userId: "alice" })
+      .asParticipant()
+      .previewWithdrawal(bookingSession, hoursBeforeSessionStart(31));
+
+    // Assert
+    expect(preview.kind).toBe("REFUNDED");
+    expect(preview.participationId).toBe("p-alice");
+    expect(preview.refundAmount.toCents()).toBe(500);
+    expect(preview.heldAmount.toCents()).toBe(500);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("previewWithdrawal_WhenExactlyAtRefundCutoff_ShowsShareStaysHeld", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const previousState = sessionState(bookingSession);
+
+    // Act
+    const preview = createTestUser({ userId: "alice" })
+      .asParticipant()
+      .previewWithdrawal(bookingSession, hoursBeforeSessionStart(30));
+
+    // Assert
+    expect(preview.kind).toBe("AWAITING_REPLACEMENT");
+    expect(preview.refundAmount.toCents()).toBe(0);
+    expect(preview.heldAmount.toCents()).toBe(500);
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("previewWithdrawal_WhenFollowedByWithdrawalAtSameTime_MatchesItsOutcome", () => {
+    // Arrange
+    const now = hoursBeforeSessionStart(40);
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const alice = createTestUser({ userId: "alice" }).asParticipant();
+    const preview = alice.previewWithdrawal(bookingSession, now);
+
+    // Act
+    const withdrawal = alice.withdraw(bookingSession, {
+      participationId: "p-alice",
+      now,
+    });
+
+    // Assert
+    expect(withdrawal.kind).toBe(preview.kind);
+    expect(
+      withdrawal.instructions.map((instruction) =>
+        instruction.amount.toCents(),
+      ),
+    ).toEqual([preview.refundAmount.toCents()]);
+  });
+
+  test("previewWithdrawal_WhenUserIsNotParticipating_RejectsWithNotFound", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+
+    // Act & Assert
+    expect(() =>
+      createTestUser({ userId: "other" })
+        .asParticipant()
+        .previewWithdrawal(bookingSession, hoursBeforeSessionStart(40)),
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
+  });
+
+  test("previewWithdrawal_WhenAlreadyWithdrawn_RejectsWithInvalidState", () => {
+    // Arrange
+    const bookingSession = createTestSession({
+      committedUserIds: ["alice", "ben"],
+    });
+    const alice = createTestUser({ userId: "alice" }).asParticipant();
+    alice.withdraw(bookingSession, {
+      participationId: "p-alice",
+      now: hoursBeforeSessionStart(10),
+    });
+
+    // Act & Assert
+    expect(() =>
+      alice.previewWithdrawal(bookingSession, hoursBeforeSessionStart(9)),
+    ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+  });
+
+  test("previewWithdrawal_WhenSessionStartsNow_RejectsWithSessionStarted", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+
+    // Act & Assert
+    expect(() =>
+      createTestUser({ userId: "alice" })
+        .asParticipant()
+        .previewWithdrawal(bookingSession, sessionStartsAt),
+    ).toThrow(expect.objectContaining({ code: "SESSION_STARTED" }));
+  });
 });

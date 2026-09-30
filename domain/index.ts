@@ -82,6 +82,7 @@ export type {
   PromotionResult,
   PayoutBatch,
   PayoutLine,
+  WithdrawalPreview,
   WithdrawalResult,
 } from "./shared/operations";
 export type { LedgerReadPort } from "./finance/ledger-read-port";

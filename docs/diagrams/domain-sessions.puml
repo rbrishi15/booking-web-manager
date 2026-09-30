@@ -53,6 +53,7 @@ class Participant <<RoleView>> {
   +acceptReplacement(session, ...) : ParticipantJoinResult
   +promoteFromWaitlist(session, ...) : PromotionResult
   +withdraw(session, ...) : WithdrawalResult
+  +previewWithdrawal(session, now) : WithdrawalPreview
   +leaveWaitlist(session, ...) : void
 }
 

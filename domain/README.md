@@ -253,6 +253,11 @@ at withdrawal and cannot be changed afterward. See
 [ADR-0006](../docs/adr/0006-personal-replacement-reservations.md) for the confirmed
 scope and its distinction from unresolved financial and rejoining proposals.
 
+`Participant.previewWithdrawal(session, now)` returns what `withdraw` would do
+at that moment (`kind`, `refundAmount`, `heldAmount`) without changing the
+session, so an application can show the refund before the irreversible action.
+It shares `withdraw`'s authorization, lifecycle checks and 30-hour rule.
+
 `Participant.withdraw` accepts `replacementMode: "DIRECT_INVITE"` with one
 `replacementInviteeId`, or
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
