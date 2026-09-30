@@ -1,4 +1,4 @@
-import type { Money } from "../finance/money";
+import { Money } from "../finance/money";
 import type { ReliabilityScore } from "../reliability/reliability-score";
 import type { Booking } from "../sessions/booking";
 import { FundHold } from "../sessions/fund-hold";
@@ -17,6 +17,7 @@ import { DomainError } from "../shared/errors";
 import type {
   ParticipantJoinResult,
   PromotionResult,
+  WithdrawalPreview,
   WithdrawalResult,
 } from "../shared/operations";
 import type { UUID } from "../shared/types";
@@ -351,6 +352,37 @@ export class Participant {
       command.now,
     );
     return change.result;
+  }
+
+  /**
+   * Read-only preview of `withdraw` at `now`, so the refund can be shown
+   * before the irreversible action. Applies the same authorization, lifecycle
+   * and 30-hour rule as `withdraw` and changes neither the session nor the
+   * participation. The replacement choice does not affect the refund.
+   */
+  previewWithdrawal(session: Session, now: Date): WithdrawalPreview {
+    assertOpenBefore(session.status, session.booking, now);
+    const existing = session.participantList.findByUserId(this.userId);
+    DomainError.require(
+      existing !== undefined,
+      "NOT_FOUND",
+      "This user is not participating in the session",
+    );
+    const { result } = this.prepareWithdrawal(
+      existing,
+      session.booking,
+      { participationId: existing.participationId, now },
+      session.sessionId,
+    );
+    const refund = result.instructions.find(
+      (instruction) => instruction.kind === "REFUND",
+    );
+    return {
+      kind: result.kind,
+      participationId: result.participationId,
+      refundAmount: refund?.amount ?? Money.fromCents(0),
+      heldAmount: existing.hold?.amount ?? Money.fromCents(0),
+    };
   }
 
   private assertAccess(

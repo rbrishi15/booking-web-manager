@@ -40,6 +40,7 @@ class Participant <<RoleView>> {
   +promoteFromWaitlist(...) : PromotionResult
   +leaveWaitlist(...) : void
   +withdraw(...) : WithdrawalResult
+  +previewWithdrawal(...) : WithdrawalPreview
 }
 
 class User <<AggregateRoot>> {
