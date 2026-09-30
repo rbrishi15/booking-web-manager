@@ -2,15 +2,34 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect } from "storybook/test";
 import { Money } from "./money";
 
-/** Money is always integer cents; this component only formats it for display. */
 const meta = {
   title: "Design system/Money",
   component: Money,
+  parameters: {
+    docs: {
+      description: {
+        component:
+          "Shows an SGD amount with two decimals, e.g. `1250` → **S$12.50**. Money is always **integer cents** in " +
+          "this project; this component only formats it for display and throws on anything that isn't a whole " +
+          "number of cents.",
+      },
+    },
+  },
+  argTypes: {
+    cents: {
+      control: { type: "number", step: 1 },
+      description: "Amount in integer SGD cents (1250 = S$12.50). Must be a whole number.",
+    },
+    className: { control: "text", description: "Extra Tailwind classes, e.g. `text-3xl font-bold`." },
+  },
   args: { cents: 1250 },
 } satisfies Meta<typeof Money>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** Change the cents in Controls and watch the formatting. */
+export const Playground: Story = {};
 
 export const BookingShare: Story = {
   play: async ({ canvas }) => {
