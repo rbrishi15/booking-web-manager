@@ -36,18 +36,47 @@ function toGroup(row: GroupRow): RegularGroup {
   });
 }
 
+/** The group's own columns (everything except members), as stored in regular_groups. */
+function groupColumns(group: RegularGroup) {
+  return {
+    name: group.name,
+    invitation_token: group.invitationToken,
+    invitation_active: group.invitationActive,
+    status: group.status,
+  };
+}
+
+type GroupColumns = ReturnType<typeof groupColumns>;
+
+/** What a group looked like when it was read, used to work out what this request changed. */
+interface LoadedGroup {
+  readonly columns: GroupColumns;
+  readonly members: ReadonlySet<UUID>;
+}
+
+/** Someone else changed the group after this request read it; saving would overwrite their change. */
+export class GroupChangedError extends Error {
+  constructor() {
+    super("The group was changed by someone else. Refresh the page and try again.");
+    this.name = "GroupChangedError";
+  }
+}
+
 /**
  * Supabase-backed storage for RegularGroup (the Repository contract) plus the extra group lookups.
- * save() only adds the members this request added and removes the ones it removed, so two
- * people joining at the same moment can't wipe out each other's membership.
+ * save() writes only what this request changed: members it added or removed, and group columns it edited.
+ * Edits only succeed if the columns still hold what this request read, so a join can never undo the
+ * owner turning the link off, and two edits can never silently overwrite each other.
  */
 export function supabaseGroupStore(): { groups: Repository<RegularGroup>; queries: GroupQueries } {
   const admin = createAdminClient();
-  /** The member ids each loaded group had when it was read, used to work out what changed. */
-  const loadedMembers = new WeakMap<RegularGroup, ReadonlySet<UUID>>();
+  const loaded = new WeakMap<RegularGroup, LoadedGroup>();
 
   function remember(group: RegularGroup): RegularGroup {
-    loadedMembers.set(group, new Set(group.memberships.map((member) => member.userId)));
+    loaded.set(group, {
+      columns: groupColumns(group),
+      members: new Set(group.memberships.map((member) => member.userId)),
+    });
     return group;
   }
 
@@ -61,19 +90,32 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
     get: (groupId) => selectOne("group_id", groupId),
 
     async save(group) {
-      // 1. The group row itself (insert the first time, update after that).
-      const { error: groupError } = await admin.from("regular_groups").upsert({
-        group_id: group.groupId,
-        owner_id: group.ownerId,
-        name: group.name,
-        invitation_token: group.invitationToken,
-        invitation_active: group.invitationActive,
-        status: group.status,
-      });
-      if (groupError !== null) throw groupError;
+      const previous = loaded.get(group);
+      const columns = groupColumns(group);
+
+      // 1. The group row: insert a new group; for an existing one, update only the columns that changed.
+      if (previous === undefined) {
+        const { error } = await admin
+          .from("regular_groups")
+          .insert({ group_id: group.groupId, owner_id: group.ownerId, ...columns });
+        if (error !== null) throw error;
+      } else {
+        const changed = Object.fromEntries(
+          Object.entries(columns).filter(([key, value]) => previous.columns[key as keyof GroupColumns] !== value),
+        );
+        if (Object.keys(changed).length > 0) {
+          // Only update the row if it still holds what this request read (compare-and-set).
+          const { error, count } = await admin
+            .from("regular_groups")
+            .update(changed, { count: "exact" })
+            .match({ group_id: group.groupId, ...previous.columns });
+          if (error !== null) throw error;
+          if (count !== 1) throw new GroupChangedError();
+        }
+      }
 
       // 2. Members: add the new ones, remove the removed ones, leave everyone else alone.
-      const before = loadedMembers.get(group) ?? new Set<UUID>();
+      const before = previous?.members ?? new Set<UUID>();
       const now = new Set(group.memberships.map((member) => member.userId));
       const added = group.memberships.filter((member) => !before.has(member.userId));
       const removed = [...before].filter((userId) => !now.has(userId));

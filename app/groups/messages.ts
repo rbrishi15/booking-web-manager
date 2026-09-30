@@ -1,7 +1,9 @@
 import { DomainError } from "@/domain";
+import { GroupChangedError } from "@/lib/supabase/group-store";
 
 /** Turns a rule the domain refused into a sentence a player understands. */
 export function groupErrorMessage(error: unknown): string {
+  if (error instanceof GroupChangedError) return error.message;
   if (!(error instanceof DomainError)) return "Something went wrong. Please try again.";
   switch (error.code) {
     case "UNAUTHORIZED":
