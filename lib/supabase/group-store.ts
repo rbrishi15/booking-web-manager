@@ -4,11 +4,11 @@ import { ManageGroup, type GroupQueries } from "@/use-cases/groups/manage-group"
 import type { Repository } from "@/use-cases/shared/contracts";
 import { createAdminClient } from "./admin";
 
-// Tables come from Neoh's migration 0005 (regular_groups, group_memberships).
-// 0005 blocks browser access to them, so this file reads and writes on the server
-// with the service role client. SERVER ONLY.
+// Tables come from Neoh's migration 0005 (regular_groups, group_memberships); writes go
+// through save_regular_group from migration 0006. 0005 blocks browser access to them, so this
+// file reads and writes on the server with the service role client. SERVER ONLY.
 const GROUP_COLUMNS =
-  "group_id, owner_id, name, invitation_token, invitation_active, status, group_memberships(user_id, joined_at)";
+  "group_id, owner_id, name, invitation_token, invitation_active, status, version, group_memberships(user_id, joined_at)";
 
 interface GroupRow {
   group_id: string;
@@ -17,6 +17,7 @@ interface GroupRow {
   invitation_token: string;
   invitation_active: boolean;
   status: string;
+  version: number;
   group_memberships: { user_id: string; joined_at: string }[];
 }
 
@@ -36,23 +37,15 @@ function toGroup(row: GroupRow): RegularGroup {
   });
 }
 
-/** The group's own columns (everything except members), as stored in regular_groups. */
-function groupColumns(group: RegularGroup) {
-  return {
-    name: group.name,
-    invitation_token: group.invitationToken,
-    invitation_active: group.invitationActive,
-    status: group.status,
-  };
-}
-
-type GroupColumns = ReturnType<typeof groupColumns>;
-
 /** What a group looked like when it was read, used to work out what this request changed. */
 interface LoadedGroup {
-  readonly columns: GroupColumns;
+  /** regular_groups.version when it was read; the save must still find this version. */
+  readonly version: number;
   readonly members: ReadonlySet<UUID>;
 }
+
+/** Postgres "serialization failure": save_regular_group found a newer version than this request read. */
+const GROUP_CHANGED = "40001";
 
 /** Someone else changed the group after this request read it; saving would overwrite their change. */
 export class GroupChangedError extends Error {
@@ -64,26 +57,26 @@ export class GroupChangedError extends Error {
 
 /**
  * Supabase-backed storage for RegularGroup (the Repository contract) plus the extra group lookups.
- * save() writes only what this request changed: members it added or removed, and group columns it edited.
- * Edits only succeed if the columns still hold what this request read, so a join can never undo the
- * owner turning the link off, and two edits can never silently overwrite each other.
+ * save() sends the group and the members this request added or removed to save_regular_group,
+ * which writes them in one transaction and only if nobody saved the group since this request read
+ * it. So a new group always has its owner as a member, and a join can never slip past the owner
+ * turning the link off or archiving the group.
  */
 export function supabaseGroupStore(): { groups: Repository<RegularGroup>; queries: GroupQueries } {
   const admin = createAdminClient();
   const loaded = new WeakMap<RegularGroup, LoadedGroup>();
 
-  function remember(group: RegularGroup): RegularGroup {
-    loaded.set(group, {
-      columns: groupColumns(group),
-      members: new Set(group.memberships.map((member) => member.userId)),
-    });
+  function remember(group: RegularGroup, version: number): RegularGroup {
+    loaded.set(group, { version, members: new Set(group.memberships.map((member) => member.userId)) });
     return group;
   }
 
   async function selectOne(column: "group_id" | "invitation_token", value: string): Promise<RegularGroup | null> {
     const { data, error } = await admin.from("regular_groups").select(GROUP_COLUMNS).eq(column, value).maybeSingle();
     if (error !== null) throw error;
-    return data === null ? null : remember(toGroup(data as GroupRow));
+    if (data === null) return null;
+    const row = data as GroupRow;
+    return remember(toGroup(row), row.version);
   }
 
   const groups: Repository<RegularGroup> = {
@@ -91,55 +84,28 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
 
     async save(group) {
       const previous = loaded.get(group);
-      const columns = groupColumns(group);
-
-      // 1. The group row: insert a new group; for an existing one, update only the columns that changed.
-      if (previous === undefined) {
-        const { error } = await admin
-          .from("regular_groups")
-          .insert({ group_id: group.groupId, owner_id: group.ownerId, ...columns });
-        if (error !== null) throw error;
-      } else {
-        const changed = Object.fromEntries(
-          Object.entries(columns).filter(([key, value]) => previous.columns[key as keyof GroupColumns] !== value),
-        );
-        if (Object.keys(changed).length > 0) {
-          // Only update the row if it still holds what this request read (compare-and-set).
-          const { error, count } = await admin
-            .from("regular_groups")
-            .update(changed, { count: "exact" })
-            .match({ group_id: group.groupId, ...previous.columns });
-          if (error !== null) throw error;
-          if (count !== 1) throw new GroupChangedError();
-        }
-      }
-
-      // 2. Members: add the new ones, remove the removed ones, leave everyone else alone.
       const before = previous?.members ?? new Set<UUID>();
       const now = new Set(group.memberships.map((member) => member.userId));
       const added = group.memberships.filter((member) => !before.has(member.userId));
       const removed = [...before].filter((userId) => !now.has(userId));
 
-      if (added.length > 0) {
-        const { error } = await admin.from("group_memberships").upsert(
-          added.map((member) => ({
-            group_id: group.groupId,
-            user_id: member.userId,
-            joined_at: member.joinedAt.toISOString(),
-          })),
-          { onConflict: "group_id,user_id", ignoreDuplicates: true },
-        );
-        if (error !== null) throw error;
+      const { data: version, error } = await admin.rpc("save_regular_group", {
+        p_group_id: group.groupId,
+        p_owner_id: group.ownerId,
+        p_name: group.name,
+        p_invitation_token: group.invitationToken,
+        p_invitation_active: group.invitationActive,
+        p_status: group.status,
+        // null = a new group, inserted together with its owner's membership.
+        p_expected_version: previous?.version ?? null,
+        p_added_members: added.map((member) => ({ user_id: member.userId, joined_at: member.joinedAt.toISOString() })),
+        p_removed_members: removed,
+      });
+      if (error !== null) {
+        if (error.code === GROUP_CHANGED) throw new GroupChangedError();
+        throw error;
       }
-      if (removed.length > 0) {
-        const { error } = await admin
-          .from("group_memberships")
-          .delete()
-          .eq("group_id", group.groupId)
-          .in("user_id", removed);
-        if (error !== null) throw error;
-      }
-      remember(group);
+      remember(group, version as number);
     },
   };
 
@@ -163,11 +129,20 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
         )
         .order("name");
       if (groupsError !== null) throw groupsError;
-      return (data as GroupRow[]).map((row) => remember(toGroup(row)));
+      return (data as GroupRow[]).map((row) => remember(toGroup(row), row.version));
     },
 
-    // Sessions are Neoh's (0005). Until the sessions workflow is on main, no session is linked to a group.
-    countUnsettledLinkedSessions: async () => 0,
+    // Sessions created with this group invited (sessions.invited_group_id, Neoh's 0005) that are not
+    // settled or cancelled yet. Any error stops the archive (fail closed).
+    async countUnsettledLinkedSessions(groupId) {
+      const { count, error } = await admin
+        .from("sessions")
+        .select("session_id", { count: "exact", head: true })
+        .eq("invited_group_id", groupId)
+        .not("status", "in", "(SETTLED,CANCELLED)");
+      if (error !== null) throw error;
+      return count ?? 0;
+    },
   };
 
   return { groups, queries };
