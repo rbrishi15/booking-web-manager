@@ -27,7 +27,7 @@ export async function deleteMyAccount(): Promise<DeleteAccountState> {
     if (result.status === "BLOCKED") {
       return {
         message:
-          "You must complete your active sessions and use or withdraw your remaining funds before deleting your account.",
+          "You must complete your active sessions, use or withdraw your remaining funds, and archive any groups you own before deleting your account.",
       };
     }
   } catch (error) {

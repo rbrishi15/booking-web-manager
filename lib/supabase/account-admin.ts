@@ -46,6 +46,14 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
         heldBalance = Money.fromCents(holds.reduce((sum, hold) => sum + cents(hold.held_cents).toCents(), 0));
       }
 
+      // UC1-06: a user who still owns an active group must archive it first.
+      const { count: ownedGroups, error: groupsError } = await admin
+        .from("regular_groups")
+        .select("group_id", { count: "exact", head: true })
+        .eq("owner_id", userId)
+        .eq("status", "ACTIVE");
+      if (groupsError !== null) throw groupsError;
+
       return {
         walletId: wallet?.wallet_id ?? null,
         availableBalance,
@@ -54,7 +62,7 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
         // Not in the database on main yet. Wire these up when their tables land:
         unsettledOwnedSessions: 0, // Neoh: sessions (0005)
         pendingPayouts: 0, // Rishi: payouts
-        activeOwnedGroups: 0, // Joseph: groups (UC1-06)
+        activeOwnedGroups: ownedGroups ?? 0,
       };
     },
 
