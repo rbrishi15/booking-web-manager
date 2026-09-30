@@ -1,11 +1,16 @@
-import { Session, type UserDetails } from "@/domain";
+import { Participation, Session, type UserDetails } from "@/domain";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
+import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
 import { describe, expect, test } from "vitest";
-import { createTestUserDetails } from "../domain/accounts/user-fixtures";
+import {
+  createTestUser,
+  createTestUserDetails,
+} from "../domain/accounts/user-fixtures";
 import {
   committedParticipation,
   hoursBeforeSessionStart,
   sessionDetails,
+  sessionStartsAt,
 } from "../domain/sessions/session/session-fixtures";
 import { InMemoryUnitOfWork } from "./support/in-memory-unit-of-work";
 
@@ -230,6 +235,250 @@ describe("UC2-04 Commit to Session", () => {
         .sort((a, b) => (a ?? 0) - (b ?? 0)),
     ).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
   });
+
+  describe("waitlist promotion", () => {
+    test("promotes the FIFO queue head into a free place and locks their share", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol", "dave"],
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result).toEqual({
+        sessionId,
+        promoted: [
+          {
+            participationId: "p-carol",
+            userId: "carol",
+            refundedParticipationId: undefined,
+          },
+        ],
+        skipped: [],
+        awaitingInvitee: undefined,
+      });
+      const list = unitOfWork.requireSession(sessionId).participantList;
+      expect(list.requireParticipation("p-carol").status).toBe("COMMITTED");
+      expect(list.nextWaitlisted()?.userId).toBe("dave");
+      expect(unitOfWork.ledgerInstructions).toHaveLength(1);
+      expect(unitOfWork.ledgerInstructions[0]).toMatchObject({
+        kind: "LOCK",
+        walletId: "w-carol",
+      });
+      expect(unitOfWork.availableCents("carol")).toBe(9_500);
+    });
+
+    test("fills every free place in one transaction, in FIFO order", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 3,
+        committed: ["alice"],
+        waitlisted: ["carol", "dave", "erin"],
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result.promoted.map((entry) => entry.userId)).toEqual([
+        "carol",
+        "dave",
+      ]);
+      const list = unitOfWork.requireSession(sessionId).participantList;
+      expect(list.committedCount).toBe(3);
+      expect(list.nextWaitlisted()?.userId).toBe("erin");
+    });
+
+    test("skips a queue head who cannot fund their share and promotes the next person", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol", "dave"],
+        fundsCents: { carol: 499 },
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result.skipped).toEqual([
+        {
+          participationId: "p-carol",
+          userId: "carol",
+          reason: "INSUFFICIENT_FUNDS",
+        },
+      ]);
+      expect(result.promoted.map((entry) => entry.userId)).toEqual(["dave"]);
+      const list = unitOfWork.requireSession(sessionId).participantList;
+      expect(list.requireParticipation("p-carol").status).toBe(
+        "LEFT_WAITLIST",
+      );
+      expect(unitOfWork.availableCents("carol")).toBe(499);
+    });
+
+    test("refunds the oldest late open-slot withdrawal replaced by the promoted person", async () => {
+      // Arrange
+      const lateWithdrawal = hoursBeforeSessionStart(10);
+      const session = promotionSession({
+        totalSlots: 2,
+        committed: ["alice", "bob"],
+        waitlisted: ["carol"],
+      });
+      createTestUser({ userId: "alice" })
+        .asParticipant()
+        .withdraw(session, {
+          participationId: "p-alice",
+          now: lateWithdrawal,
+          replacementMode: "OPEN_SLOT",
+        });
+      const { promote, unitOfWork } = promotionScenario({
+        session,
+        now: lateWithdrawal,
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result.promoted).toEqual([
+        {
+          participationId: "p-carol",
+          userId: "carol",
+          refundedParticipationId: "p-alice",
+        },
+      ]);
+      expect(
+        unitOfWork.ledgerInstructions.map((instruction) => [
+          instruction.kind,
+          instruction.walletId,
+          instruction.amount.toCents(),
+        ]),
+      ).toEqual([
+        ["LOCK", "w-carol", 500],
+        ["REFUND", "w-alice", 500],
+      ]);
+      const alice = unitOfWork
+        .requireSession(sessionId)
+        .participantList.requireParticipation("p-alice");
+      expect(alice.hold?.state).toBe("REFUNDED");
+    });
+
+    test("waits for an invited queue head to accept instead of skipping or charging them", async () => {
+      // Arrange
+      const lateWithdrawal = hoursBeforeSessionStart(10);
+      const session = promotionSession({
+        totalSlots: 3,
+        committed: ["alice", "bob"],
+        waitlisted: ["carol", "dave"],
+      });
+      createTestUser({ userId: "alice" })
+        .asParticipant()
+        .withdraw(session, {
+          participationId: "p-alice",
+          now: lateWithdrawal,
+          replacementMode: "DIRECT_INVITE",
+          replacementInviteeId: "carol",
+        });
+      const { promote, unitOfWork } = promotionScenario({
+        session,
+        now: lateWithdrawal,
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result).toMatchObject({
+        promoted: [],
+        skipped: [],
+        awaitingInvitee: { participationId: "p-carol", userId: "carol" },
+      });
+      const list = unitOfWork.requireSession(sessionId).participantList;
+      expect(list.nextWaitlisted()?.userId).toBe("carol");
+      expect(list.requireParticipation("p-dave").status).toBe("WAITLISTED");
+      expect(unitOfWork.ledgerInstructions).toHaveLength(0);
+    });
+
+    test("does nothing when no place is free", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice", "bob"],
+        waitlisted: ["carol"],
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result).toMatchObject({ promoted: [], skipped: [] });
+      expect(unitOfWork.ledgerInstructions).toHaveLength(0);
+    });
+
+    test("does nothing once the session has started", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol"],
+        now: sessionStartsAt,
+      });
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result).toMatchObject({ promoted: [], skipped: [] });
+      expect(
+        unitOfWork
+          .requireSession(sessionId)
+          .participantList.requireParticipation("p-carol").status,
+      ).toBe("WAITLISTED");
+      expect(unitOfWork.ledgerInstructions).toHaveLength(0);
+    });
+
+    test("promotes nobody when the ledger write fails", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 3,
+        committed: ["alice"],
+        waitlisted: ["carol", "dave"],
+      });
+      unitOfWork.failNextLedgerAppend = true;
+
+      // Act & Assert
+      await expect(promote.forSession(promotionRequest())).rejects.toThrow(
+        "Ledger append failed",
+      );
+      const list = unitOfWork.requireSession(sessionId).participantList;
+      expect(list.committedCount).toBe(1);
+      expect(list.nextWaitlisted()?.userId).toBe("carol");
+      expect(unitOfWork.ledgerInstructions).toHaveLength(0);
+    });
+
+    test("a repeated trigger key replays its result without locking again", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol"],
+      });
+      const first = await promote.forSession(promotionRequest("withdrawal-1"));
+
+      // Act
+      const retry = await promote.forSession(promotionRequest("withdrawal-1"));
+
+      // Assert
+      expect(retry).toEqual(first);
+      expect(unitOfWork.ledgerInstructions).toHaveLength(1);
+      expect(unitOfWork.availableCents("carol")).toBe(9_500);
+    });
+  });
 });
 
 function commitmentScenario(options: {
@@ -266,4 +515,66 @@ function fullSession(): Session {
       committedParticipation(terms, userId),
     ),
   });
+}
+
+interface PromotionRoster {
+  readonly totalSlots: number;
+  readonly committed: readonly string[];
+  readonly waitlisted: readonly string[];
+}
+
+/** A session in the stated roster; waiters queue in the order given. */
+function promotionSession({
+  totalSlots,
+  committed,
+  waitlisted,
+}: PromotionRoster): Session {
+  const details = sessionDetails({ totalSlots });
+  const terms = {
+    holdingAccountId: details.holdingAccountId,
+    bookingShare: details.booking.totalCost.divideFloor(totalSlots),
+  };
+  return new Session({
+    ...details,
+    participations: [
+      ...committed.map((userId) => committedParticipation(terms, userId)),
+      ...waitlisted.map((userId, index) =>
+        Participation.createWaitlisted({
+          participationId: `p-${userId}`,
+          userId,
+          waitlistedAt: hoursBeforeSessionStart(48),
+          queueSequence: index + 1,
+        }),
+      ),
+    ],
+    nextQueueSequence: waitlisted.length + 1,
+  });
+}
+
+function promotionScenario(
+  options: (PromotionRoster | { session: Session }) & {
+    fundsCents?: Readonly<Record<string, number>>;
+    now?: Date;
+  },
+) {
+  const session =
+    "session" in options ? options.session : promotionSession(options);
+  const users = session.participantList.participations.map(({ userId }) =>
+    createTestUserDetails({
+      userId,
+      availableFundsCents: options.fundsCents?.[userId] ?? 10_000,
+    }),
+  );
+  const unitOfWork = new InMemoryUnitOfWork({ users, sessions: [session] });
+  let nextId = 0;
+  const promote = new PromoteFromWaitlist({
+    unitOfWork,
+    clock: { now: () => options.now ?? hoursBeforeSessionStart(24) },
+    ids: { next: () => `id-${++nextId}` },
+  });
+  return { promote, unitOfWork };
+}
+
+function promotionRequest(triggerKey = "trigger-1") {
+  return { sessionId, triggerKey };
 }

@@ -33,3 +33,23 @@ transactions one at a time.
 
 Route mounting, the production auth and database adapters, and the UI are
 not yet implemented.
+
+## Waitlist promotion
+
+[`PromoteFromWaitlist.forSession`](../../use-cases/sessions/PromoteFromWaitlist.ts)
+fills free places from the waitlist in FIFO `queueSequence` order, in one unit
+of work. For each unreserved free place it loads the queue head's User and calls
+`promoteFromWaitlist` as that participant. A head who is inactive, below the
+reliability minimum, or cannot fund the share is skipped and leaves the queue.
+A head holding a personal replacement invitation must accept it explicitly
+(ADR-0006), so promotion stops there. Each promotion locks the entrant's share
+and refunds the oldest late open-slot withdrawal it replaces, all in the same
+transaction; any failure promotes nobody.
+
+Its `triggerKey` identifies the event that may have freed a place (one
+withdrawal, one waitlist departure, one scheduler run), not the session: the
+unit of work replays results by key. Withdrawal and waitlist departure will call
+it after their own transaction commits, and a scheduled sweep will call it to
+recover any trigger lost in between. That sweep's adapter is where
+`SELECT ... FOR UPDATE SKIP LOCKED` applies, so concurrent workers each take
+different sessions.
