@@ -17,7 +17,7 @@ export interface RegisterState {
   readonly emailTaken?: boolean;
 }
 
-/** UC1-01 Register User: validates the form, creates the Supabase account, then goes to Home. */
+/** UC1-01 Register User: validates the form, creates the Supabase account, then goes Home. */
 export async function registerUser(
   _previous: RegisterState,
   formData: FormData,
@@ -82,6 +82,6 @@ export async function registerUser(
     };
   }
 
-  // 5. Logged in: go to Home & Discover. redirect() must stay outside try/catch.
+  // 5. Logged in: go Home (HOME_PATH). redirect() must stay outside try/catch.
   redirect(HOME_PATH);
 }
