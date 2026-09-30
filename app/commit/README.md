@@ -53,3 +53,34 @@ it after their own transaction commits, and a scheduled sweep will call it to
 recover any trigger lost in between. That sweep's adapter is where
 `SELECT ... FOR UPDATE SKIP LOCKED` applies, so concurrent workers each take
 different sessions.
+
+## UC2-05 Withdraw from Session
+
+Every action finds the caller's participation from their authenticated user
+ID, so nobody can act on another person's place, and each takes an
+idempotency key.
+
+- [`WithdrawFromSession`](../../use-cases/sessions/WithdrawFromSession.ts) runs
+  `Participant.withdraw` in one unit of work. More than 30 hours before start,
+  the share is refunded at once (the REFUND is written with the session
+  change). At 30 hours or less it stays held, awaiting a replacement. The
+  participant chooses either `OPEN_SLOT` or `DIRECT_INVITE` for one named,
+  existing user, and cannot change it later (ADR-0006).
+- [`AcceptReplacement`](../../use-cases/sessions/AcceptReplacement.ts) lets the
+  named invitee take the reserved place: their LOCK and the late withdrawer's
+  REFUND are written together.
+- [`LeaveWaitlist`](../../use-cases/sessions/LeaveWaitlist.ts) removes a waiting
+  participant; no funds are held, so no ledger entry is written.
+- [`ExpireReplacements`](../../use-cases/sessions/ExpireReplacements.ts) is the
+  forfeiture sweep for session start. It marks late withdrawals still awaiting
+  a replacement as `FORFEITURE_DUE`; the FORFEIT ledger line that credits the
+  booker is written when the session's payout completes.
+
+An open-slot withdrawal and a waitlist departure then run waitlist promotion in
+a separate unit of work ([follow-up-promotion.ts](../../use-cases/sessions/follow-up-promotion.ts)).
+If that fails, the committed withdrawal is kept and the result reports
+`DEFERRED`; the scheduled promotion sweep fills the place later.
+
+The 30-hour boundary follows CLAUDE.md and the domain: exactly 30 hours is a
+late withdrawal. The product-owner diagram includes exactly 30 hours in the
+refund window; that discrepancy is tracked in the waitlist discussion document.
