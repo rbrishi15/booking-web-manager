@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { deletionBlockers } from "@/app/profile/delete/blockers";
 import { Money } from "@/domain";
 import {
   AccountNotActiveError,
@@ -113,6 +114,37 @@ describe("UC1-04 Delete Account", () => {
       // Assert
       expect(result).toEqual({ status: "BLOCKED", standing });
       expect(steps).toEqual(["check"]);
+    });
+  });
+
+  describe("tells the user what is blocking deletion", () => {
+    test("lists each outstanding obligation, including groups they own", () => {
+      // Arrange
+      const standing = clearStanding({
+        availableBalance: Money.fromCents(1250),
+        activeCommitments: 1,
+        heldBalance: Money.fromCents(750),
+        activeOwnedGroups: 2,
+      });
+
+      // Act
+      const blockers = deletionBlockers(standing);
+
+      // Assert
+      expect(blockers).toEqual([
+        { label: "Sessions you've committed to", count: 1 },
+        { label: "Money held for those sessions", cents: 750 },
+        { label: "Groups you own that aren't archived", count: 2 },
+        { label: "Wallet balance to withdraw or use", cents: 1250 },
+      ]);
+    });
+
+    test("lists nothing when the account is clear", () => {
+      // Act
+      const blockers = deletionBlockers(clearStanding());
+
+      // Assert
+      expect(blockers).toEqual([]);
     });
   });
 

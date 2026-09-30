@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { supabaseDeleteAccountPorts } from "@/lib/supabase/account-admin";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { canDeactivate } from "@/use-cases/accounts/delete-account";
+import { deletionBlockers } from "./blockers";
 import { DeleteAccountButton } from "./delete-account-button";
 
 /** UC1-04 Delete Account: shows what is still outstanding, then offers the final confirmation. */
@@ -86,9 +87,32 @@ export default async function DeleteAccountPage() {
                 You must complete your active sessions, use or withdraw your remaining funds, and archive any groups
                 you own before deleting your account.
               </ErrorMessage>
-              <Button asChild variant="outline">
-                <Link href="/wallet">Go to wallet</Link>
-              </Button>
+              <div className="space-y-2 text-sm">
+                <p className="font-medium">Still to sort out:</p>
+                <ul className="space-y-1">
+                  {deletionBlockers(standing).map((blocker) => (
+                    <li
+                      key={blocker.label}
+                      className="flex items-center justify-between gap-4 rounded-md bg-secondary px-3 py-2"
+                    >
+                      <span>{blocker.label}</span>
+                      <span className="font-semibold">
+                        {"cents" in blocker ? <Money cents={blocker.cents} /> : blocker.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href="/wallet">Go to wallet</Link>
+                </Button>
+                {standing.activeOwnedGroups > 0 && (
+                  <Button asChild variant="outline">
+                    <Link href="/groups">Go to my groups</Link>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </div>

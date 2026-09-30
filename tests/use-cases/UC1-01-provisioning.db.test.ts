@@ -30,6 +30,7 @@ const MIGRATIONS_BEFORE_0004 = [
 const LEGACY_WITH_WALLET = "00000000-0000-4000-8000-0000000000a1";
 const LEGACY_WITHOUT_WALLET = "00000000-0000-4000-8000-0000000000b2";
 const NEW_SIGN_UP = "00000000-0000-4000-8000-0000000000c3";
+const ODD_METADATA_SIGN_UP = "00000000-0000-4000-8000-0000000000d4";
 
 /** Refuses anything but a local database named for testing, because this suite drops the public schema. */
 function requireDisposableDatabase(url: string): string {
@@ -149,5 +150,25 @@ describe.skipIf(!DATABASE_URL)("UC1-01 account provisioning against Postgres", (
 
     // Assert
     expect(account).toEqual({ account_status: "ACTIVE", wallet_id: legacyWalletIdBefore, available_cents: "1250" });
+  });
+
+  test("signs up an account whose metadata has a too-long name and non-array preferences", async () => {
+    // Arrange: metadata the form would never send, but a direct sign-up call could.
+    const metadata = { display_name: "x".repeat(80), preferred_sports: "Tennis", preferred_regions: { west: true } };
+
+    // Act
+    await client.query("insert into auth.users (id, raw_user_meta_data) values ($1, $2::jsonb)", [
+      ODD_METADATA_SIGN_UP,
+      JSON.stringify(metadata),
+    ]);
+
+    // Assert
+    const { rows } = await client.query<{ name_length: number; preferred_sports: string[]; preferred_regions: string[] }>(
+      `select char_length(display_name) as name_length, preferred_sports, preferred_regions
+         from public.profiles where user_id = $1`,
+      [ODD_METADATA_SIGN_UP],
+    );
+    expect(rows[0]).toEqual({ name_length: 60, preferred_sports: [], preferred_regions: [] });
+    expect((await accountOf(client, ODD_METADATA_SIGN_UP))?.available_cents).toBe("0");
   });
 });
