@@ -122,3 +122,23 @@ to an opaque 500.
 
 Promotion, forfeiture expiry and auto-verification have no HTTP handler; the
 scheduler calls them.
+
+## Scheduled jobs
+
+[`RunScheduledSessionJobs`](../../use-cases/sessions/RunScheduledSessionJobs.ts)
+is the periodic sweep. It asks a
+[`DueSessionQuery`](../../use-cases/sessions/scheduling-ports.ts) for up to one
+batch of sessions that may have work due. For each one it runs
+`ExpireReplacements`, then `PromoteFromWaitlist`, then `AutoVerifyAttendance`,
+each in its own unit of work keyed by the run ID. Every job re-checks its own
+rule, so a superset of sessions is safe. A failing job is reported and the sweep
+moves on; the next run retries it. This sweep also recovers promotions that a
+withdrawal reported as `DEFERRED`.
+
+[`handleScheduledJobs`](./scheduled-jobs-handler.ts) is the cron entry point. It
+accepts only `Authorization: Bearer <CRON_SECRET>`, compared in constant time,
+and an unset secret authorizes nothing. Each call starts a new run.
+
+Not yet built: the Postgres `DueSessionQuery` adapter (it needs the sessions
+schema; it should select with `FOR UPDATE SKIP LOCKED`) and the schedule itself,
+either a `pg_cron` + `pg_net` migration or a Vercel Cron entry.
