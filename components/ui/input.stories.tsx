@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { useId } from "react";
 import { expect, userEvent } from "storybook/test";
 import { Input } from "./input";
 import { Label } from "./label";
@@ -20,16 +21,18 @@ const LONG_VALUE = "Weekend Tennis Crew at Bukit Timah Community Club, Saturdays
 
 /** Label + Input + supporting or error text, wired the way the app's forms do it (aria-invalid, aria-describedby). */
 function TextField({ label, placeholder, type, size, enabled, error, supportingText, errorText }: TextFieldArgs) {
-  const messageId = "field-message";
+  // Unique per field, so several fields on one page (e.g. the Docs page) each point at their own label and message.
+  const inputId = useId();
+  const messageId = `${inputId}-message`;
   const message = error ? errorText : supportingText;
 
   return (
     <div className="max-w-sm space-y-2">
-      <Label htmlFor="field">{label}</Label>
+      <Label htmlFor={inputId}>{label}</Label>
       <Input
         // Remount when the size knob changes so the example value updates.
         key={size}
-        id="field"
+        id={inputId}
         type={type}
         placeholder={placeholder}
         defaultValue={size === "long" ? LONG_VALUE : SHORT_VALUE}
@@ -130,4 +133,20 @@ export const LongValue: Story = { args: { size: "long", label: "Group name", pla
 
 export const Email: Story = {
   args: { type: "email", label: "Email", placeholder: "name@example.com", supportingText: "" },
+};
+
+/** Two fields on one page (as on the Docs page): each must point at its own label and message. */
+export const TwoFieldsOnOnePage: Story = {
+  render: (args) => (
+    <div className="space-y-6">
+      <TextField {...args} label="Name" supportingText="Shown to other players." />
+      <TextField {...args} label="Group name" error errorText="Enter a group name" />
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("textbox", { name: "Name" })).toHaveAccessibleDescription("Shown to other players.");
+    const groupName = canvas.getByRole("textbox", { name: "Group name" });
+    await expect(groupName).toHaveAttribute("aria-invalid", "true");
+    await expect(groupName).toHaveAccessibleDescription("Enter a group name");
+  },
 };
