@@ -79,6 +79,17 @@ begin
 end;
 $fn$;
 
+-- Backfill: users who registered before this migration get a profile too, so the
+-- log-in and middleware status checks find a row for everyone. Safe to re-run.
+insert into public.profiles (user_id, display_name, preferred_sports, preferred_regions)
+select
+  u.id,
+  left(coalesce(u.raw_user_meta_data ->> 'display_name', ''), 60),
+  coalesce(array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_sports')), '{}'),
+  coalesce(array(select jsonb_array_elements_text(u.raw_user_meta_data -> 'preferred_regions')), '{}')
+from auth.users as u
+on conflict (user_id) do nothing;
+
 -- Only the trigger may run this privileged function; API roles cannot call it directly.
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 

@@ -57,7 +57,12 @@ export async function logIn(_previous: LoginState, formData: FormData): Promise<
     await supabase.auth.signOut();
     return { status: "error", message: "We couldn't verify your account. Please try again." };
   }
-  if (profile?.account_status === "INACTIVE") {
+  if (profile === null) {
+    console.error("UC1-02 no profile row for user", data.user.id);
+    await supabase.auth.signOut();
+    return { status: "error", message: "We couldn't verify your account. Please try again." };
+  }
+  if (profile.account_status === "INACTIVE") {
     await supabase.auth.signOut();
     return { status: "error", message: "This account is no longer active." };
   }
