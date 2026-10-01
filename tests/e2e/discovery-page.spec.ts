@@ -40,6 +40,33 @@ test("signed-in discovery applies URL filters, preserves history and fits a 390p
     await expect(page.getByText("West evening badminton", { exact: true })).toBeVisible();
     await expect(page.getByText("East evening tennis", { exact: true })).toBeVisible();
     await expect(page.getByText("Following day badminton", { exact: true })).toHaveCount(0);
+    const desktopResults = page.getByRole("region", { name: "Upcoming sessions" });
+    const desktopCards = desktopResults.getByRole("listitem");
+    const desktopImages = desktopResults.locator("img");
+    for (const width of [1280, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(page.getByRole("heading", { name: "Booking.", exact: true })).toBeVisible();
+      await expect(desktopCards).toHaveCount(2);
+      await expect(desktopImages).toHaveCount(2);
+      for (const image of await desktopImages.all()) {
+        await expect(image).toBeVisible();
+        await expect(image).toHaveAttribute("alt", "");
+        expect(decodeURIComponent(await image.getAttribute("src") ?? "")).toContain("/images/sports/");
+      }
+      await expect.poll(() => desktopImages.evaluateAll((images) =>
+        images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+      )).toBe(true);
+      // Both results remain readable in one row at normal desktop widths.
+      const firstCard = await desktopCards.nth(0).boundingBox();
+      const secondCard = await desktopCards.nth(1).boundingBox();
+      expect(firstCard).not.toBeNull();
+      expect(secondCard).not.toBeNull();
+      if (!firstCard || !secondCard) throw new Error("The desktop session cards must be visible");
+      expect(Math.abs(firstCard.y - secondCard.y)).toBeLessThan(2);
+      expect(firstCard.x + firstCard.width).toBeLessThanOrEqual(secondCard.x);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`discovery-desktop-${width}.png`), fullPage: true });
+    }
     await page.getByLabel("Sport", { exact: true }).selectOption("Badminton");
     await page.getByLabel("Region", { exact: true }).selectOption("West");
     await page.getByLabel("From", { exact: true }).fill("18:00");
