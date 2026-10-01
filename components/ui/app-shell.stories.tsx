@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, screen, userEvent, waitFor } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import { AppShell } from "./app-shell";
+import { BookingLogo } from "./booking-logo";
 import { PageHeader } from "./page-header";
 
 const meta = {
@@ -50,6 +51,50 @@ export const Desktop: Story = {
     // The current page's link is marked for screen readers and highlighted.
     await expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent("Groups");
     await expect(canvas.getByText("Reliability 4.8")).toBeInTheDocument();
+    await expect(within(nav).getAllByRole("link")).toHaveLength(5);
+    await expect(canvas.getByRole("link", { name: "Booking." })).toHaveAttribute("href", "/discover");
+    await expect(canvas.queryByRole("link", { name: "+ Create session" })).not.toBeInTheDocument();
+  },
+};
+
+export const DesktopHome: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  parameters: { nextjs: { navigation: { pathname: "/discover" } } },
+  args: {
+    children: (
+      <div className="p-8 lg:p-12">
+        <h1><BookingLogo className="text-5xl" /></h1>
+        <p className="mt-3 text-muted-foreground">Find games, meet players, and make time for play.</p>
+      </div>
+    ),
+  },
+  play: async ({ canvas }) => {
+    const nav = canvas.getByRole("navigation", { name: "Main" });
+    await expect(within(nav).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  },
+};
+
+export const DesktopDark: Story = {
+  ...DesktopHome,
+  globals: { theme: "dark", viewport: { value: "desktop", isRotated: false } },
+};
+
+export const DesktopLongName: Story = {
+  ...DesktopHome,
+  args: {
+    ...DesktopHome.args,
+    user: { name: "Alexandria Catherine Tan Wei Ling", reliabilityScore: 88 },
+  },
+};
+
+export const DesktopLogout: Story = {
+  ...DesktopHome,
+  args: { ...DesktopHome.args, logoutAction: fn().mockResolvedValue(undefined) },
+  play: async ({ canvas, args }) => {
+    const sidebar = within(canvas.getByRole("complementary"));
+    await expect(sidebar.getByText("Marcus Lim")).toBeVisible();
+    await userEvent.click(sidebar.getByRole("button", { name: "Log out" }));
+    await expect(args.logoutAction).toHaveBeenCalledOnce();
   },
 };
 

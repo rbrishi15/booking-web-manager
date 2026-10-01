@@ -1,10 +1,12 @@
 "use client";
 
-import { Menu } from "lucide-react";
+import { LogOut, Menu, UsersRound } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { BookingLogo } from "@/components/ui/booking-logo";
 import { initials } from "@/components/ui/initials";
 import { toFivePoint } from "@/components/ui/reliability-badge";
 import {
@@ -16,17 +18,13 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-
 const NAV_LINKS = [
-  { href: "/discover", label: "Home", letter: "H" }, 
-  { href: "/sessions", label: "My sessions", letter: "S" }, 
-  { href: "/wallet", label: "Wallet", letter: "W" }, 
-  { href: "/groups", label: "Groups", letter: "G" }, 
-  { href: "/profile", label: "Settings", letter: "P" }, 
+  { href: "/discover", label: "Home", image: "home" },
+  { href: "/sessions", label: "My sessions", image: "sessions" },
+  { href: "/wallet", label: "Wallet", image: "wallet" },
+  { href: "/groups", label: "Groups", image: null },
+  { href: "/profile", label: "Settings", image: "settings" },
 ] as const;
-
-
-const CREATE_SESSION_HREF = "/sessions/new";
 
 export interface ShellUser {
   readonly name: string;
@@ -55,21 +53,20 @@ function SidebarContents({
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
-      {/* Logo */}
-      <Link href="/discover" onClick={onNavigate} className="text-2xl font-bold tracking-tight">
-        Booking.
-      </Link>
-
-      {/* + Create session */}
-      <Button asChild className="w-full">
-        <Link href={CREATE_SESSION_HREF} onClick={onNavigate}>
-          + Create session
+    <div className="flex h-full flex-col overflow-y-auto px-4 py-7 lg:px-5 lg:py-8">
+      <div className="px-3">
+        <Link
+          href="/discover"
+          onClick={onNavigate}
+          className="inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <BookingLogo />
         </Link>
-      </Button>
+        <p className="mt-1 text-xs text-muted-foreground">Find your next game.</p>
+      </div>
 
       {/* Navigation links */}
-      <nav className="flex flex-col gap-1" aria-label="Main">
+      <nav className="mt-10 flex flex-col gap-2 lg:mt-12" aria-label="Main">
         {NAV_LINKS.map((link) => {
           const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
@@ -79,13 +76,15 @@ function SidebarContents({
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent",
-                active && "bg-accent font-medium",
+                "flex min-h-[52px] items-center gap-3 rounded-lg px-3 py-3 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:gap-4",
+                active && "bg-accent font-semibold",
               )}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded border bg-card text-xs font-semibold text-muted-foreground">
-                {link.letter}
-              </span>
+              {link.image === null ? (
+                <UsersRound className="h-5 w-5 shrink-0" strokeWidth={1.7} aria-hidden="true" />
+              ) : (
+                <Image src={`/images/navigation/${link.image}.svg`} width={20} height={20} alt="" className="shrink-0 dark:invert" />
+              )}
               {link.label}
             </Link>
           );
@@ -93,28 +92,31 @@ function SidebarContents({
       </nav>
 
       {/* Your account (bottom) */}
-      <div className="mt-auto border-t pt-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-            {initials(user.name)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="text-xs text-muted-foreground">
-              Reliability {toFivePoint(user.reliabilityScore)}
-            </p>
+      <div className="mt-auto pt-10">
+        <div className="border-t pt-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold">
+              {initials(user.name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{user.name}</p>
+              <p className="text-xs text-muted-foreground">
+                Reliability {toFivePoint(user.reliabilityScore)}
+              </p>
+            </div>
           </div>
+          {logoutAction !== undefined && (
+            <form action={logoutAction} className="mt-3">
+              <button
+                type="submit"
+                className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                Log out
+              </button>
+            </form>
+          )}
         </div>
-        {logoutAction !== undefined && (
-          <form action={logoutAction} className="mt-3">
-            <button
-              type="submit"
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Log out
-            </button>
-          </form>
-        )}
       </div>
     </div>
   );
@@ -128,11 +130,23 @@ export function AppShell({ user, logoutAction, children }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar (hidden below 768px) */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r bg-card md:block">
+      <aside className="sticky top-4 my-4 ml-4 hidden h-[calc(100dvh-2rem)] w-52 shrink-0 rounded-2xl border border-border/40 bg-card shadow-[0_8px_32px_-16px_hsl(var(--foreground)/0.08)] md:block lg:w-60 2xl:w-64">
         <SidebarContents user={user} logoutAction={logoutAction} />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative isolate flex min-w-0 flex-1 flex-col">
+        {/* The desktop court fades behind the page introduction without competing with its content. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[420px] overflow-hidden md:block" aria-hidden="true">
+          <Image
+            src="/images/mobile-hero.png"
+            alt=""
+            fill
+            sizes="(min-width: 768px) calc(100vw - 256px), 1px"
+            className="object-cover object-right-top opacity-[0.35] dark:opacity-[0.14]"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--background))_0%,hsl(var(--background)/0.3)_40%,hsl(var(--background)/0)_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--background)/0)_0%,hsl(var(--background)/0.2)_45%,hsl(var(--background))_100%)]" />
+        </div>
         {/* Phone top bar (hidden from 768px up) */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-4 py-3 md:hidden">
           <Link href="/discover" className="text-xl font-bold tracking-tight">
