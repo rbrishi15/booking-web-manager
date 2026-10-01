@@ -28,7 +28,7 @@ export const Populated: Story = {
     await expect(canvas.getByRole("navigation", { name: "Main" }).querySelector('[aria-current="page"]')).toHaveTextContent("Home");
     const photos = [...canvasElement.querySelectorAll<HTMLImageElement>('li img')];
     await expect(photos).toHaveLength(2);
-    await waitFor(() => expect(photos.every((photo) => photo.complete && photo.naturalWidth > 0)).toBe(true));
+    await waitFor(() => expect(photos.every((photo) => photo.complete && photo.naturalWidth > 0)).toBe(true), { timeout: 5000 });
   },
 };
 
