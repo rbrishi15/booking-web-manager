@@ -4,6 +4,8 @@
 
 # Rishi: fallback, domain, shared infrastructure, CI and repository governance.
 * @rbrishi15
+# Shared settings: OneMap (Neoh), Supabase identity (Joseph), Stripe/Web Push (Rishi).
+/.env.example @liang799 @Jolingoes @rbrishi15
 /.github/ @rbrishi15
 /CLAUDE.md @rbrishi15
 /README.md @rbrishi15
