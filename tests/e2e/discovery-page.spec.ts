@@ -66,25 +66,88 @@ test("signed-in discovery applies URL filters, preserves history and fits a 390p
     await expect(page.getByRole("region", { name: "Upcoming sessions" }).locator("a")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("discovery-desktop.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Apply filters", exact: true })).toBeVisible();
+    const filters = page.getByRole("button", { name: "Filters", exact: true });
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: "Apply filters", exact: true })).toBeHidden();
+    const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+    await expect(navigation.getByRole("link", { name: "Home", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(navigation.getByRole("link", { name: "Sessions", exact: true })).toBeVisible();
+    await expect(navigation.getByRole("link", { name: "Wallet", exact: true })).toBeVisible();
+    await expect(navigation.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+    await expect(navigation.getByRole("link")).toHaveCount(4);
+    const sessionImage = page.getByRole("region", { name: "Upcoming sessions" }).locator("img");
+    await expect(sessionImage).toHaveCount(1);
+    await expect(sessionImage).toHaveAttribute("alt", "");
+    expect(decodeURIComponent(await sessionImage.getAttribute("src") ?? "")).toContain("/images/sports/");
+    await expect.poll(() => sessionImage.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("discovery-mobile.png"), fullPage: true });
 
+    const accountButton = page.getByRole("button", { name: "Open account menu", exact: true });
+    await accountButton.click();
+    const accountMenu = page.getByRole("dialog", { name: "Your account", exact: true });
+    await expect(accountMenu.getByRole("link", { name: "My groups", exact: true })).toHaveAttribute("href", "/groups");
+    await expect(accountMenu.getByRole("button", { name: "Log out", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(accountMenu).toBeHidden();
+    await expect(accountButton).toBeFocused();
+
+    await filters.click();
+    await expect(filters).toHaveAttribute("aria-expanded", "true");
+    await page.getByLabel("Sport", { exact: true }).selectOption("Tennis");
+    await filters.click();
+    await expect(page.getByLabel("Sport", { exact: true })).toBeHidden();
+    await filters.click();
+    await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("Tennis");
+    await expect(page.getByText("West evening badminton", { exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("sport")).toBe("Badminton");
+
     await page.goBack();
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await filters.click();
     await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Region", { exact: true })).toHaveValue("");
     await expect(page.getByText("East evening tennis", { exact: true })).toBeVisible();
     await page.goForward();
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await filters.click();
     await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("Badminton");
     await expect(page.getByLabel("From", { exact: true })).toHaveValue("18:00");
+
+    await page.getByLabel("Sport", { exact: true }).selectOption("Tennis");
+    await page.getByLabel("Region", { exact: true }).selectOption("East");
+    const mobileGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+    let pauseMobile = true;
+    await page.route("**/discover?**", async (route) => {
+      if (pauseMobile && route.request().resourceType() === "fetch") {
+        pauseMobile = false;
+        await mobileGate;
+      }
+      await route.continue();
+    });
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Loading sessions");
+    await expect(page.getByRole("region", { name: "Upcoming sessions" })).toHaveAttribute("aria-busy", "true");
+    await expect(filters).toBeDisabled();
+    await expect(page.getByLabel("Sport", { exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Date", { exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Apply filters", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Clear filters", exact: true })).toBeDisabled();
+    releaseRequest?.();
+    await expect(page).toHaveURL(/sport=Tennis/);
+    await page.unroute("**/discover?**");
+    await expect(page.getByText("East evening tennis", { exact: true })).toBeVisible();
+    await expect(page.getByText("West evening badminton", { exact: true })).toHaveCount(0);
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await filters.click();
     await page.getByRole("button", { name: "Clear filters", exact: true }).click();
     await expect(page).toHaveURL(/\/discover$/);
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await filters.click();
     await expect(page.getByLabel("Date", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("From", { exact: true })).toHaveValue("");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   } finally {
     releaseRequest?.();
     await context.pool.end();
@@ -94,6 +157,7 @@ test("signed-in discovery applies URL filters, preserves history and fits a 390p
 test("discovery pagination keeps filters and changing filters resets the cursor", async ({ page }) => {
   const context = sessionTestContext();
   try {
+    await page.setViewportSize({ width: 390, height: 844 });
     const user = await context.identity(false);
     const ids = Array.from({ length: 21 }, () => randomUUID()).sort();
     for (const [index, sessionId] of ids.entries()) {
@@ -116,27 +180,49 @@ test("discovery pagination keeps filters and changing filters resets the cursor"
     await expect(page.getByText("Discovery page row 01", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Next page", exact: true }).click();
     await expect(page.getByText("Discovery page row 21", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByLabel("Region", { exact: true }).selectOption("East");
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     await expect(page.getByText("No sessions found", { exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.has("cursor")).toBe(false);
     await expect(page.getByLabel("Region", { exact: true })).toHaveValue("East");
+    await expect(page.getByRole("button", { name: "Filters", exact: true })).toHaveAttribute("aria-expanded", "false");
   } finally {
     await context.pool.end();
   }
 });
 
 test("anonymous discovery navigation requires login and malformed filters remain correctable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/discover?date=2042-08-05");
   await expect(page).toHaveURL(/\/login\?next=/);
   const context = sessionTestContext();
   try {
     const user = await context.identity(false);
     await login(page, user, "/discover?date=invalid");
+    const filters = page.getByRole("button", { name: "Filters", exact: true });
+    await expect(filters).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("button", { name: "Clear filters", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Clear filters", exact: true }).click();
     await expect(page).toHaveURL(/\/discover$/);
     await expect(page.getByLabel("Date", { exact: true })).toHaveValue("");
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await filters.click();
+    await page.getByLabel("From", { exact: true }).fill("18:00");
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await expect(page).toHaveURL(/\/discover$/);
+    await expect(filters).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByLabel("Date", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    await page.getByLabel("Date", { exact: true }).fill("2042-08-05");
+    await expect(page.getByLabel("Date", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await expect(page).toHaveURL(/date=2042-08-05/);
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: "Open account menu", exact: true }).click();
+    await page.getByRole("dialog", { name: "Your account", exact: true }).getByRole("button", { name: "Log out", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.goto("/discover");
+    await expect(page).toHaveURL(/\/login\?next=/);
   } finally {
     await context.pool.end();
   }
