@@ -1,8 +1,7 @@
 import { Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  end,
-  hour,
+  hoursAfterSessionEnd,
   createTestSession,
   sessionDetails,
   sessionState,
@@ -12,6 +11,10 @@ import {
 describe("Session", () => {
   test("autoVerifyAttendance_WhenOneMillisecondBeforeDue_RejectsWithoutChangingState", () => {
     // Arrange
+    const automaticVerificationDueAt = hoursAfterSessionEnd(72);
+    const oneMillisecondBeforeAutomaticVerification = new Date(
+      automaticVerificationDueAt.getTime() - 1,
+    );
     const source = createTestSession({ committedUserIds: ["ben"] });
     const bookingSession = new Session(
       sessionDetails({
@@ -26,7 +29,7 @@ describe("Session", () => {
     // Act & Assert
     expect(() =>
       bookingSession.autoVerifyAttendance(
-        new Date(end.getTime() + 72 * hour - 1),
+        oneMillisecondBeforeAutomaticVerification,
       ),
     ).toThrow(expect.objectContaining({ code: "AUTO_VERIFICATION_NOT_DUE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -34,6 +37,7 @@ describe("Session", () => {
 
   test("autoVerifyAttendance_WhenExactlySeventyTwoHoursAfterEnd_VerifiesOnlyRemainingParticipants", () => {
     // Arrange
+    const automaticVerificationDueAt = hoursAfterSessionEnd(72);
     const source = createTestSession({ committedUserIds: ["ben"] });
     const bookingSession = new Session(
       sessionDetails({
@@ -45,7 +49,7 @@ describe("Session", () => {
     );
 
     // Act
-    bookingSession.autoVerifyAttendance(new Date(end.getTime() + 72 * hour));
+    bookingSession.autoVerifyAttendance(automaticVerificationDueAt);
 
     // Assert
     expect(

@@ -1,8 +1,7 @@
 import { Participation, Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  at,
-  before,
+  hoursBeforeSessionStart,
   committedParticipation,
   createTestSession,
   sessionDetails,
@@ -36,22 +35,23 @@ describe("ParticipantList", () => {
 
   test("nextWaitlisted_WhenHydrationOrderDiffersFromQueue_SelectsLowestSequence", () => {
     // Arrange
+    const waitlistedAt = hoursBeforeSessionStart(48);
     const alice = Participation.createWaitlisted({
       participationId: "p-alice",
       userId: "alice",
-      waitlistedAt: before,
+      waitlistedAt,
       queueSequence: 3,
     });
     const ben = Participation.createWaitlisted({
       participationId: "p-ben",
       userId: "ben",
-      waitlistedAt: before,
+      waitlistedAt,
       queueSequence: 1,
     });
     const cara = Participation.createWaitlisted({
       participationId: "p-cara",
       userId: "cara",
-      waitlistedAt: before,
+      waitlistedAt,
       queueSequence: 2,
     });
     const list = new Session(
@@ -74,21 +74,25 @@ describe("ParticipantList", () => {
 
   test("oldestAwaitingReplacement_WhenWithdrawalTimesTie_PreservesHydrationOrder", () => {
     // Arrange
+    const caraWithdrewAt = hoursBeforeSessionStart(48);
+    const tiedWithdrawalAt = hoursBeforeSessionStart(10);
     const source = createTestSession();
     const alice = committedParticipation(source, "alice");
     const ben = committedParticipation(source, "ben");
     const cara = committedParticipation(source, "cara");
-    const refundedCara = cara.withdraw(cara.hold!.refund(before), before);
+    const refundedCara = cara.withdraw(
+      cara.hold!.refund(caraWithdrewAt),
+      caraWithdrewAt,
+    );
     const withdrawnAlice = alice.withdraw(
       alice.hold!.awaitReplacement(),
-      at(10),
+      tiedWithdrawalAt,
       "OPEN_SLOT",
     );
     const withdrawnBen = ben.withdraw(
       ben.hold!.awaitReplacement(),
-      at(10),
-      "INVITE_LINK",
-      "ben-replacement",
+      tiedWithdrawalAt,
+      "OPEN_SLOT",
     );
     const list = new Session(
       sessionDetails({
@@ -109,5 +113,36 @@ describe("ParticipantList", () => {
     expect(list.findByUserId("ben")).toBe(oldestReplacement);
     expect(list.committedCount).toBe(0);
     expect(list.nextWaitlisted()).toBeUndefined();
+  });
+
+  test("oldestAwaitingReplacement_WhenOlderWithdrawalReservesNamedSeat_SelectsOpenWithdrawal", () => {
+    // Arrange
+    const aliceInvitedAt = hoursBeforeSessionStart(10);
+    const benOpenedSeatAt = hoursBeforeSessionStart(9);
+    const source = createTestSession();
+    const alice = committedParticipation(source, "alice");
+    const ben = committedParticipation(source, "ben");
+    const personal = alice.withdraw(
+      alice.hold!.awaitReplacement(),
+      aliceInvitedAt,
+      "DIRECT_INVITE",
+      "cara",
+    );
+    const open = ben.withdraw(
+      ben.hold!.awaitReplacement(),
+      benOpenedSeatAt,
+      "OPEN_SLOT",
+    );
+    const list = new Session(
+      sessionDetails({ participations: [personal, open] }),
+    ).participantList;
+
+    // Act
+    const replacement = list.oldestAwaitingReplacement();
+
+    // Assert
+    expect(replacement).toBe(open);
+    expect(list.reservedCount).toBe(1);
+    expect(list.personalReplacementForInvitee("cara")).toBe(personal);
   });
 });

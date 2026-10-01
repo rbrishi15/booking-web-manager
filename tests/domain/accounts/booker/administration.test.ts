@@ -1,18 +1,18 @@
 import { DomainError } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
 import {
-  at,
-  before,
+  hoursBeforeSessionStart,
   createTestUser,
   readyBooker,
   createTestSession,
   sessionState,
-  start,
+  sessionStartsAt,
 } from "../../sessions/session/session-fixtures";
 
 describe("Booker", () => {
   test("cancel_WhenSecondChildFails_PreservesParticipantsHoldsAndStatus", () => {
     // Arrange
+    const cancellationTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
       waitlistedUserIds: ["waiting"],
@@ -34,7 +34,9 @@ describe("Booker", () => {
 
     try {
       // Act & Assert
-      expect(() => booker.cancel(bookingSession, before)).toThrow(failure);
+      expect(() => booker.cancel(bookingSession, cancellationTime)).toThrow(
+        failure,
+      );
       expect(cancellation).toHaveBeenCalledOnce();
       expect(sessionState(bookingSession)).toEqual(previousState);
     } finally {
@@ -44,6 +46,7 @@ describe("Booker", () => {
 
   test("cancel_WhenPreviousChildFailureWasResolved_CancelsAndRefunds", () => {
     // Arrange
+    const cancellationTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
       waitlistedUserIds: ["waiting"],
@@ -64,13 +67,15 @@ describe("Booker", () => {
 
     // Establish a rejected cancellation before exercising the retry.
     try {
-      expect(() => booker.cancel(bookingSession, before)).toThrow(failure);
+      expect(() => booker.cancel(bookingSession, cancellationTime)).toThrow(
+        failure,
+      );
     } finally {
       cancellation.mockRestore();
     }
 
     // Act
-    const result = booker.cancel(bookingSession, before);
+    const result = booker.cancel(bookingSession, cancellationTime);
 
     // Assert
     expect(result.instructions.map((instruction) => instruction.kind)).toEqual([
@@ -87,6 +92,7 @@ describe("Booker", () => {
 
   test("cancel_WhenOwnerIsInactive_StillCancelsAndRefunds", () => {
     // Arrange
+    const cancellationTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const booker = createTestUser({
       userId: "booker",
@@ -94,7 +100,7 @@ describe("Booker", () => {
     }).asBooker();
 
     // Act
-    const result = booker.cancel(bookingSession, before);
+    const result = booker.cancel(bookingSession, cancellationTime);
 
     // Assert
     expect(bookingSession.status).toBe("CANCELLED");
@@ -103,6 +109,7 @@ describe("Booker", () => {
 
   test("changeVisibility_WhenOwnerIsInactive_StillChangesVisibility", () => {
     // Arrange
+    const visibilityChangeTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession();
     const booker = createTestUser({
       userId: "booker",
@@ -110,7 +117,7 @@ describe("Booker", () => {
     }).asBooker();
 
     // Act
-    booker.changeVisibility(bookingSession, "PRIVATE", before);
+    booker.changeVisibility(bookingSession, "PRIVATE", visibilityChangeTime);
 
     // Assert
     expect(bookingSession.visibility).toBe("PRIVATE");
@@ -118,6 +125,7 @@ describe("Booker", () => {
 
   test("changeVisibility_WhenSessionIsFull_RejectsWithoutChangingState", () => {
     // Arrange
+    const visibilityChangeTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
@@ -125,13 +133,18 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() =>
-      readyBooker().changeVisibility(bookingSession, "PRIVATE", before),
+      readyBooker().changeVisibility(
+        bookingSession,
+        "PRIVATE",
+        visibilityChangeTime,
+      ),
     ).toThrow(expect.objectContaining({ code: "CAPACITY_EXCEEDED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
   test("removeParticipant_WhenOwnerIsInactive_StillRemovesAndRefunds", () => {
     // Arrange
+    const removalTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const booker = createTestUser({
       userId: "booker",
@@ -139,7 +152,11 @@ describe("Booker", () => {
     }).asBooker();
 
     // Act
-    const result = booker.removeParticipant(bookingSession, "p-alice", before);
+    const result = booker.removeParticipant(
+      bookingSession,
+      "p-alice",
+      removalTime,
+    );
 
     // Assert
     expect(
@@ -154,25 +171,31 @@ describe("Booker", () => {
 
   test("removeParticipant_WhenActorIsNotBooker_RejectsWithoutChangingState", () => {
     // Arrange
+    const removalTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
     expect(() =>
-      readyBooker("other").removeParticipant(bookingSession, "p-alice", before),
+      readyBooker("other").removeParticipant(
+        bookingSession,
+        "p-alice",
+        removalTime,
+      ),
     ).toThrow(expect.objectContaining({ code: "UNAUTHORIZED" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
   test("removeParticipant_WhenBookerRemovesParticipant_RefundsHold", () => {
     // Arrange
+    const removalTime = hoursBeforeSessionStart(48);
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
 
     // Act
     const removal = readyBooker().removeParticipant(
       bookingSession,
       "p-alice",
-      before,
+      removalTime,
     );
 
     // Assert
@@ -197,7 +220,7 @@ describe("Booker", () => {
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
-    expect(() => readyBooker().cancel(bookingSession, start)).toThrow(
+    expect(() => readyBooker().cancel(bookingSession, sessionStartsAt)).toThrow(
       expect.objectContaining({ code: "SESSION_STARTED" }),
     );
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -205,16 +228,21 @@ describe("Booker", () => {
 
   test("cancel_WhenRosterIncludesActiveWithdrawnAndWaitingParticipants_RefundsHoldsAndClearsQueue", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const cancellationTime = hoursBeforeSessionStart(1);
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
       waitlistedUserIds: ["cara"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
 
     // Act
-    const cancellation = readyBooker().cancel(bookingSession, at(1));
+    const cancellation = readyBooker().cancel(bookingSession, cancellationTime);
 
     // Assert
     expect(cancellation.instructions).toHaveLength(2);

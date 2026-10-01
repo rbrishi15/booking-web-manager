@@ -1,8 +1,7 @@
 # Booking sessions
 
-People share the cost of a venue booked by one person. The supplied participant
-state diagram is the product-owner-confirmed reference; waitlist policies are
-proposals in the [product discussion](docs/discussions/waitlist-and-replacement-options.md).
+People share the cost of a venue booked by one person. Participants can take a
+place, wait for an opening, or arrange a named replacement when they leave.
 
 ## Language
 
@@ -44,32 +43,34 @@ the session starts, that share is forfeited.
 **Payout attempt**:
 One attempt to pay the booker from a session's held funds.
 
-## Discussion vocabulary — policies not approved
-
-These terms describe ideas under review, not settled product behavior.
-
 **Joining waitlist**:
-A collection of people interested in taking a place if one becomes available.
+The ordered queue of people interested in taking an ordinary place when one
+becomes available.
 
 **Awaiting refund group**:
 Withdrawn participants whose held shares have not yet been refunded or
 forfeited, distinct from people waiting to join.
 
 **Personal replacement**:
-A proposed entrant intended to take a particular withdrawing participant's
-place.
+The one named person invited to take a particular withdrawing participant's
+one place.
+
+**Reserved place**:
+A withdrawing participant's place held for their named personal replacement,
+unavailable to ordinary admission while that invitation remains active.
+
+**Departure choice**:
+The participant's fixed choice at withdrawal between one named personal
+replacement and opening their place to the groups/public waitlist.
 
 **Successful replacement**:
 A replacement who has successfully joined with their full booking share held.
-An agreement alone does not meet this proposed definition.
+An agreement alone is not a successful replacement.
 
-**Replacement link**:
-A proposed invitation link shared to find a replacement for a participant.
+**Replacement invitation**:
+A direct invitation addressed to one named person for one reserved place,
+requiring that person's explicit acceptance.
 
 **Open-slot replacement**:
-A proposed entrant who fills an ordinary opening without targeting a specific
+A participant who fills an ordinary opening without targeting a specific
 withdrawing participant.
-
-**Offering a personal place to the waitlist**:
-A proposed action for making a place available for ordinary admission after
-trying to find a personal replacement.
