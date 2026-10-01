@@ -35,7 +35,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Inter (loaded in `app/layout.tsx`) with Tailwind's size classes. Use these combinations rather than " +
+          "Locally bundled Inter (shared by the app and Storybook through `app/fonts.css`) with Tailwind's size classes. Use these combinations rather than " +
           "custom font sizes. Change the sample text in Controls to check long words and wrapping.",
       },
     },
