@@ -10,7 +10,23 @@ export interface GroupQueries {
   countUnsettledLinkedSessions(groupId: UUID): Promise<number>;
 }
 
+/**
+ * Someone else saved the group after this request read it, so saving would overwrite their change.
+ * Each store reports its own conflict signal (Supabase: SQLSTATE 40001) as this error.
+ */
+export class GroupChangedError extends Error {
+  constructor() {
+    super("The group was changed by someone else. Refresh the page and try again.");
+    this.name = "GroupChangedError";
+  }
+}
+
+
 export interface ManageGroupDependencies {
+  /**
+   * `groups` and `queries` must come from the same store: a group loaded through either one
+   * is saved through `groups`, and the store remembers which version it loaded.
+   */
   readonly groups: Repository<RegularGroup>;
   readonly queries: GroupQueries;
   readonly newId: () => UUID;
@@ -45,9 +61,12 @@ export class ManageGroup {
     return group;
   }
 
-  /** The groups shown on the user's Groups page. */
-  async listMine(userId: UUID): Promise<readonly RegularGroup[]> {
-    return this.#deps.queries.listForMember(userId);
+  /**
+   * The groups shown on the signed-in user's Groups page. There is no user to choose:
+   * it lists only groups the actor belongs to, and the actor comes from the session.
+   */
+  async listMine(command: { readonly actorId: UUID }): Promise<readonly RegularGroup[]> {
+    return this.#deps.queries.listForMember(command.actorId);
   }
 
   /** One group's details, for its members only. Non-members get NOT_FOUND so they learn nothing. */

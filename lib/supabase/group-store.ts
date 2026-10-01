@@ -1,12 +1,11 @@
-import { randomBytes, randomUUID } from "node:crypto";
 import { DomainError, GroupMembership, RegularGroup, type GroupStatus, type UUID } from "@/domain";
-import { ManageGroup, type GroupQueries } from "@/use-cases/groups/manage-group";
+import { GroupChangedError, type GroupQueries } from "@/use-cases/groups/manage-group";
 import type { Repository } from "@/use-cases/shared/contracts";
 import { createAdminClient } from "./admin";
 
-// Tables come from Neoh's migration 0005 (regular_groups, group_memberships); writes go
-// through save_regular_group from migration 0006. 0005 blocks browser access to them, so this
-// file reads and writes on the server with the service role client. SERVER ONLY.
+// Tables and save_regular_group come from migration 0005_regular_groups, which blocks
+// browser access to them, so this file reads and writes on the server with the service
+// role client. SERVER ONLY. ManageGroup is assembled in use-case-config/groups.ts.
 const GROUP_COLUMNS =
   "group_id, owner_id, name, invitation_token, invitation_active, status, version, group_memberships(user_id, joined_at)";
 
@@ -49,13 +48,6 @@ const GROUP_CHANGED = "40001";
 /** save_regular_group refused to archive: a linked session is still unsettled (0006's own SQLSTATE). */
 const UNSETTLED_LINKED_SESSIONS = "GRP01";
 
-/** Someone else changed the group after this request read it; saving would overwrite their change. */
-export class GroupChangedError extends Error {
-  constructor() {
-    super("The group was changed by someone else. Refresh the page and try again.");
-    this.name = "GroupChangedError";
-  }
-}
 
 /**
  * Supabase-backed storage for RegularGroup (the Repository contract) plus the extra group lookups.
@@ -150,15 +142,3 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
   return { groups, queries };
 }
 
-/** A ready-to-use ManageGroup for server actions and pages. */
-export function createManageGroup(): ManageGroup {
-  const { groups, queries } = supabaseGroupStore();
-  return new ManageGroup({
-    groups,
-    queries,
-    newId: () => randomUUID(),
-    // 32 random bytes → a 43-character link code that nobody can guess.
-    newInvitationToken: () => randomBytes(32).toString("base64url"),
-    now: () => new Date(),
-  });
-}

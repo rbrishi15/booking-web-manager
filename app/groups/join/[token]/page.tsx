@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { PageHeader } from "@/components/ui/page-header";
-import { createManageGroup } from "@/lib/supabase/group-store";
+import { createManageGroup } from "@/use-case-config/groups";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { JoinGroupButton } from "../../_components/group-controls";
 import { groupErrorMessage } from "../../messages";

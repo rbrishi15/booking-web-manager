@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { createManageGroup } from "@/lib/supabase/group-store";
+import { createManageGroup } from "@/use-case-config/groups";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { CreateGroupForm } from "./_components/group-controls";
 
@@ -13,8 +13,7 @@ export default async function GroupsPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login");
 
-  const groups = await createManageGroup().listMine(user.id);
-
+    const groups = await createManageGroup().listMine({ actorId: user.id });
   return (
     <>
       <PageHeader breadcrumb="Groups" title="My groups" />

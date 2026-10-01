@@ -1,5 +1,5 @@
 import { DomainError } from "@/domain";
-import { GroupChangedError } from "@/lib/supabase/group-store";
+import { GroupChangedError } from "@/use-cases/groups/manage-group";
 
 /** Turns a rule the domain refused into a sentence a player understands. */
 export function groupErrorMessage(error: unknown): string {

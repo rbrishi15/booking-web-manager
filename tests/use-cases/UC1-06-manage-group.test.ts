@@ -59,7 +59,7 @@ describe("UC1-06 Manage Group", () => {
       await manageGroup.create({ ownerId: STRANGER, name: "Someone else's group" });
 
       // Act
-      const mine = await manageGroup.listMine(OWNER);
+      const mine = await manageGroup.listMine({ actorId: OWNER });
 
       // Assert
       expect(mine.map((group) => group.name)).toEqual(["Weekend Tennis Crew"]);

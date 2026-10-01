@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DomainError, RegularGroup } from "@/domain";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { GroupChangedError, supabaseGroupStore } from "@/lib/supabase/group-store";
+import { supabaseGroupStore } from "@/lib/supabase/group-store";
+import { GroupChangedError } from "@/use-cases/groups/manage-group";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 

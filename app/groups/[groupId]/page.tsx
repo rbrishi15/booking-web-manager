@@ -5,7 +5,7 @@ import { DomainError } from "@/domain";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { displayNames } from "@/lib/supabase/profile-names";
-import { createManageGroup } from "@/lib/supabase/group-store";
+import { createManageGroup } from "@/use-case-config/groups";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import {
   ArchiveGroupButton,
