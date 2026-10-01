@@ -1,15 +1,16 @@
+import { InfoNote } from "@/components/ui/info-note";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AuthFrame, AuthHeading, AuthPanel } from "../_components/auth-frame";
 import { LoginForm } from "./login-form";
 
 interface LoginPageProps {
   /** e.g. /login?next=/profile after being sent here from a locked page (Step 20). */
-  readonly searchParams: Promise<{ next?: string | string[] }>;
+  readonly searchParams: Promise<{ next?: string | string[]; deleted?: string | string[] }>;
 }
 
 /** UC1-02 Authenticate User (mockup 03). */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { next } = await searchParams;
+  const { next, deleted } = await searchParams;
 
   return (
     <AuthFrame
@@ -39,6 +40,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         title="Log in"
         description="Use the email address linked to your wallet."
       />
+      {deleted === "1" && (
+        <InfoNote icon className="mb-5">
+          <span role="status">Your account has been deleted.</span>
+        </InfoNote>
+      )}
       <LoginForm next={typeof next === "string" ? next : undefined} />
     </AuthFrame>
   );
