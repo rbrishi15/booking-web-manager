@@ -242,7 +242,8 @@ npm run dev
 
 The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
 `/storybook`; these resources work without Supabase or database configuration.
-Signed-in users see Home at `/` and can open the dedicated `/discover` search.
+Signed-in users see their upcoming bookings at `/`, or Singapore weather when
+there are none. Home has no filters; the Search button opens `/discover`.
 
 ### Storybook on the same site
 

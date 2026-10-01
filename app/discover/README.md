@@ -4,12 +4,13 @@
 
 ## UC2-01 Discover Sessions
 
-Authenticated `/` is Home, retaining the large photo cards and responsive Booking shell.
-Anonymous `/` shows the public landing with authentication and developer-resource links.
-`/discover` is a dedicated search page. Both screens list upcoming, public, open sessions,
-including full sessions, using the region already stored by session creation.
-Cards show the venue, sport, region, Singapore timing, total capacity and the
-integer-cent participant share formatted in SGD. Cards have no join/detail action.
+Authenticated `/` is a personal bookings dashboard with compact date cards, or a
+Singapore weather forecast when no upcoming bookings exist. It has no filters or
+public discovery feed. See [`app/home/README.md`](../home/README.md).
+`/discover` is the dedicated public-session search page. It lists upcoming, public,
+open sessions, including full sessions, using the stored region. Cards show venue,
+sport, region, Singapore timing, total capacity and the participant share in SGD.
+Cards have no join/detail action.
 
 OneMap venue search, geocoding and postal-code-to-region derivation remain separate
 work. The OneMap-specific acceptance test remains TODO; stored-region filtering
@@ -79,9 +80,9 @@ Below 768px the filter form is a disclosure with one presentation state:
 `collapsed | expanded`. A committed query starts collapsed unless invalid;
 invalid submission expands it. The form stays mounted when hidden, preserving
 unsubmitted edits, while its summary describes only applied URL filters.
-Home desktop filters stay visible; Discover advanced filters are disclosed on both sizes. Cards use decorative local sport photos,
-compact Singapore timing (including the end date for overnight sessions), and
-the same informational session data. Photo sources and credits are in
+Discover advanced filters are disclosed on both sizes. Compact cards use decorative
+local sport photos, Singapore timing (including the end date for overnight sessions),
+and informational session data. Photo sources and credits are in
 [`public/images/sports/README.md`](../../public/images/sports/README.md).
 
 The shared mobile shell exposes Home, Sessions, Wallet and Settings, plus a Search
@@ -102,21 +103,17 @@ active destination shows a visible label; all four retain accessible names.
 Groups are part of the Sessions area and remain reachable through the account
 sheet, alongside settings and logout. Sessions and Wallet retain their existing
 route destinations; their pages are not implemented by this visual redesign.
-Personal upcoming bookings, joining, session details and the create-session page
-also remain outside this work.
+Joining, session details and the create-session page remain separate work.
 
 Feature-local Storybook stories render the production synchronous view with
 deterministic fixtures, without Supabase or PostgreSQL. They cover results,
 empty/loading/invalid/error states, pagination, long content and the 390px view.
 Interaction tests cover filters, correction, Clear, Retry and pending controls.
-The Home/Mobile page stories render the complete shared shell with the actual form
-controller, including disclosure/draft transitions, all result states, long
-content, overnight timing and dark mode. Static assets are shared with Next.js.
-The Home/Desktop page stories cover the same outcomes in the full Booking. layout:
-an inset sidebar, faded court background, prominent introduction and two-column
-photo cards from 1024px (one column on smaller screens). Discover has separate route loading/error fallbacks and focused search stories.
-Landing stories require no authentication or database. Card prices show the SGD share
-per person; total capacity is still distinct from available places.
+The Discover/Mobile search page stories render the complete focused shell with the
+actual controller, including disclosure/draft transitions, all states, long content,
+overnight timing and dark mode. Desktop search stories include the sidebar. Home's
+separate stories cover the personal booking cards and empty weather state. Static
+assets are shared with Next.js. Landing stories require no authentication or database.
 Run `npm run storybook`, `npm run build-storybook` and `npm run test:storybook`.
 The standard app build and dev startup also stage a public static preview at
 `/storybook` (redirecting to `/storybook/index.html` so relative assets resolve).
