@@ -1,45 +1,118 @@
-# Default owner for anything not covered by a more specific rule below
-# (root config, CI, docs, supabase/*, shared app files) — Rishi, CI owner.
-* @rbrishi15
+# Review routing only: this file grants no permission to edit another author's PR.
+# The last matching rule applies. A list of owners does not require each to approve.
+# See docs/contributing-workflow.md for independent review and merge coordination.
 
-# Domain layer + payments integration — Rishi (rbrishi15)
-# Sole integration point with Stripe; see CLAUDE.md rule #3.
+# Rishi: fallback, domain, shared infrastructure, CI and repository governance.
+* @rbrishi15
+/.github/ @rbrishi15
+/CLAUDE.md @rbrishi15
+/README.md @rbrishi15
+/docs/contributing-workflow.md @rbrishi15
 /domain/ @rbrishi15
+/tests/domain/ @rbrishi15
+/use-cases/shared/ @rbrishi15
+/lib/database/ @rbrishi15
+/lib/system.ts @rbrishi15
+/tests/lib/database/ @rbrishi15
+/tests/integration/postgres-pool.test.ts @rbrishi15
+/tests/support/ @rbrishi15
+/scripts/local-supabase-env.mjs @rbrishi15
 /app/wallet/ @rbrishi15
 /app/payouts/ @rbrishi15
 /app/api/webhooks/ @rbrishi15
 
-# Wallet ledger and financial integrity — Harrison (harr008)
+# Harrison: wallet ledger, financial integrity, its tests and existing schema.
 /lib/money/ @harr008
+/tests/lib/money/ @harr008
+/supabase/migrations/0001_wallet_ledger.sql @harr008
+/supabase/migrations/0002_idempotency_and_reconciliation.sql @harr008
+/supabase/migrations/0003_ledger_rls.sql @harr008
 
-# Commitment, waitlist and settlement — Yajie (Wyjessie)
+# Yajie: commitment, waitlist, withdrawal, attendance and settlement workflows.
 /app/commit/ @Wyjessie
+/use-cases/sessions/Commit*.ts @Wyjessie
+/use-cases/sessions/Withdraw*.ts @Wyjessie
+/use-cases/sessions/*Waitlist*.ts @Wyjessie
+/use-cases/sessions/*Attendance*.ts @Wyjessie
+/use-cases/sessions/*Settlement*.ts @Wyjessie
+/use-cases/sessions/*commitment*.ts @Wyjessie
+/use-cases/sessions/*withdrawal*.ts @Wyjessie
+/use-cases/sessions/*waitlist*.ts @Wyjessie
+/use-cases/sessions/*attendance*.ts @Wyjessie
+/use-cases/sessions/*settlement*.ts @Wyjessie
 
-# Session and venue domain — Neoh (liang799)
+# Neoh: session creation/management/discovery, adapters, wiring and feature tests.
+# Use-case rules are file-specific: this directory also hosts Yajie's workflows.
 /app/sessions/ @liang799
 /app/discover/ @liang799
+/app/api/sessions/ @liang799
+/app/api/openapi/ @liang799
+/app/api-docs/ @liang799
+/use-cases/sessions/CreateSession.ts @liang799
+/use-cases/sessions/CreateSessions.ts @liang799
+/use-cases/sessions/DiscoverSessions.ts @liang799
+/use-cases/sessions/ManageSession.ts @liang799
+/use-cases/sessions/ToggleSessionVisibility.ts @liang799
+/use-cases/sessions/RemoveParticipant.ts @liang799
+/use-cases/sessions/CancelSession.ts @liang799
+/use-cases/sessions/session-creation-transaction.ts @liang799
+/use-cases/sessions/README.md @liang799
+/use-case-config/sessions.ts @liang799
+/lib/sessions/ @liang799
+/tests/app/sessions/ @liang799
+/tests/lib/sessions/ @liang799
+/tests/integration/sessions-persistence.test.ts @liang799
+/tests/e2e/session-api.spec.ts @liang799
+/tests/e2e/session-api-unavailable.spec.ts @liang799
+/tests/e2e/api-documentation.spec.ts @liang799
+/tests/use-cases/support/create-session-unit-of-work.ts @liang799
+/scripts/prepare-session-account.ts @liang799
+/supabase/migrations/0005_session_creation.sql @liang799
 
-# Identity, groups and frontend platform — Joseph (Jolingoes)
-# Delegated review: Joseph's approval alone is sufficient here (no Rishi
-# co-sign required) — see CLAUDE.md "Directory ownership".
+# Joseph: identity, shared authentication adapters, groups and frontend platform.
+# The specific auth test overrides the session-test directory rule above.
 /app/(auth)/ @Jolingoes
 /app/profile/ @Jolingoes
 /app/groups/ @Jolingoes
 /components/ui/ @Jolingoes
+/lib/supabase/ @Jolingoes
+/middleware.ts @Jolingoes
+/tests/app/auth/ @Jolingoes
+/tests/app/profile/ @Jolingoes
+/tests/app/groups/ @Jolingoes
+/tests/lib/supabase/ @Jolingoes
+/tests/app/sessions/bearer-auth.test.ts @Jolingoes
+/supabase/migrations/0004_profiles.sql @Jolingoes
 
-# Use case test stubs (tests/use-cases) — routed to the same owner as the
-# feature directory that implements the use case, not the /tests default.
-tests/use-cases/UC1-01-*.test.ts @Jolingoes
-tests/use-cases/UC1-02-*.test.ts @Jolingoes
-tests/use-cases/UC1-03-*.test.ts @Jolingoes
-tests/use-cases/UC1-04-*.test.ts @Jolingoes
-tests/use-cases/UC1-06-*.test.ts @Jolingoes
-tests/use-cases/UC1-07-*.test.ts @rbrishi15
-tests/use-cases/UC1-08-*.test.ts @rbrishi15
-tests/use-cases/UC2-01-*.test.ts @liang799
-tests/use-cases/UC2-02-*.test.ts @liang799
-tests/use-cases/UC2-03-*.test.ts @liang799
-tests/use-cases/UC2-03c-*.test.ts @liang799
-tests/use-cases/UC2-04-*.test.ts @Wyjessie
-tests/use-cases/UC2-05-*.test.ts @Wyjessie
-tests/use-cases/UC2-06-*.test.ts @Wyjessie
+# Capability-specific adapters/tests override the broad session defaults.
+/lib/sessions/*waitlist*.ts @Wyjessie
+/lib/sessions/*withdraw*.ts @Wyjessie
+/lib/sessions/*attendance*.ts @Wyjessie
+/lib/sessions/*commitment*.ts @Wyjessie
+/lib/sessions/*settlement*.ts @Wyjessie
+/tests/app/sessions/*waitlist*.test.ts @Wyjessie
+/tests/app/sessions/*withdraw*.test.ts @Wyjessie
+/tests/app/sessions/*attendance*.test.ts @Wyjessie
+/tests/app/sessions/*commitment*.test.ts @Wyjessie
+/tests/app/sessions/*settlement*.test.ts @Wyjessie
+/tests/lib/sessions/*waitlist*.test.ts @Wyjessie
+/tests/lib/sessions/*withdraw*.test.ts @Wyjessie
+/tests/lib/sessions/*attendance*.test.ts @Wyjessie
+/tests/lib/sessions/*commitment*.test.ts @Wyjessie
+/tests/lib/sessions/*settlement*.test.ts @Wyjessie
+
+# Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
+/tests/use-cases/UC1-01-*.test.ts @Jolingoes
+/tests/use-cases/UC1-02-*.test.ts @Jolingoes
+/tests/use-cases/UC1-03-*.test.ts @Jolingoes
+/tests/use-cases/UC1-04-*.test.ts @Jolingoes
+/tests/use-cases/UC1-06-*.test.ts @Jolingoes
+/tests/use-cases/UC1-07-*.test.ts @rbrishi15
+/tests/use-cases/UC1-08-*.test.ts @rbrishi15
+/tests/use-cases/UC2-01-*.test.ts @liang799
+/tests/use-cases/UC2-02-*.test.ts @liang799
+/tests/use-cases/UC2-03-*.test.ts @liang799
+/tests/use-cases/UC2-03c-*.test.ts @liang799
+/tests/use-cases/UC2-04-*.test.ts @Wyjessie
+/tests/use-cases/UC2-05-*.test.ts @Wyjessie
+/tests/use-cases/UC2-06-*.test.ts @Wyjessie

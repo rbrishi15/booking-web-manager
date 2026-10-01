@@ -81,10 +81,14 @@ that folder's README for the convention.
 
 ## Contributing
 
-- `main` is protected: no direct pushes, no force pushes, PRs required.
-- A PR touching another member's directory needs that member's approval in
-  addition to Rishi's (enforced via [CODEOWNERS](./.github/CODEOWNERS)),
-  except `/app/(auth)` and `/components/ui`, where Joseph's approval alone is
-  sufficient.
-- Migrations are a single numbered sequence — merge a migration PR before
-  opening dependent feature work.
+Follow the [contribution workflow](./docs/contributing-workflow.md) when opening
+or updating a PR, reviewing someone else's work, or waiting on a dependency.
+The author owns branch updates and may explicitly delegate them. Area owners
+review; Rishi assigns an independent peer when the author owns the area,
+coordinates dependencies and migrations, and merges reviewed work.
+
+[CODEOWNERS](./.github/CODEOWNERS) routes review requests. It grants no editing
+permission and does not enforce an additional Rishi approval. The workflow
+includes the administrator checklist for required reviews, CI and protection
+against direct or force pushes to `main`; actual enforcement must be verified
+in GitHub settings.
