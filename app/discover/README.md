@@ -4,7 +4,9 @@
 
 ## UC2-01 Discover Sessions
 
-`/discover` is the signed-in home page. It lists upcoming, public, open sessions,
+Authenticated `/` is Home, retaining the large photo cards and responsive Booking shell.
+Anonymous `/` shows the public landing with authentication and developer-resource links.
+`/discover` is a dedicated search page. Both screens list upcoming, public, open sessions,
 including full sessions, using the region already stored by session creation.
 Cards show the venue, sport, region, Singapore timing, total capacity and the
 integer-cent participant share formatted in SGD. Cards have no join/detail action.
@@ -21,10 +23,13 @@ directly on the server. Discovery uses the existing session server settings and
 database schema through migration 0006; it requires no new migration or browser
 table grants. Results are not cached.
 
-Optional query parameters are `sport`, `region`, `date`, `timeFrom`, `timeTo` and
+Optional query parameters are `q`, `sport`, `region`, `date`, `timeFrom`, `timeTo` and
 `cursor`. Sport and region use the existing registration picker vocabulary.
 Blank filters mean no restriction; repeated known parameters are rejected and
-unknown parameters are ignored.
+unknown parameters are ignored. `q` is trimmed, limited to 100 characters, and matches
+a case-insensitive literal substring of sport or venue name. SQL wildcard characters
+are treated literally. Search combines with all other filters, preserving the same
+ordering and pagination. No full aggregate or participant data is loaded.
 
 Dates use `YYYY-MM-DD`; times use `HH:mm`. Date and time refer to
 `Asia/Singapore`. A date alone selects that calendar day. Time bounds require a
@@ -74,12 +79,25 @@ Below 768px the filter form is a disclosure with one presentation state:
 `collapsed | expanded`. A committed query starts collapsed unless invalid;
 invalid submission expands it. The form stays mounted when hidden, preserving
 unsubmitted edits, while its summary describes only applied URL filters.
-Desktop filters stay visible. Cards use decorative local sport photos,
+Home desktop filters stay visible; Discover advanced filters are disclosed on both sizes. Cards use decorative local sport photos,
 compact Singapore timing (including the end date for overnight sessions), and
 the same informational session data. Photo sources and credits are in
 [`public/images/sports/README.md`](../../public/images/sports/README.md).
 
-The shared mobile shell exposes Home, Sessions, Wallet and Settings. Only the
+The shared mobile shell exposes Home, Sessions, Wallet and Settings, plus a Search
+button alongside the account menu. Search opens the focused `/discover` view with
+a back arrow, tennis hero, mounted search/filter form, sport chips and compact cards.
+The desktop sidebar has separate Home and Discover destinations.
+
+A UI-only `returnTo` URL value records the originating page and its query. Apply,
+Clear and Next preserve it; it never reaches the API or reader. The back arrow
+replaces the current location with the validated destination, falling back to `/`
+for direct entry or invalid destinations. Browser Back/Forward still traverses
+filter changes. Search and sport-chip submissions include current form drafts,
+validate before navigating, and reset the cursor. Editing search does not open
+advanced filters.
+
+The shared mobile navigation keeps its existing active-state behavior. Only the
 active destination shows a visible label; all four retain accessible names.
 Groups are part of the Sessions area and remain reachable through the account
 sheet, alongside settings and logout. Sessions and Wallet retain their existing
@@ -91,15 +109,17 @@ Feature-local Storybook stories render the production synchronous view with
 deterministic fixtures, without Supabase or PostgreSQL. They cover results,
 empty/loading/invalid/error states, pagination, long content and the 390px view.
 Interaction tests cover filters, correction, Clear, Retry and pending controls.
-The Mobile page stories render the complete shared shell with the actual form
+The Home/Mobile page stories render the complete shared shell with the actual form
 controller, including disclosure/draft transitions, all result states, long
 content, overnight timing and dark mode. Static assets are shared with Next.js.
-The Desktop page stories cover the same outcomes in the full Booking. layout:
+The Home/Desktop page stories cover the same outcomes in the full Booking. layout:
 an inset sidebar, faded court background, prominent introduction and two-column
-photo cards from 1024px (one column on smaller screens). The shared route loading
-and error fallbacks retain the desktop identity. Card prices show the SGD share
+photo cards from 1024px (one column on smaller screens). Discover has separate route loading/error fallbacks and focused search stories.
+Landing stories require no authentication or database. Card prices show the SGD share
 per person; total capacity is still distinct from available places.
 Run `npm run storybook`, `npm run build-storybook` and `npm run test:storybook`.
+The standard app build and dev startup also stage a public static preview at
+`/storybook` (redirecting to `/storybook/index.html` so relative assets resolve).
 
 Unit tests cover query parsing, state transitions, the use-case boundary, API
 errors and OpenAPI. Database and signed-in browser tests use the existing
