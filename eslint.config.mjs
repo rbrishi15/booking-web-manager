@@ -13,6 +13,7 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "storybook-static/**",
+      "public/storybook/**",
     ],
   },
   eslint.configs.recommended,
