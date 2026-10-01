@@ -106,6 +106,9 @@ See the [integration requirements](../../use-case-config/README.md#authenticatio
 [Swagger UI](http://127.0.0.1:3000/api-docs) and `/api/openapi` publicly document
 the configured contract and missing-settings response. Swagger's Try it out
 sends a real request; configured creation requires a valid bearer token.
+The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
+The [shared OpenAPI guide](../openapi/README.md) explains how feature registrations
+are assembled and how to add operations to the reference.
 
 The [route tests](../../tests/app/sessions/create-session-route.test.ts) exercise
 creation, replay, validation, and failures with injected dependencies and the

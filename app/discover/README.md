@@ -92,6 +92,9 @@ the latter also depends on replacement reservations.
 Errors use `{ error: { code, message } }`. Swagger UI at `/api-docs` and the
 public `/api/openapi` document describe both GET discovery and POST creation,
 including examples and bearer-authenticated Try it out.
+Discovery registers its operation in [the feature OpenAPI module](./openapi.ts);
+see the [shared OpenAPI guide](../openapi/README.md) for composition and the steps
+to add another feature's operations.
 
 ## React state and Storybook
 
