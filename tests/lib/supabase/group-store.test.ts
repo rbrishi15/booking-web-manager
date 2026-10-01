@@ -143,19 +143,26 @@ describe("supabaseGroupStore (UC1-06)", () => {
     await expect(attempt).rejects.toMatchObject({ code: "ACTIVE_OBLIGATIONS" });
   });
 
-  test("counts the group's linked sessions that are not settled or cancelled", async () => {
+  test("counts the group's unsettled linked sessions through the database", async () => {
     // Arrange
-    const { queries } = fakeAdmin({ select: { count: 1, error: null } });
+    const { rpc } = fakeAdmin({ rpc: { data: 1, error: null } });
 
     // Act
     const count = await supabaseGroupStore().queries.countUnsettledLinkedSessions(GROUP_ID);
 
     // Assert
     expect(count).toBe(1);
-    expect(queries[0]?.table).toBe("sessions");
-    expect(queries[0]?.calls.slice(1)).toEqual([
-      ["eq", "invited_group_id", GROUP_ID],
-      ["not", "status", "in", "(SETTLED,CANCELLED)"],
-    ]);
+    expect(rpc).toHaveBeenCalledWith("count_unsettled_linked_sessions", { p_group_id: GROUP_ID });
+  });
+
+  test("passes on a database error while counting linked sessions", async () => {
+    // Arrange
+    fakeAdmin({ rpc: { data: null, error: { code: "57014", message: "canceling statement" } } });
+
+    // Act
+    const attempt = supabaseGroupStore().queries.countUnsettledLinkedSessions(GROUP_ID);
+
+    // Assert
+    await expect(attempt).rejects.toMatchObject({ code: "57014" });
   });
 });

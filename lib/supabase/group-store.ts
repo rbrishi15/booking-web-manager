@@ -140,13 +140,10 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
     // Sessions created with this group invited (sessions.invited_group_id, Neoh's 0005) that are not
     // settled or cancelled yet. Any error stops the archive (fail closed).
     async countUnsettledLinkedSessions(groupId) {
-      const { count, error } = await admin
-        .from("sessions")
-        .select("session_id", { count: "exact", head: true })
-        .eq("invited_group_id", groupId)
-        .not("status", "in", "(SETTLED,CANCELLED)");
+      // A database function (0005), so it also answers 0 before the sessions table exists.
+      const { data, error } = await admin.rpc("count_unsettled_linked_sessions", { p_group_id: groupId });
       if (error !== null) throw error;
-      return count ?? 0;
+      return data ?? 0;
     },
   };
 

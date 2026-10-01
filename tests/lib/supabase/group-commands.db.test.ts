@@ -4,12 +4,16 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 
 /**
- * UC1-06 save_regular_group (migration 0006) against real Postgres: a group and its
+ * UC1-06 save_regular_group (migration 0005) against real Postgres: a group and its
  * membership changes are saved in one transaction, and a save based on an older read
  * of the group is rejected instead of overwriting newer state.
  *
+ * The sessions table belongs to the session work and is not in 0005, so the archive
+ * tests create a stand-in with only the columns 0005 relies on, plus the trigger the
+ * sessions migration is expected to add (see section 4 of 0005).
+ *
  * Skipped unless `GROUPS_TEST_DATABASE_URL` points at a throwaway database (CI has no
- * Postgres), and until Neoh's 0005 migration (#24) is in this branch. It drops and
+ * Postgres). It drops and
  * recreates the `public` schema, so it only runs against a loopback host and a
  * database with "test" in its name. To run it:
  *
@@ -27,8 +31,7 @@ const MIGRATIONS = [
   "0002_idempotency_and_reconciliation.sql",
   "0003_ledger_rls.sql",
   "0004_profiles.sql",
-  "0005_session_creation.sql",
-  "0006_group_commands.sql",
+  "0005_regular_groups.sql",
 ];
 const migrationPath = (file: string) => path.join(process.cwd(), "supabase", "migrations", file);
 const HAS_MIGRATIONS = MIGRATIONS.every((file) => existsSync(migrationPath(file)));
@@ -36,7 +39,6 @@ const HAS_MIGRATIONS = MIGRATIONS.every((file) => existsSync(migrationPath(file)
 const OWNER = "00000000-0000-4000-8000-00000000000a";
 const JOINER = "00000000-0000-4000-8000-00000000000b";
 const NOT_A_USER = "00000000-0000-4000-8000-0000000000ff";
-const PLATFORM_HOLDING_ACCOUNT = "00000000-0000-4000-8000-000000000001";
 
 /** Refuses anything but a local database named for testing, because this suite drops the public schema. */
 function requireDisposableDatabase(url: string): string {
@@ -191,8 +193,36 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
     expect((await groupState(groupId)).members).toEqual([OWNER]);
   });
 
+  test("archives a group before the sessions table exists", async () => {
+    // Arrange
+    await client.query("drop table if exists sessions");
+    await save({ groupId, expectedVersion: null, added: [OWNER] });
+
+    // Act
+    const version = await save({ groupId, expectedVersion: 0, status: "ARCHIVED" });
+
+    // Assert
+    expect(version).toBe(1);
+    expect((await groupState(groupId)).group?.status).toBe("ARCHIVED");
+  });
+
+  test("archives a group whose linked sessions are all settled or cancelled", async () => {
+    // Arrange
+    await createSessionsTable(client);
+    await save({ groupId, expectedVersion: null, added: [OWNER] });
+    await insertLinkedSession(client, groupId, "SETTLED");
+    await insertLinkedSession(client, groupId, "CANCELLED");
+
+    // Act
+    await save({ groupId, expectedVersion: 0, status: "ARCHIVED" });
+
+    // Assert
+    expect((await groupState(groupId)).group?.status).toBe("ARCHIVED");
+  });
+
   test("refuses to archive a group with an unsettled linked session", async () => {
     // Arrange: an OPEN session invited from this group.
+    await createSessionsTable(client);
     await save({ groupId, expectedVersion: null, added: [OWNER] });
     await insertLinkedSession(client, groupId);
 
@@ -203,6 +233,7 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
 
   test("refuses to archive while a linked session is being created at the same moment", async () => {
     // Arrange: a second connection has inserted a session invited from this group but not committed yet.
+    await createSessionsTable(client);
     await save({ groupId, expectedVersion: null, added: [OWNER] });
     const creator = await connect();
     try {
@@ -227,13 +258,24 @@ describe.skipIf(!DATABASE_URL || !HAS_MIGRATIONS)("UC1-06 save_regular_group aga
   });
 });
 
-/** An OPEN session invited from the group, as #24's session creation stores it. */
-async function insertLinkedSession(connection: PgClient, invitedGroupId: string): Promise<void> {
-  await connection.query(
-    `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at, total_cost_cents,
-       total_slots, minimum_headcount, booking_share_cents, room_token, holding_account_id, invited_group_id)
-     values (gen_random_uuid(), $1, 'Court 1', 'West', 'Tennis', now() + interval '2 days',
-       now() + interval '2 days 2 hours', 1000, 4, 2, 250, gen_random_uuid()::text, $2, $3)`,
-    [OWNER, PLATFORM_HOLDING_ACCOUNT, invitedGroupId],
-  );
+/**
+ * A stand-in for the session work's table: only the columns 0005 reads, and the trigger
+ * its migration must add so a linked session and an archive can't overlap.
+ */
+async function createSessionsTable(connection: PgClient): Promise<void> {
+  await connection.query(`
+    create table if not exists sessions (
+      session_id uuid primary key default gen_random_uuid(),
+      invited_group_id uuid,
+      status text not null
+    );
+    create or replace trigger sessions_lock_invited_group
+      before insert or update of invited_group_id on sessions
+      for each row execute function public.lock_invited_group();
+  `);
+}
+
+/** A session invited from the group, OPEN unless a status is given. */
+async function insertLinkedSession(connection: PgClient, invitedGroupId: string, status = "OPEN"): Promise<void> {
+  await connection.query("insert into sessions (invited_group_id, status) values ($1, $2)", [invitedGroupId, status]);
 }
