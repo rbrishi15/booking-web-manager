@@ -2,6 +2,7 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import { GET } from "@/app/api/openapi/route";
 import { sessionOpenApiDocument } from "@/app/sessions/openapi";
 import { createSessionRequestSchema, parseCreateSessionInput } from "@/app/sessions/create-session-input";
+import { parseDiscoveryQuery } from "@/app/discover/query";
 import { describe, expect, test } from "vitest";
 
 describe("public session OpenAPI contract", () => {
@@ -84,7 +85,7 @@ describe("public session OpenAPI contract", () => {
     const operation = sessionOpenApiDocument.paths["/api/sessions"]?.get;
     expect(operation?.security).toEqual([{ bearerAuth: [] }]);
     expect(operation?.parameters?.map((parameter) => "name" in parameter ? parameter.name : undefined)).toEqual([
-      "sport", "region", "date", "timeFrom", "timeTo", "cursor",
+      "q", "sport", "region", "date", "timeFrom", "timeTo", "cursor",
     ]);
     expect(Object.keys(operation?.responses ?? {})).toEqual([
       "200", "400", "401", "403", "404", "500", "503",
@@ -92,6 +93,12 @@ describe("public session OpenAPI contract", () => {
     expect(operation?.description).toContain("Asia/Singapore");
     expect(operation?.description).toContain("including full sessions");
     expect(operation?.description).toContain("OneMap resolution is separate work");
+    expect(operation?.description).toContain("case-insensitive literal substring");
+    const query = operation?.parameters?.find((parameter) => "name" in parameter && parameter.name === "q");
+    expect(query).toMatchObject({ in: "query", required: false, schema: { type: "string", maxLength: 100, example: "Jurong" } });
+    expect(parseDiscoveryQuery(new URLSearchParams({ q: "Jurong", sport: "Badminton", region: "West" }))).toMatchObject({
+      status: "valid", input: { q: "Jurong", sport: "Badminton", region: "West" },
+    });
     expect(operation?.responses["503"]).toMatchObject({
       content: {
         "application/json": {

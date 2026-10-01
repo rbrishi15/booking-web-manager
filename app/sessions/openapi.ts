@@ -135,6 +135,8 @@ registry.registerPath({
   description: [
     "Lists upcoming PUBLIC, OPEN sessions for an authenticated active account, including full sessions.",
     "Only sessions starting strictly after the server clock are returned; minimum reliability and current capacity do not hide listings.",
+    "Optional q matches a case-insensitive literal substring of the sport or venue name and combines with every other filter. Percent signs, underscores, and backslashes are literal text, not wildcards. Search text is trimmed, blank text is omitted, and the maximum is 100 characters after trimming.",
+    "For example, ?q=Jurong&sport=Badminton&region=West&date=2040-01-02 finds matching West-region badminton sessions starting on that Singapore day.",
     "Optional sport and region filters use the shared profile vocabulary. Regions are the stored booking regions; OneMap resolution is separate work.",
     "Date and time filters use Asia/Singapore (UTC+08:00) and match session starts in a lower-inclusive, upper-exclusive window.",
     "A date alone covers that whole Singapore calendar day. timeFrom or timeTo requires date; omitted bounds default to the start or end of that day.",
@@ -146,6 +148,10 @@ registry.registerPath({
   security: [{ bearerAuth: [] }],
   request: {
     query: z.object({
+      q: z.string().max(100).optional().openapi({
+        description: "Case-insensitive literal substring of sport or venue name (trimmed, at most 100 characters). Supply once; blanks are omitted. Combine with sport, region, date, and time filters; preserve it when paging.",
+        example: "Jurong",
+      }),
       sport: z.enum(SPORTS).optional(),
       region: z.enum(REGIONS).optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({
@@ -190,7 +196,7 @@ registry.registerPath({
         },
       },
     },
-    400: errorResponse("Malformed or duplicate filters, invalid calendar date/time range, or invalid cursor.", "INVALID_REQUEST", "Invalid session discovery query"),
+    400: errorResponse("Malformed or duplicate filters, search text longer than 100 characters after trimming, invalid calendar date/time range, or invalid cursor.", "INVALID_REQUEST", "Invalid session discovery query"),
     401: errorResponse("Missing, invalid, or expired bearer token.", "UNAUTHENTICATED", "Authentication is required"),
     403: errorResponse("The authenticated account is inactive.", "INACTIVE_ACCOUNT", "An inactive account cannot use the session API"),
     404: errorResponse("The authenticated user has no domain account.", "NOT_FOUND", "User was not found"),
