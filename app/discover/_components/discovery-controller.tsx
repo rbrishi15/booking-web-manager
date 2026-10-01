@@ -8,12 +8,10 @@ import { DiscoveryFormController } from "./discovery-form-controller";
 import type { DiscoveryOutcome } from "./discovery-state";
 
 /** The URL owns committed filters and paging; React tracks only navigation and draft validation. */
-export function DiscoveryController({ filters, outcome, queryKey, pathname = "/", presentation = "home", returnTo }: {
+export function DiscoveryController({ filters, outcome, queryKey, returnTo }: {
   readonly filters: DiscoveryFilters;
   readonly outcome: DiscoveryOutcome;
   readonly queryKey: string;
-  readonly pathname?: "/" | "/discover";
-  readonly presentation?: "home" | "search";
   readonly returnTo?: string;
 }) {
   const router = useRouter();
@@ -25,11 +23,10 @@ export function DiscoveryController({ filters, outcome, queryKey, pathname = "/"
       filters={filters}
       outcome={outcome}
       pending={pending}
-      presentation={presentation}
       returnTo={returnTo}
       onNavigate={(query) => startTransition(() => {
         if (query === queryKey) router.refresh();
-        else router.push(pathname === "/discover" ? discoveryHref(query, returnTo) : query === "" ? "/" : `/?${query}`);
+        else router.push(discoveryHref(query, returnTo));
       })}
       onRefresh={() => startTransition(() => router.refresh())}
     />

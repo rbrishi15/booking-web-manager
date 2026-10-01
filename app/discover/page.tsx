@@ -14,5 +14,5 @@ export default async function DiscoveryPage({ searchParams }: {
   const params = await searchParams;
   const screen = await loadDiscoveryScreen(user.id, params);
   const returnTo = discoveryReturnTo(params.returnTo);
-  return <DiscoveryController key={screen.queryKey} {...screen} pathname="/discover" presentation="search" returnTo={returnTo} />;
+  return <DiscoveryController key={screen.queryKey} {...screen} returnTo={returnTo} />;
 }

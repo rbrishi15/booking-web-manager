@@ -16,9 +16,18 @@ import { sportImage } from "@/lib/sessions/sport-image";
 import { cn } from "@/lib/utils";
 import type { DiscoveryPage } from "../contracts";
 import type { DiscoveryFieldErrors, DiscoveryFilters } from "../query";
-import type { DiscoveryViewProps } from "./discovery-view";
+import type { DiscoveryState, FilterPanelState } from "./discovery-state";
 
-export interface DiscoverySearchViewProps extends DiscoveryViewProps {
+export interface DiscoverySearchViewProps {
+  readonly filters: DiscoveryFilters;
+  readonly state: DiscoveryState;
+  readonly filterPanel: FilterPanelState;
+  readonly onToggleFilters: () => void;
+  readonly onApply: (formData: FormData) => void;
+  readonly onEdit: () => void;
+  readonly onClear: () => void;
+  readonly onNext: (cursor: string) => void;
+  readonly onRetry: () => void;
   /** Already validated by the navigation controller; this destination never reaches the API. */
   readonly returnTo?: string;
 }
@@ -163,7 +172,7 @@ function FilterField({ id, name, label, errors, children }: {
   return <div className="min-w-0 space-y-2"><Label htmlFor={`${id}-${name}`}>{label}</Label>{children}{errors[name] && <p id={`${id}-${name}-error`} className="text-sm text-destructive">{errors[name]?.join(" ")}</p>}</div>;
 }
 
-function SearchResults({ state, onNext, onRetry }: Pick<DiscoveryViewProps, "state" | "onNext" | "onRetry">) {
+function SearchResults({ state, onNext, onRetry }: Pick<DiscoverySearchViewProps, "state" | "onNext" | "onRetry">) {
   switch (state.status) {
     case "loading":
       return <LoadingSpinner label="Loading sessions…" />;

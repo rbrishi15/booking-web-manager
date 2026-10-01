@@ -70,14 +70,14 @@ describe("signed-in discovery server page", () => {
     expect(search).toHaveBeenCalledWith({ region: "West", startAtFrom: new Date("2035-05-12T10:00:00Z"), startAtBefore: new Date("2035-05-12T12:00:00Z") });
     expect(result.props.outcome).toEqual({ status: "ready", page: { items: [], nextCursor: null } });
     expect(authenticate).not.toHaveBeenCalled();
-    expect(result.props).toMatchObject({ pathname: "/discover", presentation: "search", returnTo: "/" });
+    expect(result.props).toMatchObject({ returnTo: "/" });
   });
 
   test("passes normalized search to the reader while keeping return navigation UI-only", async () => {
     const result = await renderPage({ q: "  Jurong  ", sport: "Badminton", returnTo: "/?region=West&date=2035-05-12" });
     expect(search).toHaveBeenCalledExactlyOnceWith({ q: "Jurong", sport: "Badminton" });
     expect(result.props).toMatchObject({
-      pathname: "/discover", presentation: "search", returnTo: "/?region=West&date=2035-05-12",
+      returnTo: "/?region=West&date=2035-05-12",
       filters: { q: "Jurong", sport: "Badminton" }, queryKey: "q=Jurong&sport=Badminton",
     });
     expect(result.key).toBe("q=Jurong&sport=Badminton");

@@ -10,11 +10,11 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     nextjs: { navigation: { pathname: "/discover" } },
-    docs: { description: { component: "Desktop Discover keeps the Booking sidebar and a distinct active Discover destination. The centered search column shares the mobile form, disclosure, state transitions, and compact results. Home retains its separate large-photo grid." } },
+    docs: { description: { component: "Desktop Discover keeps the Booking sidebar and a distinct active Discover destination. The centered search column shares the mobile form, disclosure, state transitions, and compact results. Home shows only personal upcoming bookings or the weather fallback." } },
   },
   globals: { viewport: { value: "desktop", isRotated: false } },
   decorators: [(Story) => <AppShell mobileVariant="focused" user={{ name: "Marcus Lim", reliabilityScore: 96 }} logoutAction={fn()}><Story /></AppShell>],
-  args: { presentation: "search", returnTo: "/", filters: emptyFilters, outcome: { status: "ready", page: examplePage }, pending: false, onNavigate: fn(), onRefresh: fn() },
+  args: { returnTo: "/", filters: emptyFilters, outcome: { status: "ready", page: examplePage }, pending: false, onNavigate: fn(), onRefresh: fn() },
 } satisfies Meta<typeof DiscoveryFormController>;
 
 export default meta;

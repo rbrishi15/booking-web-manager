@@ -14,7 +14,7 @@ const meta = {
   },
   globals: { viewport: { value: "phone", isRotated: false } },
   decorators: [(Story) => <AppShell mobileVariant="focused" user={{ name: "Marcus Lim", reliabilityScore: 96 }} logoutAction={fn()}><Story /></AppShell>],
-  args: { presentation: "search", returnTo: "/?region=East", filters: emptyFilters, outcome: { status: "ready", page: examplePage }, pending: false, onNavigate: fn(), onRefresh: fn() },
+  args: { returnTo: "/?region=East", filters: emptyFilters, outcome: { status: "ready", page: examplePage }, pending: false, onNavigate: fn(), onRefresh: fn() },
 } satisfies Meta<typeof DiscoveryFormController>;
 
 export default meta;
