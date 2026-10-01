@@ -30,10 +30,9 @@ creation does not verify a venue receipt or reserve a venue.
 supplied authentication and a factory that creates a use case for each
 submission. With integrations supplied, the
 [API route](../../app/api/sessions/route.ts) authenticates, parses, and invokes
-`createSessions.forBooker(bookerId, booking, config)` directly. Production
-integrations are pending, so the default route returns
-`503 SESSION_API_UNAVAILABLE`; the configured flow is exercised with injected
-dependencies. See the
+`createSessions.forBooker(bookerId, booking, config)` directly. Configured
+production uses Supabase bearer verification and PostgreSQL persistence;
+missing server settings return `503 SESSION_API_UNAVAILABLE`. See the
 [configuration guide](../../use-case-config/README.md) for dependency setup and
 the [centralized API route tests](../../tests/app/sessions/create-session-route.test.ts)
 for executable examples. Direct application callers continue to supply
@@ -74,9 +73,9 @@ exercises this interface with real domain objects, the transaction wrapper,
 and a creation-only in-memory transaction fake. Parsing has a separate
 [app suite](../../tests/app/sessions/create-session-input.test.ts). These tests
 cover creation, replay, and failure behavior without establishing database
-concurrency guarantees. A production persistence adapter and live integration
-tests are pending. The [configuration guide](../../use-case-config/README.md#pending-integrations)
-records owner responsibilities and schema dependencies. The
+concurrency guarantees. Service-backed database and authenticated HTTP tests
+run on a separate disposable stack. The [configuration guide](../../use-case-config/README.md#configuration-and-integration-prerequisites)
+records commands and the prerequisite group migration. The
 [E2E tests](../../tests/e2e) check public documentation and the default 503
 response against a running Next.js server without credentials or Supabase.
 Session UI remains separate work.

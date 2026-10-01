@@ -24,7 +24,7 @@ registry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
-  description: "The integrated authenticator must verify the bearer token and current ACTIVE account on every request. Body identity fields are ignored. Authentication integration is pending.",
+  description: "Supabase verifies the bearer token and current ACTIVE account on every request, including replay. Body identity fields are ignored.",
 });
 
 function errorResponse(description: string, code: string, message: string) {
@@ -46,8 +46,7 @@ registry.registerPath({
   tags: ["Sessions"],
   summary: "UC2-02 Create Session",
   description: [
-    "Production authentication and persistence integration are pending; the current endpoint returns 503 SESSION_API_UNAVAILABLE for every request.",
-    "The following contract applies once those dependencies are integrated.",
+    "Requires configured Supabase and PostgreSQL settings and migrations through 0006_session_creation; missing settings return 503 SESSION_API_UNAVAILABLE.",
     "Creates a booking room for the authenticated booker at an already-booked venue.",
     "The server calculates bookingShareCents as floor(totalCostCents / totalSlots).",
     "The booker covers the rounding remainder: 1001 cents across 3 slots means 333 cents each and 2 cents remaining with the booker.",
@@ -95,7 +94,7 @@ registry.registerPath({
     409: errorResponse("Incomplete payout setup or session already started.", "PAYOUT_ACCOUNT_NOT_READY", "A session needs a completed payout account"),
     422: errorResponse("Structurally valid values violate domain rules.", "INVALID_INPUT", "Invalid session details"),
     500: errorResponse("Unexpected authentication, configuration, or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
-    503: errorResponse("Session creation is intentionally unavailable while authentication and persistence integration are pending.", "SESSION_API_UNAVAILABLE", SESSION_API_UNAVAILABLE_MESSAGE),
+    503: errorResponse("Required session server settings are missing.", "SESSION_API_UNAVAILABLE", SESSION_API_UNAVAILABLE_MESSAGE),
   },
 });
 
@@ -106,7 +105,7 @@ export const sessionOpenApiDocument = new OpenApiGeneratorV3(registry.definition
     info: {
       title: "Booking Web Manager API",
       version: "1.0.0",
-      description: "Session and venue coordination API contract. Production authentication and persistence integration are pending; session creation currently returns 503.",
+      description: "Session and venue coordination API. Configured session creation verifies Supabase bearer tokens and persists atomically in PostgreSQL; missing settings return 503.",
     },
     servers: [{ url: "/", description: "This server" }],
   });

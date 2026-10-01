@@ -5,7 +5,8 @@ let initialization: Promise<SessionApiDependencies> | undefined;
 
 /**
  * Share pending setup and reuse assembled dependencies within this instance.
- * Successful assembly may expose intentionally unavailable capabilities.
+ * Missing settings expose unavailable capabilities. Invalid setup clears the
+ * promise for retry; configured infrastructure is shared across submissions.
  */
 export async function getSessionDependencies(): Promise<SessionApiDependencies> {
   // Cache the promise before assembly runs so concurrent calls share even the first attempt.

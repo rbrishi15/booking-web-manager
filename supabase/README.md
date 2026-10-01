@@ -20,6 +20,14 @@ most likely way this project loses an afternoon.
 | 0002 | `idempotency_and_reconciliation` — keys, event de-dup, hourly job | Harrison |
 | 0003 | `ledger_rls` — row level security and privileges for the ledger | Harrison |
 | 0004 | `profiles` — profile table, RLS, sign-up trigger that creates the empty wallet | Joseph |
+| 0005 | `regular_groups` — group tables and concurrency functions; pending PR #34 | Joseph |
+| 0006 | `session_creation` — payout setup, sessions, participation and hold facts; depends on 0005 | Neoh |
+
+0006 checks that 0005's group tables and `lock_invited_group()` exist and attaches
+the session trigger. Merge and apply 0005 before 0006. A local database containing
+the superseded draft `0005_session_creation` is not the approved sequence; do not
+apply 0006 on top of it. Service-backed session tests provision their own
+disposable stack; see [the integration guide](../use-case-config/README.md#validation).
 
 0001 deliberately stops at the finance tables. `user_id`, `session_id`,
 `participation_id` and `payout_id` are plain `uuid` columns with no foreign key,

@@ -1,18 +1,43 @@
 import type { SessionApiDependencies } from "@/app/sessions/dependencies";
 import { SessionApiUnavailableError } from "@/app/sessions/session-api-unavailable";
+import { readSessionServerSettings } from "@/app/sessions/server-environment";
+import { randomUUID } from "node:crypto";
+import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
+import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
+import { PostgresSessionCreationTransaction } from "@/lib/sessions/postgres-session-creation-transaction";
+import { createSupabaseSessionAuthenticator } from "@/lib/supabase/bearer-auth";
+import { CreateSessions } from "@/use-cases/sessions/CreateSessions";
 
-/** Assemble the API capabilities; production integration is deliberately pending. */
+/** Assemble shared infrastructure and submission-scoped session capabilities. */
 export function createSessionDependencies(): SessionApiDependencies {
+  const settings = readSessionServerSettings();
+  if (settings === undefined) {
+    return {
+      authenticate: async () => {
+        throw new SessionApiUnavailableError();
+      },
+      createForSubmission: () => {
+        throw new SessionApiUnavailableError();
+      },
+    };
+  }
+  const getPool = createPostgresPoolProvider(settings.databaseUrl);
+  const clock = { now: () => new Date() };
   return {
-    // TODO(Neoh): wire Joseph's approved auth after PR #20 lands on main.
-    // See ./README.md for integration owners, prerequisites, and acceptance checks.
-    authenticate: async () => {
-      throw new SessionApiUnavailableError();
-    },
-    // TODO(Neoh): wire persistence after Rishi coordinates the prerequisite migrations.
-    // See ./README.md for the integration checklist and complete-User requirements.
-    createForSubmission: () => {
-      throw new SessionApiUnavailableError();
-    },
+    authenticate: createSupabaseSessionAuthenticator(
+      settings.supabaseUrl,
+      settings.supabaseAnonKey,
+    ),
+    createForSubmission: (submission) =>
+      new CreateSessions({
+        transaction: new PostgresSessionCreationTransaction(
+          getPool(),
+          submission,
+          clock,
+        ),
+        clock,
+        ids: { next: randomUUID },
+        holdingAccountId: PLATFORM_HOLDING_ACCOUNT_ID,
+      }),
   };
 }
