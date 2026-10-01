@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { HOME_PATH, isAuthPage, isPublicPath } from "@/app/(auth)/redirect-path";
 import { getAccountStatus } from "@/lib/supabase/account-status";
+import { isAuthenticationConfigured } from "@/lib/supabase/is-configured";
 
 /**
  * Runs before every page. Refreshes the Supabase login cookie, sends logged-out
@@ -15,6 +16,8 @@ export async function middleware(request: NextRequest) {
   // API routes and public API docs handle authentication themselves. Do not
   // initialize Supabase or refresh cookies before their own availability checks.
   if (pathname.startsWith("/api")) return response;
+  if (pathname === "/storybook" || pathname.startsWith("/storybook/") || pathname.startsWith("/fonts/")) return response;
+  if (pathname === "/" && !isAuthenticationConfigured()) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
