@@ -13,7 +13,8 @@ const meta = {
   args: {
     filters: emptyFilters,
     state: { status: "ready", page: examplePage },
-    onApply: fn(), onEdit: fn(), onClear: fn(), onNext: fn(), onRetry: fn(),
+    filterPanel: "collapsed",
+    onApply: fn(), onEdit: fn(), onClear: fn(), onNext: fn(), onRetry: fn(), onToggleFilters: fn(),
   },
 } satisfies Meta<typeof DiscoveryView>;
 
@@ -44,7 +45,7 @@ export const Loading: Story = {
 };
 
 export const InvalidFilters: Story = {
-  args: { filters: { ...emptyFilters, timeFrom: "18:00" }, state: { status: "invalid", fieldErrors: { date: ["Choose a date when filtering by time"] } } },
+  args: { filterPanel: "expanded", filters: { ...emptyFilters, timeFrom: "18:00" }, state: { status: "invalid", fieldErrors: { date: ["Choose a date when filtering by time"] } } },
 };
 
 export const Unavailable: Story = { args: { state: { status: "error", kind: "unavailable" } } };

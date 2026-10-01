@@ -8,7 +8,7 @@ const meta = {
   component: DiscoveryFormController,
   parameters: {
     layout: "fullscreen",
-    docs: { description: { component: "Exercises the same local transitions used in production, replacing only router navigation with callbacks. Local feedback is idle or invalid. Editing clears local errors, valid submission resets pagination, and loading disables changes. Browser tests cover committed URL changes, server outcomes, and history restoration." } },
+    docs: { description: { component: "Exercises the same local transitions used in production, replacing only router navigation with callbacks. Local feedback is idle or invalid. The mobile filter panel is collapsed or expanded, initially expanded for invalid URL queries. Collapsing preserves drafts; applied summaries derive from URL props. Editing clears local errors, valid submission resets pagination, and loading disables changes. Browser tests cover committed URL changes, server outcomes, and history restoration." } },
   },
   args: { filters: emptyFilters, outcome: { status: "ready", page: examplePage }, pending: false, onNavigate: fn(), onRefresh: fn() },
 } satisfies Meta<typeof DiscoveryFormController>;

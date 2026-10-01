@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, ChevronDown, MapPin, SlidersHorizontal, Users } from "lucide-react";
 import { useId } from "react";
 import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,16 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
 import { PageHeader } from "@/components/ui/page-header";
+import { cn } from "@/lib/utils";
 import type { DiscoveryPage } from "../contracts";
 import type { DiscoveryFieldErrors, DiscoveryFilters } from "../query";
-import type { DiscoveryState } from "./discovery-state";
+import type { DiscoveryState, FilterPanelState } from "./discovery-state";
 
 export interface DiscoveryViewProps {
   readonly filters: DiscoveryFilters;
   readonly state: DiscoveryState;
+  readonly filterPanel: FilterPanelState;
+  readonly onToggleFilters: () => void;
   readonly onApply: (formData: FormData) => void;
   readonly onEdit: () => void;
   readonly onClear: () => void;
@@ -25,19 +28,31 @@ export interface DiscoveryViewProps {
   readonly onRetry: () => void;
 }
 
-const selectClassName = "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 md:text-sm";
+const selectClassName = "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 md:h-10 md:text-sm";
 
 /** Synchronous UI shared by the page and stories. Draft fields are deliberately uncontrolled. */
-export function DiscoveryView({ filters, state, onApply, onEdit, onClear, onNext, onRetry }: DiscoveryViewProps) {
+export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, onApply, onEdit, onClear, onNext, onRetry }: DiscoveryViewProps) {
   const id = useId();
   const busy = state.status === "loading";
   const errors: DiscoveryFieldErrors = state.status === "invalid" ? state.fieldErrors : {};
+  const expanded = filterPanel === "expanded";
+  const appliedSummary = summarizeFilters(filters);
 
   return (
     <>
-      <PageHeader breadcrumb="Home" title="Discover sessions" />
-      <div className="space-y-6 p-4 md:p-8">
-        <section className="rounded-lg border bg-card p-4 md:p-6" aria-labelledby={`${id}-filters`}>
+      <div className="hidden md:block"><PageHeader breadcrumb="Home" title="Discover sessions" /></div>
+      <div className="flex flex-col gap-6 px-6 pb-10 pt-6 md:p-8">
+        <header className="md:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
+            <h1 className="text-2xl font-bold tracking-tight">Discover sessions</h1>
+            <Button variant="outline" className="h-11 px-3" aria-expanded={expanded} aria-controls={`${id}-filter-panel`} onClick={onToggleFilters} disabled={busy || state.status === "invalid"}>
+              <SlidersHorizontal aria-hidden />Filters<ChevronDown aria-hidden className={cn("transition-transform", expanded && "rotate-180")} />
+            </Button>
+          </div>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground" aria-label="Applied filters">{appliedSummary || "Find your next game. All upcoming public sessions."}</p>
+        </header>
+        {/* CSS hides the panel without unmounting uncontrolled draft inputs. */}
+        <section id={`${id}-filter-panel`} className={cn("rounded-lg border bg-card p-4 md:block md:p-6", !expanded && "hidden")} aria-labelledby={`${id}-filters`}>
           <h2 id={`${id}-filters`} className="text-lg font-semibold">Find your next session</h2>
           <p id={`${id}-time-zone`} className="mt-1 text-sm text-muted-foreground">
             Dates and times use Singapore time (SGT). Time filters match when a session starts.
@@ -66,18 +81,19 @@ export function DiscoveryView({ filters, state, onApply, onEdit, onClear, onNext
                 </select>
               </FilterField>
               <FilterField id={id} name="date" label="Date" errors={errors}>
-                <Input id={`${id}-date`} name="date" type="date" defaultValue={filters.date} {...fieldAccessibility(id, "date", errors)} />
+                <Input id={`${id}-date`} name="date" type="date" className="min-w-0 h-11 md:h-10" defaultValue={filters.date} {...fieldAccessibility(id, "date", errors)} />
               </FilterField>
               <FilterField id={id} name="timeFrom" label="From" errors={errors}>
-                <Input id={`${id}-timeFrom`} name="timeFrom" type="time" step="60" defaultValue={filters.timeFrom} {...fieldAccessibility(id, "timeFrom", errors)} />
+                <Input id={`${id}-timeFrom`} name="timeFrom" type="time" step="60" className="min-w-0 h-11 md:h-10" defaultValue={filters.timeFrom} {...fieldAccessibility(id, "timeFrom", errors)} />
               </FilterField>
               <FilterField id={id} name="timeTo" label="To" errors={errors}>
-                <Input id={`${id}-timeTo`} name="timeTo" type="time" step="60" defaultValue={filters.timeTo} {...fieldAccessibility(id, "timeTo", errors)} />
+                <Input id={`${id}-timeTo`} name="timeTo" type="time" step="60" className="min-w-0 h-11 md:h-10" defaultValue={filters.timeTo} {...fieldAccessibility(id, "timeTo", errors)} />
               </FilterField>
               <div className="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-5">
-                <Button type="submit" disabled={busy}>Apply filters</Button>
+                <Button type="submit" className="h-11 md:h-10" disabled={busy}>Apply filters</Button>
                 <Button
                   variant="outline"
+                  className="h-11 md:h-10"
                   disabled={busy}
                   onClick={(event) => {
                     // Clear also discards edits when the committed URL is already unfiltered.
@@ -91,12 +107,20 @@ export function DiscoveryView({ filters, state, onApply, onEdit, onClear, onNext
         </section>
 
         <section aria-labelledby={`${id}-results`} aria-busy={busy} className="space-y-4">
-          <h2 id={`${id}-results`} className="text-xl font-semibold">Upcoming sessions</h2>
+          <h2 id={`${id}-results`} className="sr-only text-xl font-semibold md:not-sr-only">Upcoming sessions</h2>
           <DiscoveryResults state={state} onNext={onNext} onRetry={onRetry} />
         </section>
       </div>
     </>
   );
+}
+
+/** The summary describes applied URL values, never the unsubmitted form draft. */
+function summarizeFilters(filters: DiscoveryFilters): string {
+  const time = filters.timeFrom && filters.timeTo
+    ? `${filters.timeFrom}–${filters.timeTo} SGT`
+    : filters.timeFrom ? `From ${filters.timeFrom} SGT` : filters.timeTo ? `Before ${filters.timeTo} SGT` : "";
+  return [filters.sport, filters.region, filters.date, time].filter(Boolean).join(" · ");
 }
 
 function fieldAccessibility(id: string, name: keyof DiscoveryFilters, errors: DiscoveryFieldErrors) {
@@ -132,7 +156,7 @@ function DiscoveryResults({ state, onNext, onRetry }: Pick<DiscoveryViewProps, "
       return (
         <div className="space-y-3">
           <ErrorMessage>{state.kind === "unavailable" ? "Session discovery is not available yet." : "We couldn't load sessions. Please try again."}</ErrorMessage>
-          <Button variant="outline" onClick={onRetry}>Retry</Button>
+          <Button variant="outline" className="h-11 md:h-10" onClick={onRetry}>Retry</Button>
         </div>
       );
     case "ready": {
@@ -148,7 +172,7 @@ function DiscoveryResults({ state, onNext, onRetry }: Pick<DiscoveryViewProps, "
           )}
           {cursor !== null && (
             <nav aria-label="Session result pages" className="flex justify-end">
-              <Button variant="outline" onClick={() => onNext(cursor)}>Next page</Button>
+              <Button variant="outline" className="h-11 md:h-10" onClick={() => onNext(cursor)}>Next page</Button>
             </nav>
           )}
         </>

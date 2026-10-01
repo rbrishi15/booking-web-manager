@@ -14,6 +14,9 @@ export type ValidationFeedback =
   | { readonly status: "idle" }
   | { readonly status: "invalid"; readonly fieldErrors: DiscoveryFieldErrors };
 
+/** Presentation only: committed filters and draft values stay in their existing owners. */
+export type FilterPanelState = "collapsed" | "expanded";
+
 /** URL/server data remain authoritative; local feedback exists only until edit or navigation. */
 export function deriveDiscoveryState(
   outcome: DiscoveryOutcome,

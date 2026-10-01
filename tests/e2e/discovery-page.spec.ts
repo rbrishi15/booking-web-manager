@@ -66,15 +66,18 @@ test("signed-in discovery applies URL filters, preserves history and fits a 390p
     await expect(page.getByRole("region", { name: "Upcoming sessions" }).locator("a")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("discovery-desktop.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await expect(page.getByRole("button", { name: "Apply filters", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("discovery-mobile.png"), fullPage: true });
 
     await page.goBack();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Region", { exact: true })).toHaveValue("");
     await expect(page.getByText("East evening tennis", { exact: true })).toBeVisible();
     await page.goForward();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await expect(page.getByLabel("Sport", { exact: true })).toHaveValue("Badminton");
     await expect(page.getByLabel("From", { exact: true })).toHaveValue("18:00");
     await page.getByRole("button", { name: "Clear filters", exact: true }).click();
