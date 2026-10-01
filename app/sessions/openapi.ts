@@ -5,6 +5,7 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { createSessionRequestSchema } from "./create-session-input";
+import { SESSION_API_UNAVAILABLE_MESSAGE } from "./session-api-unavailable";
 
 extendZodWithOpenApi(z);
 
@@ -23,7 +24,7 @@ registry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
-  description: "A Supabase access token, verified by the server. Body identity fields are ignored.",
+  description: "The integrated authenticator must verify the bearer token and current ACTIVE account on every request. Body identity fields are ignored. Authentication integration is pending.",
 });
 
 function errorResponse(description: string, code: string, message: string) {
@@ -45,12 +46,15 @@ registry.registerPath({
   tags: ["Sessions"],
   summary: "UC2-02 Create Session",
   description: [
+    "Production authentication and persistence integration are pending; the current endpoint returns 503 SESSION_API_UNAVAILABLE for every request.",
+    "The following contract applies once those dependencies are integrated.",
     "Creates a booking room for the authenticated booker at an already-booked venue.",
     "The server calculates bookingShareCents as floor(totalCostCents / totalSlots).",
     "The booker covers the rounding remainder: 1001 cents across 3 slots means 333 cents each and 2 cents remaining with the booker.",
     "A completed payout account and active account are required. Visibility defaults to PRIVATE.",
     "Use the same idempotencyKey to retry a submission: the original result is replayed,",
     "even when valid booking details change. Use a new key for a new session; keys are isolated per booker.",
+    "Current account authorization is checked before every successful replay; creation-specific payout and booking-time rules are not repeated for a replay.",
     "Booking timestamps are ISO strings with Z or a timezone offset. Unknown fields are ignored.",
     "Blank venue names, nonpositive cost, invalid time order, capacity outside 1–8,",
     "invalid minimum headcount, or reliability outside 0–100 are domain errors (422),",
@@ -91,6 +95,7 @@ registry.registerPath({
     409: errorResponse("Incomplete payout setup or session already started.", "PAYOUT_ACCOUNT_NOT_READY", "A session needs a completed payout account"),
     422: errorResponse("Structurally valid values violate domain rules.", "INVALID_INPUT", "Invalid session details"),
     500: errorResponse("Unexpected authentication, configuration, or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
+    503: errorResponse("Session creation is intentionally unavailable while authentication and persistence integration are pending.", "SESSION_API_UNAVAILABLE", SESSION_API_UNAVAILABLE_MESSAGE),
   },
 });
 
@@ -101,7 +106,7 @@ export const sessionOpenApiDocument = new OpenApiGeneratorV3(registry.definition
     info: {
       title: "Booking Web Manager API",
       version: "1.0.0",
-      description: "Session and venue coordination API. Authentication uses a Supabase bearer access token.",
+      description: "Session and venue coordination API contract. Production authentication and persistence integration are pending; session creation currently returns 503.",
     },
     servers: [{ url: "/", description: "This server" }],
   });

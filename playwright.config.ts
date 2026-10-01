@@ -1,9 +1,4 @@
-import { existsSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
-import { localSupabaseTestEnvironment } from "./tests/support/local-supabase";
-
-if (existsSync(".env.test.local")) process.loadEnvFile(".env.test.local");
-localSupabaseTestEnvironment();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -15,9 +10,8 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   projects: [
     {
-      name: "session-api",
-      testMatch: "**/session-api.spec.ts",
-      // Authenticated API traces would retain bearer tokens in CI artifacts.
+      name: "session-api-unavailable",
+      testMatch: "**/session-api-unavailable.spec.ts",
       use: { trace: "off" },
     },
     {

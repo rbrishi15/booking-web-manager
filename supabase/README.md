@@ -19,8 +19,6 @@ most likely way this project loses an afternoon.
 | 0001 | `wallet_ledger` — ledger tables, balance projections, invariants | Harrison |
 | 0002 | `idempotency_and_reconciliation` — keys, event de-dup, hourly job | Harrison |
 | 0003 | `ledger_rls` — row level security and privileges for the ledger | Harrison |
-| 0004 | `profiles` — profile table, RLS, sign-up trigger that creates the empty wallet | Joseph |
-| 0005 | `session_creation` — sessions and related User state, server-only access | Neoh |
 
 0001 deliberately stops at the finance tables. `user_id`, `session_id`,
 `participation_id` and `payout_id` are plain `uuid` columns with no foreign key,
@@ -45,17 +43,15 @@ if you find yourself doing that, something upstream of this file didn't work.
 
 ## Local development
 
-The default `npm run dev` setup (README at the repo root) points at the
-hosted project above, so most day-to-day feature work never touches this
-section. You need local Postgres for:
+Use local Postgres when integration work needs a disposable database. The
+session contract and documentation currently need no database. Local Postgres
+is useful for:
 
 - **Writing or testing a migration.** Try it locally before it touches the
   one shared hosted database everyone else is also using.
 - **Running the DB-backed half of the ledger test suite** (see
   [`lib/money/README.md`](../lib/money/README.md#tests)) — the in-memory
   tests don't exercise the actual SQL, constraints or triggers.
-- **Running the Session API and its integration/E2E tests**, using local Auth
-  and persistence as described in [Session API](#session-api).
 
 ### Prerequisites
 
@@ -91,7 +87,7 @@ order.
 
 - **Studio** (`http://127.0.0.1:54323`) is a local dashboard — browse tables,
   run SQL, inspect auth users — without touching the hosted project.
-- To point the running Next.js app at local Postgres instead of hosted,
+- To configure an integration against the local project,
   temporarily use the `anon key` / `API URL` above in your own
   `.env.local` in place of the `NEXT_PUBLIC_SUPABASE_*` values from
   `vercel env pull`. Don't commit that swap or push it to Vercel.
@@ -119,91 +115,21 @@ breaks if you forget, but Docker Desktop will let you know.
 
 ## Session API
 
-UC2-02 uses the real local Supabase Auth service and PostgreSQL. This setup is
-separate from the shared hosted project. Keep an existing hosted `.env.local`
-aside before generating local configuration; the command refuses to overwrite
-one that points at a remote project.
+PR #24 currently provides the session HTTP contract and Swagger documentation.
+The production `POST /api/sessions` route returns
+`503 SESSION_API_UNAVAILABLE` with `Session creation is not available yet`.
+It does not provision local accounts or create sessions. Run `npm run dev` and
+open [Swagger UI](http://127.0.0.1:3000/api-docs) to inspect the contract without
+credentials or a Supabase stack. `/api/openapi` serves the same specification.
 
-For a fresh macOS machine, one terminal-only option is:
+`npm run test:e2e` builds and starts Next.js, checks the documentation, and
+verifies the unavailable response. Unit and contract tests inject dependencies;
+live Auth, database hydration, persistence, rollback, and concurrent replay
+require integration coverage in the implementation follow-ups.
 
-```bash
-brew install colima docker supabase/tap/supabase
-colima start --cpu 4 --memory 8
-```
-
-With any compatible runtime running:
-
-```bash
-supabase start
-supabase db reset --local
-npm run supabase:env
-npm run seed:session
-npm run dev
-```
-
-`db reset --local` deletes local development data and reapplies migrations.
-Never use it against the shared hosted database. `supabase:env` writes ignored
-`.env.local` and `.env.test.local` files without printing credentials. The
-account preparation command creates a real local Auth user; the database
-trigger provisions its profile and empty wallet. Its completed payout record
-uses **development-only provider/bank references**, not verified Stripe setup.
-Credentials for that prepared account are stored in the ignored
-`.env.session-account.local` file.
-
-Open [Swagger UI](http://127.0.0.1:3000/api-docs). To obtain a token, use
-Supabase `signInWithPassword` with the prepared account, or the local Auth
-`/auth/v1/token?grant_type=password` endpoint with the local anon key. Supply
-the access token to Swagger’s **Authorize** control or send
-`Authorization: Bearer <access_token>` to `POST /api/sessions`. The OpenAPI
-example includes the required submission key, booking, and session config.
-Retrying a key returns the original result; use a new key for a new session.
-
-```bash
-npm run test:integration
-npm run test:e2e
-```
-
-Integration tests use actual SQL, domain hydration, transactions, and database
-roles. Playwright builds and starts Next.js on port 3100, signs in through real
-Supabase Auth, and calls the API over HTTP. It also checks the documentation
-page loads. Both suites require loopback local Supabase configuration and use
-unique fixture identities. Keep `LEDGER_TEST_DATABASE_URL` unset when running
-them: the legacy ledger suite drops the public schema and must use its own
-separate disposable database.
-
-Session creation adds no ledger entries or payout intents. New session-related
-tables enable RLS and revoke access from `anon` and `authenticated`; the trusted
-server PostgreSQL connection performs creation after bearer authentication.
-Complete User hydration reads all committed wallet transactions and actual
-memberships and participation history, with no pagination or defaulted facts.
-
-The CI session job resets a disposable Supabase stack, runs integration tests,
-and runs Playwright against the built application. Hosted migration deployment
-still occurs only through the existing `main` workflow. Apply `0004_profiles`
-before `0005_session_creation`: profile and wallet provisioning are backend
-requirements for bearer-authenticated session creation. Registration and
-sign-in screens remain separate work.
-The profile/wallet schema is carried from Joseph Wong's [PR #20](https://github.com/rbrishi15/booking-web-manager/pull/20);
-coordinate migration `0004` with that PR before merging.
-
-### Hosted Session API
-
-For Vercel, set the server-only `DATABASE_URL` to the hosted project's Supabase
-**transaction pooler** connection string with TLS and certificate verification.
-Copy the endpoint and username from the project's Connect dialog. Local
-development keeps the direct connection supplied by `supabase:env` on port
-54322. See [Supabase's connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres)
-for pooler selection and TLS configuration.
-
-Each warm function instance reuses its handler and lazy pool; cold starts and
-scale-out create separate instances. The initial pool has a maximum of two
-connections, minimum zero, and 5-second idle and connection timeouts. Fleet-wide
-usage depends on the number of instances as well as other database clients;
-the application cap alone does not establish a hosted connection budget. The
-[configuration guide](../use-case-config/README.md#lifetimes-and-retries) explains
-the pool's Vercel lifecycle integration and local behavior.
-
-Hosted deployment remains separate work: verify the Vercel function settings,
-TLS connection configuration, and Supabase pooler/database limits against the
-expected workload before deploying. Local integration and E2E checks establish
-local behavior, not hosted capacity or configuration.
+Joseph owns profile/wallet provisioning and authentication in PR #20. Neoh's
+session persistence work depends on the approved profile schema. This PR adds
+neither profile nor session migrations; Rishi coordinates their numbering and
+merge order. See the
+[configuration guide](../use-case-config/README.md#pending-integrations) for the
+required interfaces, ownership, and prerequisite stack.

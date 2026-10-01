@@ -16,7 +16,7 @@ describe("public session OpenAPI contract", () => {
     expect(document.servers).toEqual([{ url: "/", description: "This server" }]);
   });
 
-  test("describes bearer authentication and every implemented response status", () => {
+  test("describes the future bearer contract and current unavailable response", () => {
     const operation = sessionOpenApiDocument.paths["/api/sessions"]?.post;
 
     expect(operation?.security).toEqual([{ bearerAuth: [] }]);
@@ -24,8 +24,21 @@ describe("public session OpenAPI contract", () => {
       bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
     });
     expect(Object.keys(operation?.responses ?? {})).toEqual([
-      "201", "400", "401", "403", "404", "409", "422", "500",
+      "201", "400", "401", "403", "404", "409", "422", "500", "503",
     ]);
+    expect(operation?.description).toContain("current endpoint returns 503 SESSION_API_UNAVAILABLE");
+    expect(operation?.responses["503"]).toMatchObject({
+      content: {
+        "application/json": {
+          example: {
+            error: {
+              code: "SESSION_API_UNAVAILABLE",
+              message: "Session creation is not available yet",
+            },
+          },
+        },
+      },
+    });
   });
 
   test("generates JSON timestamp and money types without promoting business rules into structural validation", () => {

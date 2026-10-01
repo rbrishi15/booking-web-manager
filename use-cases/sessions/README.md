@@ -27,17 +27,21 @@ OneMap, happens before invoking this module. The booking cost is booker-supplied
 creation does not verify a venue receipt or reserve a venue.
 
 [`createSessionDependencies`](../../use-case-config/sessions.ts) assembles
-authentication and a factory that creates a use case for each submission. The
+supplied authentication and a factory that creates a use case for each
+submission. With integrations supplied, the
 [API route](../../app/api/sessions/route.ts) authenticates, parses, and invokes
-`createSessions.forBooker(bookerId, booking, config)` directly. See the
+`createSessions.forBooker(bookerId, booking, config)` directly. Production
+integrations are pending, so the default route returns
+`503 SESSION_API_UNAVAILABLE`; the configured flow is exercised with injected
+dependencies. See the
 [configuration guide](../../use-case-config/README.md) for dependency setup and
 the [centralized API route tests](../../tests/app/sessions/create-session-route.test.ts)
 for executable examples. Direct application callers continue to supply
 Date-valued booking details.
 
 The constructor accepts a [`SessionCreationTransaction`](./session-creation-transaction.ts),
-the shared `Clock` and `IdGenerator`, and the platform `holdingAccountId` from
-validated server configuration. The transaction capability exposes only the
+the shared `Clock` and `IdGenerator`, and the platform `holdingAccountId` supplied
+by dependency assembly. The transaction capability exposes only the
 User and Session repositories needed by creation. Session IDs, room tokens,
 and time are obtained inside its callback; current account and payout readiness
 come from the User loaded there. Production ID generators must supply
@@ -49,10 +53,10 @@ It namespaces keys by UC2-02, booker ID, and submission key. A fresh module and
 adapter for a retry with the same key replay the original result, including when
 valid details have changed. A new intended creation requires a new submission
 key. Reusing a module for a different submission would reuse its captured key.
-The HTTP authentication boundary checks that the current profile is active
-before invoking this module, including for retries. Deactivated accounts cannot
-retrieve stored room tokens through the API; eligible retries still replay
-without repeating creation-specific payout or booking-time checks.
+The authentication integration must check current active-account access before
+invoking this module, including for retries. This prevents deactivated accounts
+from retrieving stored room tokens through the API; eligible retries still
+replay without repeating creation-specific payout or booking-time checks.
 
 The underlying transaction adapter must atomically persist the session and
 successful replay result, roll both back on failure, and serialize concurrent
@@ -70,9 +74,9 @@ exercises this interface with real domain objects, the transaction wrapper,
 and a creation-only in-memory transaction fake. Parsing has a separate
 [app suite](../../tests/app/sessions/create-session-input.test.ts). These tests
 cover creation, replay, and failure behavior without establishing database
-concurrency guarantees. The production PostgreSQL adapter directly implements
-`SessionCreationTransaction`, loading the full User and inserting the new Session
-in one transaction with the replay result.
-[Database tests](../../tests/integration) verify hydration, rollback, concurrent
-replay, and privileges; [E2E tests](../../tests/e2e) cross the running Next.js
-server, Supabase Auth, and PostgreSQL. Session UI remains separate work.
+concurrency guarantees. A production persistence adapter and live integration
+tests are pending. The [configuration guide](../../use-case-config/README.md#pending-integrations)
+records owner responsibilities and schema dependencies. The
+[E2E tests](../../tests/e2e) check public documentation and the default 503
+response against a running Next.js server without credentials or Supabase.
+Session UI remains separate work.

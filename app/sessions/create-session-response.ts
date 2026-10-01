@@ -1,4 +1,8 @@
 import { DomainError } from "@/domain";
+import {
+  SESSION_API_UNAVAILABLE_MESSAGE,
+  SessionApiUnavailableError,
+} from "./session-api-unavailable";
 
 const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
   INVALID_INPUT: 422,
@@ -10,6 +14,9 @@ const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
 };
 
 export function sessionCreationErrorResponse(error: unknown): Response {
+  if (error instanceof SessionApiUnavailableError) {
+    return errorResponse(503, "SESSION_API_UNAVAILABLE", SESSION_API_UNAVAILABLE_MESSAGE);
+  }
   if (error instanceof DomainError) {
     const status = domainErrorStatuses[error.code];
     if (status !== undefined) {

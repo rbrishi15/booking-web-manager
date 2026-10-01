@@ -4,7 +4,7 @@ import type {
   CreateSessionResult,
   SessionConfig,
 } from "@/use-cases/sessions/CreateSessions";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const configuration = vi.hoisted(() => ({
   createSessionDependencies: vi.fn<() => SessionApiDependencies>(),
@@ -15,13 +15,6 @@ vi.mock("@/use-case-config/sessions", () => configuration);
 beforeEach(() => {
   vi.resetModules();
   configuration.createSessionDependencies.mockReset();
-  vi.stubEnv("DATABASE_URL", "postgresql://user:password@localhost:54322/postgres");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.example.test");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-anon-key");
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
 });
 
 const sessionStartsAt = new Date("2026-10-10T10:00:00Z");
@@ -130,7 +123,7 @@ describe("UC2-02 POST /api/sessions", () => {
 
   test("requires authentication even when the JSON body supplies a booker", async () => {
     // Arrange
-    const { POST, unitOfWork } = await sessionRouteScenario();
+    const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario();
     const request = { ...creationRequest(), bookerId };
 
     // Act
@@ -142,6 +135,7 @@ describe("UC2-02 POST /api/sessions", () => {
       error: { code: expect.any(String), message: expect.any(String) },
     });
     expect(unitOfWork.sessions.size).toBe(0);
+    expect(createForSubmission).not.toHaveBeenCalled();
   });
 
   test("rejects malformed JSON and keeps initialized dependencies for a valid request", async () => {
@@ -167,7 +161,6 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(unitOfWork.sessions.size).toBe(0);
 
     // Act
-    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
     const recovered = await POST(postRequest(creationRequest()));
     const result: CreateSessionResult = await recovered.json();
 
@@ -359,6 +352,64 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(unitOfWork.requireSession(first.sessionId).totalSlots).toBe(3);
   });
 
+  test("checks current account authorization before returning a successful replay", async () => {
+    // Arrange
+    const authenticate = vi.fn(verifiedTestUser);
+    const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario(authenticate);
+    const firstResponse = await POST(postRequest(creationRequest()));
+    const first: CreateSessionResult = await firstResponse.json();
+    const { DomainError } = await import("@/domain");
+    authenticate.mockRejectedValueOnce(new DomainError("INACTIVE_ACCOUNT", "Account is inactive"));
+
+    // Act
+    const denied = await POST(postRequest(creationRequest()));
+
+    // Assert
+    expect(firstResponse.status).toBe(201);
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toEqual({
+      error: { code: "INACTIVE_ACCOUNT", message: "Account is inactive" },
+    });
+    expect(authenticate).toHaveBeenCalledTimes(2);
+    expect(createForSubmission).toHaveBeenCalledOnce();
+    expect(unitOfWork.sessions.size).toBe(1);
+
+    // Act: access is restored, while creation-specific booking eligibility has changed.
+    const changedRequest = creationRequest({ totalSlots: 2 });
+    changedRequest.booking.startAt = "2020-01-01T10:00:00Z";
+    changedRequest.booking.endAt = "2020-01-01T12:00:00Z";
+    const replay = await POST(postRequest(changedRequest));
+
+    // Assert
+    expect(replay.status).toBe(201);
+    expect(await replay.json()).toEqual(first);
+    expect(authenticate).toHaveBeenCalledTimes(3);
+    expect(createForSubmission).toHaveBeenCalledTimes(2);
+    expect(unitOfWork.sessions.size).toBe(1);
+  });
+
+  test("maps an intentionally unavailable creation capability to the fixed 503 response", async () => {
+    // Arrange
+    const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario();
+    const { SessionApiUnavailableError } = await import("@/app/sessions/session-api-unavailable");
+    const unavailable = new SessionApiUnavailableError();
+    unavailable.message = "private-integration-detail";
+    createForSubmission.mockImplementationOnce(() => { throw unavailable; });
+
+    // Act
+    const response = await POST(postRequest(creationRequest()));
+
+    // Assert
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "SESSION_API_UNAVAILABLE",
+        message: "Session creation is not available yet",
+      },
+    });
+    expect(unitOfWork.sessions.size).toBe(0);
+  });
+
   test("creates distinct sessions when HTTP submissions use different keys", async () => {
     // Arrange
     const { POST, unitOfWork } = await sessionRouteScenario();
@@ -407,16 +458,19 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(unitOfWork.sessions.size).toBe(2);
   });
 
-  test.each(["Error", "DomainError"])(
+  test.each(["Error", "DomainError", "SessionApiUnavailableError"])(
     "redacts dependency assembly %s and retries setup on the next request",
     async (errorType) => {
       // Arrange
       const authenticate = vi.fn(verifiedTestUser);
       const { POST, unitOfWork } = await sessionRouteScenario(authenticate);
       const { DomainError } = await import("@/domain");
+      const { SessionApiUnavailableError } = await import("@/app/sessions/session-api-unavailable");
       const failure = errorType === "DomainError"
         ? new DomainError("INACTIVE_ACCOUNT", "private-dependency-setup-failure")
-        : new Error("private-dependency-setup-failure");
+        : errorType === "SessionApiUnavailableError"
+          ? new SessionApiUnavailableError()
+          : new Error("private-dependency-setup-failure");
       configuration.createSessionDependencies.mockImplementationOnce(() => {
         throw failure;
       });
@@ -467,7 +521,6 @@ describe("UC2-02 POST /api/sessions", () => {
 
     // Act
     providerAvailable = true;
-    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
     const recovered = await POST(postRequest(creationRequest()));
     const result: CreateSessionResult = await recovered.json();
 
@@ -572,7 +625,6 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(unitOfWork.payoutRequests).toEqual([]);
 
     // Act
-    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
     const recovered = await POST(postRequest(creationRequest()));
     const result: CreateSessionResult = await recovered.json();
 
@@ -632,6 +684,7 @@ async function sessionRouteScenario(
     "../../use-cases/support/create-session-unit-of-work"
   );
   const unitOfWork = new CreateSessionUnitOfWork([readyBookerUser(bookerId)]);
+  const createForSubmission = vi.fn<SessionApiDependencies["createForSubmission"]>();
   let now = new Date("2026-10-08T10:00:00Z");
   let sequence = 0;
   let routeLoaded = false;
@@ -646,16 +699,15 @@ async function sessionRouteScenario(
     const { RequestSessionCreationTransaction } = await import(
       "@/lib/sessions/request-session-creation-transaction"
     );
-    configuration.createSessionDependencies.mockReturnValue({
-      authenticate,
-      createForSubmission: (submission) =>
-        new CreateSessions({
-          transaction: new RequestSessionCreationTransaction(unitOfWork, submission),
-          clock,
-          ids,
-          holdingAccountId,
-        }),
-    });
+    createForSubmission.mockImplementation((submission) =>
+      new CreateSessions({
+        transaction: new RequestSessionCreationTransaction(unitOfWork, submission),
+        clock,
+        ids,
+        holdingAccountId,
+      }),
+    );
+    configuration.createSessionDependencies.mockReturnValue({ authenticate, createForSubmission });
     const route = await import("@/app/api/sessions/route");
     const { readyBookerUser } = await import("../../domain/accounts/user-fixtures");
     routeLoaded = true;
@@ -666,6 +718,7 @@ async function sessionRouteScenario(
     POST,
     loadRoute,
     unitOfWork,
+    createForSubmission,
     createTestUser,
     readyBookerUser,
     PayoutAccount,

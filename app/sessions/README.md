@@ -2,49 +2,46 @@
 
 **Owner:** Neoh (liang799)
 
-UC2-02 Create Session (server-side booking share computation), UC2-03 Manage
-Session (UC2-03a Toggle Public/Private, UC2-03b Remove Participant), UC2-03c
-Cancel Session. Session and Slot schema with row-level security policies.
-Supabase Realtime wiring lives here to meet the 3-second slot propagation
-requirement.
+UC2-02 currently supplies the Create Session HTTP contract and Swagger
+documentation. The production `POST /api/sessions` route returns:
 
-UC2-02 has a [CreateSessions module](../../use-cases/sessions/README.md) and a
-[POST route](../api/sessions/route.ts) that directly authenticates, parses,
-invokes the use case, and maps the response. The
-[configuration guide](../../use-case-config/README.md) explains dependency
-assembly; executable examples live in the
-[centralized API route tests](../../tests/app/sessions/create-session-route.test.ts).
+```json
+{
+  "error": {
+    "code": "SESSION_API_UNAVAILABLE",
+    "message": "Session creation is not available yet"
+  }
+}
+```
 
-The route starts with `await getSessionDependencies()` from the app's
-[server dependency getter](./server-dependencies.ts). The getter validates
-settings through [readSessionServerSettings](./server-environment.ts) and
-obtains [`SessionApiDependencies`](./dependencies.ts) from the synchronous
-[`createSessionDependencies(settings)`](../../use-case-config/sessions.ts).
-It shares pending and successful initialization within the runtime instance;
-only failed initialization clears the cache for retry. The route continues to
-map setup failures to an opaque JSON 500. This lazy setup is a local error
-policy, not a Vercel or Clean Architecture requirement.
+The status is **503**. Authentication and persistence integrations are pending;
+the [configuration guide](../../use-case-config/README.md) records the required
+interfaces, owners, and merge order. Documentation and contract tests work
+without credentials or a local Supabase stack.
 
-Awaiting the getter guarantees assembled dependencies, not database readiness.
-Infrastructure factories own client and pool behavior; the pool is still
-created only after authentication and request parsing succeed. The
-[getter tests](../../tests/app/sessions/server-dependencies.test.ts) cover
-initialization sharing and recovery, while the
-[route lifecycle tests](../../tests/app/sessions/production-route.test.ts)
-exercise the HTTP boundary.
+## Configured HTTP contract
 
-The route authenticates before parsing JSON.
+The [POST route](../api/sessions/route.ts) awaits the app-owned
+[dependency getter](./server-dependencies.ts). With
+[`SessionApiDependencies`](./dependencies.ts) supplied, it authenticates,
+parses the request, creates a submission-scoped use case, invokes
+[`CreateSessions.forBooker`](../../use-cases/sessions/CreateSessions.ts)
+directly, and maps its result or error. Tests inject those dependencies; the
+production default never substitutes a fake authenticated user or persisted
+session. Unexpected initialization errors return an opaque JSON 500.
+
 [parseCreateSessionInput](./create-session-input.ts) validates the authenticated
-user ID separately from the raw `{ idempotencyKey, booking, config }` body with
-Zod. Booking timestamps must be ISO strings with a timezone (`Z` or an offset);
-parsing converts them to `Date` values for the business action. Unknown fields
-are stripped. Submission keys must contain a non-whitespace character and be
-at most 200 characters; they are preserved without trimming. Oversized keys
-return 400 before creating a database pool. The parser returns
-`{ input: { bookerId, booking, config }, submission: { idempotencyKey } }`;
-the trusted `bookerId` always comes from authentication.
+user ID separately from the raw `{ idempotencyKey, booking, config }` body.
+Booking timestamps are ISO strings with a timezone (`Z` or an offset), converted
+to `Date` values for the use case. Unknown fields are stripped. Submission keys
+must contain a non-whitespace character and be at most 200 characters; they are
+preserved without trimming. Invalid input returns 400 before constructing a
+submission use case.
 
-Existing parser callers that hold Date values serialize them first:
+The parser returns
+`{ input: { bookerId, booking, config }, submission: { idempotencyKey } }`.
+The trusted `bookerId` comes from authentication. Existing parser callers that
+hold Date values serialize them first:
 
 ```ts
 const parsed = parseCreateSessionInput(authenticatedUserId, {
@@ -58,15 +55,11 @@ const parsed = parseCreateSessionInput(authenticatedUserId, {
 });
 ```
 
-Direct `CreateSessions.forBooker` callers continue to supply Date values.
-
-The configured submission factory supplies a fresh `CreateSessions` instance
-and [PostgreSQL transaction adapter](../../lib/sessions/postgres-session-creation-transaction.ts).
-The route invokes `forBooker(bookerId, booking, config)` and returns the direct
-`{ sessionId, roomToken, bookingShareCents }` JSON result. Successful creation and
-successful replay both return 201. App-owned
-[response helpers](./create-session-response.ts) map failures to the statuses
-below.
+Direct use-case callers continue to supply Date-valued booking details.
+Successful creation and replay return 201 with
+`{ sessionId, roomToken, bookingShareCents }`. Shares round down equally:
+1001 cents over three slots means 333 cents each, 999 cents collected when full,
+and a 2-cent shortfall borne by the booker. Creation moves no funds.
 
 | Status | Outcome |
 | --- | --- |
@@ -77,29 +70,28 @@ below.
 | 404 | Authenticated User is missing from storage |
 | 409 | Payout setup or session-state conflict |
 | 422 | Invalid business values |
-| 500 | Invalid server configuration, authentication adapter failure, malformed authenticated identity, or other unexpected failure |
+| 500 | Unexpected initialization, authentication, or persistence failure, or malformed authenticated identity |
+| 503 | Required session integrations are unavailable; the current production response |
 
 Errors use `{ error: { code, message } }`. Unexpected failures return the fixed
-`INTERNAL_ERROR` response without exposing infrastructure error details.
+`INTERNAL_ERROR` response. Retrying the same booker's submission key must return
+the original result; an intended new session needs a new key. The authentication
+integration must verify current active-account access before parsing or replay.
+The persistence integration must commit the Session and replay result atomically.
+See the [integration requirements](../../use-case-config/README.md#pending-integrations).
 
-Retrying the same booker's submission key returns the original result; an
-intended new session needs a new key. The business method receives no retry
-metadata. The API is mounted at `POST /api/sessions`. Its Supabase bearer adapter
-verifies the access token and current profile status before parsing the request
-or starting the PostgreSQL transaction, including replay requests. The profile
-lookup uses the caller's bearer identity. Inactive profiles return 403, missing
-profiles return 404, and lookup failures return an opaque 500.
-[Swagger UI](http://127.0.0.1:3000/api-docs) documents the request and supports
-trying it with a local access token; `/api/openapi` serves its OpenAPI document.
-See the [local API setup](../../supabase/README.md#session-api) and the
-[database](../../tests/integration) and [E2E](../../tests/e2e) suites.
-Registration and sign-in screens, session UI, and OneMap remain separate work.
+## Documentation and validation
 
-Server settings require HTTPS for non-loopback Supabase URLs and
-`sslmode=require`, `verify-ca`, or `verify-full` for non-loopback PostgreSQL
-connections. Local `localhost`, `127.0.0.1`, and `::1` connections may use HTTP
-and omit database TLS for the Supabase development stack. Invalid settings
-return the same opaque 500 response before authentication or database IO.
+[Swagger UI](http://127.0.0.1:3000/api-docs) and `/api/openapi` publicly document
+both the configured contract and current unavailable response. Swagger's
+Try it out sends a real request and receives 503 while integrations are pending.
 
-Shares round down equally: 1001 cents over three slots means 333 cents each,
-999 cents collected when full, and a 2-cent shortfall borne by the booker.
+The [route tests](../../tests/app/sessions/create-session-route.test.ts) exercise
+creation, replay, validation, and failures with injected dependencies and the
+real use case. The [E2E tests](../../tests/e2e) load the documentation and check
+503 against the running Next.js server. These checks establish the contract;
+live authentication, database persistence, and concurrency need integration
+coverage when their implementations land.
+
+Registration and sign-in screens, session UI, OneMap, and later session
+management and Realtime features remain separate work.

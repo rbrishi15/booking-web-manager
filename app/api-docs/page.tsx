@@ -8,8 +8,9 @@ export default function ApiDocsPage() {
     <main className="mx-auto max-w-6xl px-4 py-8">
       <h1 className="text-3xl font-semibold">API reference</h1>
       <p className="mt-2 text-gray-600">
-        Read the session API contract below. To try a request, authorize with a
-        Supabase access token for an eligible booker. Requests run against this server.
+        Preview the session API contract below. Session creation is not available
+        yet; requests currently return 503. No credentials are needed to view this
+        reference.
       </p>
       <SessionApiReference />
     </main>
