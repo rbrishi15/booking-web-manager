@@ -25,13 +25,13 @@ const request = (query = "") => new Request(`http://localhost/api/sessions?${que
 describe("GET /api/sessions", () => {
   test("authenticates and invokes the use case with validated filter bounds", async () => {
     const { GET, search, authenticate } = await scenario();
-    const req = request("sport=Badminton&region=West&date=2030-01-02&timeFrom=18:00&timeTo=20:00");
+    const req = request("q=+Jurong+&sport=Badminton&region=West&date=2030-01-02&timeFrom=18:00&timeTo=20:00");
     const response = await GET(req);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ items: [], nextCursor: null });
     expect(authenticate).toHaveBeenCalledExactlyOnceWith(req);
-    expect(search).toHaveBeenCalledExactlyOnceWith({ sport: "Badminton", region: "West", startAtFrom: new Date("2030-01-02T10:00:00Z"), startAtBefore: new Date("2030-01-02T12:00:00Z") });
+    expect(search).toHaveBeenCalledExactlyOnceWith({ q: "Jurong", sport: "Badminton", region: "West", startAtFrom: new Date("2030-01-02T10:00:00Z"), startAtBefore: new Date("2030-01-02T12:00:00Z") });
   });
 
   test("serializes safe listing fields and an opaque cursor", async () => {
@@ -44,7 +44,7 @@ describe("GET /api/sessions", () => {
     expect(JSON.stringify(body)).not.toContain("private");
   });
 
-  test.each(["sport=Badminton&sport=Tennis", "region=South", "timeTo=19:00", "date=2030-02-30", "cursor=bad"])("rejects invalid query %s before reading the database", async (query) => {
+  test.each(["q=one&q=two", `q=${"a".repeat(101)}`, "sport=Badminton&sport=Tennis", "region=South", "timeTo=19:00", "date=2030-02-30", "cursor=bad"])("rejects invalid query %s before reading the database", async (query) => {
     const { GET, search } = await scenario();
     const response = await GET(request(query));
     expect(response.status).toBe(400);

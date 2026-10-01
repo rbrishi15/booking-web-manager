@@ -5,8 +5,28 @@ const parse = (query: string) => parseDiscoveryQuery(new URLSearchParams(query))
 
 describe("discovery query boundary", () => {
   test("omits blanks and unknown fields from the default search", () => {
-    expect(parse("sport=+&region=&ignored=secret")).toMatchObject({
+    expect(parse("q=+&sport=+&region=&ignored=secret")).toMatchObject({
       status: "valid", input: {}, queryKey: "",
+    });
+  });
+
+  test("normalizes search text and combines it with the applied filters", () => {
+    expect(parse("q=++Jurong+East++&sport=Badminton&region=West")).toMatchObject({
+      status: "valid",
+      filters: { q: "Jurong East" },
+      input: { q: "Jurong East", sport: "Badminton", region: "West" },
+      queryKey: "q=Jurong+East&sport=Badminton&region=West",
+    });
+  });
+
+  test("accepts literal punctuation and at most 100 characters after trimming", () => {
+    const q = "100%_O'Brien\\Court";
+    expect(parse(new URLSearchParams({ q }).toString())).toMatchObject({ status: "valid", input: { q } });
+    expect(parse(new URLSearchParams({ q: ` ${"a".repeat(100)} ` }).toString())).toMatchObject({
+      status: "valid", input: { q: "a".repeat(100) },
+    });
+    expect(parse(new URLSearchParams({ q: "a".repeat(101) }).toString())).toMatchObject({
+      status: "invalid", fieldErrors: { q: ["Search must be 100 characters or fewer"] },
     });
   });
 
@@ -33,6 +53,7 @@ describe("discovery query boundary", () => {
   });
 
   test.each([
+    ["q=Tennis&q=Badminton", "q"], ["q=&q=", "q"],
     ["sport=Cricket", "sport"], ["region=South", "region"],
     ["date=2030-02-30", "date"], ["date=2027-02-29", "date"],
     ["date=0000-01-01", "date"], ["date=30-01-01", "date"],
@@ -55,8 +76,8 @@ describe("discovery query boundary", () => {
 
   test("round-trips a validated opaque cursor", () => {
     const cursor = { startAt: "2030-01-01T10:00:00.000Z", sessionId: "10000000-0000-4000-8000-000000000001" };
-    const query = buildDiscoveryQuery({ sport: "Badminton", region: "North-East", date: "", timeFrom: "", timeTo: "" }, encodeDiscoveryCursor(cursor));
-    expect(parse(query)).toMatchObject({ status: "valid", input: { cursor } });
+    const query = buildDiscoveryQuery({ q: "Sports Hall", sport: "Badminton", region: "North-East", date: "", timeFrom: "", timeTo: "" }, encodeDiscoveryCursor(cursor));
+    expect(parse(query)).toMatchObject({ status: "valid", input: { q: "Sports Hall", cursor } });
   });
 
   test.each([

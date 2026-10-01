@@ -34,6 +34,17 @@ test("parameterizes combined bounds and cursor, including hostile filter input",
   expect(query.mock.calls[0]?.[1]).toEqual([now, sport, "West", from, before, cursor.startAt, cursor.sessionId, 21]);
 });
 
+test("matches search text literally across sport or venue using one bound pattern", async () => {
+  const { query, reader } = scenario();
+  const now = new Date("2030-01-01T00:00:00Z");
+  const q = "100%_O'Brien\\Court'; select pg_sleep(10); --";
+  await reader.search({ now, limit: 21, q, sport: "Tennis", region: "West" });
+  const [statement, parameters] = query.mock.calls[0] ?? [];
+  expect(statement).toContain("(sport ilike $2 or venue_name ilike $2) and sport = $3 and region = $4");
+  expect(statement).not.toContain(q);
+  expect(parameters).toEqual([now, "%100\\%\\_O'Brien\\\\Court'; select pg\\_sleep(10); --%", "Tennis", "West", 21]);
+});
+
 test("converts safe bigint cents and projects only listing fields", async () => {
   const { query, reader } = scenario();
   query.mockResolvedValue([{

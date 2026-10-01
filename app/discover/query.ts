@@ -6,6 +6,7 @@ import type {
 } from "@/use-cases/sessions/DiscoverSessions";
 
 export interface DiscoveryFilters {
+  q?: string;
   sport: string;
   region: string;
   date: string;
@@ -14,7 +15,7 @@ export interface DiscoveryFilters {
 }
 
 export type DiscoveryFieldErrors = Partial<Record<keyof DiscoveryFilters | "cursor", string[]>>;
-const filterNames = ["sport", "region", "date", "timeFrom", "timeTo"] as const;
+const filterNames = ["q", "sport", "region", "date", "timeFrom", "timeTo"] as const;
 const queryNames = [...filterNames, "cursor"] as const;
 const cursorSchema = z.object({
   startAt: z.string().datetime(),
@@ -33,6 +34,7 @@ export type ParsedDiscoveryQuery = {
 /** Portable URL contract shared by the API, server page, and form controller. */
 export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQuery {
   const filters: DiscoveryFilters = {
+    q: params.get("q")?.trim() ?? "",
     sport: params.get("sport")?.trim() ?? "",
     region: params.get("region")?.trim() ?? "",
     date: params.get("date")?.trim() ?? "",
@@ -47,6 +49,8 @@ export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQue
   for (const name of queryNames) {
     if (params.getAll(name).length > 1) invalid(name, "Provide this filter only once");
   }
+  if (filters.q && filters.q.length > 100)
+    invalid("q", "Search must be 100 characters or fewer");
   if (filters.sport && !SPORTS.some((sport) => sport === filters.sport))
     invalid("sport", "Choose a sport from the list");
   if (filters.region && !REGIONS.some((region) => region === filters.region))
@@ -88,6 +92,7 @@ export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQue
   return {
     status: "valid", filters, cursor, queryKey: buildDiscoveryQuery(filters, cursor),
     input: {
+      ...(filters.q ? { q: filters.q } : {}),
       ...(filters.sport ? { sport: filters.sport } : {}),
       ...(filters.region ? { region: filters.region } : {}),
       ...(startAtFrom ? { startAtFrom, startAtBefore } : {}),
@@ -98,7 +103,10 @@ export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQue
 
 export function buildDiscoveryQuery(filters: DiscoveryFilters, cursor = ""): string {
   const params = new URLSearchParams();
-  for (const name of filterNames) if (filters[name].trim()) params.set(name, filters[name].trim());
+  for (const name of filterNames) {
+    const value = filters[name]?.trim();
+    if (value) params.set(name, value);
+  }
   if (cursor) params.set("cursor", cursor);
   return params.toString();
 }

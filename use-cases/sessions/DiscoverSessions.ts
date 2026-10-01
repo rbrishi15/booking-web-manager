@@ -19,6 +19,8 @@ export interface SessionDiscoveryCursor {
 }
 
 export interface DiscoverSessionsInput {
+  /** Case-insensitive literal substring of the sport or venue name. */
+  readonly q?: string;
   readonly sport?: Sport;
   readonly region?: Region;
   readonly startAtFrom?: Date;

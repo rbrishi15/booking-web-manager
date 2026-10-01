@@ -19,6 +19,11 @@ export class PostgresSessionDiscoveryReader implements SessionDiscoveryReader {
       values.push(value);
       return `$${values.length}`;
     };
+    if (input.q !== undefined) {
+      // SQL LIKE treats these as syntax; user search text must remain literal.
+      const pattern = parameter(`%${input.q.replace(/[\\%_]/g, "\\$&")}%`);
+      conditions.push(`(sport ilike ${pattern} or venue_name ilike ${pattern})`);
+    }
     if (input.sport !== undefined) conditions.push(`sport = ${parameter(input.sport)}`);
     if (input.region !== undefined) conditions.push(`region = ${parameter(input.region)}`);
     if (input.startAtFrom !== undefined)

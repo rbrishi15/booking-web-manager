@@ -20,13 +20,13 @@ test("authenticated discovery filters real stored sessions and protects private 
   try {
     const booker = await context.identity();
     const viewer = await context.identity(false); // Reading listings does not require payout setup.
-    async function createSession(startAt: string, config: { visibility?: string; sport?: string; region?: string } = {}) {
+    async function createSession(startAt: string, config: { visibility?: string; sport?: string; region?: string; venueName?: string } = {}) {
       const response = await request.post("/api/sessions", {
         headers: { Authorization: `Bearer ${booker.token}` },
         data: {
           idempotencyKey: randomUUID(),
           booking: {
-            venueName: "Discovery API fixture", region: config.region ?? "West", sport: config.sport ?? "Badminton",
+            venueName: config.venueName ?? "Discovery API fixture", region: config.region ?? "West", sport: config.sport ?? "Badminton",
             startAt, endAt: new Date(new Date(startAt).getTime() + 2 * 60 * 60 * 1000).toISOString(), totalCostCents: 1001,
           },
           config: { totalSlots: 3, minimumHeadcount: 2, visibility: config.visibility ?? "PUBLIC" },
@@ -36,7 +36,7 @@ test("authenticated discovery filters real stored sessions and protects private 
       return response.json();
     }
     const first = await createSession("2041-07-01T16:00:00Z"); // July 2 at midnight in Singapore.
-    const later = await createSession("2041-07-02T10:00:00Z");
+    const later = await createSession("2041-07-02T10:00:00Z", { venueName: "100%_O'Brien\\Court" });
     await createSession("2041-07-02T10:00:00Z", { region: "East" });
     await createSession("2041-07-02T10:00:00Z", { sport: "Tennis" });
     const privateSession = await createSession("2041-07-02T10:00:00Z", { visibility: "PRIVATE" });
@@ -67,6 +67,17 @@ test("authenticated discovery filters real stored sessions and protects private 
     expect((await narrowed.json()).items.map((item: DiscoveryItem) => item.sessionId)).toEqual([later.sessionId]);
     const empty = await request.get("/api/sessions", { headers, params: { date: "2041-07-02", sport: "Volleyball" } });
     expect(await empty.json()).toEqual({ items: [], nextCursor: null });
+    const searched = await request.get("/api/sessions", {
+      headers, params: { q: "  o'BRIEN\\court  ", date: "2041-07-02", sport: "Badminton", region: "West" },
+    });
+    expect(searched.status()).toBe(200);
+    expect((await searched.json()).items.map((item: DiscoveryItem) => item.sessionId)).toEqual([later.sessionId]);
+    const literal = await request.get("/api/sessions", { headers, params: { q: "100%_", date: "2041-07-02" } });
+    expect((await literal.json()).items.map((item: DiscoveryItem) => item.sessionId)).toEqual([later.sessionId]);
+    const sportSearch = await request.get("/api/sessions", {
+      headers, params: { q: "badmin", date: "2041-07-02", sport: "Badminton", region: "West" },
+    });
+    expect((await sportSearch.json()).items.map((item: DiscoveryItem) => item.sessionId)).toEqual([first.sessionId, later.sessionId]);
 
     const unauthenticated = await request.get("/api/sessions");
     expect(unauthenticated.status()).toBe(401);
@@ -86,6 +97,7 @@ test("rejects invalid discovery queries and pages tied start times without repea
     const viewer = await context.identity(false);
     const headers = { Authorization: `Bearer ${viewer.token}` };
     for (const query of [
+      "q=tennis&q=badminton", `q=${"a".repeat(101)}`,
       "sport=Badminton&sport=Tennis", "region=West&region=", "date=2041-02-29", "timeFrom=18%3A00",
       "date=2041-07-03&timeFrom=20%3A00&timeTo=18%3A00", "cursor=invalid",
     ]) {
@@ -104,13 +116,13 @@ test("rejects invalid discovery queries and pages tied start times without repea
       );
     }
     // Keep this window separate from the preceding test's next-day boundary fixture.
-    const firstResponse = await request.get("/api/sessions", { headers, params: { date: "2041-07-10", sport: "", unknown: "ignored" } });
+    const firstResponse = await request.get("/api/sessions", { headers, params: { q: "PAGED", date: "2041-07-10", sport: "", unknown: "ignored" } });
     expect(firstResponse.status()).toBe(200);
     const first: DiscoveryPage = await firstResponse.json();
     expect(first.items.map((item) => item.sessionId)).toEqual(ids.slice(0, 20));
     expect(first.nextCursor).not.toBeNull();
     if (first.nextCursor === null) throw new Error("Missing next page cursor");
-    const secondResponse = await request.get("/api/sessions", { headers, params: { date: "2041-07-10", cursor: first.nextCursor } });
+    const secondResponse = await request.get("/api/sessions", { headers, params: { q: "PAGED", date: "2041-07-10", cursor: first.nextCursor } });
     expect(secondResponse.status()).toBe(200);
     const second: DiscoveryPage = await secondResponse.json();
     expect(second.items.map((item) => item.sessionId)).toEqual(ids.slice(20));
