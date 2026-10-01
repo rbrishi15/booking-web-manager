@@ -36,19 +36,19 @@ export const Populated: Story = {
 };
 
 export const FiltersPreserveDraft: Story = {
-  args: { filters: { ...emptyFilters, region: "East" } },
+  args: { filters: { ...emptyFilters, q: "Court", region: "East" } },
   play: async ({ canvas, args }) => {
     const toggle = canvas.getByRole("button", { name: "Filters" });
     await userEvent.click(toggle);
     await userEvent.selectOptions(canvas.getByLabelText("Sport"), "Tennis");
     await userEvent.click(toggle);
     await expect(canvas.getByLabelText("Sport")).not.toBeVisible();
-    await expect(canvas.getByLabelText("Applied filters")).toHaveTextContent(/^East$/);
+    await expect(canvas.getByLabelText("Applied filters")).toHaveTextContent(/^“Court” · East$/);
     await userEvent.click(toggle);
     await expect(canvas.getByLabelText("Sport")).toHaveValue("Tennis");
     await expect(args.onNavigate).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "Apply filters" }));
-    await expect(args.onNavigate).toHaveBeenCalledWith("sport=Tennis&region=East");
+    await expect(args.onNavigate).toHaveBeenCalledWith("q=Court&sport=Tennis&region=East");
   },
 };
 

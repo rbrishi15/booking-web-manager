@@ -70,6 +70,7 @@ export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, on
               if (!busy) onApply(new FormData(event.currentTarget));
             }}
           >
+            <input type="hidden" name="q" defaultValue={filters.q ?? ""} />
             <fieldset disabled={busy} className="grid min-w-0 gap-4 [color-scheme:light] dark:[color-scheme:dark] sm:grid-cols-2 xl:grid-cols-5">
               <legend className="sr-only">Session filters</legend>
               <FilterField id={id} name="sport" label="Sport" errors={errors}>
@@ -128,7 +129,7 @@ function summarizeFilters(filters: DiscoveryFilters): string {
   const time = filters.timeFrom && filters.timeTo
     ? `${filters.timeFrom}–${filters.timeTo} SGT`
     : filters.timeFrom ? `From ${filters.timeFrom} SGT` : filters.timeTo ? `Before ${filters.timeTo} SGT` : "";
-  return [filters.sport, filters.region, filters.date, time].filter(Boolean).join(" · ");
+  return [filters.q ? `“${filters.q}”` : "", filters.sport, filters.region, filters.date, time].filter(Boolean).join(" · ");
 }
 
 function fieldAccessibility(id: string, name: keyof DiscoveryFilters, errors: DiscoveryFieldErrors) {
@@ -159,7 +160,7 @@ function DiscoveryResults({ state, onNext, onRetry }: Pick<DiscoveryViewProps, "
     case "loading":
       return <LoadingSpinner label="Loading sessions…" />;
     case "invalid":
-      return <ErrorMessage>{state.fieldErrors.cursor?.join(" ") ?? "Please fix the highlighted filters, then apply them again."}</ErrorMessage>;
+      return <ErrorMessage>{state.fieldErrors.q?.join(" ") ?? state.fieldErrors.cursor?.join(" ") ?? "Please fix the highlighted filters, then apply them again."}</ErrorMessage>;
     case "error":
       return (
         <div className="space-y-3">
