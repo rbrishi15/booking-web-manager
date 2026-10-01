@@ -8,9 +8,8 @@ import {
 } from "@/domain";
 import { describe, expect, test, vi } from "vitest";
 import {
-  at,
-  before,
-  end,
+  hoursBeforeSessionStart,
+  sessionEndsAt,
   pendingPayoutDetails,
   sessionState,
   verifiedParticipation,
@@ -29,9 +28,9 @@ describe("Session", () => {
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
-    expect(() => bookingSession.completeSettlement("out", end)).toThrow(
-      expect.objectContaining({ code: "INVALID_INPUT" }),
-    );
+    expect(() =>
+      bookingSession.completeSettlement("out", sessionEndsAt),
+    ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
     expect(bookingSession.participantList).toBe(previousList);
     expect(bookingSession.status).toBe("PAYOUT_PENDING");
@@ -50,9 +49,9 @@ describe("Session", () => {
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
-    expect(() => bookingSession.completeSettlement("stale", end)).toThrow(
-      expect.objectContaining({ code: "STALE_PAYOUT" }),
-    );
+    expect(() =>
+      bookingSession.completeSettlement("stale", sessionEndsAt),
+    ).toThrow(expect.objectContaining({ code: "STALE_PAYOUT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
   });
 
@@ -83,7 +82,9 @@ describe("Session", () => {
 
     // Act & Assert
     try {
-      expect(() => bookingSession.completeSettlement("out", end)).toThrow(
+      expect(() =>
+        bookingSession.completeSettlement("out", sessionEndsAt),
+      ).toThrow(
         expect.objectContaining({
           code: "INVALID_STATE",
           message: "Second line rejected",
@@ -97,6 +98,7 @@ describe("Session", () => {
 
   test("completeSettlement_WhenSecondHoldFailureIsRetried_ReleasesAllHolds", () => {
     // Arrange
+    const completionTime = sessionEndsAt;
     const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
     const failure = vi
       .spyOn(
@@ -107,15 +109,15 @@ describe("Session", () => {
         throw new DomainError("INVALID_STATE", "Second line rejected");
       });
     try {
-      expect(() => bookingSession.completeSettlement("out", end)).toThrow(
-        expect.objectContaining({ code: "INVALID_STATE" }),
-      );
+      expect(() =>
+        bookingSession.completeSettlement("out", completionTime),
+      ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
     } finally {
       failure.mockRestore();
     }
 
     // Act
-    const completion = bookingSession.completeSettlement("out", end);
+    const completion = bookingSession.completeSettlement("out", completionTime);
 
     // Assert
     expect(completion.instructions).toHaveLength(2);
@@ -129,8 +131,14 @@ describe("Session", () => {
 
   test("completeSettlement_WhenPayoutHasReleaseAndForfeiture_FinalizesBothHolds", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const completionTime = sessionEndsAt;
+    const reliabilityEvaluationTime = sessionEndsAt;
     const details = pendingPayoutDetails(["alice", "ben"]);
-    const alice = withdrawnParticipationWithForfeitureDue("alice", at(2));
+    const alice = withdrawnParticipationWithForfeitureDue(
+      "alice",
+      withdrawalTime,
+    );
     const ben = verifiedParticipation("ben", "ATTENDED");
     const bookingSession = new Session({
       ...details,
@@ -145,7 +153,7 @@ describe("Session", () => {
     });
 
     // Act
-    const completion = bookingSession.completeSettlement("out", end);
+    const completion = bookingSession.completeSettlement("out", completionTime);
 
     // Assert
     expect(
@@ -163,7 +171,7 @@ describe("Session", () => {
     expect(
       bookingSession.participantList
         .requireParticipation("p-alice")
-        .reliabilityOutcome(end)?.value,
+        .reliabilityOutcome(reliabilityEvaluationTime)?.value,
     ).toBe(0);
   });
 
@@ -182,7 +190,10 @@ describe("Session", () => {
     });
 
     // Act
-    const completion = bookingSession.completeSettlement("retry", end);
+    const completion = bookingSession.completeSettlement(
+      "retry",
+      sessionEndsAt,
+    );
 
     // Assert
     expect(completion.instructions).toEqual([
@@ -206,7 +217,7 @@ describe("Session", () => {
     const previousList = bookingSession.participantList;
 
     // Act
-    bookingSession.failSettlement("out", end);
+    bookingSession.failSettlement("out", sessionEndsAt);
 
     // Assert
     expect(bookingSession.status).toBe("AWAITING_PAYOUT");
@@ -226,12 +237,13 @@ function withdrawnParticipationWithForfeitureDue(
   userId: string,
   withdrawnAt: Date,
 ): Participation {
+  const committedAt = hoursBeforeSessionStart(48);
   return new Participation({
     participationId: `p-${userId}`,
     userId,
     status: "WITHDRAWN",
     attendance: "UNVERIFIED",
-    committedAt: before,
+    committedAt,
     withdrawnAt,
     hold: new FundHold({
       holdId: `h-${userId}`,
@@ -240,7 +252,7 @@ function withdrawnParticipationWithForfeitureDue(
       walletId: `w-${userId}`,
       amount: Money.fromCents(500),
       state: "FORFEITURE_DUE",
-      createdAt: before,
+      createdAt: committedAt,
     }),
   });
 }

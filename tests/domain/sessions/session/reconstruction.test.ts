@@ -1,18 +1,19 @@
 import { DomainError, FundHold, Participation, Session } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  before,
-  end,
+  hoursBeforeSessionStart,
+  sessionEndsAt,
   pendingPayoutDetails,
   createTestSession,
   sessionDetails,
-  start,
+  sessionStartsAt,
 } from "./session-fixtures";
 
 describe("Session", () => {
   describe("Construction and isolation", () => {
     test("constructor_WhenInputsAndGettersAreMutated_PreservesRosterAndHistory", () => {
       // Arrange
+      const committedAt = hoursBeforeSessionStart(48);
       const source = createTestSession({ committedUserIds: ["alice"] });
       const participations = [...source.participantList.participations];
       const attemptIds = ["earlier"];
@@ -42,9 +43,9 @@ describe("Session", () => {
       expect(constructed.participantList.requireParticipation("p-alice")).toBe(
         child,
       );
-      expect(constructed.booking.startAt).toEqual(start);
-      expect(child.committedAt).toEqual(before);
-      expect(child.hold?.createdAt).toEqual(before);
+      expect(constructed.booking.startAt).toEqual(sessionStartsAt);
+      expect(child.committedAt).toEqual(committedAt);
+      expect(child.hold?.createdAt).toEqual(committedAt);
       expect(constructed.payoutAttemptIds).toEqual(["earlier"]);
       expect(constructed.payoutIdempotencyKeys).toEqual(["earlier-key"]);
       expect(constructed.participantList.nextQueueSequence).toBe(1);
@@ -174,7 +175,7 @@ describe("Session", () => {
 
       // Assert
       expect(restoredSession.status).toBe("SETTLED");
-      expect(restoredSession.booking.endAt).toEqual(end);
+      expect(restoredSession.booking.endAt).toEqual(sessionEndsAt);
     });
 
     test("constructor_WhenFailedPayoutHistoryIsRestored_PreservesAttemptsAndKeys", () => {
@@ -213,16 +214,17 @@ describe("Session", () => {
 
     test("constructor_WhenDifferentUsersShareParticipationId_ThrowsDuplicateId", () => {
       // Arrange
+      const waitlistedAt = hoursBeforeSessionStart(48);
       const alice = Participation.createWaitlisted({
         participationId: "p-shared",
         userId: "alice",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 1,
       });
       const ben = Participation.createWaitlisted({
         participationId: "p-shared",
         userId: "ben",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 2,
       });
       const details = sessionDetails({
@@ -238,16 +240,17 @@ describe("Session", () => {
 
     test("constructor_WhenDifferentParticipationsShareUserId_ThrowsDuplicateId", () => {
       // Arrange
+      const waitlistedAt = hoursBeforeSessionStart(48);
       const firstEntry = Participation.createWaitlisted({
         participationId: "p-alice-first",
         userId: "alice",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 1,
       });
       const secondEntry = Participation.createWaitlisted({
         participationId: "p-alice-second",
         userId: "alice",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 2,
       });
       const details = sessionDetails({
@@ -263,19 +266,20 @@ describe("Session", () => {
 
     test("constructor_WhenDifferentParticipationsShareHoldId_ThrowsDuplicateId", () => {
       // Arrange
+      const benCommittedAt = hoursBeforeSessionStart(48);
       const source = createTestSession({ committedUserIds: ["alice"] });
       const alice = source.participantList.requireParticipation("p-alice");
       const ben = Participation.createCommitted({
         participationId: "p-ben",
         userId: "ben",
-        committedAt: before,
+        committedAt: benCommittedAt,
         hold: FundHold.create({
           holdId: "h-alice",
           participationId: "p-ben",
           holdingAccountId: source.holdingAccountId,
           walletId: "w-ben",
           amount: source.bookingShare,
-          createdAt: before,
+          createdAt: benCommittedAt,
         }),
       });
       const details = sessionDetails({ participations: [alice, ben] });
@@ -288,16 +292,17 @@ describe("Session", () => {
 
     test("constructor_WhenWaiterReusesHistoricalQueueSequence_ThrowsDuplicateId", () => {
       // Arrange
+      const waitlistedAt = hoursBeforeSessionStart(48);
       const departedAlice = Participation.createWaitlisted({
         participationId: "p-alice",
         userId: "alice",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 1,
       }).leaveWaitlist();
       const ben = Participation.createWaitlisted({
         participationId: "p-ben",
         userId: "ben",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 1,
       });
       const details = sessionDetails({
@@ -325,7 +330,7 @@ describe("Session", () => {
       const queued = Participation.createWaitlisted({
         participationId: "queued",
         userId: "queued-user",
-        waitlistedAt: before,
+        waitlistedAt: hoursBeforeSessionStart(48),
         queueSequence: 5,
       });
       const details = sessionDetails({
@@ -388,7 +393,7 @@ describe("Session", () => {
       const queued = Participation.createWaitlisted({
         participationId: "queued",
         userId: "queued-user",
-        waitlistedAt: before,
+        waitlistedAt: hoursBeforeSessionStart(48),
         queueSequence: 5,
       });
       const details = sessionDetails({
@@ -478,7 +483,9 @@ describe("Session", () => {
       (exposed.lines as unknown[]).pop();
 
       // Assert
-      expect(restoredSession.pendingSettlement?.requestedAt).toEqual(end);
+      expect(restoredSession.pendingSettlement?.requestedAt).toEqual(
+        sessionEndsAt,
+      );
       expect(
         restoredSession.pendingSettlement?.destination.bankAccountReference,
       ).toBe("bank");
@@ -499,7 +506,10 @@ describe("Session", () => {
       const restoredSession = new Session(details);
 
       // Act
-      const completion = restoredSession.completeSettlement("out", end);
+      const completion = restoredSession.completeSettlement(
+        "out",
+        sessionEndsAt,
+      );
 
       // Assert
       expect(completion.instructions.map((line) => line.kind)).toEqual([

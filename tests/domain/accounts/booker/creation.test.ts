@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   createTestUser,
   creationDetails,
-  end,
+  sessionEndsAt,
   readyBooker,
 } from "../../sessions/session/session-fixtures";
 import { readyBookerUser } from "../user-fixtures";
@@ -107,7 +107,7 @@ describe("Booker", () => {
 
   test("createSession_WhenBookingHasEnded_ThrowsSessionStarted", () => {
     // Arrange
-    const details = { ...creationDetails(), now: end };
+    const details = { ...creationDetails(), now: sessionEndsAt };
 
     // Act & Assert
     expect(() => readyBooker().createSession(details)).toThrow(

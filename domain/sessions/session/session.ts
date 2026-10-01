@@ -130,13 +130,13 @@ export class Session {
 
   recordAdmission(
     admission: Participation,
-    refundedReplacement: Participation | undefined,
+    completedReplacement: Participation | undefined,
     now: Date,
   ): void {
     assertOpenBefore(this.#status, this.#booking, now);
     const next = this.#participantList.withAdmission(
       admission,
-      refundedReplacement,
+      completedReplacement,
       now,
       this.bookingShare,
     );
@@ -373,7 +373,12 @@ export class Session {
       const at = validDate(now, "now");
       if (this.#booking.hasStarted(at)) return 0;
     }
-    return Math.max(0, this.#totalSlots - this.#participantList.committedCount);
+    return Math.max(
+      0,
+      this.#totalSlots -
+        this.#participantList.committedCount -
+        this.#participantList.reservedCount,
+    );
   }
 
   meetsReliabilityRequirement(score: ReliabilityScore): boolean {

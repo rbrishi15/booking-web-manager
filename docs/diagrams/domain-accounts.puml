@@ -36,10 +36,11 @@ class Participant <<RoleView>> {
   +userId : UUID
   --
   +join(...) : ParticipantJoinResult
+  +acceptReplacement(...) : ParticipantJoinResult
   +promoteFromWaitlist(...) : PromotionResult
   +leaveWaitlist(...) : void
   +withdraw(...) : WithdrawalResult
-  +offerPlaceToWaitlist(...) : FinancialResult
+  +previewWithdrawal(...) : WithdrawalPreview
 }
 
 class User <<AggregateRoot>> {

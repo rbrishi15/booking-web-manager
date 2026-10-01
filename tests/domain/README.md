@@ -117,7 +117,7 @@ test("completeSettlement_WhenPayoutIsPending_ReleasesHeldShares", () => {
   const session = new Session(pendingPayoutDetails(["alice", "ben"]));
 
   // Act
-  const completion = session.completeSettlement("out", end);
+  const completion = session.completeSettlement("out", sessionEndsAt);
 
   // Assert
   expect(session.status).toBe("SETTLED");
@@ -152,6 +152,41 @@ failed Session recording must preserve both roster and queue state.
 Avoid generic error-capture helpers and setup hooks that hide the scenario.
 Domain tests assume declared input types and exercise business constraints;
 external input parsing belongs in boundary tests.
+
+## Time expressions
+
+Time expressions must reveal their unit, direction, and anchor. Use the shared
+session fixture's `sessionStartsAt` and `sessionEndsAt` for those exact instants,
+and its named helpers for offsets:
+
+```ts
+const withdrawalTime = hoursBeforeSessionStart(10);
+const acceptanceTime = hoursBeforeSessionStart(9);
+const joiningTime = hoursBeforeSessionStart(48);
+const prematureVerificationTime = hoursBeforeSessionEnd(1);
+```
+
+Use scenario-specific variables when a test contains multiple events or reuses
+a timestamp. A single-use timestamp can stay inline when the helper states its
+meaning clearly. Keep milliseconds-per-hour conversion inside the fixture, and
+use positive offsets with the helper that describes the intended direction.
+
+Name exact boundaries and their one-millisecond offsets explicitly:
+
+```ts
+const refundCutoff = hoursBeforeSessionStart(30);
+const oneMillisecondBeforeRefundCutoff = new Date(refundCutoff.getTime() - 1);
+const automaticVerificationDueAt = hoursAfterSessionEnd(72);
+const oneMillisecondBeforeAutomaticVerification = new Date(
+  automaticVerificationDueAt.getTime() - 1,
+);
+```
+
+The refund boundary is measured from session start; automatic attendance
+verification is measured from session end. Exactly 30 hours before session start
+still requires a replacement for a refund. One millisecond earlier is inside the
+full-refund window. Automatic verification is allowed exactly 72 hours after
+session end and rejected one millisecond earlier.
 
 ## Examples and verification
 

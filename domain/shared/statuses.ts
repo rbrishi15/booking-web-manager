@@ -13,7 +13,7 @@ export type ParticipationStatus =
   | "WITHDRAWN"
   | "REMOVED"
   | "CANCELLED";
-export type ReplacementMode = "OPEN_SLOT" | "INVITE_LINK";
+export type ReplacementMode = "OPEN_SLOT" | "DIRECT_INVITE";
 export type AttendanceStatus = "UNVERIFIED" | "ATTENDED" | "ABSENT";
 export type VerificationMethod = "BOOKER" | "AUTOMATIC";
 export type HoldState =

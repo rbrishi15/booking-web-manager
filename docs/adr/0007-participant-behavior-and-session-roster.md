@@ -15,6 +15,15 @@ Session-to-role callbacks and promotion routing below. Participant now runs its
 complete workflows, including promotion, and Session records prepared children
 without actor authorization. This record preserves the earlier decision history.
 
+**Current policy:** [ADR-0006](./0006-personal-replacement-reservations.md)
+records the 27 September confirmation of the queue and fixed either/or departure
+choice: one named replacement or the groups/public waitlist. The historical
+`offerPlaceToWaitlist` / `releaseParticipantReplacement` APIs below are removed;
+a personal place cannot switch to the waitlist after withdrawal. References
+below to proposed policy describe the original decision date. Replacement-link
+references are also historical: current personal invitations use the recipient's
+user ID and require explicit `Participant.acceptReplacement` acceptance.
+
 ## Context
 
 `Participant` previously forwarded its loaded `User` to `Session`, which decided
