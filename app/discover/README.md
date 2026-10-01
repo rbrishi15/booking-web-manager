@@ -70,10 +70,35 @@ filters; Retry refreshes the current query. A controller keyed by the committed
 query restores form defaults during back/forward navigation. Pending controls
 are disabled and the result area announces its busy state.
 
+Below 768px the filter form is a disclosure with one presentation state:
+`collapsed | expanded`. A committed query starts collapsed unless invalid;
+invalid submission expands it. The form stays mounted when hidden, preserving
+unsubmitted edits, while its summary describes only applied URL filters.
+Desktop filters stay visible. Cards use decorative local sport photos,
+compact Singapore timing (including the end date for overnight sessions), and
+the same informational session data. Photo sources and credits are in
+[`public/images/sports/README.md`](../../public/images/sports/README.md).
+
+The shared mobile shell exposes Home, Sessions, Wallet and Settings. Only the
+active destination shows a visible label; all four retain accessible names.
+Groups are part of the Sessions area and remain reachable through the account
+sheet, alongside settings and logout. Sessions and Wallet retain their existing
+route destinations; their pages are not implemented by this visual redesign.
+Personal upcoming bookings, joining, session details and the create-session page
+also remain outside this work.
+
 Feature-local Storybook stories render the production synchronous view with
 deterministic fixtures, without Supabase or PostgreSQL. They cover results,
 empty/loading/invalid/error states, pagination, long content and the 390px view.
 Interaction tests cover filters, correction, Clear, Retry and pending controls.
+The Mobile page stories render the complete shared shell with the actual form
+controller, including disclosure/draft transitions, all result states, long
+content, overnight timing and dark mode. Static assets are shared with Next.js.
+The Desktop page stories cover the same outcomes in the full Booking. layout:
+an inset sidebar, faded court background, prominent introduction and two-column
+photo cards from 1024px (one column on smaller screens). The shared route loading
+and error fallbacks retain the desktop identity. Card prices show the SGD share
+per person; total capacity is still distinct from available places.
 Run `npm run storybook`, `npm run build-storybook` and `npm run test:storybook`.
 
 Unit tests cover query parsing, state transitions, the use-case boundary, API
