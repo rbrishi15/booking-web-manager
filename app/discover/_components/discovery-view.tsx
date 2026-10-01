@@ -11,12 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
-import { PageHeader } from "@/components/ui/page-header";
 import { sportImage } from "@/lib/sessions/sport-image";
 import { cn } from "@/lib/utils";
 import type { DiscoveryPage } from "../contracts";
 import type { DiscoveryFieldErrors, DiscoveryFilters } from "../query";
 import type { DiscoveryState, FilterPanelState } from "./discovery-state";
+import { DiscoveryHero } from "./discovery-hero";
 
 export interface DiscoveryViewProps {
   readonly filters: DiscoveryFilters;
@@ -41,9 +41,9 @@ export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, on
   const appliedSummary = summarizeFilters(filters);
 
   return (
-    <>
-      <div className="hidden md:block"><PageHeader breadcrumb="Home" title="Discover sessions" /></div>
-      <div className="flex flex-col gap-6 px-6 pb-10 pt-6 md:p-8">
+    <div className="mx-auto w-full max-w-[1440px] px-6 pb-10 pt-6 md:px-8 md:pb-12 md:pt-0 xl:px-12">
+      <DiscoveryHero />
+      <div className="flex flex-col gap-6 md:gap-8">
         <header className="md:hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
             <h1 className="text-2xl font-bold tracking-tight">Discover sessions</h1>
@@ -54,11 +54,13 @@ export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, on
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground" aria-label="Applied filters">{appliedSummary || "Find your next game. All upcoming public sessions."}</p>
         </header>
         {/* CSS hides the panel without unmounting uncontrolled draft inputs. */}
-        <section id={`${id}-filter-panel`} className={cn("rounded-lg border bg-card p-4 md:block md:p-6", !expanded && "hidden")} aria-labelledby={`${id}-filters`}>
-          <h2 id={`${id}-filters`} className="text-lg font-semibold">Find your next session</h2>
-          <p id={`${id}-time-zone`} className="mt-1 text-sm text-muted-foreground">
-            Dates and times use Singapore time (SGT). Time filters match when a session starts.
-          </p>
+        <section id={`${id}-filter-panel`} className={cn("rounded-lg border bg-card p-4 md:block md:border-border/70 md:p-5 md:shadow-[0_4px_24px_hsl(var(--foreground)/0.03)] xl:p-6", !expanded && "hidden")} aria-labelledby={`${id}-filters`}>
+          <div className="xl:flex xl:items-baseline xl:justify-between xl:gap-4">
+            <h2 id={`${id}-filters`} className="text-lg font-semibold">Find your next session</h2>
+            <p id={`${id}-time-zone`} className="mt-1 text-sm text-muted-foreground xl:max-w-sm xl:text-right xl:text-xs">
+              Dates and times use Singapore time (SGT). Time filters match when a session starts.
+            </p>
+          </div>
           <form
             className="mt-5"
             noValidate
@@ -108,12 +110,16 @@ export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, on
           </form>
         </section>
 
-        <section aria-labelledby={`${id}-results`} aria-busy={busy} className="space-y-4">
-          <h2 id={`${id}-results`} className="sr-only text-xl font-semibold md:not-sr-only">Upcoming sessions</h2>
+        <section aria-label="Upcoming sessions" aria-busy={busy} className="space-y-4 md:space-y-5">
+          <div className="hidden items-end justify-between gap-4 md:flex">
+            <h2 className="text-2xl font-bold tracking-tight lg:text-[28px]">Discover sessions</h2>
+            <p className="max-w-[45%] text-right text-sm leading-relaxed text-muted-foreground">{appliedSummary || "Upcoming public sessions"}</p>
+          </div>
+          <h2 className="sr-only md:hidden">Upcoming sessions</h2>
           <DiscoveryResults state={state} onNext={onNext} onRetry={onRetry} />
         </section>
       </div>
-    </>
+    </div>
   );
 }
 
