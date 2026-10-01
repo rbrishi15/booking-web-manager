@@ -1,8 +1,8 @@
 /**
  * Where users land after registering or logging in.
- * Home & Discover lists upcoming public sessions (UC2-01).
+ * Home lists upcoming public sessions (UC2-01); Discover is the dedicated search page.
  */
-export const HOME_PATH = "/discover";
+export const HOME_PATH = "/";
 
 /**
  * Where to send the user after logging in. Only paths on this site are allowed,
