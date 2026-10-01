@@ -27,7 +27,7 @@ test("loads the Swagger page and shows the Create Session operation", async ({
 
   // Assert
   await expect(page.locator("main > p")).toContainText(
-    "Session creation is not available yet; requests currently return 503.",
+    "Session creation requires server configuration; missing settings return 503.",
   );
   await expect(page.getByText("/api/sessions", { exact: true })).toBeVisible();
 });

@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: "**/*.spec.ts",
+  testMatch: ["**/session-api-unavailable.spec.ts", "**/api-documentation.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -25,6 +25,7 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run start -- --hostname 127.0.0.1 --port 3100",
+    env: { DATABASE_URL: "", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "" },
     url: "http://127.0.0.1:3100/api/openapi",
     reuseExistingServer: false,
     timeout: 60_000,

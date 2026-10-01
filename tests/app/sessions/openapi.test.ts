@@ -16,7 +16,7 @@ describe("public session OpenAPI contract", () => {
     expect(document.servers).toEqual([{ url: "/", description: "This server" }]);
   });
 
-  test("describes the future bearer contract and current unavailable response", () => {
+  test("describes configured bearer authentication and missing-settings unavailability", () => {
     const operation = sessionOpenApiDocument.paths["/api/sessions"]?.post;
 
     expect(operation?.security).toEqual([{ bearerAuth: [] }]);
@@ -26,7 +26,7 @@ describe("public session OpenAPI contract", () => {
     expect(Object.keys(operation?.responses ?? {})).toEqual([
       "201", "400", "401", "403", "404", "409", "422", "500", "503",
     ]);
-    expect(operation?.description).toContain("current endpoint returns 503 SESSION_API_UNAVAILABLE");
+    expect(operation?.description).toContain("missing settings return 503 SESSION_API_UNAVAILABLE");
     expect(operation?.responses["503"]).toMatchObject({
       content: {
         "application/json": {

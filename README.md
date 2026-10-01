@@ -188,13 +188,13 @@ at different levels of detail.
 
 ## How session creation fits together
 
-UC2-02 currently provides the HTTP contract, dependency interfaces, request
-validation, response mapping, and Swagger documentation. The production
-`POST /api/sessions` route returns `503 SESSION_API_UNAVAILABLE` with
-`Session creation is not available yet` until authentication and persistence
-integrations are supplied.
+UC2-02 provides request validation, Swagger documentation, Supabase bearer
+authentication and atomic PostgreSQL persistence. With server settings and
+migrations through 0006 applied, `POST /api/sessions` creates or replays a session.
+Missing settings return `503 SESSION_API_UNAVAILABLE` with
+`Session creation is not available yet`.
 
-With dependencies injected, the [API route](./app/api/sessions/route.ts) owns
+The [API route](./app/api/sessions/route.ts) owns
 the HTTP flow and calls the use case directly:
 
 ```text
@@ -205,8 +205,8 @@ POST → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
 The app-owned [`SessionApiDependencies`](./app/sessions/dependencies.ts) separates
 authentication from the submission-scoped use-case factory. `/use-cases`
 coordinates persistence, and `/domain` owns eligibility and booking-share rules.
-The [configuration guide](./use-case-config/README.md) records the missing
-integrations, their owners, and merge prerequisites. The
+The [configuration guide](./use-case-config/README.md) records server settings,
+the dependency on PR #34's group migration, and integration validation. The
 [centralized API route tests](./tests/app/sessions/create-session-route.test.ts)
 exercise the configured flow through injected dependencies and the real use
 case. The domain remains framework-independent.
@@ -214,9 +214,8 @@ case. The domain remains framework-independent.
 Run `npm run dev`, then open
 [Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
 `/api/openapi` and can also be imported into Postman. Documentation needs no
-credentials or local Supabase stack; trying session creation returns 503.
-Registration, sign-in and session screens, along with OneMap integration,
-remain separate work.
+credentials or local Supabase stack; an unconfigured server returns 503 for
+session creation. Session UI and OneMap integration remain separate work.
 
 ## Team
 
@@ -247,8 +246,10 @@ npm run test:concurrency
 
 ### Environment variables
 
-The session contract, Swagger page, and unavailable route need no environment
-credentials. The settings below apply to other integrations as they are added.
+Swagger/OpenAPI and the unconfigured session route need no credentials. Live
+session creation needs `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus migrations through 0006. Remote database
+connections require TLS. See `.env.example` and the configuration guide.
 
 Real values live in the project's Vercel settings, not in git. If you've been
 added as a collaborator on the `rishi-331c/booking-web-manager` Vercel
@@ -297,9 +298,12 @@ that folder's README for the convention.
 Session contract tests run with `npm test` and injected dependencies.
 `npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
 Swagger documentation, and verifies the production route's 503 response.
-These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials;
-live authentication, persistence, and database concurrency remain unverified
-until their integrations are implemented.
+These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
+`npm run test:integration` and `npm run test:e2e:integration` provision a separate
+disposable Supabase stack for database and authenticated HTTP coverage.
+`npm run test:sessions:integration` runs both. They require Docker, the Supabase
+CLI, and PR #34's group migration; see the configuration guide for preview
+validation while that dependency is pending.
 
 ## Contributing
 
