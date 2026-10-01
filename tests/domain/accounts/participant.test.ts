@@ -1,8 +1,7 @@
 import { Money } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  at,
-  before,
+  hoursBeforeSessionStart,
   createTestSession,
   createTestUser,
 } from "../sessions/session/session-fixtures";
@@ -18,7 +17,7 @@ describe("Participant", () => {
     // Act
     const withdrawal = participant.withdraw(session, {
       participationId: "p-participant",
-      now: at(31),
+      now: hoursBeforeSessionStart(31),
     });
 
     // Assert
@@ -48,7 +47,7 @@ describe("Participant", () => {
     const admission = participantUser.asParticipant().join(session, {
       participationId: "participation",
       holdId: "hold",
-      now: before,
+      now: hoursBeforeSessionStart(48),
     });
 
     // Assert
@@ -89,7 +88,7 @@ describe("Participant", () => {
       participant.join(session, {
         participationId: "participation",
         holdId: "hold",
-        now: before,
+        now: hoursBeforeSessionStart(48),
       }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
     expect(session.participantList.participations).toEqual([]);
@@ -118,7 +117,7 @@ describe("Participant", () => {
       participant.join(session, {
         participationId: "participation",
         holdId: "hold",
-        now: before,
+        now: hoursBeforeSessionStart(48),
       }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
     expect(session.participantList.participations).toEqual([]);

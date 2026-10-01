@@ -1,10 +1,10 @@
 import { Money, Session, type SessionDetails } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  at,
+  hoursBeforeSessionStart,
   createTestUser,
   destination,
-  end,
+  sessionEndsAt,
   pendingPayoutDetails,
   readyBooker,
   createTestSession,
@@ -15,6 +15,7 @@ import { readyBookerUser } from "../user-fixtures";
 describe("Booker", () => {
   test("preparePayout_WhenRoleWasCreatedBeforeDeactivation_RejectsWithoutChangingState", () => {
     // Arrange
+    const payoutTime = sessionEndsAt;
     const owner = createTestUser({
       userId: "booker",
       availableFundsCents: 0,
@@ -37,7 +38,7 @@ describe("Booker", () => {
       booker.preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "INACTIVE_ACCOUNT" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -45,12 +46,14 @@ describe("Booker", () => {
 
   test("preparePayout_WhenAttendanceIsIncomplete_RejectsWithoutChangingState", () => {
     // Arrange
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-alice", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     const previousState = sessionState(bookingSession);
 
@@ -59,7 +62,7 @@ describe("Booker", () => {
       readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "key",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "ATTENDANCE_INCOMPLETE" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -67,22 +70,28 @@ describe("Booker", () => {
 
   test("preparePayout_WhenHoldsNeedReleaseAndForfeiture_KeepsFundsPending", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
 
     // Act
     const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     });
 
     // Assert
@@ -101,20 +110,26 @@ describe("Booker", () => {
 
   test("preparePayout_WhenAnotherPayoutIsPending_RejectsWithoutChangingState", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     });
 
     const previousState = sessionState(bookingSession);
@@ -124,7 +139,7 @@ describe("Booker", () => {
       readyBooker().preparePayout(bookingSession, {
         payoutId: "another",
         idempotencyKey: "key2",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "PAYOUT_IN_PROGRESS" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -132,22 +147,29 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedPayoutIdIsReused_RejectsWithoutChangingState", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutFailureTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     });
-    bookingSession.failSettlement("out", end);
+    bookingSession.failSettlement("out", payoutFailureTime);
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -155,7 +177,7 @@ describe("Booker", () => {
       readyBooker().preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "new",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -163,6 +185,9 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedPayoutKeyIsReusedWithNewPayoutId_RejectsWithoutChangingState", () => {
     // Arrange
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutFailureTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
@@ -171,14 +196,14 @@ describe("Booker", () => {
         { participationId: "p-alice", attendance: "ATTENDED" },
         { participationId: "p-ben", attendance: "ATTENDED" },
       ],
-      now: end,
+      now: attendanceVerificationTime,
     });
     readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     });
-    bookingSession.failSettlement("out", end);
+    bookingSession.failSettlement("out", payoutFailureTime);
     const previousState = sessionState(bookingSession);
 
     // Act & Assert
@@ -186,7 +211,7 @@ describe("Booker", () => {
       readyBooker().preparePayout(bookingSession, {
         payoutId: "retry",
         idempotencyKey: "key",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(
       expect.objectContaining({
@@ -200,19 +225,21 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedAttemptIsRetriedWithNewIdentity_RecordsRetry", () => {
     // Arrange
+    const payoutFailureTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = new Session(pendingPayoutDetails(["alice", "ben"]));
     const aliceHold =
       bookingSession.participantList.requireParticipation("p-alice").hold;
     const benHold =
       bookingSession.participantList.requireParticipation("p-ben").hold;
-    bookingSession.failSettlement("out", end);
+    bookingSession.failSettlement("out", payoutFailureTime);
     const booker = readyBooker();
 
     // Act
     const retryBatch = booker.preparePayout(bookingSession, {
       payoutId: "retry",
       idempotencyKey: "retry-key",
-      now: end,
+      now: payoutTime,
     });
 
     // Assert
@@ -237,13 +264,14 @@ describe("Booker", () => {
 
   test("preparePayout_WhenSessionHasNoHolds_SettlesWithoutPayout", () => {
     // Arrange
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession();
 
     // Act
     const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "unused",
       idempotencyKey: "unused",
-      now: end,
+      now: payoutTime,
     });
     const status = bookingSession.status;
 
@@ -254,16 +282,21 @@ describe("Booker", () => {
 
   test("preparePayout_WhenReplacementSweepWasMissed_ExpiresOutstandingReplacement", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({ committedUserIds: ["alice"] });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
 
     // Act
     const batch = readyBooker().preparePayout(bookingSession, {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     });
 
     // Assert
@@ -276,16 +309,21 @@ describe("Booker", () => {
 
   test("preparePayout_WhenAttendanceIsIncomplete_LeavesExpiryUnapplied", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     const command = {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     };
     const previousState = sessionState(bookingSession);
 
@@ -302,20 +340,26 @@ describe("Booker", () => {
 
   test("preparePayout_WhenBookerIsForeign_LeavesExpiryAndHistoryUnapplied", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     const command = {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     };
     const previousState = sessionState(bookingSession);
 
@@ -330,20 +374,26 @@ describe("Booker", () => {
 
   test("preparePayout_WhenOwningBookerRetriesAfterForeignBooker_AppliesExpiryAndRecordsAttempt", () => {
     // Arrange
+    const withdrawalTime = hoursBeforeSessionStart(2);
+    const attendanceVerificationTime = sessionEndsAt;
+    const payoutTime = sessionEndsAt;
     const bookingSession = createTestSession({
       committedUserIds: ["alice", "ben"],
     });
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(bookingSession, { participationId: "p-alice", now: at(2) });
+      .withdraw(bookingSession, {
+        participationId: "p-alice",
+        now: withdrawalTime,
+      });
     readyBooker().verifyAttendance(bookingSession, {
       marks: [{ participationId: "p-ben", attendance: "ATTENDED" }],
-      now: end,
+      now: attendanceVerificationTime,
     });
     const command = {
       payoutId: "out",
       idempotencyKey: "key",
-      now: end,
+      now: payoutTime,
     };
 
     // Establish a rejected foreign attempt before exercising the owner retry.
@@ -369,6 +419,7 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedPayoutHistoryIsRestored_RejectsReusedPayoutId", () => {
     // Arrange
+    const payoutTime = sessionEndsAt;
     const bookingSession = new Session({
       ...pendingPayoutDetails(),
       status: "AWAITING_PAYOUT",
@@ -382,7 +433,7 @@ describe("Booker", () => {
       booker.preparePayout(bookingSession, {
         payoutId: "out",
         idempotencyKey: "retry-key",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -390,6 +441,7 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedPayoutHistoryIsRestored_RejectsReusedIdempotencyKey", () => {
     // Arrange
+    const payoutTime = sessionEndsAt;
     const bookingSession = new Session({
       ...pendingPayoutDetails(),
       status: "AWAITING_PAYOUT",
@@ -403,7 +455,7 @@ describe("Booker", () => {
       booker.preparePayout(bookingSession, {
         payoutId: "retry",
         idempotencyKey: "key",
-        now: end,
+        now: payoutTime,
       }),
     ).toThrow(expect.objectContaining({ code: "DUPLICATE_ID" }));
     expect(sessionState(bookingSession)).toEqual(previousState);
@@ -411,6 +463,7 @@ describe("Booker", () => {
 
   test("preparePayout_WhenFailedPayoutHistoryIsRestored_AllowsNewIdentityIndependentlyOfSource", () => {
     // Arrange
+    const payoutTime = sessionEndsAt;
     const details: SessionDetails = {
       ...pendingPayoutDetails(),
       status: "AWAITING_PAYOUT",
@@ -425,7 +478,7 @@ describe("Booker", () => {
     const retryBatch = booker.preparePayout(restoredSession, {
       payoutId: "retry",
       idempotencyKey: "retry-key",
-      now: end,
+      now: payoutTime,
     });
 
     // Assert

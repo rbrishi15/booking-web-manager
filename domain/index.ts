@@ -61,7 +61,7 @@ export {
   type PromotionCommand,
   type LeaveWaitlistCommand,
   type ParticipantJoinCommand,
-  type ParticipantPlaceOfferCommand,
+  type ParticipantReplacementAcceptanceCommand,
   type ParticipantWithdrawalCommand,
 } from "./accounts/participant";
 export {
@@ -82,6 +82,7 @@ export type {
   PromotionResult,
   PayoutBatch,
   PayoutLine,
+  WithdrawalPreview,
   WithdrawalResult,
 } from "./shared/operations";
 export type { LedgerReadPort } from "./finance/ledger-read-port";

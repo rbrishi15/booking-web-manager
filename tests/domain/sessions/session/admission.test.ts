@@ -1,16 +1,17 @@
 import { Participation } from "@/domain";
 import { describe, expect, test } from "vitest";
 import {
-  before,
+  hoursBeforeSessionStart,
   committedParticipation,
   createTestSession,
-  start,
+  sessionStartsAt,
 } from "./session-fixtures";
 
 describe("Session", () => {
   describe("Capacity", () => {
     test("recordAdmission_WhenBookerTakesEighthSlot_FillsSession", () => {
       // Arrange
+      const bookerJoinedAt = hoursBeforeSessionStart(48);
       const bookingSession = createTestSession({
         totalSlots: 8,
         committedUserIds: [
@@ -26,7 +27,11 @@ describe("Session", () => {
       const bookerAdmission = committedParticipation(bookingSession, "booker");
 
       // Act
-      bookingSession.recordAdmission(bookerAdmission, undefined, before);
+      bookingSession.recordAdmission(
+        bookerAdmission,
+        undefined,
+        bookerJoinedAt,
+      );
 
       // Assert
       expect(bookingSession.participantList.findByUserId("booker")).toBe(
@@ -46,11 +51,12 @@ describe("Session", () => {
         "COMMITTED",
         "COMMITTED",
       ]);
-      expect(bookingSession.getAvailableSlots(before)).toBe(0);
+      expect(bookingSession.getAvailableSlots(bookerJoinedAt)).toBe(0);
     });
 
     test("recordAdmission_WhenSessionIsFull_RecordsWaitlistedParticipation", () => {
       // Arrange
+      const waitlistedAt = hoursBeforeSessionStart(48);
       const bookingSession = createTestSession({
         totalSlots: 8,
         committedUserIds: [
@@ -67,12 +73,12 @@ describe("Session", () => {
       const waiting = Participation.createWaitlisted({
         participationId: "p-waiting",
         userId: "waiting",
-        waitlistedAt: before,
+        waitlistedAt,
         queueSequence: 1,
       });
 
       // Act
-      bookingSession.recordAdmission(waiting, undefined, before);
+      bookingSession.recordAdmission(waiting, undefined, waitlistedAt);
 
       // Assert
       expect(
@@ -81,7 +87,7 @@ describe("Session", () => {
       expect(bookingSession.participantList.nextWaitlisted()).toBe(waiting);
       expect(bookingSession.participantList.committedCount).toBe(8);
       expect(bookingSession.participantList.nextQueueSequence).toBe(2);
-      expect(bookingSession.getAvailableSlots(before)).toBe(0);
+      expect(bookingSession.getAvailableSlots(waitlistedAt)).toBe(0);
     });
   });
 
@@ -91,7 +97,7 @@ describe("Session", () => {
       const bookingSession = createTestSession();
 
       // Act
-      const availableSlots = bookingSession.getAvailableSlots(start);
+      const availableSlots = bookingSession.getAvailableSlots(sessionStartsAt);
 
       // Assert
       expect(availableSlots).toBe(0);

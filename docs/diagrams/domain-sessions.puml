@@ -50,10 +50,11 @@ class Participant <<RoleView>> {
   +userId : UUID
   --
   +join(session, ...) : ParticipantJoinResult
+  +acceptReplacement(session, ...) : ParticipantJoinResult
   +promoteFromWaitlist(session, ...) : PromotionResult
   +withdraw(session, ...) : WithdrawalResult
+  +previewWithdrawal(session, now) : WithdrawalPreview
   +leaveWaitlist(session, ...) : void
-  +offerPlaceToWaitlist(session, ...) : FinancialResult
 }
 
 class Booker <<RoleView>> {
@@ -83,11 +84,13 @@ class ParticipantList <<ImmutableCollection>> {
   +participations : readonly Participation[]
   +nextQueueSequence : number
   +committedCount : number
+  +reservedCount : number
   --
   +requireParticipation(id) : Participation
   +findByUserId(id) : Participation [0..1]
   +nextWaitlisted() : Participation [0..1]
   +oldestAwaitingReplacement() : Participation [0..1]
+  +personalReplacementForInvitee(userId) : Participation [0..1]
 }
 
 class Participation <<ImmutableChild>> {
@@ -97,6 +100,8 @@ class Participation <<ImmutableChild>> {
   +attendance : AttendanceStatus
   +queueSequence : number [0..1]
   +replacesParticipationId : UUID [0..1]
+  +replacementMode : ReplacementMode [0..1]
+  +replacementInviteeId : UUID [0..1]
   --
   +commit(...) : Participation
   +withdraw(...) : Participation

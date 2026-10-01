@@ -11,12 +11,17 @@ import { readyBookerUser } from "../../accounts/user-fixtures";
 
 export { createTestUser } from "../../accounts/user-fixtures";
 
-export const hour = 3_600_000;
-export const start = new Date("2026-10-10T10:00:00Z");
-export const end = new Date(start.getTime() + 2 * hour);
-export const before = new Date(start.getTime() - 48 * hour);
-export const at = (hoursBefore: number) =>
-  new Date(start.getTime() - hoursBefore * hour);
+const millisecondsPerHour = 3_600_000;
+export const sessionStartsAt = new Date("2026-10-10T10:00:00Z");
+export const sessionEndsAt = new Date(
+  sessionStartsAt.getTime() + 2 * millisecondsPerHour,
+);
+export const hoursBeforeSessionStart = (hours: number) =>
+  new Date(sessionStartsAt.getTime() - hours * millisecondsPerHour);
+export const hoursBeforeSessionEnd = (hours: number) =>
+  new Date(sessionEndsAt.getTime() - hours * millisecondsPerHour);
+export const hoursAfterSessionEnd = (hours: number) =>
+  new Date(sessionEndsAt.getTime() + hours * millisecondsPerHour);
 export const destination = {
   payoutAccountId: "pa",
   userId: "booker",
@@ -31,8 +36,8 @@ export function creationDetails(totalSlots = 2): BookerSessionCreation {
       venueName: "Court",
       region: "North",
       sport: "Badminton",
-      startAt: start,
-      endAt: end,
+      startAt: sessionStartsAt,
+      endAt: sessionEndsAt,
       totalCost: Money.fromCents(1000),
     }),
     totalSlots,
@@ -40,7 +45,7 @@ export function creationDetails(totalSlots = 2): BookerSessionCreation {
     holdingAccountId: "platform",
     roomToken: "room",
     visibility: "PUBLIC",
-    now: before,
+    now: hoursBeforeSessionStart(48),
   };
 }
 
@@ -75,7 +80,7 @@ export function createTestSession({
         Participation.createWaitlisted({
           participationId: `p-${userId}`,
           userId,
-          waitlistedAt: before,
+          waitlistedAt: hoursBeforeSessionStart(48),
           queueSequence: index + 1,
         }),
       ),
@@ -87,7 +92,7 @@ export function createTestSession({
 export function committedParticipation(
   session: Pick<Session, "holdingAccountId" | "bookingShare">,
   userId: string,
-  now = before,
+  now = hoursBeforeSessionStart(48),
 ) {
   return Participation.createCommitted({
     participationId: `p-${userId}`,
@@ -107,14 +112,14 @@ export function committedParticipation(
 export function verifiedParticipation(
   userId: string,
   attendance: "ATTENDED" | "ABSENT",
-  verifiedAt = end,
+  verifiedAt = sessionEndsAt,
 ): Participation {
   return new Participation({
     participationId: `p-${userId}`,
     userId,
     status: "COMMITTED",
     attendance,
-    committedAt: before,
+    committedAt: hoursBeforeSessionStart(48),
     verifiedAt,
     verificationMethod: "BOOKER",
     hold: new FundHold({
@@ -124,7 +129,7 @@ export function verifiedParticipation(
       walletId: `w-${userId}`,
       amount: Money.fromCents(500),
       state: "HELD",
-      createdAt: before,
+      createdAt: hoursBeforeSessionStart(48),
     }),
   });
 }
@@ -142,7 +147,7 @@ export function pendingPayoutDetails(
       payoutId: "out",
       sessionId: "s",
       idempotencyKey: "key",
-      requestedAt: new Date(end),
+      requestedAt: new Date(sessionEndsAt),
       destination: { ...destination },
       lines: userIds.map((userId) => ({
         holdId: `h-${userId}`,
@@ -206,7 +211,7 @@ export function sessionState(s: Session) {
       committedAt: p.committedAt,
       withdrawnAt: p.withdrawnAt,
       replacementMode: p.replacementMode,
-      replacementToken: p.replacementToken,
+      replacementInviteeId: p.replacementInviteeId,
       replacesParticipationId: p.replacesParticipationId,
       verifiedAt: p.verifiedAt,
       verificationMethod: p.verificationMethod,

@@ -1,22 +1,45 @@
 # Waitlists and replacements: product-owner discussion
 
-**Status: proposal for discussion — no waitlist policy approved.**
+**Status: session queue waitlist and two departure choices confirmed by the user
+on 27 September 2026; the choice is strictly either/or, with no switching after
+withdrawal. Personal invitations are direct by user ID and require explicit
+recipient acceptance.**
 
-The user identifies the participant state diagram below as the material already
-confirmed with the product owner. The waitlist, personal-link, and reservation
-rules explored afterward were working assumptions. Earlier choices in that
-conversation are recorded here as proposals, not product-owner decisions.
+When a participant leaves, the product must present these choices:
 
-The purpose of this discussion is to decide whether a waitlist is needed and
-what promise the product should make before adding its exceptions and workflow.
+1. **Invite one named person to replace them.** One invitation reserves the
+   departing person's one place, like an airplane seat. The invitation is sent
+   directly to the named user's ID, and only that person can explicitly accept.
+2. **Open the place to groups / the public waitlist.** Ordinary admission uses
+   the session's group/public access rules and queue.
 
-**Current proposal for the first release (26 September 2026): defer the joining
-waitlist.** The user selected this direction for product-owner discussion. Focus
-on the replacement process in the confirmed diagram without maintaining a queue
-of interested people. Product-owner approval remains pending for this direction
-and the proposed rules for accepting replacements and matching refunds. Personal
-links and reservations also remain unapproved. Keep the richer waitlist options
-below as deferred discussion material.
+The departing participant chooses once, when withdrawing. They cannot invite
+someone and then open the same place to the waitlist. The current clarification
+**rejects the earlier proposal to offer a personal place to the waitlist**;
+that is not an available or deferred path. A named invitee already in the queue
+can still accept their own reserved place: the either/or rule concerns the
+departing participant's allocation choice.
+
+The user explicitly confirmed “one named person,” then chose a direct invitation
+by user ID and explicit acceptance. Replacement-link and token proposals are
+superseded. Ordinary joining or promotion cannot accept the invitation on the
+recipient's behalf. This also supersedes the 26 September proposal to defer
+the joining waitlist. [ADR-0006](../adr/0006-personal-replacement-reservations.md)
+records the confirmed scope and its domain implementation consequences.
+
+The supplied participant state diagram remains the earlier confirmed reference.
+Today's confirmation does not resolve its completion-balance or exactly-30-hour
+discrepancies, approve rejoining after late withdrawal, or approve all the
+financial proposals below. Historical proposals are retained with their scope
+and approval status visible.
+
+## Earlier first-release proposals — historical
+
+**Superseded proposal (26 September 2026): defer the joining waitlist.** The
+user had selected this direction for product-owner discussion, with approval
+pending. The 27 September confirmation replaces this proposal; it is no longer
+the current direction. The separate financial and rejoining proposals below
+remain under review.
 
 **Proposed definition of a successful replacement (26 September 2026):** the
 replacement must successfully join with their full booking share held before
@@ -93,7 +116,7 @@ policy must decide whose held share is refunded when someone joins.
 Choosing the next person to join does not, by itself, identify the refund
 recipient. Treating these as one queue hides an important business decision.
 
-## 3. Three possible approaches
+## 3. Historical alternatives
 
 Use this example throughout: Ben withdraws first, Alice withdraws later, and
 both await replacement. Dana is first among people wanting a place; Cara is
@@ -105,32 +128,36 @@ second. Ben asks Cara to take his place.
 | **2. Shared openings with first-come admission** | Dana gets first chance. Under the proposed oldest-withdrawal refund rule, her successful admission refunds Ben. Ben cannot reserve the place for Cara. | One clear admission order and fewer special cases. | Someone cannot promise their place to a friend; inviting a person might refund a different withdrawing participant. |
 | **3. Personal reservations plus an ordinary waitlist** | Cara takes Ben's reserved place and Ben is refunded. Dana stays first for an ordinary opening. | Supports arranging a specific replacement. | Requires separate rules for reserved places, ordinary places, admission order, and refund order. A place can remain unused while people wait. |
 
-**Option 3 is the richer idea explored in the conversation. It is not an
-approved requirement.** None of these three options is established by the state
-diagram alone.
+**The core allocation choice in Option 3 is now confirmed:** a joining waitlist
+alongside a personal reservation for one named replacement. The state diagram
+alone did not establish this; the user confirmed it on 27 September. Financial
+matching details and other scenarios below must still be distinguished from
+that confirmed choice.
 
-Suggested discussion order: decide whether an automatic waitlist is needed for
-the first release, then choose the allocation promise. Resolve the details
-below only for the chosen approach.
+## 4. Historical assumptions explored for Option 3
 
-## 4. Assumptions explored for Option 3
-
-Every row is awaiting product-owner review. The proposed answers preserve the
-conversation so the product owner can accept, change, or reject them.
+These rows preserve the earlier conversation. The confirmation above settles
+the queue and named-seat allocation choice; it does not blanket-approve every
+proposed answer. Section 6 distinguishes that confirmation from unresolved
+product policies, and section 7 describes the domain behavior implemented with it.
+The two switching scenarios are explicitly rejected by the user's current
+either/or clarification. Link/token scenarios are historical and superseded by
+direct user-ID invitations with an explicit acceptance action.
 
 | Business scenario | Working proposal from the conversation | Decision or complexity introduced |
 | --- | --- | --- |
-| Alice withdrew before Ben, but Cara uses Ben's personal link. | Refund Ben when Cara successfully joins. | Does the link identify a specific replacement, or merely invite someone into the session? |
+| Alice withdrew before Ben, but Cara uses Ben's personal link. | Refund Ben when Cara successfully joins. | **Link mechanism superseded.** Cara now explicitly accepts Ben's direct invitation addressed to her user ID; financial matching remains separately identified below. |
 | Dana is already waiting when Ben invites Cara. | Reserve Ben's place for his personal replacement ahead of the waitlist. | Is keeping the place empty acceptable while someone else is ready to join? Does any reservation expire before session start? |
 | An ordinary entrant joins while some places have personal reservations. | Use only ordinary capacity and refund the oldest eligible open-slot withdrawal. | Reserved places and their owners must be excluded from ordinary admission and refund allocation. |
-| Cara has already used Ben's link; Evan uses it afterward. | Reject Evan's replacement request without charge or queue changes. He may choose ordinary joining separately. | Links need a clear active, used, or invalidated outcome. Another available place must not silently change what Evan is accepting. |
-| Ben cannot find a personal replacement, but Dana is waiting. | Let Ben explicitly offer the place to the waitlist before start. Invalidate the personal link; give no refund merely for switching. | Adds a new action and a transition between the two allocation approaches. |
-| Ben withdrew at 8 a.m.; Alice offered her place to the waitlist at 9 a.m.; Ben switches at 10 a.m. | Refund Ben first, using his original withdrawal time. | Choose between priority by withdrawal time and priority by time offered to the ordinary pool. |
+| Cara has already used Ben's link; Evan uses it afterward. | Reject Evan's replacement request without charge or queue changes. He may choose ordinary joining separately. | **Link scenario superseded.** There is no link to reuse. A direct invitation is addressed to one user ID and can be accepted only once by that recipient. |
+| Ben cannot find a personal replacement, but Dana is waiting. | Historical proposal: let Ben offer the place to the waitlist before start, invalidate the link, and give no refund merely for switching. | **Rejected by the current either/or clarification.** Ben cannot switch his personal place to the waitlist after withdrawing. |
+| Ben withdrew at 8 a.m.; Alice offered her place to the waitlist at 9 a.m.; Ben switches at 10 a.m. | Historical proposal: refund Ben first using his original withdrawal time. | **Rejected scenario.** Neither participant can change from a personal invitation to the waitlist after withdrawing, so this switching-priority question does not apply. |
 | Cara is already second on the waitlist when Ben invites her. | Let her accept directly, pay once, and leave the queue. Dana remains first for ordinary openings. | Joining must update the reservation, payment, refund, and existing queue entry together. A failed attempt must preserve her original position. |
 
-In all of these proposals, a late-withdrawing person's refund depends on a
-replacement successfully securing and funding the place. Sharing a link,
-joining a waitlist, or releasing a reservation alone would not issue a refund.
+The financial proposal is that a late-withdrawing person's refund depends on a
+replacement successfully securing and funding the place. Sending an invitation
+or joining a waitlist alone would not issue a refund. Releasing a personal
+reservation to the waitlist was considered earlier and is now rejected.
 The user has explicitly selected the funded-joining definition above; it still
 requires product-owner review.
 
@@ -138,53 +165,88 @@ requires product-owner review.
 
 One successful personal replacement can need to change several things together:
 allocate a reserved place, accept the entrant's payment, refund the intended
-person, invalidate the link, and remove an existing waitlist entry. A failure
+person, consume the invitation, and remove an existing waitlist entry. A failure
 partway through must leave the prior situation intact.
 
 It also creates product questions beyond the basic withdrawal diagram:
 
 - Which places are actually available to an ordinary joiner?
 - Can a reservation leave capacity unused while willing participants wait?
-- Can a participant change allocation method, and what happens to priority?
-- What does a person see when a link is used, revoked, or no longer eligible?
+- How should the fixed departure choice be explained before a participant commits to it?
+- What does a person see when an invitation is pending, accepted, or no longer eligible?
 - How should competing attempts to claim the same place be explained to users?
 
-These costs should be justified by a product need. Simplifying or postponing the
-waitlist is a valid outcome of the discussion.
+The user has now selected the queue and personal-seat allocation despite these
+costs. UI explanations, delivery, and transaction coordination still need to
+support that choice; they are not supplied by the domain implementation alone.
 
 ## 6. Decisions to record with the product owner
 
 | Decision | Current discussion position | Product-owner approval/date |
 | --- | --- | --- |
-| Is an automatic waitlist needed for the first release? | User proposes deferring the joining waitlist; product-owner answer pending. | Pending |
-| Which allocation approach, or alternative, should the product use? | Joining waitlist deferred in the user's first-release proposal; the replacement allocation approach still needs product-owner review. | Pending |
+| Is the session queue waitlist needed? | Yes; the earlier proposal to defer it is superseded. | User confirmed, 2026-09-27 |
+| Which choices are presented when a participant leaves? | Invite one person to replace them, or open the place to groups / the public waitlist. | User confirmed, 2026-09-27 |
+| Can the departing participant invite someone and then open the place to the waitlist, or otherwise switch choices after withdrawing? | No. The choice is strictly either/or at withdrawal. The historical offer-to-waitlist proposal is rejected and its action/transition removed. | User clarified, 2026-09-27 |
+| Who may accept the personal invitation, and how? | One named person identified by user ID, using an explicit acceptance action. No replacement link or token exists. | User confirmed, 2026-09-27 |
+| Can ordinary joining or promotion accept a pending invitation implicitly? | No. The recipient must explicitly accept. Their existing waitlist entry remains unchanged until acceptance; FIFO promotion must await an invited queue head's response. | Explicit acceptance confirmed, 2026-09-27; queue handling is an implementation consequence |
 | What counts as a successfully found replacement? | User proposes successful joining with the replacement's full booking share held before refunding the withdrawing participant; product-owner answer pending. | Pending |
 | What if a successful replacement later withdraws less than 30 hours before start and finds no further replacement before start? | User proposes that the original participant keeps their refund and the replacement forfeits their own held share; product-owner answer pending. | Pending |
 | Can the booker waive one participant's charge after that participant has already withdrawn late, while the session still goes ahead? | User proposes no individual exception in the first release; product-owner answer pending. | Pending |
 | Can a late-withdrawing participant return before start when nobody has replaced them, a place remains available, and their original share is still held? | User proposes rejoining with the existing held share and no additional charge; product-owner answer pending. | Pending |
-| Who receives the refund when several participants await replacement? | Earlier user proposal: a personal replacement refunds the participant they replace; an ordinary entrant refunds the oldest eligible open-slot withdrawal. | Pending |
-| If personal links exist, do they reserve capacity and outrank waiting people? | Earlier user proposal: personal replacements have priority over the joining waitlist. Queue priority is now deferred with the waitlist; personal reservations remain for review. | Pending |
-| If Option 3 is chosen, which rows in section 4 are approved or changed? | Deferred from the first-release proposal; the scenarios are retained for later discussion. | Pending |
+| Who receives the refund when several participants await replacement? | The domain matches personal acceptance to its departing participant and ordinary admission to the oldest eligible open-slot withdrawal. An already-refunded early departure is not refunded twice. The earlier financial proposal is not separately approved by the queue confirmation. | Separate financial-policy review pending |
+| Does a personal invitation reserve a place? | The named person's one seat is reserved from ordinary admission. The implementation allows that invitee to accept from any queue position; others keep their ordinary order. | Named-seat requirement confirmed, 2026-09-27; queue handling is an implementation consequence |
+| Which remaining rows in section 4 are approved or changed? | Switching proposals are rejected and link/token proposals are superseded. The scope above does not imply approval of unrelated financial rules or invitation expiry policy. | Switching rejected; links superseded; remaining policies reviewed separately |
 | Should the completion example show $20 or $30 available? | User proposes $20 available and $0 held after paying the $10 share. The original diagram shows $30; reconcile with the product owner. | Pending |
 
-## 7. Existing implementation is not product approval
+## 7. Current domain capability and remaining work
 
-The repository already contains waitlist behavior. During the discussion, a
-used-link rejection check, an action to offer a personal place to the waitlist,
-and related tests were also added to the working copy. They are a **partial
-implementation of discussion assumptions**, not evidence of approved scope or
-a finished replacement feature.
+The domain implements the confirmed named replacement and ordinary waitlist
+allocation. `DIRECT_INVITE` stores one `replacementInviteeId`; there is no
+`replacementToken`. The named user's participant role explicitly calls
+`acceptReplacement(session, { participationId, holdId, now })`. Their user ID
+authorizes their unique active pending invitation, including private-session
+access, while eligibility and funding requirements still apply. The personal
+place stays reserved after either early or late withdrawal.
 
-Reserved capacity, refunding the personal-link owner, direct acceptance by an
-already-waitlisted invitee, and the inclusive 30-hour correction remain
-unimplemented. Existing passing tests do not settle product decisions.
+A named invitee already waiting can explicitly accept from any queue position.
+Ordinary `join` and `promoteFromWaitlist` calls by a recipient with a pending
+invitation reject without changing their reservation or existing waitlist entry;
+they cannot accept the invitation implicitly. Promotion keeps FIFO order and
+must await an invited queue head's response. Ordinary admission for others uses
+unreserved capacity and existing visibility/membership rules.
 
-The proposed return after a late withdrawal also remains unimplemented. Current
-admission rejects rejoining after withdrawal, including when the original share
-is still held. Supporting this return would be a separate business change, not
-part of preserving behavior during the internal restructuring.
+Successful personal acceptance holds the entrant's share, records the one
+replacement through `replacesParticipationId`, and refunds that specific late
+withdrawal when its share is still held. An early withdrawal has already been
+refunded, so accepting its reservation issues no second refund and does not
+refund an unrelated late withdrawal. Ordinary admission selects the oldest
+eligible `OPEN_SLOT` late withdrawal. These are domain financial behaviors, not
+evidence that all earlier financial proposals have been approved.
 
-The separate [Session restructuring plan](../plans/session-domain-coordinator.md)
-tracks technical cleanup and the current changes. Keep that cleanup separate
-from adopting a waitlist policy. Reconcile the provisional changes and tests
-with the product owner's decision before treating them as requirements.
+The departing participant records either `DIRECT_INVITE` or `OPEN_SLOT` when
+withdrawing and cannot switch afterward. The earlier `offerPlaceToWaitlist`
+action and conversion transition are removed because they violate the
+clarification. This does not change the acceptance rights of a named invitee
+who is already waiting. Failed acceptance leaves the reservation, funds, and
+existing queue position unchanged.
+
+No invitation-decline or invitation-cancellation workflow is added. Existing
+session cancellation and start rules remain unchanged.
+
+There is no departure-choice UI, invitation delivery, application coordinator,
+or persistence adapter for this flow in the repository. A future application
+must load the authenticated user's identity and persist participation changes
+and financial instructions atomically; the domain does not itself authenticate
+requests, deliver invitations, or guarantee concurrent database writes.
+
+The inclusive 30-hour correction and proposed return after late withdrawal
+remain unimplemented. Current admission rejects rejoining after withdrawal,
+including when the original share is still held. They remain separate changes
+and are not implied by the confirmed waitlist scope. Existing tests do not
+settle these product decisions.
+
+The [Session restructuring plan](../plans/session-domain-coordinator.md) records
+the earlier technical cleanup. References there to provisional or deferred
+waitlist policy describe the earlier discussion; this document and ADR-0006
+record the subsequent 27 September confirmation and rejection of switching a
+personal place to the waitlist after withdrawal.

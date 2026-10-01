@@ -74,6 +74,16 @@ export interface WithdrawalResult extends FinancialResult {
   readonly participationId: UUID;
 }
 
+/** What withdrawing now would do; computing it changes nothing. */
+export interface WithdrawalPreview {
+  readonly kind: WithdrawalResult["kind"];
+  readonly participationId: UUID;
+  /** Returned to the wallet at once; zero when the share stays held. */
+  readonly refundAmount: Money;
+  /** The share currently held for this participation. */
+  readonly heldAmount: Money;
+}
+
 export interface PayoutRequestedIntent {
   readonly kind: "PAYOUT_REQUESTED";
   readonly payoutId: UUID;
