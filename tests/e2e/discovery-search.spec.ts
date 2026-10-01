@@ -34,7 +34,7 @@ async function insertSession(context: SessionTestContext, bookerId: string, inpu
   );
 }
 
-test("mobile search preserves drafts and history, disables pending actions, and returns to filtered Home", async ({ page }, testInfo) => {
+test("mobile search preserves drafts and history, disables pending actions, and returns to Home", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const context = sessionTestContext();
   let releaseRequest: (() => void) | undefined;
@@ -130,7 +130,7 @@ test("mobile search preserves drafts and history, disables pending actions, and 
     await page.reload();
     await page.getByRole("link", { name: "Back to previous page", exact: true }).click();
     await expectLocation(page, origin);
-    await expect(page.getByRole("heading", { name: "Discover sessions", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Upcoming Bookings", exact: true })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true })).toHaveAttribute("aria-current", "page");
   } finally {
     releaseRequest?.();

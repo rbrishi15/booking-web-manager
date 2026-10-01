@@ -1,6 +1,6 @@
 /**
  * Where users land after registering or logging in.
- * Home lists upcoming public sessions (UC2-01); Discover is the dedicated search page.
+ * Home lists personal upcoming bookings; Discover is the public-session search page.
  */
 export const HOME_PATH = "/";
 

@@ -146,7 +146,7 @@ export const PhoneHome: Story = {
   globals: { viewport: { value: "phone", isRotated: false } },
   parameters: { nextjs: { navigation: { pathname: "/" } } },
   args: {
-    children: <div className="px-6 pb-6"><h1 className="text-xl font-bold">Discover sessions</h1></div>,
+    children: <div className="px-6 pb-6"><h1 className="text-xl font-bold">Upcoming Bookings</h1></div>,
   },
   play: async ({ canvas }) => {
     const nav = canvas.getByRole("navigation", { name: "Main" });
