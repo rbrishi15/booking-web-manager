@@ -88,8 +88,8 @@ A repeat key returns the original result without re-executing.
                  Business rules, policy engines, interfaces.
 /use-cases       Framework-independent coordinators, organized by use case;
                  shared ports and transaction contracts live in /shared.
-/use-case-config Connects app handlers, use cases, and adapters with explicit
-                 dependencies; see its README when wiring a use case.
+/use-case-config Assembles authentication and submission-scoped use-case
+                 factories; see its README when wiring a use case.
 /lib/sessions    Session infrastructure adapters implementing use-case contracts.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
@@ -99,11 +99,9 @@ A repeat key returns the original result without re-executing.
 
 Core dependencies point inward: `/use-cases` → `/domain` → nothing. App handlers
 and lib adapters depend on core contracts. The outer `/use-case-config` folder
-may import app handlers, lib adapters, and use cases to assemble them; core
+may import app contracts, lib adapters, and use cases to assemble them; core
 modules never import outward. `/domain` must never import from `/app`, `next`,
-`@supabase/*` or `stripe`. When wiring HTTP to a use case, read the
-[configuration guide](./use-case-config/README.md) for dependency lifetimes and
-the tested session-creation example.
+`@supabase/*` or `stripe`.
 
 Actor-driven session workflows enter through `User`'s Participant or Booker
 role, which performs actor authorization and prepares the complete change.
@@ -112,6 +110,38 @@ Session guards lifecycle and records prepared state through bounded operations; 
 Read participation state through `session.participantList`; its query-only view
 and the internal list's collection validation are defined in
 [ADR-0010](./docs/adr/0010-session-participant-list.md).
+
+### Dependency assembly and infrastructure adapters
+
+Before changing dependency assembly or moving responsibilities between `/app`,
+`/use-case-config`, and `/lib`, read the
+[configuration guide](./use-case-config/README.md). Keep detailed setup examples
+and dependency lifetimes in that guide.
+
+- **`use-case-config` assembles dependencies only.** Select implementations
+  through constructors and infrastructure factories using already-validated
+  settings. Return app-owned dependencies and submission-scoped construction
+  callbacks; API routes authenticate, parse, invoke the use case directly, and
+  map responses. See [ADR-0011](./docs/adr/0011-api-routes-invoke-use-cases.md).
+- **`/lib` contains concrete infrastructure adapters.** Core-facing adapters
+  implement interfaces (ports) owned by `/use-cases` or `/domain`.
+  Provider-specific dependencies stay outside the core.
+- **External integration adapters form the anti-corruption layer.** Translate
+  Supabase/Stripe payloads, database records, and provider outcomes into the
+  application's own types and terminology, protecting the domain from external
+  models. See the [pattern reference](https://docs.aws.amazon.com/en_en/prescriptive-guidance/latest/cloud-design-patterns/acl.html).
+
+Keep infrastructure failures distinct from business-rule failures: database or
+provider failures must not be disguised as domain validation errors.
+Infrastructure helpers such as pools and clocks may also live in `/lib`;
+introduce interfaces at actual seams, not for every helper.
+
+| Owner | Responsibilities |
+|---|---|
+| `/app` | Environment/request validation, server dependency initialization/caching, HTTP authentication flow, parsing, response/status mapping, and OpenAPI documentation. |
+| Route handler | Await the app-owned dependency getter, orchestrate HTTP, invoke the use case directly, and map request/initialization errors to responses. |
+| `/lib` | External integrations, persistence, transaction/replay behavior, client options, resource caching, cleanup, and connection logging. |
+| `/use-cases` and `/domain` | Application workflows and business rules, respectively. |
 
 ### Money states
 

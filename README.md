@@ -188,23 +188,35 @@ at different levels of detail.
 
 ## How session creation fits together
 
-[`use-case-config/sessions.ts`](./use-case-config/sessions.ts) connects the
-session HTTP handler to authentication, transactions, IDs, and the clock:
+UC2-02 currently provides the HTTP contract, dependency interfaces, request
+validation, response mapping, and Swagger documentation. The production
+`POST /api/sessions` route returns `503 SESSION_API_UNAVAILABLE` with
+`Session creation is not available yet` until authentication and persistence
+integrations are supplied.
+
+With dependencies injected, the [API route](./app/api/sessions/route.ts) owns
+the HTTP flow and calls the use case directly:
 
 ```text
-Request → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
-        → load User → Booker creates Session → commit → Response
+POST → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
+     → load User → Booker creates Session → commit → JSON response
 ```
 
-The app layer handles HTTP and parsing; `/use-cases` coordinates persistence;
-`/domain` owns eligibility and booking-share rules. Infrastructure adapters in
-`/lib` implement application contracts. The outer `/use-case-config` module
-assembles these pieces without putting framework dependencies into the core.
-See the [configuration guide](./use-case-config/README.md) for setup and the
-dependencies a real server must supply, and the
-[centralized HTTP handler tests](./tests/use-case-config/sessions.test.ts) for
-executable examples. The handler is tested as a function; route mounting,
-production authentication and database adapters, and session UI remain future work.
+The app-owned [`SessionApiDependencies`](./app/sessions/dependencies.ts) separates
+authentication from the submission-scoped use-case factory. `/use-cases`
+coordinates persistence, and `/domain` owns eligibility and booking-share rules.
+The [configuration guide](./use-case-config/README.md) records the missing
+integrations, their owners, and merge prerequisites. The
+[centralized API route tests](./tests/app/sessions/create-session-route.test.ts)
+exercise the configured flow through injected dependencies and the real use
+case. The domain remains framework-independent.
+
+Run `npm run dev`, then open
+[Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
+`/api/openapi` and can also be imported into Postman. Documentation needs no
+credentials or local Supabase stack; trying session creation returns 503.
+Registration, sign-in and session screens, along with OneMap integration,
+remain separate work.
 
 ## Team
 
@@ -217,6 +229,9 @@ production authentication and database adapters, and session UI remain future wo
 | Joseph | [@Jolingoes](https://github.com/Jolingoes) | Identity, groups and frontend platform — `/app/(auth)`, `/app/profile`, `/app/groups`, `/components/ui` |
 
 ## Getting started
+
+Use Node.js 22.x, declared in `package.json` under `engines.node`. Both CI jobs
+read that setting, and [Vercel uses it for builds and functions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
 ```bash
 npm install
@@ -231,6 +246,9 @@ npm run test:concurrency
 ```
 
 ### Environment variables
+
+The session contract, Swagger page, and unavailable route need no environment
+credentials. The settings below apply to other integrations as they are added.
 
 Real values live in the project's Vercel settings, not in git. If you've been
 added as a collaborator on the `rishi-331c/booking-web-manager` Vercel
@@ -275,6 +293,13 @@ Use-case acceptance tests are organised in
 [tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
 `test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
 that folder's README for the convention.
+
+Session contract tests run with `npm test` and injected dependencies.
+`npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
+Swagger documentation, and verifies the production route's 503 response.
+These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials;
+live authentication, persistence, and database concurrency remain unverified
+until their integrations are implemented.
 
 ## Contributing
 

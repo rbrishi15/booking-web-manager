@@ -10,6 +10,11 @@ import { getAccountStatus } from "@/lib/supabase/account-status";
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const { pathname, search } = request.nextUrl;
+
+  // API routes and public API docs handle authentication themselves. Do not
+  // initialize Supabase or refresh cookies before their own availability checks.
+  if (pathname.startsWith("/api")) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
@@ -32,11 +37,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { pathname, search } = request.nextUrl;
-
-  // API routes answer for themselves (e.g. 401), never with a redirect to a page.
-  if (pathname.startsWith("/api")) return response;
-
   if (user === null) {
     if (isPublicPath(pathname)) return response;
     const loginUrl = new URL("/login", request.url);

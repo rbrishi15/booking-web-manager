@@ -2,6 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-09-15
+- Partially superseded: the session factory's Request-to-Response output is
+  replaced by app-owned dependencies in
+  [ADR-0011](./0011-api-routes-invoke-use-cases.md); the remaining decisions stand.
 
 ## Context
 

@@ -28,6 +28,9 @@ next-env.d.ts
 .vercel
 .env*
 
+# local browser test artifacts
+/playwright-report/
+/test-results/
 # storybook
 /storybook-static
 *storybook.log

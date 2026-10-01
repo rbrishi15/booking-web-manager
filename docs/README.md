@@ -11,7 +11,7 @@ is available as [PlantUML source](./domain-class-diagram.puml) and a
 
 Architecture decisions are recorded in [`docs/adr`](./adr):
 
-- [ADR-0001: Use-case-driven development](./adr/0001-use-case-driven-development.md).
+- [ADR-0001: Use-case-driven development](./adr/0001-use-case-driven-development.md) — session factory output superseded by ADR-0011.
 - [ADR-0002: Constructor-based domain hydration](./adr/0002-constructor-based-domain-hydration.md).
 - [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md) — current role routing is defined by ADR-0009.
 - [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md) — admission routing updated by ADR-0007 and ADR-0009.
@@ -21,6 +21,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0008: Booker behavior and the Session lifecycle](./adr/0008-booker-behavior-and-session-lifecycle.md) — callback routing superseded by ADR-0009.
 - [ADR-0009: Role workflows and Session recording](./adr/0009-role-workflows-and-session-recording.md).
 - [ADR-0010: Session's participant list](./adr/0010-session-participant-list.md).
+- [ADR-0011: API routes invoke use cases](./adr/0011-api-routes-invoke-use-cases.md).
 
 Product decisions and remaining discussion:
 

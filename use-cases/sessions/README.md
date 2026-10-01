@@ -26,27 +26,37 @@ JSON ISO timestamps with a timezone into Dates. Venue resolution, including
 OneMap, happens before invoking this module. The booking cost is booker-supplied;
 creation does not verify a venue receipt or reserve a venue.
 
-[`createSessionHandler`](../../use-case-config/sessions.ts) composes the app HTTP
-handler and creates a module for each submission. See the
-[configuration guide](../../use-case-config/README.md) for dependency setup and the
-[centralized HTTP handler tests](../../tests/use-case-config/sessions.test.ts) for
-executable examples. Direct application callers continue to use
-`createSessions.forBooker(bookerId, booking, config)` with Date-valued booking details.
+[`createSessionDependencies`](../../use-case-config/sessions.ts) assembles
+supplied authentication and a factory that creates a use case for each
+submission. With integrations supplied, the
+[API route](../../app/api/sessions/route.ts) authenticates, parses, and invokes
+`createSessions.forBooker(bookerId, booking, config)` directly. Production
+integrations are pending, so the default route returns
+`503 SESSION_API_UNAVAILABLE`; the configured flow is exercised with injected
+dependencies. See the
+[configuration guide](../../use-case-config/README.md) for dependency setup and
+the [centralized API route tests](../../tests/app/sessions/create-session-route.test.ts)
+for executable examples. Direct application callers continue to supply
+Date-valued booking details.
 
 The constructor accepts a [`SessionCreationTransaction`](./session-creation-transaction.ts),
-the shared `Clock` and `IdGenerator`, and the platform `holdingAccountId` from
-validated server configuration. The transaction capability exposes only the
+the shared `Clock` and `IdGenerator`, and the platform `holdingAccountId` supplied
+by dependency assembly. The transaction capability exposes only the
 User and Session repositories needed by creation. Session IDs, room tokens,
 and time are obtained inside its callback; current account and payout readiness
 come from the User loaded there. Production ID generators must supply
 cryptographically random UUIDs because room tokens grant access to private sessions.
 
-The lib adapter [RequestSessionCreationTransaction](../../lib/sessions/request-session-creation-transaction.ts)
+The compatibility adapter [RequestSessionCreationTransaction](../../lib/sessions/request-session-creation-transaction.ts)
 captures the submission key and delegates to the existing shared `UnitOfWork`.
 It namespaces keys by UC2-02, booker ID, and submission key. A fresh module and
 adapter for a retry with the same key replay the original result, including when
 valid details have changed. A new intended creation requires a new submission
 key. Reusing a module for a different submission would reuse its captured key.
+The authentication integration must check current active-account access before
+invoking this module, including for retries. This prevents deactivated accounts
+from retrieving stored room tokens through the API; eligible retries still
+replay without repeating creation-specific payout or booking-time checks.
 
 The underlying transaction adapter must atomically persist the session and
 successful replay result, roll both back on failure, and serialize concurrent
@@ -56,12 +66,17 @@ failures throw `ZodError` in the app layer. Domain failures propagate as
 `DomainError`; a `RangeError` from constructing request-derived Money, Booking,
 or ReliabilityScore values becomes `DomainError("INVALID_INPUT")`. Persistence
 failures propagate unchanged, including infrastructure `RangeError`s.
-The [app HTTP handler](../../app/sessions/README.md) maps those errors to responses.
+The [API route](../../app/api/sessions/route.ts) maps those errors to responses
+documented in the [HTTP contract](../../app/sessions/README.md).
 
 The [UC2-02 acceptance suite](../../tests/use-cases/UC2-02-create-session.test.ts)
 exercises this interface with real domain objects, the transaction wrapper,
 and a creation-only in-memory transaction fake. Parsing has a separate
 [app suite](../../tests/app/sessions/create-session-input.test.ts). These tests
 cover creation, replay, and failure behavior without establishing database
-concurrency guarantees. Production repository/transaction adapters, schema/RLS,
-auth wiring, route mounting, and UI remain separate work.
+concurrency guarantees. A production persistence adapter and live integration
+tests are pending. The [configuration guide](../../use-case-config/README.md#pending-integrations)
+records owner responsibilities and schema dependencies. The
+[E2E tests](../../tests/e2e) check public documentation and the default 503
+response against a running Next.js server without credentials or Supabase.
+Session UI remains separate work.

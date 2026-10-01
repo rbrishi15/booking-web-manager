@@ -1,32 +1,18 @@
-import {
-  handleCreateSession,
-  type CreateSessionHttpDependencies,
-} from "@/app/sessions/create-session-handler";
-import type { UUID } from "@/domain";
-import { RequestSessionCreationTransaction } from "@/lib/sessions/request-session-creation-transaction";
-import { CreateSessions } from "@/use-cases/sessions/CreateSessions";
-import type { UseCaseDependencies } from "@/use-cases/shared/dependencies";
+import type { SessionApiDependencies } from "@/app/sessions/dependencies";
+import { SessionApiUnavailableError } from "@/app/sessions/session-api-unavailable";
 
-export interface SessionHandlerDependencies extends UseCaseDependencies {
-  readonly authenticate: CreateSessionHttpDependencies["authenticate"];
-  readonly holdingAccountId: UUID;
-}
-
-/** Connect the server dependencies once; create submission-scoped objects per request. */
-export function createSessionHandler(
-  dependencies: SessionHandlerDependencies,
-): (request: Request) => Promise<Response> {
-  const { authenticate, unitOfWork, clock, ids, holdingAccountId } = dependencies;
-  const httpDependencies: CreateSessionHttpDependencies = {
-    authenticate,
-    createForSubmission: (submission) =>
-      new CreateSessions({
-        transaction: new RequestSessionCreationTransaction(unitOfWork, submission),
-        clock,
-        ids,
-        holdingAccountId,
-      }),
+/** Assemble the API capabilities; production integration is deliberately pending. */
+export function createSessionDependencies(): SessionApiDependencies {
+  return {
+    // TODO(Neoh): wire Joseph's approved auth after PR #20 lands on main.
+    // See ./README.md for integration owners, prerequisites, and acceptance checks.
+    authenticate: async () => {
+      throw new SessionApiUnavailableError();
+    },
+    // TODO(Neoh): wire persistence after Rishi coordinates the prerequisite migrations.
+    // See ./README.md for the integration checklist and complete-User requirements.
+    createForSubmission: () => {
+      throw new SessionApiUnavailableError();
+    },
   };
-
-  return (request) => handleCreateSession(request, httpDependencies);
 }

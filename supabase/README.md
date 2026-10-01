@@ -44,9 +44,9 @@ if you find yourself doing that, something upstream of this file didn't work.
 
 ## Local development
 
-The default `npm run dev` setup (README at the repo root) points at the
-hosted project above, so most day-to-day feature work never touches this
-section. You need a local Postgres for two things specifically:
+Use local Postgres when integration work needs a disposable database. The
+session contract and documentation currently need no database. Local Postgres
+is useful for:
 
 - **Writing or testing a migration.** Try it locally before it touches the
   one shared hosted database everyone else is also using.
@@ -56,9 +56,9 @@ section. You need a local Postgres for two things specifically:
 
 ### Prerequisites
 
-Docker Desktop, running. The CLI shells out to it for every local Postgres
-container; there's no way around this requirement short of using the hosted
-project directly.
+A running Docker-compatible container runtime and the Supabase CLI. Docker
+Desktop, Colima with Docker CLI, or another compatible runtime can supply it.
+The runtime is a developer preference, not an application dependency.
 
 ### Start it up
 
@@ -88,7 +88,7 @@ order.
 
 - **Studio** (`http://127.0.0.1:54323`) is a local dashboard — browse tables,
   run SQL, inspect auth users — without touching the hosted project.
-- To point the running Next.js app at local Postgres instead of hosted,
+- To configure an integration against the local project,
   temporarily use the `anon key` / `API URL` above in your own
   `.env.local` in place of the `NEXT_PUBLIC_SUPABASE_*` values from
   `vercel env pull`. Don't commit that swap or push it to Vercel.
@@ -113,3 +113,24 @@ npx supabase stop
 
 Leaving it running costs you laptop resources, not correctness — nothing
 breaks if you forget, but Docker Desktop will let you know.
+
+## Session API
+
+PR #24 currently provides the session HTTP contract and Swagger documentation.
+The production `POST /api/sessions` route returns
+`503 SESSION_API_UNAVAILABLE` with `Session creation is not available yet`.
+It does not provision local accounts or create sessions. Run `npm run dev` and
+open [Swagger UI](http://127.0.0.1:3000/api-docs) to inspect the contract without
+credentials or a Supabase stack. `/api/openapi` serves the same specification.
+
+`npm run test:e2e` builds and starts Next.js, checks the documentation, and
+verifies the unavailable response. Unit and contract tests inject dependencies;
+live Auth, database hydration, persistence, rollback, and concurrent replay
+require integration coverage in the implementation follow-ups.
+
+Joseph owns profile/wallet provisioning and authentication in PR #20. Neoh's
+session persistence work depends on the approved profile schema. This PR adds
+neither profile nor session migrations; Rishi coordinates their numbering and
+merge order. See the
+[configuration guide](../use-case-config/README.md#pending-integrations) for the
+required interfaces, ownership, and prerequisite stack.

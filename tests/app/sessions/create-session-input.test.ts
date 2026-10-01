@@ -144,6 +144,27 @@ describe("UC2-02 Create Session input", () => {
     );
   });
 
+  test("accepts an idempotency key at the 200-character limit unchanged", () => {
+    // Arrange
+    const request = { ...creationRequest(), idempotencyKey: "k".repeat(200) };
+
+    // Act
+    const parsed = parseCreateSessionInput(actorUserId, request);
+
+    // Assert
+    expect(parsed.submission.idempotencyKey).toBe(request.idempotencyKey);
+  });
+
+  test("rejects an idempotency key above the 200-character limit", () => {
+    // Arrange
+    const request = { ...creationRequest(), idempotencyKey: "k".repeat(201) };
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(
+      "The idempotency key is too long",
+    );
+  });
+
   test("rejects fractional booking cents", () => {
     // Arrange
     const request = creationRequest();
