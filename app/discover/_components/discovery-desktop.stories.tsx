@@ -5,11 +5,11 @@ import { emptyFilters, examplePage } from "./discovery-fixtures";
 import { DiscoveryFormController } from "./discovery-form-controller";
 
 const meta = {
-  title: "Discovery/Desktop page",
+  title: "Home/Desktop page",
   component: DiscoveryFormController,
   parameters: {
     layout: "fullscreen",
-    nextjs: { navigation: { pathname: "/discover" } },
+    nextjs: { navigation: { pathname: "/" } },
     docs: { description: { component: "The Booking desktop composition uses the production shell, court backdrop, always-visible filters and two-column photo cards. It shares the mobile controller and its loading/ready/invalid/error outcomes; resizing never replaces the form or its draft. Cards display public session information, including total capacity and the SGD share per person. Personal bookings and booking actions remain separate features." } },
   },
   globals: { viewport: { value: "desktop", isRotated: false } },

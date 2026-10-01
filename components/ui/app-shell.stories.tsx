@@ -54,15 +54,15 @@ export const Desktop: Story = {
     // The current page's link is marked for screen readers and highlighted.
     await expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent("Groups");
     await expect(canvas.getByText("Reliability 4.8")).toBeInTheDocument();
-    await expect(within(nav).getAllByRole("link")).toHaveLength(5);
-    await expect(canvas.getByRole("link", { name: "Booking." })).toHaveAttribute("href", "/discover");
+    await expect(within(nav).getAllByRole("link")).toHaveLength(6);
+    await expect(canvas.getByRole("link", { name: "Booking." })).toHaveAttribute("href", "/");
     await expect(canvas.queryByRole("link", { name: "+ Create session" })).not.toBeInTheDocument();
   },
 };
 
 export const DesktopHome: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
-  parameters: { nextjs: { navigation: { pathname: "/discover" } } },
+  parameters: { nextjs: { navigation: { pathname: "/" } } },
   args: {
     children: (
       <div className="p-8 lg:p-12">
@@ -111,7 +111,7 @@ export const OnSettings: Story = {
 };
 
 const mobileDestinations = [
-  { label: "Home", href: "/discover" },
+  { label: "Home", href: "/" },
   { label: "Sessions", href: "/sessions" },
   { label: "Wallet", href: "/wallet" },
   { label: "Settings", href: "/profile" },
@@ -144,7 +144,7 @@ async function expectMobileNavigation(nav: HTMLElement, activeLabel: string) {
 /** The active destination expands to show its label; the other destinations stay as named icons. */
 export const PhoneHome: Story = {
   globals: { viewport: { value: "phone", isRotated: false } },
-  parameters: { nextjs: { navigation: { pathname: "/discover" } } },
+  parameters: { nextjs: { navigation: { pathname: "/" } } },
   args: {
     children: <div className="px-6 pb-6"><h1 className="text-xl font-bold">Discover sessions</h1></div>,
   },
@@ -152,6 +152,31 @@ export const PhoneHome: Story = {
     const nav = canvas.getByRole("navigation", { name: "Main" });
     await expectMobileNavigation(nav, "Home");
     await expect(canvas.queryByRole("link", { name: "+ Create session" })).not.toBeInTheDocument();
+  },
+};
+
+export const PhoneSearchPreservesOrigin: Story = {
+  ...PhoneHome,
+  parameters: { nextjs: { navigation: { pathname: "/", query: { sport: "Tennis", region: "East" } } } },
+  play: async ({ canvas }) => {
+    const search = canvas.getByRole("link", { name: "Search sessions" });
+    const destination = new URL(search.getAttribute("href")!, "https://booking.invalid");
+    await expect(destination.pathname).toBe("/discover");
+    await expect(destination.searchParams.get("returnTo")).toBe("/?sport=Tennis&region=East");
+    await expect(search.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    await expect(canvas.getByRole("button", { name: "Open account menu" })).toBeVisible();
+  },
+};
+
+export const DesktopDiscover: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  parameters: { nextjs: { navigation: { pathname: "/discover", query: { returnTo: "/profile" } } } },
+  args: { mobileVariant: "focused" },
+  play: async ({ canvas }) => {
+    const nav = canvas.getByRole("navigation", { name: "Main" });
+    await expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent("Discover");
+    await expect(within(nav).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
+    await expect(within(nav).getByRole("link", { name: "Discover" })).toHaveAttribute("href", "/discover?returnTo=%2Fprofile");
   },
 };
 

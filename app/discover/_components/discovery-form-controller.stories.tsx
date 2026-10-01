@@ -4,7 +4,7 @@ import { emptyFilters, examplePage } from "./discovery-fixtures";
 import { DiscoveryFormController } from "./discovery-form-controller";
 
 const meta = {
-  title: "Discovery/Form transitions",
+  title: "Home/Form transitions",
   component: DiscoveryFormController,
   parameters: {
     layout: "fullscreen",

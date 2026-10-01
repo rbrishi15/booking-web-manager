@@ -7,11 +7,11 @@ import { DiscoveryFormController } from "./discovery-form-controller";
 import type { DiscoveryOutcome } from "./discovery-state";
 
 const meta = {
-  title: "Discovery/Mobile page",
+  title: "Home/Mobile page",
   component: DiscoveryFormController,
   parameters: {
     layout: "fullscreen",
-    nextjs: { navigation: { pathname: "/discover" } },
+    nextjs: { navigation: { pathname: "/" } },
     docs: { description: { component: "The production shell and discovery controller at 390px. Sport photos are decorative; cards remain informational. Filters are a mounted disclosure, independent of loading/ready/invalid/error screen states. Each committed URL remounts the controller: valid queries start collapsed, invalid queries start expanded. The Desktop page stories show the corresponding sidebar layout with always-visible filters." } },
   },
   globals: { viewport: { value: "phone", isRotated: false } },

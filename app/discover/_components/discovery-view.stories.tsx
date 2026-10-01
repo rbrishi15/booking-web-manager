@@ -4,7 +4,7 @@ import { emptyFilters, examplePage } from "./discovery-fixtures";
 import { DiscoveryView } from "./discovery-view";
 
 const meta = {
-  title: "Discovery/Screen states",
+  title: "Home/Screen states",
   component: DiscoveryView,
   parameters: {
     layout: "fullscreen",

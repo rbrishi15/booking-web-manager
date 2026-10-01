@@ -1,9 +1,9 @@
 "use client";
 
-import { LogOut, UserRound, UsersRound } from "lucide-react";
+import { LogOut, Search, UserRound, UsersRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BookingLogo } from "@/components/ui/booking-logo";
@@ -17,9 +17,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { discoveryHref, discoveryReturnTo } from "@/app/discover/navigation";
 
 const NAV_LINKS = [
-  { href: "/discover", label: "Home", image: "home" },
+  { href: "/", label: "Home", image: "home" },
+  { href: "/discover", label: "Discover", image: "search" },
   { href: "/sessions", label: "My sessions", image: "sessions" },
   { href: "/wallet", label: "Wallet", image: "wallet" },
   { href: "/groups", label: "Groups", image: null },
@@ -27,7 +29,7 @@ const NAV_LINKS = [
 ] as const;
 
 const MOBILE_NAV_LINKS = [
-  { href: "/discover", label: "Home", image: "home" },
+  { href: "/", label: "Home", image: "home" },
   { href: "/sessions", label: "Sessions", image: "sessions" },
   { href: "/wallet", label: "Wallet", image: "wallet" },
   { href: "/profile", label: "Settings", image: "settings" },
@@ -44,6 +46,7 @@ interface AppShellProps {
   
   readonly logoutAction?: () => Promise<void>;
   readonly children: React.ReactNode;
+  readonly mobileVariant?: "standard" | "focused";
 }
 
 
@@ -52,10 +55,12 @@ function SidebarContents({
   user,
   logoutAction,
   onNavigate,
+  searchHref,
 }: {
   readonly user: ShellUser;
   readonly logoutAction?: () => Promise<void>;
   readonly onNavigate?: () => void;
+  readonly searchHref: string;
 }) {
   const pathname = usePathname();
 
@@ -63,7 +68,7 @@ function SidebarContents({
     <div className="flex h-full flex-col overflow-y-auto px-4 py-7 lg:px-5 lg:py-8">
       <div className="px-3">
         <Link
-          href="/discover"
+          href="/"
           onClick={onNavigate}
           className="inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
@@ -79,7 +84,7 @@ function SidebarContents({
           return (
             <Link
               key={link.href}
-              href={link.href}
+              href={link.href === "/discover" ? searchHref : link.href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(
@@ -87,7 +92,9 @@ function SidebarContents({
                 active && "bg-accent font-semibold",
               )}
             >
-              {link.image === null ? (
+              {link.image === "search" ? (
+                <Search className="h-5 w-5 shrink-0" strokeWidth={1.7} aria-hidden="true" />
+              ) : link.image === null ? (
                 <UsersRound className="h-5 w-5 shrink-0" strokeWidth={1.7} aria-hidden="true" />
               ) : (
                 <Image src={`/images/navigation/${link.image}.svg`} width={20} height={20} alt="" className="shrink-0 dark:invert" />
@@ -131,9 +138,16 @@ function SidebarContents({
 
 
 /** Frames signed-in content with a desktop sidebar and mobile navigation plus an account sheet. */
-export function AppShell({ user, logoutAction, children }: AppShellProps) {
+export function AppShell({ user, logoutAction, children, mobileVariant = "standard" }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const origins = searchParams.getAll("returnTo");
+  const searchOrigin = pathname === "/discover"
+    ? discoveryReturnTo(origins.length === 1 ? origins[0] : undefined)
+    : `${pathname}${query ? `?${query}` : ""}`;
+  const searchHref = discoveryHref("", searchOrigin);
   const activeMobileIndex = MOBILE_NAV_LINKS.findIndex(({ href }) =>
     pathname === href || pathname.startsWith(`${href}/`)
     || (href === "/sessions" && (pathname === "/groups" || pathname.startsWith("/groups/"))),
@@ -143,12 +157,12 @@ export function AppShell({ user, logoutAction, children }: AppShellProps) {
     <div className="flex min-h-screen bg-card md:bg-background">
       {/* Desktop sidebar (hidden below 768px) */}
       <aside className="sticky top-4 my-4 ml-4 hidden h-[calc(100dvh-2rem)] w-52 shrink-0 rounded-2xl border border-border/40 bg-card shadow-[0_8px_32px_-16px_hsl(var(--foreground)/0.08)] md:block lg:w-60 2xl:w-64">
-        <SidebarContents user={user} logoutAction={logoutAction} />
+        <SidebarContents user={user} logoutAction={logoutAction} searchHref={searchHref} />
       </aside>
 
       <div className="relative isolate flex min-w-0 flex-1 flex-col">
         {/* The desktop court fades behind the page introduction without competing with its content. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[420px] overflow-hidden md:block" aria-hidden="true">
+        <div className={cn("pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[420px] overflow-hidden", mobileVariant === "standard" && "md:block")} aria-hidden="true">
           <Image
             src="/images/mobile-hero.png"
             alt=""
@@ -160,7 +174,7 @@ export function AppShell({ user, logoutAction, children }: AppShellProps) {
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--background)/0)_0%,hsl(var(--background)/0.2)_45%,hsl(var(--background))_100%)]" />
         </div>
         {/* Figma's hero: an oversized image at 50%, with left and bottom fades into the page. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[295px] overflow-hidden md:hidden" aria-hidden="true">
+        <div className={cn("pointer-events-none absolute inset-x-0 top-0 -z-10 h-[295px] overflow-hidden md:hidden", mobileVariant === "focused" && "hidden")} aria-hidden="true">
           <div className="absolute -top-2.5 left-1/2 h-[295px] w-[calc(100%+148px)] -translate-x-1/2">
             <Image
               src="/images/mobile-hero.png"
@@ -173,14 +187,18 @@ export function AppShell({ user, logoutAction, children }: AppShellProps) {
           <div className="absolute -left-2.5 top-3.5 h-72 w-[64.4%] bg-[linear-gradient(to_left,hsl(var(--card)/0)_0%,hsl(var(--card)/0.25)_12.5%,hsl(var(--card)/0.5)_25%,hsl(var(--card))_50%)] dark:top-0" />
           <div className="absolute inset-x-0 -top-[19px] h-[430px] bg-[linear-gradient(to_bottom,hsl(var(--card)/0)_0%,hsl(var(--card)/0.25)_12.5%,hsl(var(--card)/0.5)_25%,hsl(var(--card))_50%)]" />
         </div>
-        <header className="relative px-6 pb-6 pt-5 md:hidden">
+        <header className={cn("relative px-6 pb-6 pt-5 md:hidden", mobileVariant === "focused" && "hidden")}>
           <div className="mb-4 flex items-center justify-between">
             <Link
-              href="/discover"
+              href="/"
               className="inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <BookingLogo />
             </Link>
+            <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" className="h-11 w-11" aria-label="Search sessions">
+              <Link href={searchHref}><Search className="h-5 w-5" aria-hidden="true" /></Link>
+            </Button>
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
                 <Button size="icon" className="h-11 w-11 rounded-md" aria-label="Open account menu">
@@ -223,6 +241,7 @@ export function AppShell({ user, logoutAction, children }: AppShellProps) {
                 )}
               </SheetContent>
             </Sheet>
+            </div>
           </div>
 
           <nav
