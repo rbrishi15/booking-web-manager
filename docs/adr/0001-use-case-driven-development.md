@@ -27,12 +27,23 @@ use case and follows this path:
 4. Connect framework and infrastructure adapters through explicit ports and
    transaction boundaries.
 
-The top-level [`/use-cases`](../../use-cases/) directory is the reserved,
-framework-independent boundary for those coordinators. At present it contains
-only [`use-cases/shared`](../../use-cases/shared/), which holds reusable ports,
-contracts, transaction types, and coordination helpers. Capability-specific
-use-case implementations are added only when a concrete use case requires
-them; the empty capability space is intentional.
+The top-level [`/use-cases`](../../use-cases/) directory is the
+framework-independent boundary for those coordinators.
+[`use-cases/shared`](../../use-cases/shared/) holds reusable ports, contracts,
+transaction types, and coordination helpers. Capability-specific implementations
+are added when a concrete use case requires them. UC2-02 now has a
+[CreateSessions module](../../use-cases/sessions/CreateSessions.ts) whose
+`forBooker(bookerId, booking, config)` action loads the booker and saves the
+domain-created session through a creation-specific transaction capability. An
+adapter in `/lib/sessions` captures submission retry metadata and delegates to the shared
+unit of work; the business input contains no idempotency key.
+
+The outer [`/use-case-config`](../../use-case-config/README.md) folder assembles
+app HTTP handlers, lib adapters, and use-case modules with plain functions and
+constructors. Its session factory returns a configured Request-to-Response
+handler. This folder can import those pieces; `/use-cases` and `/domain` keep
+their dependencies inward and do not import configuration, app handlers, or lib
+adapters. Request parsing and response mapping remain in `/app`.
 
 Use-case work is organized by business capability and traced by UC ID, rather
 than collected into a generic service module. The acceptance tests remain in
@@ -59,7 +70,7 @@ use-cases/
 │   └── ports.ts
 └── sessions/
     ├── DiscoverSessions.ts
-    ├── CreateSession.ts
+    ├── CreateSessions.ts
     ├── ManageSession.ts
     ├── ToggleSessionVisibility.ts
     ├── RemoveParticipant.ts
@@ -73,8 +84,8 @@ For example, `use-cases/sessions/DiscoverSessions.ts` would coordinate the
 inputs and query ports needed to discover sessions, while `domain/sessions`
 would continue to own session invariants and state transitions. Supabase and
 Stripe remain external adapters; they are not imported directly by the use-case
-coordinator. This is an illustrative target structure, not a claim that every
-file above currently exists.
+coordinator. CreateSessions is implemented; the remaining coordinators in this
+illustrative structure are future work.
 
 ## What belongs in `/use-cases`
 
@@ -84,6 +95,7 @@ file above currently exists.
 - Cross-aggregate sequencing, idempotency coordination, and durable intent
   creation.
 - Shared contracts and ports under `/use-cases/shared/`.
+- Plain TypeScript input DTOs consumed after validation at the app boundary.
 
 ## What does not belong in `/use-cases`
 
@@ -91,6 +103,8 @@ file above currently exists.
   in `/domain`.
 - Next.js pages, route handlers, HTTP DTO parsing, authentication plumbing, or
   UI concerns; those belong in `/app` and `/components`.
+- Zod input schemas and parsing; `/app` validates external input and maps it to
+  application-owned DTOs before invoking a use case.
 - Supabase queries, Stripe calls, payment-provider adapters, or other external
   API clients; those belong in their infrastructure/integration boundaries.
 - Database migrations, schema definitions, or ledger implementations.

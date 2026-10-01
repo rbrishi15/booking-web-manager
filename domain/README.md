@@ -2,9 +2,11 @@
 
 The domain is framework independent TypeScript. It imports no Next.js, database,
 HTTP, or payment SDK code. Shared contracts in `/use-cases/shared` define the
-boundary for future coordinators that will load authoritative state, invoke
-aggregate commands, and commit returned financial instructions in one unit of
-work.
+boundary for coordinators that load authoritative state, invoke aggregate
+commands, and persist their results in one unit of work. UC2-02 is implemented
+by [CreateSessions](../use-cases/sessions/CreateSessions.ts); its application
+contract and remaining adapter work are documented in the
+[session use-case guide](../use-cases/sessions/README.md).
 
 ## Aggregate roots
 
@@ -211,15 +213,20 @@ repositories, invokes the appropriate Participant or Booker action, then saves
 the session and applies its returned financial instructions in the same unit of
 work. It does not call internal helpers or save child changes independently.
 Automatic verification, replacement expiry, and payout callbacks invoke Session
-directly. Payout dispatch calls the provider outside the transaction. This split
-adds no use-case, database, or payment-provider implementation; domain atomicity
-tests do not establish database concurrency guarantees.
+directly. Payout dispatch calls the provider outside the transaction. These
+domain workflows require separate application and infrastructure integration;
+domain atomicity tests do not establish database concurrency guarantees.
 
 ## Money and booking
 
 `Money` is an immutable signed SGD-cent value object. It uses safe integer cents,
 BigInt-backed arithmetic checks, and floor division for the per-slot booking
-share. `Booking` is an immutable value object requiring a positive total cost and
+share. `toDollars()` returns an exact decimal string with two fractional digits
+(for example, `Money.fromCents(333).toDollars()` returns `"3.33"`). Arithmetic and
+persistence continue to use integer cents; currency symbols and locale formatting
+belong at the render layer.
+
+`Booking` is an immutable value object requiring a positive total cost and
 `startAt < endAt`. A session has at most eight commitments, including accepted
 personal replacements; the booker does not receive a reserved place.
 

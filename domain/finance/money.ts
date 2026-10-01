@@ -19,6 +19,15 @@ export class Money {
     return this.#cents;
   }
 
+  /** Exact SGD dollars with two decimal places; locale formatting belongs in the UI. */
+  toDollars(): string {
+    const cents = BigInt(this.#cents);
+    const magnitude = cents < 0n ? -cents : cents;
+    const dollars = magnitude / 100n;
+    const remainder = (magnitude % 100n).toString().padStart(2, "0");
+    return `${cents < 0n ? "-" : ""}${dollars}.${remainder}`;
+  }
+
   equals(other: Money): boolean {
     return this.#cents === other.#cents;
   }

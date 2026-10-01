@@ -86,16 +86,24 @@ A repeat key returns the original result without re-executing.
 ```
 /domain          Pure TypeScript. No framework imports, no DB, no HTTP.
                  Business rules, policy engines, interfaces.
-/use-cases       Shared ports and contracts for future use-case coordinators;
-                 use-case implementations are not present yet.
+/use-cases       Framework-independent coordinators, organized by use case;
+                 shared ports and transaction contracts live in /shared.
+/use-case-config Connects app handlers, use cases, and adapters with explicit
+                 dependencies; see its README when wiring a use case.
+/lib/sessions    Session infrastructure adapters implementing use-case contracts.
 /lib/money       Money type, ledger implementation, invariants.
 /app             Next.js App Router. Route handlers + pages.
 /components/ui   Shared design system. Request changes, don't add directly.
 /supabase        Migrations (numbered, serialised) and RLS policies.
 ```
 
-The dependency direction is one-way: `/app` → `/use-cases` → `/domain` → nothing.
-`/domain` must never import from `/app`, `next`, `@supabase/*` or `stripe`.
+Core dependencies point inward: `/use-cases` → `/domain` → nothing. App handlers
+and lib adapters depend on core contracts. The outer `/use-case-config` folder
+may import app handlers, lib adapters, and use cases to assemble them; core
+modules never import outward. `/domain` must never import from `/app`, `next`,
+`@supabase/*` or `stripe`. When wiring HTTP to a use case, read the
+[configuration guide](./use-case-config/README.md) for dependency lifetimes and
+the tested session-creation example.
 
 Actor-driven session workflows enter through `User`'s Participant or Booker
 role, which performs actor authorization and prepares the complete change.
@@ -178,7 +186,8 @@ creation and cannot be changed.
 
 - Server-side computation for anything financial. Never trust a client-supplied
   amount, refund figure or settlement outcome.
-- Validate at the boundary with Zod; the domain layer assumes valid input.
+- Validate external input with Zod in `/app`, then pass plain TypeScript DTOs
+  into `/use-cases`. Keep business invariants in `/domain`.
 - Waitlist promotion is strictly FIFO on `joined_at`, using
   `SELECT ... FOR UPDATE SKIP LOCKED`.
 - Cancel sessions through `user.asBooker().cancel(session, now)` and retain their
@@ -186,6 +195,20 @@ creation and cannot be changed.
 - SGD displays to two decimals. The applicable refund amount is shown before any
   irreversible action.
 - Responsive from 390px.
+
+### Commit messages
+
+Use semantic commit messages. For breaking changes, add `!` immediately before
+the colon (`feat!:` or `feat(sessions)!:`) and include a `BREAKING CHANGE:` footer
+describing the change.
+
+Example with both `!` and a `BREAKING CHANGE` footer:
+
+```text
+feat!: drop support for Node 6
+
+BREAKING CHANGE: use JavaScript features not available in Node 6.
+```
 
 ---
 
