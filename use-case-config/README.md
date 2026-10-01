@@ -2,15 +2,29 @@
 
 ## Discovery configuration
 
-UC2-01 assembles its read-only dependencies in `discovery.ts`, using the same
-validated Supabase/PostgreSQL settings, lazy pool provider and bearer verifier
-as creation. Discovery has its own unavailable error and dependency getter so
-adding GET does not change POST's submission or replay contract. The API verifies
-a current active account on each request; the discovery page uses cookie identity
-and current account status before invoking the same use case directly.
+UC2-01 assembles its dependencies in `discovery.ts`, using the same validated
+Supabase/PostgreSQL settings and lazy pool provider as creation. Its bearer
+verification establishes identity only; the API validates the external query
+before passing that identity to `DiscoverSessions.forParticipant(...)`. The page
+uses cookie identity and invokes the same use case directly. The use case loads
+one complete User and checks active-account eligibility through its Participant
+role on every invocation. Creation retains its existing account checks before
+creation or replay. Discovery has its own unavailable error and dependency getter.
 
-The adapter returns only public session summaries and does not expose raw rows,
-room tokens, or direct browser access to session tables. See the
+`PostgresSessionDiscoveryTransaction` acquires the lazy pool inside `run()` and
+uses the existing `PostgresTransactor` to give `PostgresUserReader` and
+`PostgresSessionDiscoveryReader` one repeatable-read transaction executor. It uses
+ordinary transaction mode because User hydration takes shared locks, and makes
+one attempt with existing infrastructure-error propagation. It writes no ledger
+entries and uses no replay store. Complete User hydration includes wallet history,
+memberships and calculated reliability; incomplete or malformed state fails
+instead of supplying partial facts. Only active account status limits discovery.
+
+The adapter returns all matching public session summaries ordered by start and
+session ID, with no cursor predicate or result cap. The app owns 20-item pagination
+and opaque cursors: every request, including Next, fetches the entire matching
+list, then sends only the selected page to the browser. It does not expose raw
+rows, room tokens, or direct browser access to session tables. See the
 [discovery guide](../app/discover/README.md) for filters, pagination, states,
 Swagger and Storybook coverage. OneMap settings are not needed for stored-region
 discovery.

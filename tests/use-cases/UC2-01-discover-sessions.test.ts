@@ -1,94 +1,161 @@
-import { describe, expect, test } from "vitest";
+import { ReliabilityScore, type User, type UUID } from "@/domain";
+import { describe, expect, test, vi } from "vitest";
 import {
   DiscoverSessions,
   type DiscoveredSession,
-  type SessionDiscoveryReader,
+  type SessionDiscoveryCriteria,
 } from "@/use-cases/sessions/DiscoverSessions";
+import type {
+  SessionDiscoveryReader,
+  SessionDiscoveryTransaction,
+} from "@/use-cases/sessions/session-discovery-transaction";
+import { createTestUser } from "../domain/accounts/user-fixtures";
 
 const now = new Date("2030-01-01T00:00:00Z");
-const session = (id: number, overrides: Partial<DiscoveredSession> = {}): DiscoveredSession => ({
-  sessionId: `10000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
-  venueName: "Jurong East Sports Hall", region: "West", sport: "Badminton",
-  startAt: new Date("2030-01-02T10:00:00Z"), endAt: new Date("2030-01-02T12:00:00Z"),
-  totalSlots: 8, bookingShareCents: 333, ...overrides,
-});
-
-/** Contract fake; the same filtering semantics are verified against PostgreSQL. */
-function discovery(rows: readonly DiscoveredSession[]) {
-  const reader: SessionDiscoveryReader = {
-    search: async (query) => rows
-      .filter((row) => row.startAt > query.now)
-      .filter((row) => query.sport === undefined || row.sport === query.sport)
-      .filter((row) => query.region === undefined || row.region === query.region)
-      .filter((row) => query.startAtFrom === undefined || row.startAt >= query.startAtFrom)
-      .filter((row) => query.startAtBefore === undefined || row.startAt < query.startAtBefore)
-      .filter((row) => query.cursor === undefined || row.startAt.toISOString() > query.cursor.startAt ||
-        (row.startAt.toISOString() === query.cursor.startAt && row.sessionId > query.cursor.sessionId))
-      .toSorted((a, b) => a.startAt.getTime() - b.startAt.getTime() || a.sessionId.localeCompare(b.sessionId))
-      .slice(0, query.limit),
-  };
-  return new DiscoverSessions({ reader, clock: { now: () => now } });
-}
+const participantId = "10000000-0000-4000-8000-000000000001";
 
 // Owner: Neoh (liang799) — /app/discover
 describe("UC2-01 Discover Sessions", () => {
-  test("filters sessions by sport", async () => {
-    const badminton = session(1);
-    const tennis = session(2, { sport: "Tennis" });
-    const result = await discovery([badminton, tennis]).search({ sport: "Tennis" });
-    expect(result.items).toEqual([tennis]);
+  test("loads the verified participant once before reading public listings", async () => {
+    const user = createTestUser({
+      userId: participantId,
+      availableFundsCents: 0,
+      reliabilityScore: ReliabilityScore.from(0),
+    });
+    const item = session(1);
+    const { useCase, get, search, run } = discovery([item], user);
+
+    const result = await useCase.forParticipant(participantId);
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledExactlyOnceWith(participantId);
+    expect(search).toHaveBeenCalledExactlyOnceWith({}, now);
+    expect(get.mock.invocationCallOrder[0]).toBeLessThan(search.mock.invocationCallOrder[0]!);
+    expect(result).toEqual([item]);
   });
+
+  test("passes combined search, sport, region and date bounds to the listing reader", async () => {
+    const criteria: SessionDiscoveryCriteria = {
+      text: "Jurong", sport: "Badminton", region: "West",
+      startsWithin: {
+        from: new Date("2030-01-02T10:00:00Z"),
+        before: new Date("2030-01-02T12:00:00Z"),
+      },
+    };
+    const { useCase, search } = discovery();
+
+    const result = await useCase.forParticipant(participantId, criteria);
+
+    expect(search).toHaveBeenCalledExactlyOnceWith(criteria, now);
+    expect(result).toEqual([]);
+  });
+
   test.todo("filters sessions by region (derived from OneMap postal code)");
-  test("filters sessions by stored region pending OneMap provenance", async () => {
-    const west = session(1);
-    const east = session(2, { region: "East" });
-    expect((await discovery([west, east]).search({ region: "West" })).items).toEqual([west]);
+
+  test("captures the current time after loading and authorizing the participant", async () => {
+    const { useCase, get, search, clock } = discovery();
+    const afterLoading = new Date("2030-01-01T00:00:05Z");
+    get.mockImplementationOnce(async () => {
+      clock.now.mockReturnValue(afterLoading);
+      return createTestUser({ userId: participantId });
+    });
+
+    await useCase.forParticipant(participantId);
+
+    expect(clock.now).toHaveBeenCalledOnce();
+    expect(search).toHaveBeenCalledWith({}, afterLoading);
   });
 
-  test("filters sessions by date and time", async () => {
-    const before = session(1, { startAt: new Date("2030-01-02T09:59:59Z") });
-    const first = session(2);
-    const last = session(3, { startAt: new Date("2030-01-02T11:59:59Z") });
-    const after = session(4, { startAt: new Date("2030-01-02T12:00:00Z") });
-    expect((await discovery([before, first, last, after]).search({
-      startAtFrom: new Date("2030-01-02T10:00:00Z"),
-      startAtBefore: new Date("2030-01-02T12:00:00Z"),
-    })).items).toEqual([first, last]);
+  test("rejects a missing participant before querying listings", async () => {
+    const { useCase, search, clock } = discovery([], null);
+
+    await expect(useCase.forParticipant(participantId)).rejects.toMatchObject({
+      code: "NOT_FOUND", message: "User was not found",
+    });
+    expect(search).not.toHaveBeenCalled();
+    expect(clock.now).not.toHaveBeenCalled();
   });
 
-  test("combines filters and returns an empty page for no match", async () => {
-    const useCase = discovery([session(1), session(2, { region: "East", sport: "Tennis" })]);
-    expect(await useCase.search({ sport: "Tennis", region: "West" })).toEqual({ items: [], nextCursor: null });
-    expect((await useCase.search({ sport: "Tennis", region: "East" })).items.map((row) => row.sessionId)).toEqual([session(2).sessionId]);
+  test("rejects an inactive participant before querying listings", async () => {
+    const user = createTestUser({ userId: participantId, accountStatus: "INACTIVE" });
+    const { useCase, search, clock } = discovery([], user);
+
+    await expect(useCase.forParticipant(participantId)).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+    expect(search).not.toHaveBeenCalled();
+    expect(clock.now).not.toHaveBeenCalled();
   });
 
-  test("uses the current clock to exclude sessions starting now or earlier", async () => {
-    const upcoming = session(3);
-    const result = await discovery([
-      session(1, { startAt: new Date(now.getTime() - 1) }), session(2, { startAt: now }), upcoming,
-    ]).search({});
-    expect(result.items).toEqual([upcoming]);
+  test("reloads the participant and observes deactivation between requests", async () => {
+    const { useCase, get, search } = discovery();
+    await useCase.forParticipant(participantId);
+    get.mockResolvedValue(createTestUser({ userId: participantId, accountStatus: "INACTIVE" }));
+
+    await expect(useCase.forParticipant(participantId)).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledOnce();
   });
 
-  test("paginates ties without omitting or repeating sessions", async () => {
+  test("preserves actor loading failures without querying listings", async () => {
+    const { useCase, get, search } = discovery();
+    const failure = new Error("User hydration failed");
+    get.mockRejectedValue(failure);
+
+    await expect(useCase.forParticipant(participantId)).rejects.toBe(failure);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  test("preserves listing failures", async () => {
+    const { useCase, search } = discovery();
+    const failure = new Error("Session query failed");
+    search.mockRejectedValue(failure);
+
+    await expect(useCase.forParticipant(participantId)).rejects.toBe(failure);
+  });
+
+  test("waits for transaction completion and preserves commit failures", async () => {
+    const { useCase, run, get, search } = discovery([session(1)]);
+    const failure = new Error("Commit failed");
+    run.mockImplementation(async (work) => {
+      await work({ users: { get }, sessions: { search } });
+      throw failure;
+    });
+
+    await expect(useCase.forParticipant(participantId)).rejects.toBe(failure);
+    expect(search).toHaveBeenCalledOnce();
+  });
+
+  test("returns every matching summary without a page-size limit", async () => {
     const rows = Array.from({ length: 41 }, (_, index) => session(index + 1));
-    const useCase = discovery(rows.toReversed());
-    const first = await useCase.search({});
-    expect(first.items).toHaveLength(20);
-    expect(first.nextCursor).toEqual({ startAt: rows[19]?.startAt.toISOString(), sessionId: rows[19]?.sessionId });
-    if (first.nextCursor === null) throw new Error("Expected a second page");
-    const second = await useCase.search({ cursor: first.nextCursor });
-    expect(second.items).toHaveLength(20);
-    if (second.nextCursor === null) throw new Error("Expected a third page");
-    const third = await useCase.search({ cursor: second.nextCursor });
-    expect(third.items).toHaveLength(1);
-    expect(third.nextCursor).toBeNull();
-    expect([...first.items, ...second.items, ...third.items]).toEqual(rows);
-  });
+    const { useCase, search } = discovery(rows);
+    const criteria = { sport: "Badminton" };
 
-  test("exactly twenty remaining results do not advertise an empty next page", async () => {
-    const result = await discovery(Array.from({ length: 20 }, (_, index) => session(index + 1))).search({});
-    expect(result.items).toHaveLength(20);
-    expect(result.nextCursor).toBeNull();
+    const result = await useCase.forParticipant(participantId, criteria);
+
+    expect(search).toHaveBeenCalledExactlyOnceWith(criteria, now);
+    expect(result).toEqual(rows);
+    expect(result).toHaveLength(41);
   });
 });
+
+function discovery(
+  rows: readonly DiscoveredSession[] = [],
+  user: User | null = createTestUser({ userId: participantId }),
+) {
+  const get = vi.fn<(id: UUID) => Promise<User | null>>().mockResolvedValue(user);
+  const search = vi.fn<SessionDiscoveryReader["search"]>().mockResolvedValue(rows);
+  const transaction: SessionDiscoveryTransaction = {
+    run: (work) => work({ users: { get }, sessions: { search } }),
+  };
+  const run = vi.spyOn(transaction, "run");
+  const clock = { now: vi.fn(() => now) };
+  return { get, search, run, clock, useCase: new DiscoverSessions({ transaction, clock }) };
+}
+
+function session(id: number): DiscoveredSession {
+  return {
+    sessionId: `10000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+    venueName: "Jurong East Sports Hall", region: "West", sport: "Badminton",
+    startAt: new Date("2030-01-02T10:00:00Z"), endAt: new Date("2030-01-02T12:00:00Z"),
+    totalSlots: 8, bookingShareCents: 333,
+  };
+}

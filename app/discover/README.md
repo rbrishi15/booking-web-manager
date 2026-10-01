@@ -18,11 +18,16 @@ does not establish OneMap provenance.
 
 ## Query and HTTP contract
 
-`GET /api/sessions` verifies a Supabase bearer token and current active account.
-The page uses cookie authentication and invokes the same discovery use case
-directly on the server. Discovery uses the existing session server settings and
-database schema through migration 0006; it requires no new migration or browser
-table grants. Results are not cached.
+`GET /api/sessions` verifies a Supabase bearer token, validates the external query,
+and passes the verified identity to `DiscoverSessions.forParticipant(...)`.
+The use case loads one complete User and checks active-account eligibility through
+its Participant role on every invocation. The page uses cookie authentication and
+invokes the same use case directly on the server; missing or inactive accounts
+redirect to login. Identity verification precedes query validation, and invalid
+queries are rejected before loading the User or checking account eligibility.
+Discovery uses the existing session server settings and database schema through
+migration 0006; it requires no new migration or browser table grants. Results are
+not cached.
 
 Optional query parameters are `q`, `sport`, `region`, `date`, `timeFrom`, `timeTo` and
 `cursor`. Sport and region use the existing registration picker vocabulary.
@@ -30,7 +35,12 @@ Blank filters mean no restriction; repeated known parameters are rejected and
 unknown parameters are ignored. `q` is trimmed, limited to 100 characters, and matches
 a case-insensitive literal substring of sport or venue name. SQL wildcard characters
 are treated literally. Search combines with all other filters, preserving the same
-ordering and pagination. No full aggregate or participant data is loaded.
+ordering and pagination. Only the acting User is fully hydrated, including wallet
+history, memberships and reliability; matching Sessions remain lightweight public
+summaries. Payout setup, available funds, memberships and reliability do not limit
+browsing. User hydration and listing reads share one repeatable-read transaction.
+Missing required User state or malformed stored state fails as an infrastructure
+error rather than substituting incomplete account facts.
 
 Dates use `YYYY-MM-DD`; times use `HH:mm`. Date and time refer to
 `Asia/Singapore`. A date alone selects that calendar day. Time bounds require a
@@ -39,7 +49,12 @@ upper bound. Omitted bounds mean midnight or the next midnight. Invalid dates,
 reversed ranges and overnight ranges are rejected. Sessions that have already
 started are always excluded, even when a selected date is in the past.
 
-Results are ordered by start time, then session ID, with 20 items per page.
+The use case returns all matching summaries ordered by start time, then session
+ID, with no result cap. The app applies the cursor and selects at most 20 items
+for each HTTP response or server-page render. Every request, including Next,
+loads the complete matching list on the server; only the selected page is sent
+to the browser. This keeps pagination out of the domain and use-case interface
+and accepts the cost of reading the complete list for this school project.
 `nextCursor` is an opaque continuation value; clients should reuse it with the
 same filters and reset it whenever filters change. The response is
 `{ items, nextCursor }`, with a null cursor on the last page. Each item contains

@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
-import type {
-  DiscoverSessionsInput,
-  SessionDiscoveryCursor,
-} from "@/use-cases/sessions/DiscoverSessions";
+import type { UUID } from "@/domain";
+import type { SessionDiscoveryCriteria } from "@/use-cases/sessions/DiscoverSessions";
+
+export interface DiscoveryCursor {
+  readonly startAt: Date;
+  readonly sessionId: UUID;
+}
 
 export interface DiscoveryFilters {
   q?: string;
@@ -27,7 +30,7 @@ export type ParsedDiscoveryQuery = {
   cursor: string;
   queryKey: string;
 } & (
-  | { status: "valid"; input: DiscoverSessionsInput }
+  | { status: "valid"; criteria: SessionDiscoveryCriteria; after?: DiscoveryCursor }
   | { status: "invalid"; fieldErrors: DiscoveryFieldErrors }
 );
 
@@ -66,13 +69,15 @@ export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQue
   if (filters.timeTo && (filters.timeFrom || "00:00") >= filters.timeTo)
     invalid("timeTo", "End time must be later than start time on the same day");
 
-  let decodedCursor: SessionDiscoveryCursor | undefined;
+  let decodedCursor: DiscoveryCursor | undefined;
   if (cursor) {
     try {
       if (cursor.length > 512 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error("Invalid cursor");
       const base64 = cursor.replace(/-/g, "+").replace(/_/g, "/");
-      decodedCursor = cursorSchema.parse(JSON.parse(atob(base64)));
-      if (!Number.isFinite(new Date(decodedCursor.startAt).getTime())) throw new Error("Invalid cursor timestamp");
+      const payload = cursorSchema.parse(JSON.parse(atob(base64)));
+      const startAt = new Date(payload.startAt);
+      if (!Number.isFinite(startAt.getTime())) throw new Error("Invalid cursor timestamp");
+      decodedCursor = { startAt, sessionId: payload.sessionId };
     } catch {
       invalid("cursor", "Invalid page cursor; clear filters to start again");
     }
@@ -91,13 +96,13 @@ export function parseDiscoveryQuery(params: URLSearchParams): ParsedDiscoveryQue
   }
   return {
     status: "valid", filters, cursor, queryKey: buildDiscoveryQuery(filters, cursor),
-    input: {
-      ...(filters.q ? { q: filters.q } : {}),
+    criteria: {
+      ...(filters.q ? { text: filters.q } : {}),
       ...(filters.sport ? { sport: filters.sport } : {}),
       ...(filters.region ? { region: filters.region } : {}),
-      ...(startAtFrom ? { startAtFrom, startAtBefore } : {}),
-      ...(decodedCursor ? { cursor: decodedCursor } : {}),
+      ...(startAtFrom ? { startsWithin: { from: startAtFrom, before: startAtBefore } } : {}),
     },
+    ...(decodedCursor ? { after: decodedCursor } : {}),
   };
 }
 
@@ -111,8 +116,9 @@ export function buildDiscoveryQuery(filters: DiscoveryFilters, cursor = ""): str
   return params.toString();
 }
 
-export function encodeDiscoveryCursor(cursor: SessionDiscoveryCursor): string {
-  return btoa(JSON.stringify(cursor)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export function encodeDiscoveryCursor(cursor: DiscoveryCursor): string {
+  const payload = { startAt: cursor.startAt.toISOString(), sessionId: cursor.sessionId };
+  return btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function validCalendarDate(value: string): boolean {

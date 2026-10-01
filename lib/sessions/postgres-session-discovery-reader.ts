@@ -3,46 +3,39 @@ import { fromDatabaseCents } from "@/lib/money/cents";
 import type { SqlExecutor } from "@/lib/money/sql";
 import type {
   DiscoveredSession,
-  SessionDiscoveryQuery,
-  SessionDiscoveryReader,
+  SessionDiscoveryCriteria,
 } from "@/use-cases/sessions/DiscoverSessions";
+import type { SessionDiscoveryReader } from "@/use-cases/sessions/session-discovery-transaction";
 import { date, text } from "./postgres-row-values";
 
 /** A single read query over the public summary; no roster or ledger joins. */
 export class PostgresSessionDiscoveryReader implements SessionDiscoveryReader {
   constructor(private readonly sql: SqlExecutor) {}
 
-  async search(input: SessionDiscoveryQuery): Promise<readonly DiscoveredSession[]> {
-    const values: unknown[] = [input.now];
+  async search(criteria: SessionDiscoveryCriteria, now: Date): Promise<readonly DiscoveredSession[]> {
+    const values: unknown[] = [now];
     const conditions = ["visibility = 'PUBLIC'", "status = 'OPEN'", "start_at > $1"];
     const parameter = (value: unknown) => {
       values.push(value);
       return `$${values.length}`;
     };
-    if (input.q !== undefined) {
+    if (criteria.text !== undefined) {
       // SQL LIKE treats these as syntax; user search text must remain literal.
-      const pattern = parameter(`%${input.q.replace(/[\\%_]/g, "\\$&")}%`);
+      const pattern = parameter(`%${criteria.text.replace(/[\\%_]/g, "\\$&")}%`);
       conditions.push(`(sport ilike ${pattern} or venue_name ilike ${pattern})`);
     }
-    if (input.sport !== undefined) conditions.push(`sport = ${parameter(input.sport)}`);
-    if (input.region !== undefined) conditions.push(`region = ${parameter(input.region)}`);
-    if (input.startAtFrom !== undefined)
-      conditions.push(`start_at >= ${parameter(input.startAtFrom)}`);
-    if (input.startAtBefore !== undefined)
-      conditions.push(`start_at < ${parameter(input.startAtBefore)}`);
-    if (input.cursor !== undefined) {
-      conditions.push(
-        `(start_at, session_id) > (${parameter(input.cursor.startAt)}::timestamptz, ${parameter(input.cursor.sessionId)}::uuid)`,
-      );
-    }
-    const limit = parameter(input.limit);
+    if (criteria.sport !== undefined) conditions.push(`sport = ${parameter(criteria.sport)}`);
+    if (criteria.region !== undefined) conditions.push(`region = ${parameter(criteria.region)}`);
+    if (criteria.startsWithin?.from !== undefined)
+      conditions.push(`start_at >= ${parameter(criteria.startsWithin.from)}`);
+    if (criteria.startsWithin?.before !== undefined)
+      conditions.push(`start_at < ${parameter(criteria.startsWithin.before)}`);
     const rows = await this.sql.query(
       `select session_id, venue_name, sport, region, start_at, end_at,
               total_slots, booking_share_cents
        from sessions
        where ${conditions.join(" and ")}
-       order by start_at asc, session_id asc
-       limit ${limit}`,
+       order by start_at asc, session_id asc`,
       values,
     );
     return rows.map((row) => ({

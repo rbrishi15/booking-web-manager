@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { PostgresTransactor } from "@/lib/database/postgres-transactor";
 import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
-import { PostgresSessionDiscoveryReader } from "@/lib/sessions/postgres-session-discovery-reader";
-import { DiscoverSessions, type DiscoverSessionsInput } from "@/use-cases/sessions/DiscoverSessions";
+import { PostgresSessionDiscoveryTransaction } from "@/lib/sessions/postgres-session-discovery-transaction";
+import { DiscoverSessions, type SessionDiscoveryCriteria } from "@/use-cases/sessions/DiscoverSessions";
 import { sessionTestContext, type SessionTestContext } from "../support/session-test-context";
 
 const now = new Date("2040-01-01T00:00:00Z");
@@ -44,14 +43,71 @@ describe("UC2-01 PostgreSQL discovery", () => {
     return sessionId;
   }
 
-  function discover(input: DiscoverSessionsInput = {}, at = now) {
-    return new PostgresTransactor(context.pool).transaction((sql) =>
-      new DiscoverSessions({
-        reader: new PostgresSessionDiscoveryReader(sql),
-        clock: { now: () => at },
-      }).search(input),
-    );
+  function discovery(at = now) {
+    const clock = { now: () => at };
+    return new DiscoverSessions({
+      transaction: new PostgresSessionDiscoveryTransaction(() => context.pool, clock),
+      clock,
+    });
   }
+
+  function discover(criteria: SessionDiscoveryCriteria = {}, at = now) {
+    return discovery(at).forParticipant(bookerId, criteria);
+  }
+
+  test("loads current participant eligibility on every invocation", async () => {
+    const participant = await context.identity(false);
+    const useCase = discovery();
+    await expect(useCase.forParticipant(participant.userId)).resolves.toEqual(expect.any(Array));
+
+    await context.pool.query("update profiles set account_status = 'INACTIVE' where user_id = $1", [participant.userId]);
+    await expect(useCase.forParticipant(participant.userId)).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+    await expect(useCase.forParticipant(randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("refuses discovery when the actor's complete User cannot be hydrated", async () => {
+    const missing = await context.identity(false);
+    await context.pool.query("delete from wallet_balances where wallet_id = $1", [missing.walletId]);
+    await context.pool.query("delete from wallets where wallet_id = $1", [missing.walletId]);
+    await expect(discovery().forParticipant(missing.userId)).rejects.toMatchObject({ name: "SessionPersistenceError" });
+
+    const corrupt = await context.identity(false);
+    await context.pool.query("update profiles set preferred_sports = '{\"\"}' where user_id = $1", [corrupt.userId]);
+    await expect(discovery().forParticipant(corrupt.userId)).rejects.toMatchObject({ name: "SessionPersistenceError" });
+  });
+
+  test("allows an active participant with no payout setup, no available funds and low reliability to browse", async () => {
+    const participant = await context.identity(false);
+    const pastSession = await insertSession({ startAt: "2039-12-01T10:00:00Z" });
+    const participationId = randomUUID();
+    const holdId = randomUUID();
+    await context.pool.query(
+      `insert into ledger_entries (kind, amount_cents, occurred_at, idempotency_key, external_reference, wallet_id)
+       values ('TOP_UP',500,'2039-11-30T09:00:00Z',$1,$2,$3)`,
+      [randomUUID(), randomUUID(), participant.walletId],
+    );
+    await context.pool.query(
+      `insert into participations (participation_id, session_id, user_id, status, attendance, committed_at, verified_at, verification_method)
+       values ($1,$2,$3,'COMMITTED','ABSENT','2039-11-30T10:00:00Z','2039-12-01T12:00:00Z','BOOKER')`,
+      [participationId, pastSession, participant.userId],
+    );
+    await context.pool.query(
+      `insert into fund_holds (hold_id, participation_id, holding_account_id, wallet_id, amount_cents, state, created_at)
+       values ($1,$2,$3,$4,500,'HELD','2039-11-30T10:00:00Z')`,
+      [holdId, participationId, PLATFORM_HOLDING_ACCOUNT_ID, participant.walletId],
+    );
+    await context.pool.query(
+      `insert into ledger_entries (kind, amount_cents, occurred_at, idempotency_key, wallet_id, hold_id, holding_account_id, session_id, participation_id)
+       values ('LOCK',500,'2039-11-30T10:00:00Z',$1,$2,$3,$4,$5,$6)`,
+      [randomUUID(), participant.walletId, holdId, PLATFORM_HOLDING_ACCOUNT_ID, pastSession, participationId],
+    );
+    const target = await insertSession({ startAt: "2040-06-08T10:00:00Z" });
+
+    const result = await discovery().forParticipant(participant.userId, {
+      startsWithin: { from: new Date("2040-06-08T00:00:00Z"), before: new Date("2040-06-09T00:00:00Z") },
+    });
+    expect(result.map((session) => session.sessionId)).toEqual([target]);
+  });
 
   test("matches sport or venue case-insensitively while keeping other filters and exclusions", async () => {
     const startAt = "2040-06-05T10:00:00Z";
@@ -62,12 +118,12 @@ describe("UC2-01 PostgreSQL discovery", () => {
     await insertSession({ startAt, sport: "Tennis", status: "CANCELLED" });
     await insertSession({ startAt: "2040-06-06T10:00:00Z", sport: "Tennis" });
     const filters = {
-      q: "tenNIS", region: "West",
-      startAtFrom: new Date("2040-06-05T00:00:00Z"), startAtBefore: new Date("2040-06-06T00:00:00Z"),
+      text: "tenNIS", region: "West",
+      startsWithin: { from: new Date("2040-06-05T00:00:00Z"), before: new Date("2040-06-06T00:00:00Z") },
     };
-    expect((await discover(filters)).items.map((row) => row.sessionId)).toEqual([matchingSport, matchingVenue].sort());
-    expect((await discover({ ...filters, sport: "Badminton" })).items.map((row) => row.sessionId)).toEqual([matchingVenue]);
-    expect((await discover({ ...filters, q: "unmatched" })).items).toEqual([]);
+    expect((await discover(filters)).map((row) => row.sessionId)).toEqual([matchingSport, matchingVenue].sort());
+    expect((await discover({ ...filters, sport: "Badminton" })).map((row) => row.sessionId)).toEqual([matchingVenue]);
+    expect(await discover({ ...filters, text: "unmatched" })).toEqual([]);
   });
 
   test("treats wildcard characters, quotes, backslashes, and SQL fragments as literal search text", async () => {
@@ -76,12 +132,12 @@ describe("UC2-01 PostgreSQL discovery", () => {
     await insertSession({ startAt, venueName: "100X_O'BrienCourt" });
     await insertSession({ startAt, venueName: "100%XO'BrienCourt" });
     const filters = {
-      startAtFrom: new Date("2040-06-07T00:00:00Z"), startAtBefore: new Date("2040-06-08T00:00:00Z"),
+      startsWithin: { from: new Date("2040-06-07T00:00:00Z"), before: new Date("2040-06-08T00:00:00Z") },
     };
-    for (const q of ["100%_", "O'Brien\\Court", "\\"]) {
-      expect((await discover({ ...filters, q })).items.map((row) => row.sessionId)).toEqual([target]);
+    for (const text of ["100%_", "O'Brien\\Court", "\\"]) {
+      expect((await discover({ ...filters, text })).map((row) => row.sessionId)).toEqual([target]);
     }
-    expect((await discover({ ...filters, q: "' OR true --" })).items).toEqual([]);
+    expect(await discover({ ...filters, text: "' OR true --" })).toEqual([]);
   });
 
   test("combines stored sport and region filters while excluding private and closed sessions", async () => {
@@ -96,17 +152,15 @@ describe("UC2-01 PostgreSQL discovery", () => {
 
     const result = await discover({
       sport: "Badminton", region: "West",
-      startAtFrom: new Date("2040-06-01T00:00:00Z"),
-      startAtBefore: new Date("2040-06-02T00:00:00Z"),
+      startsWithin: { from: new Date("2040-06-01T00:00:00Z"), before: new Date("2040-06-02T00:00:00Z") },
     });
 
-    expect(result.items.map((session) => session.sessionId)).toEqual([expected]);
-    expect(result.nextCursor).toBeNull();
-    expect(Object.keys(result.items[0] ?? {}).sort()).toEqual(publicKeys);
-    expect(result.items[0]?.bookingShareCents).toBe(500);
-    expect(result.items[0]?.startAt).toEqual(new Date(startAt));
+    expect(result.map((session) => session.sessionId)).toEqual([expected]);
+    expect(Object.keys(result[0] ?? {}).sort()).toEqual(publicKeys);
+    expect(result[0]?.bookingShareCents).toBe(500);
+    expect(result[0]?.startAt).toEqual(new Date(startAt));
     const injection = await discover({ sport: "Badminton' OR true --" });
-    expect(injection.items).toEqual([]);
+    expect(injection).toEqual([]);
   });
 
   test("uses inclusive/exclusive start bounds and excludes exactly-now and already-started sessions", async () => {
@@ -116,32 +170,32 @@ describe("UC2-01 PostgreSQL discovery", () => {
     const first = await insertSession({ startAt: lower });
     const last = await insertSession({ startAt: "2040-06-02T11:59:59.999Z" });
     await insertSession({ startAt: upper });
-    const filters = { startAtFrom: new Date(lower), startAtBefore: new Date(upper) };
+    const filters = { startsWithin: { from: new Date(lower), before: new Date(upper) } };
 
-    expect((await discover(filters)).items.map((session) => session.sessionId)).toEqual([first, last]);
-    expect((await discover(filters, new Date(lower))).items.map((session) => session.sessionId)).toEqual([last]);
-    expect((await discover(filters, new Date(upper))).items).toEqual([]);
+    expect((await discover(filters)).map((session) => session.sessionId)).toEqual([first, last]);
+    expect((await discover(filters, new Date(lower))).map((session) => session.sessionId)).toEqual([last]);
+    expect(await discover(filters, new Date(upper))).toEqual([]);
   });
 
-  test("paginates tied starts by session ID without repeating or skipping a result", async () => {
-    const ids = Array.from({ length: 23 }, () => randomUUID()).sort();
-    for (const sessionId of [...ids].reverse()) {
-      await insertSession({ startAt: "2040-06-03T10:00:00Z", sessionId, venueName: "Paged keyword venue" });
+  test("returns all 41 matches ordered by start and tied session IDs without a page limit", async () => {
+    const earlierIds = Array.from({ length: 21 }, () => randomUUID()).sort();
+    const laterIds = Array.from({ length: 20 }, () => randomUUID()).sort();
+    for (const [startAt, ids] of [
+      ["2040-06-03T11:00:00Z", laterIds],
+      ["2040-06-03T10:00:00Z", earlierIds],
+    ] as const) {
+      for (const sessionId of [...ids].reverse()) {
+        await insertSession({ startAt, sessionId, venueName: "Ordered keyword venue" });
+      }
     }
     await insertSession({ startAt: "2040-06-03T10:00:00Z", venueName: "Excluded venue" });
-    const filters = {
-      q: "KEYWORD",
-      startAtFrom: new Date("2040-06-03T00:00:00Z"),
-      startAtBefore: new Date("2040-06-04T00:00:00Z"),
-    };
+    const result = await discover({
+      text: "KEYWORD",
+      startsWithin: { from: new Date("2040-06-03T00:00:00Z"), before: new Date("2040-06-04T00:00:00Z") },
+    });
 
-    const first = await discover(filters);
-    expect(first.items.map((session) => session.sessionId)).toEqual(ids.slice(0, 20));
-    expect(first.nextCursor).toEqual({ startAt: "2040-06-03T10:00:00.000Z", sessionId: ids[19] });
-    if (first.nextCursor === null) throw new Error("Expected another discovery page");
-    const second = await discover({ ...filters, cursor: first.nextCursor });
-    expect(second.items.map((session) => session.sessionId)).toEqual(ids.slice(20));
-    expect(second.nextCursor).toBeNull();
+    expect(result).toHaveLength(41);
+    expect(result.map((session) => session.sessionId)).toEqual([...earlierIds, ...laterIds]);
   });
 
   test("includes full sessions with reliability requirements without reading private participation facts", async () => {
@@ -173,10 +227,10 @@ describe("UC2-01 PostgreSQL discovery", () => {
     }
 
     const result = await discover({
-      startAtFrom: new Date("2040-06-04T00:00:00Z"), startAtBefore: new Date("2040-06-05T00:00:00Z"),
+      startsWithin: { from: new Date("2040-06-04T00:00:00Z"), before: new Date("2040-06-05T00:00:00Z") },
     });
-    expect(result.items.map((session) => session.sessionId)).toEqual([sessionId]);
-    expect(result.items[0]?.totalSlots).toBe(2);
-    expect(Object.keys(result.items[0] ?? {}).sort()).toEqual(publicKeys);
+    expect(result.map((session) => session.sessionId)).toEqual([sessionId]);
+    expect(result[0]?.totalSlots).toBe(2);
+    expect(Object.keys(result[0] ?? {}).sort()).toEqual(publicKeys);
   });
 });

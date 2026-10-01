@@ -97,7 +97,7 @@ describe("public session OpenAPI contract", () => {
     const query = operation?.parameters?.find((parameter) => "name" in parameter && parameter.name === "q");
     expect(query).toMatchObject({ in: "query", required: false, schema: { type: "string", maxLength: 100, example: "Jurong" } });
     expect(parseDiscoveryQuery(new URLSearchParams({ q: "Jurong", sport: "Badminton", region: "West" }))).toMatchObject({
-      status: "valid", input: { q: "Jurong", sport: "Badminton", region: "West" },
+      status: "valid", criteria: { text: "Jurong", sport: "Badminton", region: "West" },
     });
     expect(operation?.responses["503"]).toMatchObject({
       content: {

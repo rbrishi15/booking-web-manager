@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAccountStatus } from "@/lib/supabase/account-status";
-import { createClient } from "@/lib/supabase/server";
+import { DomainError } from "@/domain";
 import type { DiscoveryOutcome } from "./_components/discovery-state";
 import { toDiscoveryPage } from "./contracts";
 import { DiscoveryApiUnavailableError } from "./discovery-api-unavailable";
@@ -9,10 +8,8 @@ import { getDiscoveryDependencies } from "./server-dependencies";
 
 export type PageSearchParams = Record<string, string | string[] | undefined>;
 
-/** An active account is required before acquiring session access for either screen. */
+/** The use case authorizes the verified participant before reading listings. */
 export async function loadDiscoveryScreen(userId: string, searchParams: PageSearchParams) {
-  const account = await getAccountStatus(await createClient(), userId);
-  if (account.kind === "inactive" || account.kind === "missing-profile") redirect("/login");
   const params = new URLSearchParams();
   for (const [name, value] of Object.entries(searchParams)) {
     if (name === "returnTo") continue;
@@ -21,13 +18,15 @@ export async function loadDiscoveryScreen(userId: string, searchParams: PageSear
   }
   const parsed = parseDiscoveryQuery(params);
   let outcome: DiscoveryOutcome;
-  if (account.kind === "lookup-failed") outcome = { status: "error", kind: "unexpected" };
-  else if (parsed.status === "invalid") outcome = { status: "invalid", fieldErrors: parsed.fieldErrors };
+  if (parsed.status === "invalid") outcome = { status: "invalid", fieldErrors: parsed.fieldErrors };
   else {
     try {
       const { discoverSessions } = await getDiscoveryDependencies();
-      outcome = { status: "ready", page: toDiscoveryPage(await discoverSessions.search(parsed.input)) };
+      const sessions = await discoverSessions.forParticipant(userId, parsed.criteria);
+      outcome = { status: "ready", page: toDiscoveryPage(sessions, parsed.after) };
     } catch (error) {
+      if (error instanceof DomainError && (error.code === "INACTIVE_ACCOUNT" || error.code === "NOT_FOUND"))
+        redirect("/login");
       outcome = { status: "error", kind: error instanceof DiscoveryApiUnavailableError ? "unavailable" : "unexpected" };
     }
   }

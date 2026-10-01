@@ -58,6 +58,7 @@
 /use-cases/sessions/RemoveParticipant.ts @liang799
 /use-cases/sessions/CancelSession.ts @liang799
 /use-cases/sessions/session-creation-transaction.ts @liang799
+/use-cases/sessions/session-discovery-transaction.ts @liang799
 /use-cases/sessions/README.md @liang799
 /use-case-config/sessions.ts @liang799
 /use-case-config/discovery.ts @liang799

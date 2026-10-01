@@ -82,10 +82,39 @@ test("authenticated discovery filters real stored sessions and protects private 
     const unauthenticated = await request.get("/api/sessions");
     expect(unauthenticated.status()).toBe(401);
     expect(unauthenticated.headers()["cache-control"]).toBe("no-store");
+    expect((await request.get("/api/sessions?cursor=invalid")).status()).toBe(401);
     await context.pool.query("update profiles set account_status = 'INACTIVE' where user_id = $1", [viewer.userId]);
+    const invalidForInactive = await request.get("/api/sessions?cursor=invalid", { headers });
+    expect(invalidForInactive.status()).toBe(400);
+    expect(await invalidForInactive.json()).toEqual({ error: { code: "INVALID_REQUEST", message: "Invalid session discovery query" } });
     const inactive = await request.get("/api/sessions", { headers });
     expect(inactive.status()).toBe(403);
     expect(await inactive.json()).toMatchObject({ error: { code: "INACTIVE_ACCOUNT" } });
+  } finally {
+    await context.pool.end();
+  }
+});
+
+test("distinguishes a missing participant profile from incomplete User hydration", async ({ request }) => {
+  const context = sessionTestContext();
+  try {
+    const missing = await context.identity(false);
+    await context.pool.query("delete from profiles where user_id = $1", [missing.userId]);
+    const missingResponse = await request.get("/api/sessions", {
+      headers: { Authorization: `Bearer ${missing.token}` },
+    });
+    expect(missingResponse.status()).toBe(404);
+    expect(await missingResponse.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+
+    const incomplete = await context.identity(false);
+    await context.pool.query("delete from wallet_balances where wallet_id = $1", [incomplete.walletId]);
+    await context.pool.query("delete from wallets where wallet_id = $1", [incomplete.walletId]);
+    const headers = { Authorization: `Bearer ${incomplete.token}` };
+    const invalid = await request.get("/api/sessions?cursor=invalid", { headers });
+    expect(invalid.status()).toBe(400);
+    const failed = await request.get("/api/sessions", { headers });
+    expect(failed.status()).toBe(500);
+    expect(await failed.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
   } finally {
     await context.pool.end();
   }

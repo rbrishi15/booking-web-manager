@@ -69,7 +69,7 @@ interface CommitmentTerms {
 }
 
 /**
- * User's participant role. Coordinates admission, invitation acceptance,
+ * User's participant role. Authorizes discovery and coordinates admission, invitation acceptance,
  * promotion, withdrawal, and waitlist departure using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  * Each workflow prepares its result and immutable child changes before asking
@@ -88,6 +88,15 @@ export class Participant {
 
   get userId(): UUID {
     return this.#user.userId;
+  }
+
+  /** Discovery needs an active account, without admission or funding requirements. */
+  assertCanDiscoverSessions(): void {
+    DomainError.require(
+      this.#user.accountStatus === "ACTIVE",
+      "INACTIVE_ACCOUNT",
+      "An inactive account cannot use the session API",
+    );
   }
 
   join(

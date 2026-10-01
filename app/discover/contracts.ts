@@ -1,5 +1,5 @@
-import type { DiscoveredSession, DiscoverSessionsResult } from "@/use-cases/sessions/DiscoverSessions";
-import { encodeDiscoveryCursor } from "./query";
+import type { DiscoveredSession } from "@/use-cases/sessions/DiscoverSessions";
+import { encodeDiscoveryCursor, type DiscoveryCursor } from "./query";
 
 export interface DiscoverySession extends Omit<DiscoveredSession, "startAt" | "endAt"> {
   readonly startAt: string;
@@ -11,10 +11,19 @@ export interface DiscoveryPage {
   readonly nextCursor: string | null;
 }
 
-/** Explicit allowlist keeps internal fields out of browser props and API JSON. */
-export function toDiscoveryPage(result: DiscoverSessionsResult): DiscoveryPage {
+const DISCOVERY_PAGE_SIZE = 20;
+
+/** Pages summaries ordered by start then ID, exposing only public browser fields. */
+export function toDiscoveryPage(sessions: readonly DiscoveredSession[], after?: DiscoveryCursor): DiscoveryPage {
+  const first = after === undefined ? 0 : sessions.findIndex((session) =>
+    session.startAt.getTime() > after.startAt.getTime() ||
+    (session.startAt.getTime() === after.startAt.getTime() && session.sessionId.toLowerCase() > after.sessionId.toLowerCase()),
+  );
+  const start = first === -1 ? sessions.length : first;
+  const items = sessions.slice(start, start + DISCOVERY_PAGE_SIZE);
+  const last = items.at(-1);
   return {
-    items: result.items.map((item) => ({
+    items: items.map((item) => ({
       sessionId: item.sessionId,
       venueName: item.venueName,
       sport: item.sport,
@@ -24,6 +33,8 @@ export function toDiscoveryPage(result: DiscoverSessionsResult): DiscoveryPage {
       totalSlots: item.totalSlots,
       bookingShareCents: item.bookingShareCents,
     })),
-    nextCursor: result.nextCursor === null ? null : encodeDiscoveryCursor(result.nextCursor),
+    nextCursor: start + items.length < sessions.length && last !== undefined
+      ? encodeDiscoveryCursor({ startAt: last.startAt, sessionId: last.sessionId })
+      : null,
   };
 }

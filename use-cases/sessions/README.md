@@ -2,16 +2,29 @@
 
 ## UC2-01 Discover Sessions
 
-`DiscoverSessions.search(...)` consumes a narrow read port and a clock. The
-PostgreSQL adapter selects public, open sessions starting after that clock time,
-applies the requested sport, stored-region and start-time filters, and orders by
-start time and ID. It reads at most 21 summaries to return a 20-item page and an
-optional continuation cursor. Full sessions stay discoverable.
+`DiscoverSessions.forParticipant(participantId, criteria = {})` loads
+one complete User within its discovery transaction and invokes
+`user.asParticipant().assertCanDiscoverSessions()`. Only an active account is
+required; payout setup, funds, memberships and reliability do not restrict browsing.
+The use case captures the listing cutoff from its clock after eligibility succeeds.
+The PostgreSQL reader selects public, open sessions starting after that instant,
+applies text, sport, stored-region and start-time filters, and orders by start time
+and ID. The use case returns `Promise<readonly DiscoveredSession[]>` containing
+every matching summary, without a result cap. Full sessions stay discoverable.
 
-Discovery is a read model: it needs neither complete User/Session hydration nor
-the ledger unit of work. The app validates external filters, converts Singapore
-date/time bounds to instants and encodes/decodes opaque HTTP cursors. The
-framework-independent use case consumes plain inputs. See the
+Criteria group `text`, `sport`, `region` and `startsWithin: { from?, before? }`.
+The reader receives only `criteria` and `now`; SQL has no cursor predicate or
+page limit. Pagination is entirely app-owned: each request, including Next,
+fetches all matching summaries, applies the cursor and selects a 20-item page.
+Only that page reaches browser props or HTTP JSON. This deliberately accepts
+the full-list read cost for school-project simplicity.
+Complete actor hydration and summary reads share a repeatable-read transaction;
+discovered Sessions are not hydrated, and no ledger unit of work or replay store
+is needed. Missing or malformed related User state fails hydration. Each invocation
+loads fresh User state and checks eligibility again. The app verifies identity,
+validates external filters before User loading, converts Singapore date/time
+bounds to instants and encodes/decodes opaque HTTP cursors. HTTP field names and
+responses remain unchanged. See the
 [discovery guide](../../app/discover/README.md) for its API and React state model.
 OneMap resolution remains separate; this milestone filters stored regions.
 

@@ -37,8 +37,8 @@ export async function GET(request: Request): Promise<Response> {
     const parsed = parseDiscoveryQuery(new URL(request.url).searchParams);
     if (parsed.status === "invalid")
       return discoveryError(400, "INVALID_REQUEST", "Invalid session discovery query");
-    const result = await dependencies.discoverSessions.search(parsed.input);
-    return discoveryJson(toDiscoveryPage(result));
+    const sessions = await dependencies.discoverSessions.forParticipant(identity, parsed.criteria);
+    return discoveryJson(toDiscoveryPage(sessions, parsed.after));
   } catch (error) {
     return discoveryErrorResponse(error);
   }

@@ -1,5 +1,7 @@
 import type { Region, Sport, UUID } from "@/domain";
 import type { Clock } from "../shared/contracts";
+import { requireAggregate } from "../shared/helpers";
+import type { SessionDiscoveryTransaction } from "./session-discovery-transaction";
 
 /** Public listing projection: no admission, participant, or payment secrets. */
 export interface DiscoveredSession {
@@ -13,64 +15,40 @@ export interface DiscoveredSession {
   readonly bookingShareCents: number;
 }
 
-export interface SessionDiscoveryCursor {
-  readonly startAt: string;
-  readonly sessionId: UUID;
-}
-
-export interface DiscoverSessionsInput {
+export interface SessionDiscoveryCriteria {
   /** Case-insensitive literal substring of the sport or venue name. */
-  readonly q?: string;
+  readonly text?: string;
   readonly sport?: Sport;
   readonly region?: Region;
-  readonly startAtFrom?: Date;
-  readonly startAtBefore?: Date;
-  readonly cursor?: SessionDiscoveryCursor;
+  readonly startsWithin?: {
+    readonly from?: Date;
+    readonly before?: Date;
+  };
 }
 
-export interface SessionDiscoveryQuery extends DiscoverSessionsInput {
-  readonly now: Date;
-  readonly limit: number;
-}
-
-/** Returns PUBLIC, OPEN, strictly upcoming sessions, ordered by start then ID.
- * Full sessions remain discoverable. Date bounds are inclusive/exclusive;
- * cursor comparison is exclusive. Readers never hydrate command aggregates.
+/**
+ * UC2-01: authorize the participant and discover all matches in one consistent snapshot.
+ * Results are public, open and strictly upcoming, including full sessions,
+ * ordered by start time and session ID.
  */
-export interface SessionDiscoveryReader {
-  search(query: SessionDiscoveryQuery): Promise<readonly DiscoveredSession[]>;
-}
-
-export interface DiscoverSessionsResult {
-  readonly items: readonly DiscoveredSession[];
-  readonly nextCursor: SessionDiscoveryCursor | null;
-}
-
-export const DISCOVERY_PAGE_SIZE = 20;
-
-/** UC2-01: read public listings in bounded pages using the current clock. */
 export class DiscoverSessions {
   constructor(
     private readonly dependencies: {
-      readonly reader: SessionDiscoveryReader;
+      readonly transaction: SessionDiscoveryTransaction;
       readonly clock: Clock;
     },
   ) {}
 
-  async search(input: DiscoverSessionsInput): Promise<DiscoverSessionsResult> {
-    const rows = await this.dependencies.reader.search({
-      ...input,
-      now: this.dependencies.clock.now(),
-      limit: DISCOVERY_PAGE_SIZE + 1,
+  /** The caller supplies the verified participant identity, never a client-chosen ID. */
+  async forParticipant(
+    participantId: UUID,
+    criteria: SessionDiscoveryCriteria = {},
+  ): Promise<readonly DiscoveredSession[]> {
+    return this.dependencies.transaction.run(async ({ users, sessions }) => {
+      const user = await requireAggregate(users, participantId, "User");
+      user.asParticipant().assertCanDiscoverSessions();
+
+      return sessions.search(criteria, this.dependencies.clock.now());
     });
-    const items = rows.slice(0, DISCOVERY_PAGE_SIZE);
-    const last = items.at(-1);
-    return {
-      items,
-      nextCursor:
-        rows.length > DISCOVERY_PAGE_SIZE && last !== undefined
-          ? { startAt: last.startAt.toISOString(), sessionId: last.sessionId }
-          : null,
-    };
   }
 }
