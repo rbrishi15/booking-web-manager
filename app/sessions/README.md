@@ -2,6 +2,10 @@
 
 **Owner:** Neoh (liang799)
 
+`GET /api/sessions` provides UC2-01 discovery; see the
+[discovery contract and page guide](../discover/README.md). Swagger documents
+both GET and POST. The remainder of this guide describes session creation.
+
 UC2-02 supplies the Create Session API with Supabase bearer authentication and
 atomic PostgreSQL persistence. When server settings are missing,
 `POST /api/sessions` returns:
@@ -94,5 +98,5 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-Registration and sign-in screens, session UI, OneMap, and later session
-management and Realtime features remain separate work.
+The discovery page is covered by UC2-01. Session-creation UI, OneMap, and later
+session management and Realtime features remain separate work.

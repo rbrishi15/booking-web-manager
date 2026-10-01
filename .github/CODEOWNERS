@@ -60,11 +60,15 @@
 /use-cases/sessions/session-creation-transaction.ts @liang799
 /use-cases/sessions/README.md @liang799
 /use-case-config/sessions.ts @liang799
+/use-case-config/discovery.ts @liang799
 /lib/sessions/ @liang799
 /tests/app/sessions/ @liang799
+/tests/app/discover/ @liang799
 /tests/lib/sessions/ @liang799
 /tests/integration/sessions-persistence.test.ts @liang799
+/tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
+/tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799
 /tests/e2e/api-documentation.spec.ts @liang799
 /tests/use-cases/support/create-session-unit-of-work.ts @liang799

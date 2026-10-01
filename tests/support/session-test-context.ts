@@ -97,6 +97,7 @@ export function sessionTestContext() {
         userId,
         walletId,
         email,
+        password,
         token: signedIn.data.session.access_token,
       };
     },

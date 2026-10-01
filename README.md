@@ -215,7 +215,10 @@ Run `npm run dev`, then open
 [Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
 `/api/openapi` and can also be imported into Postman. Documentation needs no
 credentials or local Supabase stack; an unconfigured server returns 503 for
-session creation. Session UI and OneMap integration remain separate work.
+session creation. UC2-01 adds the signed-in [discovery page](./app/discover/README.md)
+and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
+Swagger documents discovery and creation. Session-creation UI and OneMap
+integration remain separate work.
 
 ## Team
 

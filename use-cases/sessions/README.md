@@ -1,5 +1,20 @@
 # Session use cases
 
+## UC2-01 Discover Sessions
+
+`DiscoverSessions.search(...)` consumes a narrow read port and a clock. The
+PostgreSQL adapter selects public, open sessions starting after that clock time,
+applies the requested sport, stored-region and start-time filters, and orders by
+start time and ID. It reads at most 21 summaries to return a 20-item page and an
+optional continuation cursor. Full sessions stay discoverable.
+
+Discovery is a read model: it needs neither complete User/Session hydration nor
+the ledger unit of work. The app validates external filters, converts Singapore
+date/time bounds to instants and encodes/decodes opaque HTTP cursors. The
+framework-independent use case consumes plain inputs. See the
+[discovery guide](../../app/discover/README.md) for its API and React state model.
+OneMap resolution remains separate; this milestone filters stored regions.
+
 ## UC2-02 Create Session
 
 [`CreateSessions.forBooker(bookerId, booking, config)`](./CreateSessions.ts)
@@ -78,4 +93,4 @@ run on a separate disposable stack. The [configuration guide](../../use-case-con
 records commands and the prerequisite group migration. The
 [E2E tests](../../tests/e2e) check public documentation and the default 503
 response against a running Next.js server without credentials or Supabase.
-Session UI remains separate work.
+Session-creation UI remains separate work; UC2-01 supplies the discovery page.

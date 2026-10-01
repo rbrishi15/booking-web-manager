@@ -5,7 +5,7 @@ sessionTestEnvironment();
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: "**/session-api.spec.ts",
+  testMatch: ["**/session-api.spec.ts", "**/discovery*.spec.ts"],
   workers: 1,
   fullyParallel: false,
   retries: 0,

@@ -1,5 +1,22 @@
 # Use-case configuration
 
+## Discovery configuration
+
+UC2-01 assembles its read-only dependencies in `discovery.ts`, using the same
+validated Supabase/PostgreSQL settings, lazy pool provider and bearer verifier
+as creation. Discovery has its own unavailable error and dependency getter so
+adding GET does not change POST's submission or replay contract. The API verifies
+a current active account on each request; the discovery page uses cookie identity
+and current account status before invoking the same use case directly.
+
+The adapter returns only public session summaries and does not expose raw rows,
+room tokens, or direct browser access to session tables. See the
+[discovery guide](../app/discover/README.md) for filters, pagination, states,
+Swagger and Storybook coverage. OneMap settings are not needed for stored-region
+discovery.
+
+## Session creation configuration
+
 This folder assembles session API dependencies. The app owns HTTP orchestration,
 use cases coordinate domain behavior, and infrastructure adapters live in `/lib`.
 

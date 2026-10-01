@@ -79,4 +79,67 @@ describe("public session OpenAPI contract", () => {
     expect(input.booking.totalCostCents).toBe(1001);
     expect(input.config.totalSlots).toBe(3);
   });
+
+  test("documents discovery filters, public listing fields, pagination and failures", () => {
+    const operation = sessionOpenApiDocument.paths["/api/sessions"]?.get;
+    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation?.parameters?.map((parameter) => "name" in parameter ? parameter.name : undefined)).toEqual([
+      "sport", "region", "date", "timeFrom", "timeTo", "cursor",
+    ]);
+    expect(Object.keys(operation?.responses ?? {})).toEqual([
+      "200", "400", "401", "403", "404", "500", "503",
+    ]);
+    expect(operation?.description).toContain("Asia/Singapore");
+    expect(operation?.description).toContain("including full sessions");
+    expect(operation?.description).toContain("OneMap resolution is separate work");
+    expect(operation?.responses["503"]).toMatchObject({
+      content: {
+        "application/json": {
+          example: { error: { code: "DISCOVERY_API_UNAVAILABLE", message: "Session discovery is not available yet" } },
+        },
+      },
+    });
+    expect(sessionOpenApiDocument.components?.schemas?.DiscoverSessionsResult).toMatchObject({
+      properties: {
+        items: {
+          type: "array",
+          maxItems: 20,
+          items: {
+            properties: {
+              sessionId: { type: "string", format: "uuid" },
+              startAt: { type: "string", format: "date-time" },
+              bookingShareCents: { type: "integer" },
+            },
+          },
+        },
+        nextCursor: { type: "string", nullable: true },
+      },
+    });
+    const result = JSON.stringify(sessionOpenApiDocument.components?.schemas?.DiscoverSessionsResult);
+    for (const sensitiveField of ["roomToken", "bookerId", "walletId", "holdingAccountId", "invitedGroupId", "participations"]) {
+      expect(result).not.toContain(sensitiveField);
+    }
+  });
+
+  test("provides meaningful populated, empty and paginated discovery examples", () => {
+    const response = sessionOpenApiDocument.paths["/api/sessions"]?.get?.responses["200"];
+    if (!response || !("content" in response)) throw new Error("Missing discovery response");
+    const examples = response.content?.["application/json"]?.examples;
+    if (!examples) throw new Error("Missing discovery examples");
+    const populated = examples.populated;
+    const empty = examples.empty;
+    const pagination = examples.pagination;
+    if (!populated || !("value" in populated) || !empty || !("value" in empty) || !pagination || !("value" in pagination)) {
+      throw new Error("Discovery examples must be inline values");
+    }
+    expect(populated.value.items).toHaveLength(1);
+    expect(populated.value.nextCursor).toBeNull();
+    expect(empty.value).toEqual({ items: [], nextCursor: null });
+    expect(pagination.value.items).toHaveLength(20);
+    expect(new Set(pagination.value.items.map((item: { sessionId: string }) => item.sessionId)).size).toBe(20);
+    expect(JSON.parse(Buffer.from(pagination.value.nextCursor, "base64url").toString("utf8"))).toEqual({
+      startAt: pagination.value.items.at(-1).startAt,
+      sessionId: pagination.value.items.at(-1).sessionId,
+    });
+  });
 });
