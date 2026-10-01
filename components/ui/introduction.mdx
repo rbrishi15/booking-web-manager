@@ -1,0 +1,40 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Introduction" />
+
+# Booking. design system
+
+Shared components in `components/ui`, used by every page of the app. Owner: Joseph. To add or change a
+component, ask the owner rather than editing it directly.
+
+## How to use this Storybook
+
+- Every component has a **Docs** page (props table, description and every example) and a **Playground**
+  story. Open the Playground and change props in the **Controls** tab to see the component respond.
+- The other stories are important states (for example *Disabled*, *Pending*, *Phone menu*). Their
+  **Interactions** tab shows the checks that run in the tests.
+- The **Accessibility** tab lists any accessibility problems. The story tests fail on any violation.
+- Use the viewport button in the toolbar to switch to **Phone (390px)**; the app must work from 390px wide.
+
+## Rules every component follows
+
+- **Money is always integer cents** (`1250` = S$12.50) and is only formatted by `<Money>`, so the
+  ledger never has rounding errors.
+- **Buttons default to `type="button"`**; buttons that submit a form pass `type="submit"`, so nothing
+  submits by accident.
+- **Irreversible actions go through `<ConfirmDialog>`** with the amount shown, because the SRS requires
+  the amount before any irreversible action.
+- **Errors use `<ErrorMessage>`** (`role="alert"`) and status text uses `role="status"`, so screen
+  readers announce them.
+- **Colours come from the tokens** in `app/globals.css` (for example `bg-primary`, `text-destructive`)
+  and meet WCAG AA contrast, so the look is consistent and text stays readable.
+
+## Running the tests
+
+```bash
+npm run storybook        # open Storybook at http://localhost:6006
+npm run test:storybook   # run every story as a test in headless Chromium
+npm test                 # unit tests only (no browser), as in CI
+```
+
+In Storybook you can also click **Run tests** at the bottom of the sidebar.
