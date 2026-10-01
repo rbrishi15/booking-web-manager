@@ -1,4 +1,5 @@
 import { DomainError } from "@/domain";
+import { isRequestFailure } from "@/app/http/request-failure";
 import {
   SESSION_API_UNAVAILABLE_MESSAGE,
   SessionApiUnavailableError,
@@ -14,6 +15,9 @@ const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
 };
 
 export function sessionCreationErrorResponse(error: unknown): Response {
+  if (isRequestFailure(error)) {
+    return errorResponse(error.status, error.code, error.message);
+  }
   if (error instanceof SessionApiUnavailableError) {
     return errorResponse(503, "SESSION_API_UNAVAILABLE", SESSION_API_UNAVAILABLE_MESSAGE);
   }

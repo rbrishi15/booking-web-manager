@@ -29,6 +29,22 @@ Discovery uses the existing session server settings and database schema through
 migration 0006; it requires no new migration or browser table grants. Results are
 not cached.
 
+The API exports an ordinary async GET handler from
+[`app/api/sessions/route.ts`](../api/sessions/route.ts). Inside one `try`/`catch`,
+it calls [`loadDependencies`](../http/load-dependencies.ts), then
+[`requireUserId`](../http/require-user-id.ts), reads the query and invokes
+`forParticipant` directly. Dependencies and the verified actor are local values;
+the helpers do not modify the Request or retain shared actor state.
+`loadDependencies` makes initialization failures opaque before the feature's
+error mapper handles them as 500s. `requireUserId` uses the endpoint's own
+authenticator, rejects absent credentials and validates the verified UUID.
+The discovery mapper applies `no-store` to all responses. The exported handler
+keeps the standard `Request` → `Promise<Response>` signature.
+
+[`readDiscoveryRequest`](./request.ts) adapts the existing query parser to HTTP
+and reports invalid queries through the discovery response mapper. The server
+page and form continue to use the shared query parser directly.
+
 Optional query parameters are `q`, `sport`, `region`, `date`, `timeFrom`, `timeTo` and
 `cursor`. Sport and region use the existing registration picker vocabulary.
 Blank filters mean no restriction; repeated known parameters are rejected and

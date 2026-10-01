@@ -1,4 +1,5 @@
 import { DomainError } from "@/domain";
+import { isRequestFailure } from "@/app/http/request-failure";
 import { DISCOVERY_API_UNAVAILABLE_MESSAGE, DiscoveryApiUnavailableError } from "./discovery-api-unavailable";
 
 export function discoveryJson(body: unknown, status = 200): Response {
@@ -14,6 +15,8 @@ export function discoveryInternalError(): Response {
 }
 
 export function discoveryErrorResponse(error: unknown): Response {
+  if (isRequestFailure(error))
+    return discoveryError(error.status, error.code, error.message);
   if (error instanceof DiscoveryApiUnavailableError)
     return discoveryError(503, "DISCOVERY_API_UNAVAILABLE", DISCOVERY_API_UNAVAILABLE_MESSAGE);
   if (error instanceof DomainError) {

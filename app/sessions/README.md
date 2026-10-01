@@ -26,14 +26,30 @@ without credentials or a local Supabase stack.
 
 ## Configured HTTP contract
 
-The [POST route](../api/sessions/route.ts) awaits the app-owned
-[dependency getter](./server-dependencies.ts). With
-[`SessionApiDependencies`](./dependencies.ts) supplied, it authenticates,
-parses the request, creates a submission-scoped use case, invokes
-[`CreateSessions.forBooker`](../../use-cases/sessions/CreateSessions.ts)
-directly, and maps its result or error. Tests inject those dependencies; the
-production default never substitutes a fake authenticated user or persisted
-session. Unexpected initialization errors return an opaque JSON 500.
+The [route module](../api/sessions/route.ts) exports ordinary async GET and POST
+functions with the standard `Request` → `Promise<Response>` signature. Each
+function encloses dependency loading, authentication and request handling in one
+`try`/`catch`, then maps failures through its feature's response helpers.
+
+[`loadDependencies`](../http/load-dependencies.ts) awaits the app-owned
+[dependency getter](./server-dependencies.ts). It makes initialization failures
+opaque before the feature mapper handles them as JSON 500s.
+[`requireUserId`](../http/require-user-id.ts) invokes the endpoint's own
+authenticator, rejects absent credentials and validates the verified UUID.
+POST's authenticator also checks current active-account access before parsing or
+replay. Dependencies and actor identities remain local values in each handler;
+the helpers do not modify the Request or store shared actor state.
+
+After loading [`SessionApiDependencies`](./dependencies.ts), the POST handler
+authenticates, reads the request, creates a submission-scoped use case and invokes
+[`CreateSessions.forBooker`](../../use-cases/sessions/CreateSessions.ts) directly.
+Tests inject those dependencies and exercise the real helpers. The production
+default never substitutes a fake authenticated user or persisted session.
+
+`readCreateSessionRequest(request, bookerId)` reads JSON and delegates to the
+existing parser. It distinguishes malformed JSON from an invalid request schema;
+only the JSON/schema failures it identifies become 400 responses. Internal
+validation errors from authentication or the use case remain opaque 500s.
 
 [parseCreateSessionInput](./create-session-input.ts) validates the authenticated
 user ID separately from the raw `{ idempotencyKey, booking, config }` body.

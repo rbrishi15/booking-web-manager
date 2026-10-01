@@ -23,6 +23,61 @@ async function scenario() {
 const request = (query = "") => new Request(`http://localhost/api/sessions?${query}`, { headers: { authorization: "Bearer token" } });
 
 describe("GET /api/sessions", () => {
+  test("imports without assembling dependencies or authenticating", async () => {
+    const { authenticate, forParticipant } = await scenario();
+
+    expect(configuration.createDiscoveryDependencies).not.toHaveBeenCalled();
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(forParticipant).not.toHaveBeenCalled();
+  });
+
+  test("keeps each identity and query together when authentication finishes out of order", async () => {
+    const { GET, authenticate, forParticipant } = await scenario();
+    const otherUserId = "10000000-0000-4000-8000-000000000002";
+    const firstIdentity = Promise.withResolvers<string>();
+    const secondIdentity = Promise.withResolvers<string>();
+    const firstRequest = request("q=First");
+    const secondRequest = request("q=Second");
+    authenticate.mockImplementation((req) =>
+      req === firstRequest ? firstIdentity.promise : secondIdentity.promise,
+    );
+    forParticipant.mockImplementation(async (id, criteria) => [{
+      sessionId: id,
+      venueName: criteria?.text ?? "",
+      sport: "Badminton",
+      region: "West",
+      startAt: new Date("2030-01-02T10:00:00Z"),
+      endAt: new Date("2030-01-02T12:00:00Z"),
+      totalSlots: 8,
+      bookingShareCents: 333,
+    }]);
+
+    const firstPending = GET(firstRequest);
+    const secondPending = GET(secondRequest);
+    secondIdentity.resolve(otherUserId);
+    const secondResponse = await secondPending;
+
+    expect(secondResponse.status).toBe(200);
+    expect(await secondResponse.json()).toMatchObject({
+      items: [{ sessionId: otherUserId, venueName: "Second" }],
+    });
+    expect(forParticipant).toHaveBeenCalledExactlyOnceWith(otherUserId, { text: "Second" });
+
+    firstIdentity.resolve(userId);
+    const firstResponse = await firstPending;
+
+    expect(firstResponse.status).toBe(200);
+    expect(await firstResponse.json()).toMatchObject({
+      items: [{ sessionId: userId, venueName: "First" }],
+    });
+    expect(forParticipant.mock.calls).toEqual([
+      [otherUserId, { text: "Second" }],
+      [userId, { text: "First" }],
+    ]);
+    expect(authenticate.mock.calls).toEqual([[firstRequest], [secondRequest]]);
+    expect(configuration.createDiscoveryDependencies).toHaveBeenCalledOnce();
+  });
+
   test("authenticates and invokes the use case with validated filter bounds", async () => {
     const { GET, forParticipant, authenticate } = await scenario();
     const req = request("q=+Jurong+&sport=Badminton&region=West&date=2030-01-02&timeFrom=18:00&timeTo=20:00");
@@ -99,6 +154,33 @@ describe("GET /api/sessions", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: { code: "DISCOVERY_API_UNAVAILABLE", message: "Session discovery is not available yet" } });
   });
+
+  test.each(["Error", "DomainError", "DiscoveryApiUnavailableError"])(
+    "redacts dependency assembly %s before authentication and retries setup",
+    async (kind) => {
+      const { GET, authenticate, forParticipant, DomainError, DiscoveryApiUnavailableError } = await scenario();
+      const failure = kind === "DomainError"
+        ? new DomainError("INACTIVE_ACCOUNT", "private-discovery-setup-failure")
+        : kind === "DiscoveryApiUnavailableError"
+          ? new DiscoveryApiUnavailableError()
+          : new Error("private-discovery-setup-failure");
+      configuration.createDiscoveryDependencies.mockImplementationOnce(() => { throw failure; });
+
+      const response = await GET(request());
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+      expect(authenticate).not.toHaveBeenCalled();
+      expect(forParticipant).not.toHaveBeenCalled();
+
+      const recovered = await GET(request());
+      expect(recovered.status).toBe(200);
+      expect(configuration.createDiscoveryDependencies).toHaveBeenCalledTimes(2);
+      expect(authenticate).toHaveBeenCalledOnce();
+      expect(forParticipant).toHaveBeenCalledOnce();
+    },
+  );
 
   test.each(["auth", "forParticipant", "identity", "setup"])("redacts %s failures", async (stage) => {
     const { GET, forParticipant, authenticate } = await scenario();

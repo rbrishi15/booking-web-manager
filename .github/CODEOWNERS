@@ -23,6 +23,10 @@
 /app/payouts/ @rbrishi15
 /app/api/webhooks/ @rbrishi15
 
+# Shared HTTP orchestration and identity decorators: infrastructure and auth owners.
+/app/http/ @rbrishi15 @Jolingoes
+/tests/app/http/ @rbrishi15 @Jolingoes
+
 # Harrison: wallet ledger, financial integrity, its tests and existing schema.
 /lib/money/ @harr008
 /tests/lib/money/ @harr008
