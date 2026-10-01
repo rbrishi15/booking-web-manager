@@ -23,7 +23,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Populated: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Bishan Sports Hall" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "12 May 2035 · Badminton" })).toBeVisible();
+    await expect(canvas.getByText("Bishan Sports Hall", { exact: true })).toBeVisible();
     await expect(canvas.getByText("S$7.50")).toBeVisible();
     await expect(canvas.getAllByText("Total capacity")).toHaveLength(2);
   },

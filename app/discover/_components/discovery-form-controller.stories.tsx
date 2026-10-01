@@ -21,7 +21,7 @@ export const ApplyFilters: Story = {
     await userEvent.selectOptions(canvas.getByLabelText("Sport"), "Badminton");
     await userEvent.selectOptions(canvas.getByLabelText("Region"), "Central");
     await expect(args.onNavigate).not.toHaveBeenCalled();
-    await expect(canvas.getByRole("heading", { name: "Tampines Hub" })).toBeVisible();
+    await expect(canvas.getByText("Tampines Hub", { exact: true })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Apply filters" }));
     await expect(args.onNavigate).toHaveBeenCalledWith("sport=Badminton&region=Central");
   },
@@ -36,7 +36,7 @@ export const CorrectValidation: Story = {
     await expect(args.onNavigate).not.toHaveBeenCalled();
     await userEvent.clear(canvas.getByLabelText("From"));
     await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
-    await expect(canvas.getByRole("heading", { name: "Bishan Sports Hall" })).toBeVisible();
+    await expect(canvas.getByText("Bishan Sports Hall", { exact: true })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Apply filters" }));
     await expect(args.onNavigate).toHaveBeenCalledWith("");
   },

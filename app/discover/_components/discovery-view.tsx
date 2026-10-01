@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronDown, MapPin, SlidersHorizontal, Users } from "lucide-react";
+import { ChevronDown, Clock3, MapPin, SlidersHorizontal, Users } from "lucide-react";
+import Image from "next/image";
 import { useId } from "react";
 import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
 import { PageHeader } from "@/components/ui/page-header";
+import { sportImage } from "@/lib/sessions/sport-image";
 import { cn } from "@/lib/utils";
 import type { DiscoveryPage } from "../contracts";
 import type { DiscoveryFieldErrors, DiscoveryFilters } from "../query";
@@ -166,7 +168,7 @@ function DiscoveryResults({ state, onNext, onRetry }: Pick<DiscoveryViewProps, "
           {state.page.items.length === 0 ? (
             <EmptyState title="No sessions found" description="Try another sport, region, or date, or clear your filters to see all upcoming public sessions." />
           ) : (
-            <ul className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <ul className="grid gap-6 lg:grid-cols-2">
               {state.page.items.map((session) => <SessionCard key={session.sessionId} session={session} />)}
             </ul>
           )}
@@ -190,34 +192,51 @@ function exhaustiveState(state: never): never {
 const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
   timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
 });
+const singaporeDate = new Intl.DateTimeFormat("en-SG", {
+  timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric",
+});
+const singaporeTime = new Intl.DateTimeFormat("en-SG", {
+  timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit",
+});
 
 function SessionCard({ session }: { readonly session: DiscoveryPage["items"][number] }) {
+  const start = new Date(session.startAt);
+  const end = new Date(session.endAt);
+  const sameDay = singaporeDate.format(start) === singaporeDate.format(end);
   return (
-    <li className="min-w-0 rounded-lg border bg-card p-5">
-      <p className="text-sm font-medium text-primary">{session.sport}</p>
-      <h3 className="mt-1 break-words text-lg font-semibold">{session.venueName}</h3>
-      <dl className="mt-4 space-y-3 text-sm">
-        <div className="flex items-start gap-2">
-          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <dt className="sr-only">Region</dt><dd>{session.region}</dd>
+    <li className="min-w-0 overflow-hidden rounded-lg border bg-card md:border-border/70 md:shadow-[0_4px_24px_hsl(var(--foreground)/0.04)]">
+      <Image src={sportImage(session.sport)} alt="" width={960} height={540} sizes="(max-width: 767px) calc(100vw - 48px), (max-width: 1023px) calc(100vw - 304px), (max-width: 1535px) calc((100vw - 392px) / 2), 660px" className="aspect-video w-full object-cover" />
+      <div className="p-5 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-4 lg:p-6">
+        <div className="min-w-0">
+          <h3 className="break-words text-base font-semibold md:text-lg">
+            <time dateTime={session.startAt}>{singaporeDate.format(start)}</time> · {session.sport}
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground md:mt-3 md:flex md:items-start md:gap-2">
+            <MapPin className="mt-0.5 hidden h-4 w-4 shrink-0 md:block" aria-hidden />
+            <span className="min-w-0 break-words">{session.venueName}</span>
+          </p>
+          <dl className="mt-1 space-y-2 text-sm text-muted-foreground">
+            <div className="flex items-start gap-2 md:pl-6">
+              <dt className="sr-only">Region</dt><dd>{session.region}</dd>
+            </div>
+            <div className="flex items-start gap-2">
+              <Clock3 className="mt-0.5 hidden h-4 w-4 shrink-0 md:block" aria-hidden />
+              <dt className="sr-only">Session time in Singapore</dt>
+              <dd className="min-w-0">
+                <time dateTime={session.startAt}>{singaporeTime.format(start)}</time> – <time dateTime={session.endAt}>{sameDay ? singaporeTime.format(end) : singaporeDateTime.format(end)}</time> SGT
+              </dd>
+            </div>
+            <div className="flex items-start gap-2 text-foreground md:text-muted-foreground">
+              <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <dt>Total capacity</dt><dd>{session.totalSlots}</dd>
+            </div>
+          </dl>
         </div>
-        <div className="flex items-start gap-2">
-          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <dt className="sr-only">Session time in Singapore</dt>
-          <dd className="min-w-0">
-            <time dateTime={session.startAt}>{singaporeDateTime.format(new Date(session.startAt))}</time>
-            <span className="block">to <time dateTime={session.endAt}>{singaporeDateTime.format(new Date(session.endAt))}</time> SGT</span>
-          </dd>
-        </div>
-        <div className="flex items-start gap-2">
-          <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <dt>Total capacity</dt><dd>{session.totalSlots}</dd>
-        </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-3">
-          <dt className="text-muted-foreground">Booking share</dt>
-          <dd><Money cents={session.bookingShareCents} className="text-lg font-semibold" /></dd>
-        </div>
-      </dl>
+        <dl className="mt-2 pt-2 md:mt-0 md:pt-0 md:text-right">
+          <dt className="sr-only">Booking share</dt>
+          <dd><Money cents={session.bookingShareCents} className="text-xl font-semibold md:text-2xl md:tracking-tight" /><span className="ml-1.5 text-xs md:ml-0 md:mt-1 md:block md:text-sm md:text-muted-foreground">per person</span></dd>
+        </dl>
+      </div>
     </li>
   );
 }
