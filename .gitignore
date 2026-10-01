@@ -27,3 +27,7 @@ npm-debug.log*
 next-env.d.ts
 .vercel
 .env*
+
+# storybook
+/storybook-static
+*storybook.log
