@@ -15,6 +15,35 @@ Design model, access-control matrix and traceability:
 The reasoning behind the storage design:
 [ADR-0004](../../docs/adr/0004-append-only-double-entry-ledger.md).
 
+## Architectural role
+
+This is a **ledger infrastructure module with persistence adapters**. Its
+translation code performs an anti-corruption role by keeping storage-specific
+representations out of domain types and ledger port inputs and results:
+
+| Code | Translation it owns |
+| --- | --- |
+| `ledger-write-adapter.ts` | Maps domain `FinancialInstruction` values to validated `ledger_entries` columns. |
+| `ledger-read-adapter.ts` | Maps database rows to `WalletBalance`, `HoldingAccountBalance` and `LedgerTransaction` values. |
+| `cents.ts` | Converts database `bigint` representations to and from domain `Money`, rejecting lossy amounts. |
+| `errors.ts` | Maps known PostgreSQL constraints and SQLSTATE codes to `LedgerError` codes. Unrecognised errors still propagate unchanged. |
+
+For example, a UC2-04 `LOCK` instruction with `Money.fromCents(1000)` becomes a
+ledger entry with `amount_cents` represented as the database parameter `"1000"`.
+A balance read converts `available_cents` back into a `Money` value. The domain
+can use its own money model while these adapters handle the database format.
+
+The rest of the module supports ledger correctness: transactions, idempotency,
+reconciliation and cent-exact allocation have responsibilities beyond model
+translation. `SqlExecutor` is the interface to the SQL driver; the interface
+alone is not an anti-corruption layer. This module does not implement the
+Stripe or Supabase HTTP API integrations.
+
+`/lib/money` is an appropriate home for this existing implementation. ACLs have
+no required folder name; see the [library placement guidance](../README.md).
+Domain rules and `Money` remain in `/domain`, and use cases consume their ports
+without importing these concrete persistence adapters.
+
 ## Where `Money` lives
 
 In `/domain`, not here. The business rules that reason about amounts need the

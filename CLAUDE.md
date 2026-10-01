@@ -20,6 +20,10 @@ Treat accepted ADRs as implementation constraints. If the requested change
 revises an accepted decision, record the new decision in an ADR, identify which
 earlier decision it supersedes, and update the index.
 
+Before opening or updating a PR, reviewing another author's work, or handling
+a missing dependency, read the [contribution workflow](./docs/contributing-workflow.md).
+It defines author delegation, independent review, dependency handoffs and merging.
+
 ---
 
 ## Non-negotiable rules
@@ -47,7 +51,7 @@ handler is the sole writer for inbound money, with event-ID deduplication
 against the `processed_events` table. A user who closes the tab must still get
 their money; a replayed callback must not double-credit.
 
-### 3. Stripe is called from `/app/wallet`, `/app/payouts` and `/api/webhooks` only.
+### 3. Stripe is called from `/app/wallet`, `/app/payouts` and `/app/api/webhooks` only.
 
 Settlement, commitment and withdrawal logic move money through the ledger
 interface, never through the Stripe SDK. This keeps the domain layer
@@ -121,29 +125,28 @@ codes — both credit the booker. `refunded` returns to the participant.
 
 ## Directory ownership
 
-Changes outside your area need the owner's approval in addition to the
-repository owner's.
+Feature ownership applies across routes, use cases, configuration, adapters and
+tests. [CODEOWNERS](./.github/CODEOWNERS) routes reviews to the relevant owner;
+it does not grant editing permission or enforce a separate Rishi co-sign.
+Follow the [contribution workflow](./docs/contributing-workflow.md) for author
+delegation, independent review and Rishi's merge coordination.
 
 | Area | Owner |
 |---|---|
-| `/domain`, `/app/wallet`, `/app/payouts`, `/api/webhooks`, CI | Rishi (also approves all PRs) |
+| `/domain` (including session domain), payments, shared infrastructure, CI and governance | Rishi |
 | `/lib/money`, ledger schema, reconciliation | Harrison |
 | `/app/commit`, waitlist, verification, schedulers | Yajie |
-| `/app/sessions`, `/app/discover`, OneMap | Neoh |
-| `/app/(auth)`, `/app/profile`, `/app/groups`, `/components/ui` | Joseph |
+| Session creation/management/discovery, related API/use-case/config/adapters/tests, OneMap | Neoh |
+| Authentication and its shared adapters, profiles, groups, `/components/ui` | Joseph |
 
 **Domain / ledger seam.** Rishi defines the ledger interface in `/domain` and
 the business rules that call it. Harrison owns the schema, the implementation
 behind that interface, and the invariants. Neither side changes the other
 without review.
 
-**Delegated review.** Approval for `/app/(auth)` and `/components/ui` may be
-given by their owner, so routine interface changes don't queue behind payment
-work.
-
-Migrations are a single numbered sequence. Merge a migration PR before opening
-dependent feature work — two people writing `0007` on the same day is the most
-likely way this project loses an afternoon.
+Migrations retain their feature owner; Rishi coordinates the shared sequence
+and merge order. Use the workflow's dependency handoff when another owner's
+migration or implementation is not yet on `main`.
 
 ---
 
