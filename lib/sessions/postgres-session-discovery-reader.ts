@@ -30,12 +30,13 @@ export class PostgresSessionDiscoveryReader implements SessionDiscoveryReader {
       conditions.push(`start_at >= ${parameter(criteria.startsWithin.from)}`);
     if (criteria.startsWithin?.before !== undefined)
       conditions.push(`start_at < ${parameter(criteria.startsWithin.before)}`);
+    // Match Date/cursor precision so sub-millisecond ties use the same ID order when paging.
     const rows = await this.sql.query(
       `select session_id, venue_name, sport, region, start_at, end_at,
               total_slots, booking_share_cents
        from sessions
        where ${conditions.join(" and ")}
-       order by start_at asc, session_id asc`,
+       order by date_trunc('milliseconds', start_at) asc, session_id asc`,
       values,
     );
     return rows.map((row) => ({

@@ -217,7 +217,7 @@ describe("UC1-02 Authenticate User", () => {
   });
 
   describe("redirect after log-in", () => {
-    test("uses Discover as the post-login home", () => {
+    test("uses Home as the post-login destination", () => {
       expect(HOME_PATH).toBe("/");
     });
 

@@ -15,7 +15,7 @@ test("queries explicit public upcoming fields without availability, ledger, or r
   expect(statement).toContain("visibility = 'PUBLIC'");
   expect(statement).toContain("status = 'OPEN'");
   expect(statement).toContain("start_at > $1");
-  expect(statement).toContain("order by start_at asc, session_id asc");
+  expect(statement).toContain("order by date_trunc('milliseconds', start_at) asc, session_id asc");
   expect(statement).not.toMatch(/room_token|booker_id|\*|ledger|participations|fund_holds/);
   expect(statement).not.toMatch(/\blimit\b|\boffset\b/i);
   expect(query.mock.calls[0]?.[1]).toEqual([now]);

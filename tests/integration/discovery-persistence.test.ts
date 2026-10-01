@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { toDiscoveryPage } from "@/app/discover/contracts";
+import { parseDiscoveryQuery } from "@/app/discover/query";
 import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
 import { PostgresSessionDiscoveryTransaction } from "@/lib/sessions/postgres-session-discovery-transaction";
 import { DiscoverSessions, type SessionDiscoveryCriteria } from "@/use-cases/sessions/DiscoverSessions";
@@ -196,6 +198,40 @@ describe("UC2-01 PostgreSQL discovery", () => {
 
     expect(result).toHaveLength(41);
     expect(result.map((session) => session.sessionId)).toEqual([...earlierIds, ...laterIds]);
+  });
+
+  test("pages sessions with sub-millisecond start differences exactly once at Date precision", async () => {
+    // Arrange: PostgreSQL timestamp order is the reverse of the cursor's tied-ID order.
+    const expectedIds = Array.from({ length: 21 }, () => randomUUID()).sort();
+    const venueName = `Microsecond discovery ${randomUUID()}`;
+    for (const [index, sessionId] of [...expectedIds].reverse().entries()) {
+      await insertSession({
+        sessionId,
+        venueName,
+        startAt: `2040-06-09T10:00:00.123${String(index + 1).padStart(3, "0")}Z`,
+      });
+    }
+
+    // Act: follow the real app cursor through a second complete discovery read.
+    const result = await discover({ text: venueName });
+    const firstPage = toDiscoveryPage(result);
+    expect(firstPage.nextCursor).not.toBeNull();
+    const nextQuery = parseDiscoveryQuery(new URLSearchParams({
+      q: venueName,
+      cursor: firstPage.nextCursor ?? "",
+    }));
+    if (nextQuery.status !== "valid") throw new Error("Expected a valid discovery continuation");
+    const secondPage = toDiscoveryPage(await discover(nextQuery.criteria), nextQuery.after);
+
+    // Assert
+    expect(result.map((session) => session.sessionId)).toEqual(expectedIds);
+    expect(result.map((session) => session.startAt.toISOString())).toEqual(
+      expectedIds.map(() => "2040-06-09T10:00:00.123Z"),
+    );
+    expect([firstPage.items.length, secondPage.items.length]).toEqual([20, 1]);
+    expect([...firstPage.items, ...secondPage.items].map((session) => session.sessionId))
+      .toEqual(expectedIds);
+    expect(secondPage.nextCursor).toBeNull();
   });
 
   test("includes full sessions with reliability requirements without reading private participation facts", async () => {

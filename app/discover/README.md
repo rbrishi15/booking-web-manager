@@ -65,8 +65,10 @@ upper bound. Omitted bounds mean midnight or the next midnight. Invalid dates,
 reversed ranges and overnight ranges are rejected. Sessions that have already
 started are always excluded, even when a selected date is in the past.
 
-The use case returns all matching summaries ordered by start time, then session
-ID, with no result cap. The app applies the cursor and selects at most 20 items
+The use case returns all matching summaries ordered by start time at JavaScript
+millisecond precision, then session ID, with no result cap. Database ordering uses
+the same precision as the cursor so finer stored timestamps cannot repeat pages.
+The app applies the cursor and selects at most 20 items
 for each HTTP response or server-page render. Every request, including Next,
 loads the complete matching list on the server; only the selected page is sent
 to the browser. This keeps pagination out of the domain and use-case interface
