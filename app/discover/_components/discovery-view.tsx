@@ -70,7 +70,7 @@ export function DiscoveryView({ filters, state, filterPanel, onToggleFilters, on
               if (!busy) onApply(new FormData(event.currentTarget));
             }}
           >
-            <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <fieldset disabled={busy} className="grid min-w-0 gap-4 [color-scheme:light] dark:[color-scheme:dark] sm:grid-cols-2 xl:grid-cols-5">
               <legend className="sr-only">Session filters</legend>
               <FilterField id={id} name="sport" label="Sport" errors={errors}>
                 <select id={`${id}-sport`} name="sport" defaultValue={filters.sport} className={selectClassName} {...fieldAccessibility(id, "sport", errors)}>
