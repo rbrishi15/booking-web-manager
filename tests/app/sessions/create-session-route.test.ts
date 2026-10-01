@@ -1,34 +1,44 @@
-import { createSessionHandler } from "@/use-case-config/sessions";
-import { PayoutAccount, type UUID } from "@/domain";
+import type { SessionApiDependencies } from "@/app/sessions/dependencies";
+import type { UUID } from "@/domain";
 import type {
   CreateSessionResult,
   SessionConfig,
 } from "@/use-cases/sessions/CreateSessions";
-import { describe, expect, test } from "vitest";
-import {
-  createTestUser,
-  readyBookerUser,
-} from "../domain/accounts/user-fixtures";
-import {
-  hoursBeforeSessionStart,
-  sessionEndsAt,
-  sessionStartsAt,
-} from "../domain/sessions/session/session-fixtures";
-import { CreateSessionUnitOfWork } from "../use-cases/support/create-session-unit-of-work";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+const configuration = vi.hoisted(() => ({
+  createSessionDependencies: vi.fn<() => SessionApiDependencies>(),
+}));
+
+vi.mock("@/use-case-config/sessions", () => configuration);
+
+beforeEach(() => {
+  vi.resetModules();
+  configuration.createSessionDependencies.mockReset();
+  vi.stubEnv("DATABASE_URL", "postgresql://user:password@localhost:54322/postgres");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.example.test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-anon-key");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+const sessionStartsAt = new Date("2026-10-10T10:00:00Z");
+const sessionEndsAt = new Date("2026-10-10T12:00:00Z");
 const bookerId = "11111111-1111-4111-8111-111111111111";
 const otherBookerId = "22222222-2222-4222-8222-222222222222";
 const groupId = "33333333-3333-4333-8333-333333333333";
 const holdingAccountId = "00000000-0000-4000-8000-000000000001";
 
 // Owner: Neoh (liang799) — /app/sessions
-describe("UC2-02 session HTTP composition", () => {
+describe("UC2-02 POST /api/sessions", () => {
   test("creates a private session and returns its persisted integer-cent share", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
     const result: CreateSessionResult = await response.json();
 
     // Assert
@@ -56,7 +66,7 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("maps optional configuration and timezone-bearing timestamps into the domain", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest({
       visibility: "PUBLIC",
       minimumReliability: 75,
@@ -66,7 +76,7 @@ describe("UC2-02 session HTTP composition", () => {
     request.booking.endAt = "2026-10-10T20:00:00+08:00";
 
     // Act
-    const response = await handler(postRequest(request));
+    const response = await POST(postRequest(request));
     const result: CreateSessionResult = await response.json();
 
     // Assert
@@ -86,7 +96,7 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("uses verified identity and computed share despite forged JSON fields", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest();
     const forgedRequest = {
       ...request,
@@ -104,7 +114,7 @@ describe("UC2-02 session HTTP composition", () => {
     };
 
     // Act
-    const response = await handler(postRequest(forgedRequest));
+    const response = await POST(postRequest(forgedRequest));
     const result: CreateSessionResult = await response.json();
 
     // Assert
@@ -120,11 +130,11 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("requires authentication even when the JSON body supplies a booker", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = { ...creationRequest(), bookerId };
 
     // Act
-    const response = await handler(postRequest(request, null));
+    const response = await POST(postRequest(request, null));
 
     // Assert
     expect(response.status).toBe(401);
@@ -134,9 +144,9 @@ describe("UC2-02 session HTTP composition", () => {
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
-  test("rejects malformed JSON before creating a session", async () => {
+  test("rejects malformed JSON and keeps initialized dependencies for a valid request", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = new Request("http://localhost/api/sessions", {
       method: "POST",
       headers: {
@@ -147,7 +157,7 @@ describe("UC2-02 session HTTP composition", () => {
     });
 
     // Act
-    const response = await handler(request);
+    const response = await POST(request);
 
     // Assert
     expect(response.status).toBe(400);
@@ -155,15 +165,25 @@ describe("UC2-02 session HTTP composition", () => {
       error: { code: expect.any(String), message: expect.any(String) },
     });
     expect(unitOfWork.sessions.size).toBe(0);
+
+    // Act
+    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
+    const recovered = await POST(postRequest(creationRequest()));
+    const result: CreateSessionResult = await recovered.json();
+
+    // Assert
+    expect(recovered.status).toBe(201);
+    expect(unitOfWork.requireSession(result.sessionId).bookerId).toBe(bookerId);
+    expect(unitOfWork.sessions.size).toBe(1);
   });
 
   test("rejects a schema-invalid capacity without coercing numeric strings", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest();
 
     // Act
-    const response = await handler(
+    const response = await POST(
       postRequest({
         ...request,
         config: { ...request.config, totalSlots: "3" },
@@ -180,12 +200,12 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("rejects a timestamp without a timezone", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest();
     request.booking.startAt = "2026-10-10T10:00:00";
 
     // Act
-    const response = await handler(postRequest(request));
+    const response = await POST(postRequest(request));
 
     // Assert
     expect(response.status).toBe(400);
@@ -194,14 +214,14 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("returns forbidden for an inactive authenticated booker", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork, createTestUser } = await sessionRouteScenario();
     unitOfWork.users.set(
       bookerId,
       createTestUser({ userId: bookerId, accountStatus: "INACTIVE" }),
     );
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
 
     // Assert
     expect(response.status).toBe(403);
@@ -213,11 +233,11 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("returns not found when the authenticated user has no domain account", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     unitOfWork.users.clear();
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
 
     // Assert
     expect(response.status).toBe(404);
@@ -229,7 +249,7 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("returns conflict when the booker's payout setup is incomplete", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork, createTestUser, PayoutAccount } = await sessionRouteScenario();
     unitOfWork.users.set(
       bookerId,
       createTestUser({
@@ -243,7 +263,7 @@ describe("UC2-02 session HTTP composition", () => {
     );
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
 
     // Assert
     expect(response.status).toBe(409);
@@ -255,11 +275,11 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("returns conflict when the server clock reaches session start", async () => {
     // Arrange
-    const { handler, unitOfWork, setTime } = sessionHttpScenario();
+    const { POST, unitOfWork, setTime } = await sessionRouteScenario();
     setTime(sessionStartsAt);
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
 
     // Assert
     expect(response.status).toBe(409);
@@ -271,12 +291,12 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("maps an invalid booking interval to an input error", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest();
     request.booking.endAt = request.booking.startAt;
 
     // Act
-    const response = await handler(postRequest(request));
+    const response = await POST(postRequest(request));
 
     // Assert
     expect(response.status).toBe(422);
@@ -288,11 +308,11 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("maps an out-of-range reliability choice to an input error", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest({ minimumReliability: 101 });
 
     // Act
-    const response = await handler(postRequest(request));
+    const response = await POST(postRequest(request));
 
     // Assert
     expect(response.status).toBe(422);
@@ -304,11 +324,11 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("preserves the domain capacity limit as an input error", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest({ totalSlots: 9 });
 
     // Act
-    const response = await handler(postRequest(request));
+    const response = await POST(postRequest(request));
 
     // Assert
     expect(response.status).toBe(422);
@@ -318,12 +338,14 @@ describe("UC2-02 session HTTP composition", () => {
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
-  test("replays the original result across handler instances with changed valid input", async () => {
+  test("replays the original result across independently initialized routes with changed valid input", async () => {
     // Arrange
-    const { handler, makeHandler, unitOfWork } = sessionHttpScenario();
-    const firstResponse = await handler(postRequest(creationRequest()));
+    const { POST, loadRoute, unitOfWork } = await sessionRouteScenario();
+    const firstResponse = await POST(postRequest(creationRequest()));
     const first: CreateSessionResult = await firstResponse.json();
-    const retry = makeHandler();
+    const { POST: retry, readyBookerUser: reloadedBooker } = await loadRoute();
+    // A fresh process hydrates persisted Users with its own domain constructors.
+    unitOfWork.users.set(bookerId, reloadedBooker(bookerId));
     const changedRequest = creationRequest({ totalSlots: 2 });
 
     // Act
@@ -339,13 +361,13 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("creates distinct sessions when HTTP submissions use different keys", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     const request = creationRequest();
-    const firstResponse = await handler(postRequest(request));
+    const firstResponse = await POST(postRequest(request));
     const first: CreateSessionResult = await firstResponse.json();
 
     // Act
-    const secondResponse = await handler(
+    const secondResponse = await POST(
       postRequest({
         ...request,
         idempotencyKey: "second-submission",
@@ -363,13 +385,13 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("isolates the same submission key between independently authenticated bookers", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork, readyBookerUser } = await sessionRouteScenario();
     unitOfWork.users.set(otherBookerId, readyBookerUser(otherBookerId));
-    const firstResponse = await handler(postRequest(creationRequest()));
+    const firstResponse = await POST(postRequest(creationRequest()));
     const first: CreateSessionResult = await firstResponse.json();
 
     // Act
-    const secondResponse = await handler(
+    const secondResponse = await POST(
       postRequest(creationRequest(), "Bearer other-booker"),
     );
     const second: CreateSessionResult = await secondResponse.json();
@@ -385,14 +407,52 @@ describe("UC2-02 session HTTP composition", () => {
     expect(unitOfWork.sessions.size).toBe(2);
   });
 
-  test("redacts authentication provider failures as server errors", async () => {
+  test.each(["Error", "DomainError"])(
+    "redacts dependency assembly %s and retries setup on the next request",
+    async (errorType) => {
+      // Arrange
+      const authenticate = vi.fn(verifiedTestUser);
+      const { POST, unitOfWork } = await sessionRouteScenario(authenticate);
+      const { DomainError } = await import("@/domain");
+      const failure = errorType === "DomainError"
+        ? new DomainError("INACTIVE_ACCOUNT", "private-dependency-setup-failure")
+        : new Error("private-dependency-setup-failure");
+      configuration.createSessionDependencies.mockImplementationOnce(() => {
+        throw failure;
+      });
+
+      // Act
+      const response = await POST(postRequest(creationRequest()));
+
+      // Assert
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+      });
+      expect(authenticate).not.toHaveBeenCalled();
+      expect(unitOfWork.sessions.size).toBe(0);
+
+      // Act
+      const recovered = await POST(postRequest(creationRequest()));
+
+      // Assert
+      expect(recovered.status).toBe(201);
+      expect(configuration.createSessionDependencies).toHaveBeenCalledTimes(2);
+      expect(authenticate).toHaveBeenCalledOnce();
+      expect(unitOfWork.sessions.size).toBe(1);
+    },
+  );
+
+  test("redacts authentication failures and keeps initialized dependencies for retry", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario(async () => {
-      throw new Error("authentication-provider-secret");
+    let providerAvailable = false;
+    const { POST, unitOfWork } = await sessionRouteScenario(async (request) => {
+      if (!providerAvailable) throw new Error("authentication-provider-secret");
+      return verifiedTestUser(request);
     });
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
     const body = await response.json();
 
     // Assert
@@ -404,16 +464,27 @@ describe("UC2-02 session HTTP composition", () => {
       "authentication-provider-secret",
     );
     expect(unitOfWork.sessions.size).toBe(0);
+
+    // Act
+    providerAvailable = true;
+    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
+    const recovered = await POST(postRequest(creationRequest()));
+    const result: CreateSessionResult = await recovered.json();
+
+    // Assert
+    expect(recovered.status).toBe(201);
+    expect(unitOfWork.requireSession(result.sessionId).bookerId).toBe(bookerId);
+    expect(unitOfWork.sessions.size).toBe(1);
   });
 
   test("treats a malformed verified identity as a server dependency error", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario(
+    const { POST, unitOfWork } = await sessionRouteScenario(
       async () => "invalid-uuid",
     );
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
     const body = await response.json();
 
     // Assert
@@ -427,13 +498,13 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("keeps a hydration RangeError separate from invalid client input", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     unitOfWork.nextUserLoadError = new RangeError(
       "private-corrupt-user-record",
     );
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
     const body = await response.json();
 
     // Assert
@@ -447,12 +518,12 @@ describe("UC2-02 session HTTP composition", () => {
 
   test("rolls back a save RangeError and allows the same HTTP submission to retry", async () => {
     // Arrange
-    const { handler, makeHandler, unitOfWork } = sessionHttpScenario();
+    const { POST, loadRoute, unitOfWork } = await sessionRouteScenario();
     unitOfWork.nextSaveError = new RangeError("private-database-range-error");
     const request = creationRequest();
 
     // Act
-    const failure = await handler(postRequest(request));
+    const failure = await POST(postRequest(request));
     const failureBody = await failure.json();
 
     // Assert
@@ -466,7 +537,10 @@ describe("UC2-02 session HTTP composition", () => {
     expect(unitOfWork.sessions.size).toBe(0);
 
     // Act
-    const retry = await makeHandler()(postRequest(request));
+    const { POST: retryPost, readyBookerUser: reloadedBooker } = await loadRoute();
+    // A fresh process hydrates persisted Users with its own domain constructors.
+    unitOfWork.users.set(bookerId, reloadedBooker(bookerId));
+    const retry = await retryPost(postRequest(request));
     const result: CreateSessionResult = await retry.json();
 
     // Assert
@@ -478,13 +552,13 @@ describe("UC2-02 session HTTP composition", () => {
     expect(unitOfWork.sessions.size).toBe(1);
   });
 
-  test("redacts an unexpected persistence failure and saves nothing", async () => {
+  test("redacts persistence failures and keeps initialized dependencies for retry", async () => {
     // Arrange
-    const { handler, unitOfWork } = sessionHttpScenario();
+    const { POST, unitOfWork } = await sessionRouteScenario();
     unitOfWork.nextSaveError = new Error("postgres-connection-secret");
 
     // Act
-    const response = await handler(postRequest(creationRequest()));
+    const response = await POST(postRequest(creationRequest()));
     const body = await response.json();
 
     // Assert
@@ -494,6 +568,18 @@ describe("UC2-02 session HTTP composition", () => {
     });
     expect(JSON.stringify(body)).not.toContain("postgres-connection-secret");
     expect(unitOfWork.sessions.size).toBe(0);
+    expect(unitOfWork.ledgerInstructions).toEqual([]);
+    expect(unitOfWork.payoutRequests).toEqual([]);
+
+    // Act
+    vi.stubEnv("DATABASE_URL", "invalid-after-initialization");
+    const recovered = await POST(postRequest(creationRequest()));
+    const result: CreateSessionResult = await recovered.json();
+
+    // Assert
+    expect(recovered.status).toBe(201);
+    expect(unitOfWork.requireSession(result.sessionId).bookerId).toBe(bookerId);
+    expect(unitOfWork.sessions.size).toBe(1);
     expect(unitOfWork.ledgerInstructions).toEqual([]);
     expect(unitOfWork.payoutRequests).toEqual([]);
   });
@@ -534,27 +620,55 @@ async function verifiedTestUser(request: Request): Promise<UUID | null> {
   return null;
 }
 
-function sessionHttpScenario(
+async function sessionRouteScenario(
   authenticate: (request: Request) => Promise<UUID | null> = verifiedTestUser,
 ) {
+  // Load real domain fixtures after resetModules so error classes match the route.
+  const { PayoutAccount } = await import("@/domain");
+  const { createTestUser, readyBookerUser } = await import(
+    "../../domain/accounts/user-fixtures"
+  );
+  const { CreateSessionUnitOfWork } = await import(
+    "../../use-cases/support/create-session-unit-of-work"
+  );
   const unitOfWork = new CreateSessionUnitOfWork([readyBookerUser(bookerId)]);
-  let now = hoursBeforeSessionStart(48);
+  let now = new Date("2026-10-08T10:00:00Z");
   let sequence = 0;
-  const dependencies = {
-    authenticate,
-    unitOfWork,
-    clock: { now: () => new Date(now) },
-    ids: {
-      next: () =>
-        `50000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
-    },
-    holdingAccountId,
+  let routeLoaded = false;
+  const clock = { now: () => new Date(now) };
+  const ids = {
+    next: () =>
+      `50000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
   };
-  const makeHandler = () => createSessionHandler(dependencies);
+  const loadRoute = async () => {
+    if (routeLoaded) vi.resetModules();
+    const { CreateSessions } = await import("@/use-cases/sessions/CreateSessions");
+    const { RequestSessionCreationTransaction } = await import(
+      "@/lib/sessions/request-session-creation-transaction"
+    );
+    configuration.createSessionDependencies.mockReturnValue({
+      authenticate,
+      createForSubmission: (submission) =>
+        new CreateSessions({
+          transaction: new RequestSessionCreationTransaction(unitOfWork, submission),
+          clock,
+          ids,
+          holdingAccountId,
+        }),
+    });
+    const route = await import("@/app/api/sessions/route");
+    const { readyBookerUser } = await import("../../domain/accounts/user-fixtures");
+    routeLoaded = true;
+    return { ...route, readyBookerUser };
+  };
+  const { POST } = await loadRoute();
   return {
-    handler: makeHandler(),
-    makeHandler,
+    POST,
+    loadRoute,
     unitOfWork,
+    createTestUser,
+    readyBookerUser,
+    PayoutAccount,
     setTime: (at: Date) => {
       now = at;
     },

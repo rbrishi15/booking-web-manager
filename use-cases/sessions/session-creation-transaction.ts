@@ -1,10 +1,10 @@
 import type { UUID } from "@/domain";
 import type { DomainTransaction } from "../shared/contracts";
 
-export type SessionCreationRepositories = Pick<
-  DomainTransaction,
-  "users" | "sessions"
->;
+export interface SessionCreationRepositories {
+  readonly users: Pick<DomainTransaction["users"], "get">;
+  readonly sessions: Pick<DomainTransaction["sessions"], "save">;
+}
 
 /**
  * An atomic creation transaction scoped to one logical submission. Its adapter

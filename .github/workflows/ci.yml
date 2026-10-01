@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: package.json
           cache: npm
 
       - run: npm ci
@@ -24,3 +24,36 @@ jobs:
       - run: npm run lint
 
       - run: npm test
+
+  session-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+      - run: supabase start
+      - run: supabase db reset --local
+      - run: npm run supabase:env
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: session-api-test-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - run: supabase stop --no-backup
+        if: always()

@@ -1,32 +1,39 @@
+import type { SessionApiDependencies } from "@/app/sessions/dependencies";
+import type { SessionServerSettings } from "@/app/sessions/server-environment";
+import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
+import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
+import { PostgresSessionCreationTransaction } from "@/lib/sessions/postgres-session-creation-transaction";
+import { createBearerAuthenticator } from "@/lib/supabase/bearer-auth";
 import {
-  handleCreateSession,
-  type CreateSessionHttpDependencies,
-} from "@/app/sessions/create-session-handler";
-import type { UUID } from "@/domain";
-import { RequestSessionCreationTransaction } from "@/lib/sessions/request-session-creation-transaction";
+  createBearerAccountStatusReader,
+  createSupabaseAuthClient,
+} from "@/lib/supabase/bearer-client";
+import { systemClock, uuidGenerator } from "@/lib/system";
 import { CreateSessions } from "@/use-cases/sessions/CreateSessions";
-import type { UseCaseDependencies } from "@/use-cases/shared/dependencies";
 
-export interface SessionHandlerDependencies extends UseCaseDependencies {
-  readonly authenticate: CreateSessionHttpDependencies["authenticate"];
-  readonly holdingAccountId: UUID;
-}
+/** Select concrete adapters using validated app settings. */
+export function createSessionDependencies(
+  settings: SessionServerSettings,
+): SessionApiDependencies {
+  // The provider defers pool construction until a parsed submission needs a transaction.
+  const getPool = createPostgresPoolProvider(settings.databaseUrl);
+  const supabase = createSupabaseAuthClient(
+    settings.supabaseUrl,
+    settings.supabaseAnonKey,
+  );
 
-/** Connect the server dependencies once; create submission-scoped objects per request. */
-export function createSessionHandler(
-  dependencies: SessionHandlerDependencies,
-): (request: Request) => Promise<Response> {
-  const { authenticate, unitOfWork, clock, ids, holdingAccountId } = dependencies;
-  const httpDependencies: CreateSessionHttpDependencies = {
-    authenticate,
+  return {
+    authenticate: createBearerAuthenticator(
+      supabase.auth,
+      createBearerAccountStatusReader(settings.supabaseUrl, settings.supabaseAnonKey),
+    ),
+    // Retry identity belongs to one submission, so its transaction and use case are fresh.
     createForSubmission: (submission) =>
       new CreateSessions({
-        transaction: new RequestSessionCreationTransaction(unitOfWork, submission),
-        clock,
-        ids,
-        holdingAccountId,
+        transaction: new PostgresSessionCreationTransaction(getPool(), submission, systemClock),
+        clock: systemClock,
+        ids: uuidGenerator,
+        holdingAccountId: PLATFORM_HOLDING_ACCOUNT_ID,
       }),
   };
-
-  return (request) => handleCreateSession(request, httpDependencies);
 }

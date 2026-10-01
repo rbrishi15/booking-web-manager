@@ -5,12 +5,16 @@ const uuid = z.string().uuid();
 const timestamp = z
   .string()
   .datetime({ offset: true })
-  .transform((value) => new Date(value))
-  .pipe(z.date());
-const requestSchema = z.object({
-  idempotencyKey: z.string().refine((key) => key.trim() !== "", {
-    message: "An idempotency key is required",
-  }),
+  .refine((value) => Number.isFinite(new Date(value).getTime()), {
+    message: "Invalid date",
+  });
+
+/** JSON transport contract, also used to generate the OpenAPI request schema. */
+export const createSessionRequestSchema = z.object({
+  idempotencyKey: z
+    .string()
+    .max(200, { message: "The idempotency key is too long" })
+    .regex(/\S/, { message: "An idempotency key is required" }),
   booking: z.object({
     venueName: z.string(),
     region: z.string(),
@@ -34,11 +38,19 @@ export function parseCreateSessionInput(
   request: unknown,
 ) {
   const bookerId = uuid.parse(actorUserId);
-  const { booking, config, idempotencyKey } = requestSchema.parse(request);
+  const { booking, config, idempotencyKey } = createSessionRequestSchema.parse(request);
   const submission: SessionCreationSubmission = { idempotencyKey };
 
   return {
-    input: { bookerId, booking, config },
+    input: {
+      bookerId,
+      booking: {
+        ...booking,
+        startAt: new Date(booking.startAt),
+        endAt: new Date(booking.endAt),
+      },
+      config,
+    },
     submission,
   };
 }

@@ -11,23 +11,36 @@ directory ownership and conventions. See [docs/](./docs) for the SRS.
 
 ## How session creation fits together
 
-[`use-case-config/sessions.ts`](./use-case-config/sessions.ts) connects the
-session HTTP handler to authentication, transactions, IDs, and the clock:
+The [API route](./app/api/sessions/route.ts) owns the HTTP flow and calls the
+use case directly:
 
 ```text
-Request → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
-        → load User → Booker creates Session → commit → Response
+POST → authenticate → parse JSON with Zod → CreateSessions.forBooker(...)
+     → load User → Booker creates Session → commit → JSON response
 ```
 
-The app layer handles HTTP and parsing; `/use-cases` coordinates persistence;
-`/domain` owns eligibility and booking-share rules. Infrastructure adapters in
-`/lib` implement application contracts. The outer `/use-case-config` module
-assembles these pieces without putting framework dependencies into the core.
-See the [configuration guide](./use-case-config/README.md) for setup and the
-dependencies a real server must supply, and the
-[centralized HTTP handler tests](./tests/use-case-config/sessions.test.ts) for
-executable examples. The handler is tested as a function; route mounting,
-production authentication and database adapters, and session UI remain future work.
+[`createSessionDependencies(settings)`](./use-case-config/sessions.ts) assembles
+authentication and a factory for submission-scoped use cases. The route awaits
+[`getSessionDependencies()`](./app/sessions/server-dependencies.ts), which
+validates settings and shares pending or successful setup within the runtime
+instance. Initialization failures clear that cache and reach the route's
+opaque JSON 500 response. Awaiting setup does not open a database connection.
+`/use-cases` coordinates persistence; `/domain` owns eligibility and booking-share
+rules. Infrastructure adapters in `/lib` own database/client setup and resource
+lifetimes, including the independently lazy pool.
+
+See the [configuration guide](./use-case-config/README.md) for setup and replacing
+dependencies, and the
+[centralized API route tests](./tests/app/sessions/create-session-route.test.ts)
+for executable examples. `POST /api/sessions` uses Supabase bearer
+authentication and PostgreSQL transactions. The domain remains
+framework-independent.
+
+Run the [local API setup](./supabase/README.md#session-api), then open
+[Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
+`/api/openapi` and can also be imported into Postman. This implementation covers
+the session creation backend and its Swagger documentation. Registration,
+sign-in and session screens, along with OneMap integration, remain separate work.
 
 ## Team
 
@@ -40,6 +53,11 @@ production authentication and database adapters, and session UI remain future wo
 | Joseph | [@Jolingoes](https://github.com/Jolingoes) | Identity, groups and frontend platform — `/app/(auth)`, `/app/profile`, `/app/groups`, `/components/ui` |
 
 ## Getting started
+
+Use Node.js 22.x, declared in `package.json` under `engines.node`. Both CI jobs
+read that setting, and [Vercel uses it for builds and functions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
+The installed Supabase client requires Node 22's native WebSocket support;
+Node 20 fails during client initialization, even for authentication-only calls.
 
 ```bash
 npm install
@@ -98,6 +116,12 @@ Use-case acceptance tests are organised in
 [tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
 `test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
 that folder's README for the convention.
+
+Session persistence tests live in [tests/integration](./tests/integration),
+and real HTTP/browser tests in [tests/e2e](./tests/e2e). After local Supabase
+setup, run `npm run test:integration` and `npm run test:e2e`. The latter builds
+and starts Next.js automatically. These suites are separate from `npm test`
+and must never share a database with the destructive ledger DB suite.
 
 ## Contributing
 
