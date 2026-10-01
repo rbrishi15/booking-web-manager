@@ -13,6 +13,7 @@ import {
   sessionStartsAt,
 } from "../domain/sessions/session/session-fixtures";
 import { InMemoryUnitOfWork } from "./support/in-memory-unit-of-work";
+import { RecordingNotifier } from "./support/recording-notifier";
 
 // sessionDetails() books a 1000-cent venue, so each share is 1000 / totalSlots.
 const sessionId = "s";
@@ -461,6 +462,43 @@ describe("UC2-04 Commit to Session", () => {
       expect(unitOfWork.ledgerInstructions).toHaveLength(0);
     });
 
+    test("notifies each promoted participant, but not a skipped one", async () => {
+      // Arrange
+      const { promote, notifier } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol", "dave"],
+        fundsCents: { carol: 499 },
+      });
+
+      // Act
+      await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(notifier.deliveries()).toEqual([["PROMOTED", "dave"]]);
+    });
+
+    test("keeps a promotion when its notification cannot be delivered", async () => {
+      // Arrange
+      const { promote, unitOfWork, notifier } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol"],
+      });
+      notifier.failNext = true;
+
+      // Act
+      const result = await promote.forSession(promotionRequest());
+
+      // Assert
+      expect(result.promoted.map((entry) => entry.userId)).toEqual(["carol"]);
+      expect(
+        unitOfWork
+          .requireSession(sessionId)
+          .participantList.requireParticipation("p-carol").status,
+      ).toBe("COMMITTED");
+    });
+
     test("a repeated trigger key replays its result without locking again", async () => {
       // Arrange
       const { promote, unitOfWork } = promotionScenario({
@@ -567,12 +605,14 @@ function promotionScenario(
   );
   const unitOfWork = new InMemoryUnitOfWork({ users, sessions: [session] });
   let nextId = 0;
+  const notifier = new RecordingNotifier();
   const promote = new PromoteFromWaitlist({
     unitOfWork,
     clock: { now: () => options.now ?? hoursBeforeSessionStart(24) },
     ids: { next: () => `id-${++nextId}` },
+    notifier,
   });
-  return { promote, unitOfWork };
+  return { promote, unitOfWork, notifier };
 }
 
 function promotionRequest(triggerKey = "trigger-1") {

@@ -16,6 +16,7 @@ import {
   sessionStartsAt,
 } from "../domain/sessions/session/session-fixtures";
 import { InMemoryUnitOfWork } from "./support/in-memory-unit-of-work";
+import { RecordingNotifier } from "./support/recording-notifier";
 
 // A two-slot session for a 1000-cent booking: each share is 500 cents.
 const sessionId = "s";
@@ -79,7 +80,10 @@ describe("UC2-05 Withdraw from Session", () => {
     // Assert
     // The share stays held for the booker; the FORFEIT ledger line is written
     // when the session's payout completes (Booker settlement), not here.
-    expect(result).toEqual({ sessionId, forfeitureDue: ["id-1"] });
+    expect(result).toEqual({
+      sessionId,
+      forfeitureDue: [{ participationId: "id-1", userId: "alice" }],
+    });
     expect(scenario.participation("id-1").hold?.state).toBe("FORFEITURE_DUE");
     expect(scenario.unitOfWork.availableCents("alice")).toBe(9_500);
     expect(scenario.ledgerKinds()).toEqual(["LOCK"]);
@@ -337,6 +341,81 @@ describe("UC2-05 Withdraw from Session", () => {
       result: { promoted: [{ userId: "dave" }] },
     });
   });
+
+  describe("notifications", () => {
+    test("a late named-invite withdrawal invites the invitee and warns the withdrawer", async () => {
+      // Arrange
+      const scenario = withdrawalScenario();
+      await scenario.commit("alice");
+      scenario.setTime(hoursBeforeSessionStart(10));
+
+      // Act
+      await scenario.withdraw("alice", {
+        mode: "DIRECT_INVITE",
+        inviteeId: "dave",
+      });
+
+      // Assert
+      expect(scenario.notifier.deliveries()).toEqual([
+        ["REPLACEMENT_INVITATION", "dave"],
+        ["FORFEITURE_WARNING", "alice"],
+      ]);
+    });
+
+    test("an early withdrawal sends no forfeiture warning, only the promotion notice", async () => {
+      // Arrange
+      const scenario = withdrawalScenario();
+      await scenario.commit("alice");
+      await scenario.commit("bob");
+      await scenario.commit("carol");
+      scenario.setTime(hoursBeforeSessionStart(31));
+
+      // Act
+      await scenario.withdraw("alice", openSlot);
+
+      // Assert
+      expect(scenario.notifier.deliveries()).toEqual([["PROMOTED", "carol"]]);
+    });
+
+    test("the forfeiture sweep tells the withdrawer their share was forfeited", async () => {
+      // Arrange
+      const scenario = withdrawalScenario();
+      await scenario.commit("alice");
+      scenario.setTime(hoursBeforeSessionStart(10));
+      await scenario.withdraw("alice", openSlot);
+      scenario.notifier.sent.length = 0;
+      scenario.setTime(sessionStartsAt);
+
+      // Act
+      await scenario.expireReplacements.forSession({
+        sessionId,
+        triggerKey: "start-sweep",
+      });
+
+      // Assert
+      expect(scenario.notifier.deliveries()).toEqual([
+        ["FORFEITURE_DUE", "alice"],
+      ]);
+    });
+
+    test("keeps a committed withdrawal when its notification cannot be delivered", async () => {
+      // Arrange
+      const scenario = withdrawalScenario();
+      await scenario.commit("alice");
+      scenario.setTime(hoursBeforeSessionStart(10));
+      scenario.notifier.failNext = true;
+
+      // Act
+      const result = await scenario.withdraw("alice", {
+        mode: "DIRECT_INVITE",
+        inviteeId: "dave",
+      });
+
+      // Assert
+      expect(result.kind).toBe("AWAITING_REPLACEMENT");
+      expect(scenario.participation("id-1").status).toBe("WITHDRAWN");
+    });
+  });
 });
 
 function withdrawalScenario({ totalSlots = 2 } = {}) {
@@ -348,10 +427,12 @@ function withdrawalScenario({ totalSlots = 2 } = {}) {
   });
   let now = hoursBeforeSessionStart(48);
   let nextId = 0;
+  const notifier = new RecordingNotifier();
   const dependencies = {
     unitOfWork,
     clock: { now: () => now },
     ids: { next: () => `id-${++nextId}` },
+    notifier,
   };
   const promote = new PromoteFromWaitlist(dependencies);
   const commitToSession = new CommitToSession(dependencies);
@@ -360,6 +441,7 @@ function withdrawalScenario({ totalSlots = 2 } = {}) {
 
   return {
     unitOfWork,
+    notifier,
     expireReplacements: new ExpireReplacements(dependencies),
     leaveWaitlist: new LeaveWaitlist({ ...dependencies, promote }),
     setTime(at: Date) {

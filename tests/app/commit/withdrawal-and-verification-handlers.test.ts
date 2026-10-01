@@ -22,6 +22,7 @@ import {
   sessionDetails,
 } from "../../domain/sessions/session/session-fixtures";
 import { InMemoryUnitOfWork } from "../../use-cases/support/in-memory-unit-of-work";
+import { RecordingNotifier } from "../../use-cases/support/recording-notifier";
 
 const bookerId = "10000000-0000-4000-8000-000000000000";
 const aliceId = "11111111-1111-4111-8111-111111111111";
@@ -254,6 +255,7 @@ async function handlerScenario() {
   let nextId = 0;
   const dependencies = {
     unitOfWork,
+    notifier: new RecordingNotifier(),
     clock: { now: () => now },
     ids: {
       next: () => `00000000-0000-4000-8000-${String(++nextId).padStart(12, "0")}`,
