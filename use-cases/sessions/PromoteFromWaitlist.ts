@@ -1,6 +1,10 @@
 import type { FinancialInstruction, PromotionResult, UUID } from "@/domain";
 import type { UseCaseDependencies } from "../shared/dependencies";
 import { appendInstructions, requireAggregate } from "../shared/helpers";
+import {
+  type CommitmentNotifier,
+  notifyBestEffort,
+} from "./commitment-notifications";
 
 export interface PromoteFromWaitlistRequest {
   readonly sessionId: UUID;
@@ -39,6 +43,11 @@ export interface PromoteFromWaitlistResult {
   readonly awaitingInvitee?: { readonly participationId: UUID; readonly userId: UUID };
 }
 
+export interface PromoteFromWaitlistDependencies
+  extends Pick<UseCaseDependencies, "unitOfWork" | "clock" | "ids"> {
+  readonly notifier: CommitmentNotifier;
+}
+
 /**
  * Fills a session's free places from its waitlist in FIFO order (UC2-04,
  * UC2-05).
@@ -52,27 +61,23 @@ export interface PromoteFromWaitlistResult {
  * Callers run this after a place may have opened (an open-slot withdrawal or
  * waitlist departure) and from a scheduled sweep, which also covers a
  * trigger lost between transactions. It does nothing once the session has
- * started, closed, or has no free place.
+ * started, closed, or has no free place. Promoted participants are notified
+ * after the unit of work commits.
  */
 export class PromoteFromWaitlist {
-  constructor(
-    private readonly dependencies: Pick<
-      UseCaseDependencies,
-      "unitOfWork" | "clock" | "ids"
-    >,
-  ) {}
+  constructor(private readonly dependencies: PromoteFromWaitlistDependencies) {}
 
   async forSession(
     request: PromoteFromWaitlistRequest,
   ): Promise<PromoteFromWaitlistResult> {
-    const { unitOfWork, clock, ids } = this.dependencies;
+    const { unitOfWork, clock, ids, notifier } = this.dependencies;
     const key = JSON.stringify([
       "promote-from-waitlist",
       request.sessionId,
       request.triggerKey,
     ]);
 
-    return unitOfWork.execute(key, async (transaction) => {
+    const result = await unitOfWork.execute(key, async (transaction) => {
       const session = await requireAggregate(
         transaction.sessions,
         request.sessionId,
@@ -134,5 +139,15 @@ export class PromoteFromWaitlist {
         awaitingInvitee,
       };
     });
+
+    await notifyBestEffort(
+      notifier,
+      result.promoted.map((entry) => ({
+        kind: "PROMOTED" as const,
+        recipientId: entry.userId,
+        sessionId: result.sessionId,
+      })),
+    );
+    return result;
   }
 }
