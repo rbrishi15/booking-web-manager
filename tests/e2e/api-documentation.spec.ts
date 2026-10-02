@@ -24,6 +24,15 @@ test("serves the shared OpenAPI document with creation and discovery", async ({ 
     nextCursor: null,
   });
   expect(discovery.responses["503"].content["application/json"].example.error.code).toBe("DISCOVERY_API_UNAVAILABLE");
+  for (const path of [
+    "/api/sessions/commit", "/api/sessions/withdraw",
+    "/api/sessions/replacements/accept", "/api/sessions/waitlist/leave",
+    "/api/sessions/attendance",
+  ]) {
+    expect(document.paths[path].post.security).toEqual([{ bearerAuth: [] }]);
+    expect(document.paths[path].post.description).toContain("no Next.js route is mounted here yet");
+  }
+  expect(document.paths["/api/cron/commitments"].get.security).toEqual([{ cronAuth: [] }]);
 });
 
 test("loads the shared Swagger page and enables discovery requests", async ({
@@ -34,11 +43,18 @@ test("loads the shared Swagger page and enables discovery requests", async ({
 
   // Assert
   await expect(page.getByRole("heading", { name: /^Booking Web Manager API/ })).toBeVisible();
-  const discovery = page.locator(".opblock-get");
+  const discovery = page.locator(".opblock-get").filter({ hasText: "UC2-01 Discover Sessions" });
   await expect(discovery.getByText("/api/sessions", { exact: true })).toBeVisible();
   await expect(page.locator(".opblock-post").getByText("/api/sessions", { exact: true })).toBeVisible();
   await expect(page.getByText("UC2-01 Discover Sessions", { exact: true })).toBeVisible();
   await expect(page.getByText("UC2-02 Create Session", { exact: true })).toBeVisible();
+  for (const summary of [
+    "UC2-04 Commit to Session", "UC2-05 Withdraw from Session",
+    "UC2-05 Accept Replacement", "UC2-05 Leave Waitlist",
+    "UC2-06 Verify Attendance", "UC2-05/06 Run Scheduled Session Jobs",
+  ]) {
+    await expect(page.getByText(summary, { exact: true })).toBeVisible();
+  }
 
   // The shared UI exposes Swagger's normal request controls for GET as well as POST.
   await discovery.locator(".opblock-summary").click();

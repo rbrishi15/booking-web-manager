@@ -1,3 +1,4 @@
+import { registerCommitmentApi } from "@/app/commit/openapi";
 import { registerDiscoveryApi } from "@/app/discover/openapi";
 import { registerSessionApi } from "@/app/sessions/openapi";
 import { createOpenApiDocument } from "./document";
@@ -6,4 +7,5 @@ import { createOpenApiDocument } from "./document";
 export const openApiDocument = createOpenApiDocument([
   registerSessionApi,
   registerDiscoveryApi,
+  registerCommitmentApi,
 ]);
