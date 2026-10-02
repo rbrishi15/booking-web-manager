@@ -137,8 +137,8 @@ advanced filters.
 The shared mobile navigation keeps its existing active-state behavior. Only the
 active destination shows a visible label; all four retain accessible names.
 Groups are part of the Sessions area and remain reachable through the account
-sheet, alongside settings and logout. Sessions and Wallet retain their existing
-route destinations; their pages are not implemented by this visual redesign.
+sheet, alongside settings and logout. Sessions now opens the UC2-03a hosted-session
+management page. Wallet retains its existing route destination.
 Joining, session details and the create-session page remain separate work.
 
 Feature-local Storybook stories render the production synchronous view with
@@ -156,5 +156,26 @@ The standard app build and dev startup also stage a public static preview at
 
 Unit tests cover query parsing, state transitions, the use-case boundary, API
 errors and OpenAPI. Database and signed-in browser tests use the existing
-disposable session stack via `npm run test:sessions:integration`. Automatic
-refresh for UC2-03a's three-second visibility requirement remains follow-up work.
+disposable session stack via `npm run test:sessions:integration`.
+
+## Background visibility updates (UC2-03a)
+
+A valid committed query refreshes once per second while discovery is visible
+and online, with an immediate refresh when visibility or connectivity returns.
+Results remain server-owned. Background refresh does not create navigation
+history, reset scroll, disable controls, or display the foreground loading state.
+The mounted form retains unsubmitted drafts, focus and expanded filters. Explicit
+Search, Apply, Next and Retry retain their existing loading behavior.
+
+Polling avoids overlapping refreshes, pauses new work during navigation and
+cleans up when the page unmounts. Server errors use the existing error outcome.
+The cursor and return destination remain unchanged: a newly public session before
+the current cursor belongs to an earlier page, and hiding the last session on a
+page can leave that page empty. The user is never sent back to page one by polling.
+
+The acceptance target is appearance/disappearance within three seconds after a
+booker's committed change on a healthy, visible, online discovery page. Browser
+throttling, offline periods and provider failures cannot satisfy that timing.
+One-second refresh repeats complete User and matching-session reads; this follows
+the current small-project scale assumption. Larger deployments should revisit
+the query cost and polling frequency together.

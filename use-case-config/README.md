@@ -31,6 +31,9 @@ discovery.
 
 ## Session creation configuration
 
+See [session management configuration](#session-management-configuration) below
+for UC2-03a's separate dependency assembly and migration requirements.
+
 This folder assembles session API dependencies. The app owns HTTP orchestration,
 use cases coordinate domain behavior, and infrastructure adapters live in `/lib`.
 
@@ -144,3 +147,64 @@ HTTP tests passed. The service-backed runs used PR #34 at
 `f9481b61211a9e96b24cf808cb6062e18f651787`, with prerequisite SQL SHA256
 `cd1be0e3eeb1a82648a25ff2c9585407ab7f794798599d818ba743d30bd22a0e`.
 This is preview validation; rerun against the merged prerequisite before integration.
+
+## Session management configuration
+
+`session-management.ts` assembles `ToggleSessionVisibility` and
+`ListHostedSessions` using the existing Supabase/PostgreSQL settings, lazy pool,
+complete User reader and a dedicated `PostgresSessionManagementTransaction`.
+The management getter has the same retryable initialization boundary as creation.
+Bearer verification establishes current active-account access; the coordinator
+rechecks that access within its transaction. The page uses verified cookie
+identity and invokes the same coordinator through a server action.
+
+Apply **0007_session_management.sql before deploying management**. Its additions
+are nullable settlement JSON, non-null payout-history arrays, and an
+identity-backed participant `list_position` unique within each session. The
+stored batch uses domain field names, ISO dates and integer `amountCents` values
+in place of Money objects. The reader constructs validated domain values; the
+visibility writer never changes those settlement fields or participant positions.
+
+The migration accepts creation-only data: no participation rows and only OPEN
+sessions. It aborts atomically if that assumption is false because migration 0006
+cannot supply the original participant order or complete settlement history.
+Do not delete rows or invent histories to pass this preflight. Existing lifecycle
+data requires a separately verified backfill before applying the migration.
+The existing creation writer uses the new empty-history defaults unchanged.
+
+Each management operation runs at SERIALIZABLE isolation and retries its complete
+transaction at most three times on serialization failures/deadlocks. The shared
+transaction helper retains REPEATABLE READ as its default for existing callers.
+A visibility mutation loads User, locks Session, hydrates the complete participant
+list and holds, obtains the current time, applies the Booker command and updates
+only visibility. Mapping failures are infrastructure errors; SQL errors retain
+their retry classifications. Rejected operations and failed commits roll back.
+
+**Concurrent-writer contract:** future commitment, withdrawal and other lifecycle
+adapters that read/write these invariants must also use SERIALIZABLE transactions
+and whole-transaction retries. The visibility tests model those writers and
+accept either valid serial ordering. This does not guarantee consistency for
+arbitrary direct SQL or lower-isolation lifecycle writers. Agree that integration
+boundary with Yajie and Rishi before those adapters are merged.
+
+Neoh owns migration 0007 and the feature adapters. Rishi coordinates migration
+numbering/merge order and reviews the shared transaction helper; follow the
+[contribution workflow](../docs/contributing-workflow.md) for independent feature
+review. Recheck the next migration number when updating from main. No review or
+deployment approval is implied by local test success.
+
+Run `npm run test:sessions:integration` for real database and authenticated browser
+coverage. The existing disposable runner applies the full merged migration
+sequence on 55321/55322, never a developer or hosted database. Browser acceptance
+uses two identities to verify an already-open discovery view updates within
+three seconds after an owner changes visibility. The public suite also checks
+the management endpoint's unconfigured response and OpenAPI documentation.
+
+### UC2-03a validation, 2026-10-02
+
+Typecheck, lint, the production build, 1,233 unit tests, 136 Storybook tests,
+33 database integration tests, 16 authenticated browser tests and seven public
+browser tests passed against the merged migration sequence through 0007. The
+authenticated suite verifies both visibility directions within three seconds,
+preserved draft filters and pagination, refresh/navigation races, polling cleanup
+and a 390px mobile layout. Database validation used only the disposable stack.

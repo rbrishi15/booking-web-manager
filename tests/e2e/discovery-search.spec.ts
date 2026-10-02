@@ -63,7 +63,8 @@ test("mobile search preserves drafts and history, disables pending actions, and 
     const gate = new Promise<void>((resolve) => { releaseRequest = resolve; });
     let pauseNext = true;
     await page.route("**/discover?**", async (route) => {
-      if (pauseNext && route.request().resourceType() === "fetch") {
+      const requestQuery = new URL(route.request().url()).searchParams;
+      if (pauseNext && route.request().resourceType() === "fetch" && requestQuery.get("q") === tag.toLowerCase() && requestQuery.get("sport") === "Badminton") {
         pauseNext = false;
         await gate;
       }

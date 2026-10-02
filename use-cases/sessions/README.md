@@ -107,3 +107,23 @@ records commands and the prerequisite group migration. The
 [E2E tests](../../tests/e2e) check public documentation and the default 503
 response against a running Next.js server without credentials or Supabase.
 Session-creation UI remains separate work; UC2-01 supplies the discovery page.
+
+## UC2-03a: manage visibility
+
+`ToggleSessionVisibility.forBooker(bookerId, sessionId, visibility)` loads complete
+User and Session state within `SessionManagementTransaction`, checks active
+application access, captures the current time, calls
+`user.asBooker().changeVisibility(...)`, then saves visibility. It returns only
+`{ sessionId, visibility }` after the transaction commits. Repeating an explicit
+target still applies all current access, time, lifecycle and capacity guards.
+The application's active-account gate does not alter the Booker's domain policy.
+
+`ListHostedSessions.forBooker(bookerId)` provides ordered summaries of all owned,
+open, upcoming sessions, including full sessions. It derives available slots from
+hydrated Session objects and exposes no room token, participant or payment details.
+
+The capability supplies User loading, Session loading/listing and visibility-only
+persistence. It does not expose ledger or payout operations. Production uses
+serializable transactions with bounded retries; every retry reloads state and
+obtains a fresh operation time. See the configuration guide for schema rollout
+and the contract required of future concurrent lifecycle writers.
