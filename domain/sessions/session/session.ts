@@ -34,7 +34,6 @@ export interface SessionDetails {
   /** Omission preserves the equal-split default for existing domain callers. */
   readonly bookingShare?: Money;
   readonly totalSlots: number;
-  readonly minimumHeadcount: number;
   readonly visibility: Visibility;
   readonly status: SessionStatus;
   readonly minimumReliability?: ReliabilityScore;
@@ -81,7 +80,6 @@ export class Session {
   readonly #booking: Booking;
   readonly #bookingShare: Money;
   readonly #totalSlots: number;
-  readonly #minimumHeadcount: number;
   readonly #roomToken: string;
   readonly #holdingAccountId: UUID;
   readonly #minimumReliability?: ReliabilityScore;
@@ -100,7 +98,6 @@ export class Session {
     this.#bookerId = details.bookerId;
     this.#booking = details.booking;
     this.#totalSlots = details.totalSlots;
-    this.#minimumHeadcount = details.minimumHeadcount;
     this.#roomToken = details.roomToken;
     this.#holdingAccountId = details.holdingAccountId;
     this.#visibility = details.visibility;
@@ -117,7 +114,6 @@ export class Session {
       status: this.#status,
       visibility: this.#visibility,
       totalSlots: this.#totalSlots,
-      minimumHeadcount: this.#minimumHeadcount,
     });
     this.#bookingShare = resolveBookingShare(this.#booking.totalCost, this.#totalSlots, details.bookingShare);
     this.#participantList = new ParticipantList(
@@ -331,9 +327,6 @@ export class Session {
   }
   get totalSlots(): number {
     return this.#totalSlots;
-  }
-  get minimumHeadcount(): number {
-    return this.#minimumHeadcount;
   }
   get bookingShare(): Money {
     return this.#bookingShare;

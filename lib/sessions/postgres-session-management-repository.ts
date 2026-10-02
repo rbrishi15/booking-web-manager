@@ -6,7 +6,7 @@ import { hydrateParticipation } from "./postgres-participation-reader";
 import { choice, date, optionalText, SessionPersistenceError, strings, text } from "./postgres-row-values";
 
 const sessionColumns = `session_id, booker_id, venue_name, region, sport, start_at, end_at,
-  total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, status,
+  total_cost_cents, total_slots, booking_share_cents, visibility, status,
   minimum_reliability, room_token, holding_account_id, invited_group_id, next_queue_sequence,
   payout_attempt_ids, payout_idempotency_keys, pending_settlement`;
 
@@ -89,7 +89,6 @@ export class PostgresSessionManagementRepository {
           }),
           totalSlots: z.number().int().safe().parse(row.total_slots),
           bookingShare: fromDatabaseCents(row.booking_share_cents, "booking_share_cents"),
-          minimumHeadcount: z.number().int().safe().parse(row.minimum_headcount),
           visibility: choice(row.visibility, ["PUBLIC", "PRIVATE"]),
           status: choice(row.status, ["OPEN", "CANCELLED", "AWAITING_PAYOUT", "PAYOUT_PENDING", "SETTLED"]),
           minimumReliability: row.minimum_reliability === null

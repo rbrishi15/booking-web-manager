@@ -27,9 +27,9 @@ export class PostgresSessionWriter {
     const booking = session.booking;
     await this.sql.query(
       `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-        total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, status,
+        total_cost_cents, total_slots, booking_share_cents, visibility, status,
         minimum_reliability, room_token, holding_account_id, invited_group_id, next_queue_sequence)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         session.sessionId,
         session.bookerId,
@@ -40,7 +40,6 @@ export class PostgresSessionWriter {
         booking.endAt,
         toDatabaseCents(booking.totalCost),
         session.totalSlots,
-        session.minimumHeadcount,
         toDatabaseCents(session.bookingShare),
         session.visibility,
         session.status,

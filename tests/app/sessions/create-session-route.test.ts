@@ -71,7 +71,6 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(session.booking.totalCost.toCents()).toBe(1001);
     expect(session.bookingShare.toCents()).toBe(result.bookingShareCents);
     expect(session.totalSlots).toBe(3);
-    expect(session.minimumHeadcount).toBe(2);
     expect(session.roomToken).toBe(result.roomToken);
     expect(session.holdingAccountId).toBe(holdingAccountId);
     expect(session.visibility).toBe("PRIVATE");
@@ -751,7 +750,7 @@ function creationRequest(config: Partial<SessionConfig> = {}) {
       endAt: sessionEndsAt.toISOString(),
       totalCostCents: 1001,
     },
-    config: { totalSlots: 3, minimumHeadcount: 2, ...config },
+    config: { totalSlots: 3, ...config },
   };
 }
 

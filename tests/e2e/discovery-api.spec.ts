@@ -29,7 +29,7 @@ test("authenticated discovery filters real stored sessions and protects private 
             venueName: config.venueName ?? "Discovery API fixture", region: config.region ?? "West", sport: config.sport ?? "Badminton",
             startAt, endAt: new Date(new Date(startAt).getTime() + 2 * 60 * 60 * 1000).toISOString(), totalCostCents: 1001,
           },
-          config: { totalSlots: 3, minimumHeadcount: 2, visibility: config.visibility ?? "PUBLIC" },
+          config: { totalSlots: 3, visibility: config.visibility ?? "PUBLIC" },
         },
       });
       expect(response.status()).toBe(201);
@@ -139,8 +139,8 @@ test("rejects invalid discovery queries and pages tied start times without repea
     for (const id of [...ids].reverse()) {
       await context.pool.query(
         `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-         total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, room_token, holding_account_id)
-         values ($1,$2,'Paged discovery venue','West','Badminton','2041-07-10T10:00:00Z','2041-07-10T12:00:00Z',1001,3,2,333,'PUBLIC',$3,$4)`,
+         total_cost_cents, total_slots, booking_share_cents, visibility, room_token, holding_account_id)
+         values ($1,$2,'Paged discovery venue','West','Badminton','2041-07-10T10:00:00Z','2041-07-10T12:00:00Z',1001,3,333,'PUBLIC',$3,$4)`,
         [id, viewer.userId, randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
       );
     }

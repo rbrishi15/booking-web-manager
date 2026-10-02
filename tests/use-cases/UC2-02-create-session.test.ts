@@ -66,7 +66,6 @@ describe("UC2-02 Create Session", () => {
     // Act
     const result = await createSessions.forBooker(bookerId, booking, {
       totalSlots: 3,
-      minimumHeadcount: 2,
     });
 
     // Assert
@@ -103,7 +102,6 @@ describe("UC2-02 Create Session", () => {
       startAt: sessionStartsAt,
       endAt: sessionEndsAt,
     });
-    expect(session.minimumHeadcount).toBe(2);
     expect(session.visibility).toBe("PUBLIC");
     expect(session.minimumReliability?.toNumber()).toBe(75);
     expect(session.invitedGroupId).toBe(groupId);
@@ -317,7 +315,7 @@ describe("UC2-02 Create Session", () => {
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
-  test("rejects minimum headcount greater than capacity", async () => {
+  test("rejects capacity below the domain limit without persisting a session", async () => {
     // Arrange
     const { booking, config } = creationInput();
     const { createSessions, unitOfWork } = sessionCreationScenario();
@@ -326,7 +324,7 @@ describe("UC2-02 Create Session", () => {
     await expect(
       createSessions.forBooker(bookerId, booking, {
         ...config,
-        minimumHeadcount: 4,
+        totalSlots: 1,
       }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(unitOfWork.sessions.size).toBe(0);
@@ -569,7 +567,7 @@ function creationInput(config: Partial<SessionConfig> = {}) {
       endAt: sessionEndsAt,
       totalCostCents: 1001,
     },
-    config: { totalSlots: 3, minimumHeadcount: 2, ...config },
+    config: { totalSlots: 3, ...config },
   };
 }
 
