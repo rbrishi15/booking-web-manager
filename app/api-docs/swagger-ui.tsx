@@ -5,13 +5,12 @@ import "swagger-ui-react/swagger-ui.css";
 
 const SwaggerUI = dynamic(() => import("swagger-ui-react"), { ssr: false });
 
-export function SessionApiReference() {
+export function ApiReference() {
   return (
     <SwaggerUI
       url="/api/openapi"
       plugins={[{ components: { onlineValidatorBadge: () => null } }]}
       persistAuthorization={false}
-      supportedSubmitMethods={["post"]}
       docExpansion="list"
     />
   );

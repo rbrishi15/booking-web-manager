@@ -2,6 +2,10 @@
 
 **Owner:** Neoh (liang799)
 
+`GET /api/sessions` provides UC2-01 discovery; see the
+[discovery contract and page guide](../discover/README.md). Swagger documents
+both GET and POST. The remainder of this guide describes session creation.
+
 UC2-02 supplies the Create Session API with Supabase bearer authentication and
 atomic PostgreSQL persistence. When server settings are missing,
 `POST /api/sessions` returns:
@@ -22,14 +26,30 @@ without credentials or a local Supabase stack.
 
 ## Configured HTTP contract
 
-The [POST route](../api/sessions/route.ts) awaits the app-owned
-[dependency getter](./server-dependencies.ts). With
-[`SessionApiDependencies`](./dependencies.ts) supplied, it authenticates,
-parses the request, creates a submission-scoped use case, invokes
-[`CreateSessions.forBooker`](../../use-cases/sessions/CreateSessions.ts)
-directly, and maps its result or error. Tests inject those dependencies; the
-production default never substitutes a fake authenticated user or persisted
-session. Unexpected initialization errors return an opaque JSON 500.
+The [route module](../api/sessions/route.ts) exports ordinary async GET and POST
+functions with the standard `Request` → `Promise<Response>` signature. Each
+function encloses dependency loading, authentication and request handling in one
+`try`/`catch`, then maps failures through its feature's response helpers.
+
+[`loadDependencies`](../http/load-dependencies.ts) awaits the app-owned
+[dependency getter](./server-dependencies.ts). It makes initialization failures
+opaque before the feature mapper handles them as JSON 500s.
+[`requireUserId`](../http/require-user-id.ts) invokes the endpoint's own
+authenticator, rejects absent credentials and validates the verified UUID.
+POST's authenticator also checks current active-account access before parsing or
+replay. Dependencies and actor identities remain local values in each handler;
+the helpers do not modify the Request or store shared actor state.
+
+After loading [`SessionApiDependencies`](./dependencies.ts), the POST handler
+authenticates, reads the request, creates a submission-scoped use case and invokes
+[`CreateSessions.forBooker`](../../use-cases/sessions/CreateSessions.ts) directly.
+Tests inject those dependencies and exercise the real helpers. The production
+default never substitutes a fake authenticated user or persisted session.
+
+`readCreateSessionRequest(request, bookerId)` reads JSON and delegates to the
+existing parser. It distinguishes malformed JSON from an invalid request schema;
+only the JSON/schema failures it identifies become 400 responses. Internal
+validation errors from authentication or the use case remain opaque 500s.
 
 [parseCreateSessionInput](./create-session-input.ts) validates the authenticated
 user ID separately from the raw `{ idempotencyKey, booking, config }` body.
@@ -86,6 +106,9 @@ See the [integration requirements](../../use-case-config/README.md#authenticatio
 [Swagger UI](http://127.0.0.1:3000/api-docs) and `/api/openapi` publicly document
 the configured contract and missing-settings response. Swagger's Try it out
 sends a real request; configured creation requires a valid bearer token.
+The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
+The [shared OpenAPI guide](../openapi/README.md) explains how feature registrations
+are assembled and how to add operations to the reference.
 
 The [route tests](../../tests/app/sessions/create-session-route.test.ts) exercise
 creation, replay, validation, and failures with injected dependencies and the
@@ -94,5 +117,5 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-Registration and sign-in screens, session UI, OneMap, and later session
-management and Realtime features remain separate work.
+The discovery page is covered by UC2-01. Session-creation UI, OneMap, and later
+session management and Realtime features remain separate work.

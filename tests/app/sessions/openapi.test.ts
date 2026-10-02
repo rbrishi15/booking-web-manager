@@ -1,21 +1,11 @@
-import SwaggerParser from "@apidevtools/swagger-parser";
-import { GET } from "@/app/api/openapi/route";
-import { sessionOpenApiDocument } from "@/app/sessions/openapi";
+import { createOpenApiDocument } from "@/app/openapi/document";
+import { registerSessionApi } from "@/app/sessions/openapi";
 import { createSessionRequestSchema, parseCreateSessionInput } from "@/app/sessions/create-session-input";
 import { describe, expect, test } from "vitest";
 
-describe("public session OpenAPI contract", () => {
-  test("publishes a structurally valid OpenAPI 3.0.3 document without authentication", async () => {
-    const response = GET();
-    const document = await response.json();
+const sessionOpenApiDocument = createOpenApiDocument([registerSessionApi]);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    await expect(SwaggerParser.validate(structuredClone(document))).resolves.toBeDefined();
-    expect(document.openapi).toBe("3.0.3");
-    expect(document.servers).toEqual([{ url: "/", description: "This server" }]);
-  });
-
+describe("session creation OpenAPI contract", () => {
   test("describes configured bearer authentication and missing-settings unavailability", () => {
     const operation = sessionOpenApiDocument.paths["/api/sessions"]?.post;
 
@@ -79,4 +69,5 @@ describe("public session OpenAPI contract", () => {
     expect(input.booking.totalCostCents).toBe(1001);
     expect(input.config.totalSlots).toBe(3);
   });
+
 });

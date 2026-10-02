@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { UUID } from "@/domain";
+import { invalidRequest } from "@/app/http/request-failure";
 import type { SessionCreationSubmission } from "@/lib/sessions/request-session-creation-transaction";
 
 const uuid = z.string().uuid();
@@ -53,4 +55,27 @@ export function parseCreateSessionInput(
     },
     submission,
   };
+}
+
+/** Classifies client transport failures after the caller has verified the booker. */
+export async function readCreateSessionRequest(
+  request: Request,
+  bookerId: UUID,
+): Promise<ReturnType<typeof parseCreateSessionInput>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch (cause) {
+    if (cause instanceof SyntaxError)
+      throw invalidRequest("Request body must be valid JSON");
+    throw new Error("Session request body could not be read", { cause });
+  }
+
+  try {
+    return parseCreateSessionInput(bookerId, body);
+  } catch (cause) {
+    if (cause instanceof z.ZodError)
+      throw invalidRequest("Invalid session creation request");
+    throw new Error("Session creation request could not be parsed", { cause });
+  }
 }

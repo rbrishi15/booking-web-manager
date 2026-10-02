@@ -215,7 +215,10 @@ Run `npm run dev`, then open
 [Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
 `/api/openapi` and can also be imported into Postman. Documentation needs no
 credentials or local Supabase stack; an unconfigured server returns 503 for
-session creation. Session UI and OneMap integration remain separate work.
+session creation. UC2-01 adds the signed-in [discovery page](./app/discover/README.md)
+and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
+Swagger documents discovery and creation. Session-creation UI and OneMap
+integration remain separate work.
 
 ## Team
 
@@ -237,6 +240,34 @@ npm install
 npm run dev
 ```
 
+The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
+`/storybook`; these resources work without Supabase or database configuration.
+Signed-in users see their upcoming bookings at `/`, or Singapore weather when
+there are none. Home has no filters; the Search button opens `/discover`.
+
+### Storybook on the same site
+
+`npm run dev` first builds a static Storybook preview, so the landing page’s
+Storybook link works on the app’s own port. `npm run build` repeats that build
+before Next.js, so deployed previews and production include the same public
+`/storybook` destination. Deep links such as
+`/storybook?path=/story/foundations-booking-logo--default` retain their query
+when redirected to `/storybook/index.html`.
+
+For live component development, run `npm run storybook` on port 6006. The
+app-hosted preview is static; run `npm run build-storybook:public` and restart
+Next.js to refresh it, or restart `npm run dev`. `npm run build-storybook`
+continues to produce a standalone `storybook-static` directory.
+
+The build stages `storybook-static` into ignored `public/storybook` only after
+a successful build. Storybook copies only `public/images` and `public/fonts`,
+and its Vite build disables automatic public-directory copying, so repeated
+builds never embed an older Storybook inside the next one. The staging script
+also rejects nested Storybook output before replacing the preview. Both
+output directories are generated and must stay out of git. No Storybook server
+or external hosting account is needed in deployment. See the
+[Storybook static publishing guide](https://storybook.js.org/docs/sharing/publish-storybook).
+
 ```bash
 npm run typecheck
 npm run lint
@@ -246,7 +277,8 @@ npm run test:concurrency
 
 ### Environment variables
 
-Swagger/OpenAPI and the unconfigured session route need no credentials. Live
+The public landing, Storybook, Swagger/OpenAPI, and the unconfigured session
+route need no credentials. Live
 session creation needs `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus migrations through 0006. Remote database
 connections require TLS. See `.env.example` and the configuration guide.
@@ -297,7 +329,8 @@ that folder's README for the convention.
 
 Session contract tests run with `npm test` and injected dependencies.
 `npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
-Swagger documentation, and verifies the production route's 503 response.
+Swagger documentation, landing links, hosted Storybook deep links and assets,
+and verifies the production route's 503 response.
 These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 `npm run test:integration` and `npm run test:e2e:integration` provision a separate
 disposable Supabase stack for database and authenticated HTTP coverage.

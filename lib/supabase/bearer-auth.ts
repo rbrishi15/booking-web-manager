@@ -8,24 +8,33 @@ const authOptions = {
   detectSessionInUrl: false,
 };
 
+async function verifyBearerIdentity(
+  auth: Pick<SupabaseClient["auth"], "getUser">,
+  request: Request,
+): Promise<{ readonly token: string; readonly userId: UUID } | null> {
+  const token = request.headers
+    .get("authorization")
+    ?.match(/^Bearer[ \t]+([^\s,]+)$/i)?.[1];
+  if (!token) return null;
+  const { data, error } = await auth.getUser(token);
+  if (error !== null) {
+    if ([400, 401, 403].includes(error.status ?? 0)) return null;
+    throw error;
+  }
+  if (data.user === null)
+    throw new Error("Authentication provider returned no user");
+  return { token, userId: data.user.id };
+}
+
 export function createBearerAuthenticator(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   readStatus: (token: string, userId: UUID) => Promise<AccountStatus>,
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
-    const token = request.headers
-      .get("authorization")
-      ?.match(/^Bearer[ \t]+([^\s,]+)$/i)?.[1];
-    if (!token) return null;
-    const { data, error } = await auth.getUser(token);
-    if (error !== null) {
-      if ([400, 401, 403].includes(error.status ?? 0)) return null;
-      throw error;
-    }
-    if (data.user === null)
-      throw new Error("Authentication provider returned no user");
+    const identity = await verifyBearerIdentity(auth, request);
+    if (identity === null) return null;
     // Never cache account access: replay can reveal the private room token.
-    const status = await readStatus(token, data.user.id);
+    const status = await readStatus(identity.token, identity.userId);
     switch (status.kind) {
       case "inactive":
         throw new DomainError(
@@ -39,9 +48,18 @@ export function createBearerAuthenticator(
           cause: status,
         });
       case "active":
-        return data.user.id;
+        return identity.userId;
     }
   };
+}
+
+/** Discovery loads the complete participant and checks access in its use case. */
+export function createSupabaseIdentityAuthenticator(
+  url: string,
+  anonKey: string,
+): (request: Request) => Promise<UUID | null> {
+  const verifier = createClient(url, anonKey, { auth: authOptions });
+  return async (request) => (await verifyBearerIdentity(verifier.auth, request))?.userId ?? null;
 }
 
 /** Identity verification is shared; each profile read has its own bearer-scoped client. */

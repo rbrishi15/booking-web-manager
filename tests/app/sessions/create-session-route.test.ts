@@ -26,6 +26,16 @@ const holdingAccountId = "00000000-0000-4000-8000-000000000001";
 
 // Owner: Neoh (liang799) — /app/sessions
 describe("UC2-02 POST /api/sessions", () => {
+  test("imports without assembling dependencies or authenticating", async () => {
+    const authenticate = vi.fn(verifiedTestUser);
+    const { createForSubmission, unitOfWork } = await sessionRouteScenario(authenticate);
+
+    expect(configuration.createSessionDependencies).not.toHaveBeenCalled();
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(createForSubmission).not.toHaveBeenCalled();
+    expect(unitOfWork.sessions.size).toBe(0);
+  });
+
   test("creates a private session and returns its persisted integer-cent share", async () => {
     // Arrange
     const { POST, unitOfWork } = await sessionRouteScenario();
@@ -140,7 +150,7 @@ describe("UC2-02 POST /api/sessions", () => {
 
   test("rejects malformed JSON and keeps initialized dependencies for a valid request", async () => {
     // Arrange
-    const { POST, unitOfWork } = await sessionRouteScenario();
+    const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario();
     const request = new Request("http://localhost/api/sessions", {
       method: "POST",
       headers: {
@@ -156,9 +166,10 @@ describe("UC2-02 POST /api/sessions", () => {
     // Assert
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: { code: expect.any(String), message: expect.any(String) },
+      error: { code: "INVALID_REQUEST", message: "Request body must be valid JSON" },
     });
     expect(unitOfWork.sessions.size).toBe(0);
+    expect(createForSubmission).not.toHaveBeenCalled();
 
     // Act
     const recovered = await POST(postRequest(creationRequest()));
@@ -172,7 +183,7 @@ describe("UC2-02 POST /api/sessions", () => {
 
   test("rejects a schema-invalid capacity without coercing numeric strings", async () => {
     // Arrange
-    const { POST, unitOfWork } = await sessionRouteScenario();
+    const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario();
     const request = creationRequest();
 
     // Act
@@ -186,10 +197,43 @@ describe("UC2-02 POST /api/sessions", () => {
     // Assert
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: { code: expect.any(String), message: expect.any(String) },
+      error: { code: "INVALID_REQUEST", message: "Invalid session creation request" },
     });
     expect(unitOfWork.sessions.size).toBe(0);
+    expect(createForSubmission).not.toHaveBeenCalled();
   });
+
+  test.each(["SyntaxError", "Error", "DomainError", "SessionApiUnavailableError", "ZodError"])(
+    "classifies a body-read %s by its origin before creating a submission",
+    async (kind) => {
+      const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario();
+      const { DomainError } = await import("@/domain");
+      const { SessionApiUnavailableError } = await import("@/app/sessions/session-api-unavailable");
+      const { z } = await import("zod");
+      const failure = kind === "SyntaxError"
+        ? new SyntaxError("private-body-read-failure")
+        : kind === "DomainError"
+          ? new DomainError("INACTIVE_ACCOUNT", "private-body-read-failure")
+          : kind === "SessionApiUnavailableError"
+            ? new SessionApiUnavailableError()
+            : kind === "ZodError"
+              ? new z.ZodError([{ code: "custom", path: [], message: "private-body-read-failure" }])
+              : new Error("private-body-read-failure");
+      const incoming = postRequest(creationRequest());
+      vi.spyOn(incoming, "json").mockRejectedValueOnce(failure);
+
+      const response = await POST(incoming);
+
+      expect(response.status).toBe(kind === "SyntaxError" ? 400 : 500);
+      expect(await response.json()).toEqual({
+        error: kind === "SyntaxError"
+          ? { code: "INVALID_REQUEST", message: "Request body must be valid JSON" }
+          : { code: "INTERNAL_ERROR", message: "Internal server error" },
+      });
+      expect(createForSubmission).not.toHaveBeenCalled();
+      expect(unitOfWork.sessions.size).toBe(0);
+    },
+  );
 
   test("rejects a timestamp without a timezone", async () => {
     // Arrange
@@ -434,28 +478,43 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(unitOfWork.sessions.size).toBe(2);
   });
 
-  test("isolates the same submission key between independently authenticated bookers", async () => {
+  test("isolates the same submission key when bookers authenticate out of order", async () => {
     // Arrange
-    const { POST, unitOfWork, readyBookerUser } = await sessionRouteScenario();
+    const firstIdentity = Promise.withResolvers<UUID>();
+    const secondIdentity = Promise.withResolvers<UUID>();
+    const firstRequest = postRequest(creationRequest());
+    const secondRequest = postRequest(creationRequest(), "Bearer other-booker");
+    const authenticate = vi.fn<SessionApiDependencies["authenticate"]>((request) =>
+      request === firstRequest ? firstIdentity.promise : secondIdentity.promise,
+    );
+    const { POST, unitOfWork, readyBookerUser } = await sessionRouteScenario(authenticate);
     unitOfWork.users.set(otherBookerId, readyBookerUser(otherBookerId));
-    const firstResponse = await POST(postRequest(creationRequest()));
-    const first: CreateSessionResult = await firstResponse.json();
 
     // Act
-    const secondResponse = await POST(
-      postRequest(creationRequest(), "Bearer other-booker"),
-    );
+    const firstPending = POST(firstRequest);
+    const secondPending = POST(secondRequest);
+    secondIdentity.resolve(otherBookerId);
+    const secondResponse = await secondPending;
     const second: CreateSessionResult = await secondResponse.json();
 
     // Assert
-    expect(firstResponse.status).toBe(201);
     expect(secondResponse.status).toBe(201);
+    expect(unitOfWork.requireSession(second.sessionId).bookerId).toBe(otherBookerId);
+    expect(unitOfWork.sessions.size).toBe(1);
+
+    firstIdentity.resolve(bookerId);
+    const firstResponse = await firstPending;
+    const first: CreateSessionResult = await firstResponse.json();
+
+    expect(firstResponse.status).toBe(201);
     expect(second.sessionId).not.toBe(first.sessionId);
     expect(unitOfWork.requireSession(first.sessionId).bookerId).toBe(bookerId);
     expect(unitOfWork.requireSession(second.sessionId).bookerId).toBe(
       otherBookerId,
     );
     expect(unitOfWork.sessions.size).toBe(2);
+    expect(authenticate.mock.calls).toEqual([[firstRequest], [secondRequest]]);
+    expect(configuration.createSessionDependencies).toHaveBeenCalledOnce();
   });
 
   test.each(["Error", "DomainError", "SessionApiUnavailableError"])(
@@ -548,6 +607,35 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(JSON.stringify(body)).not.toContain("invalid-uuid");
     expect(unitOfWork.sessions.size).toBe(0);
   });
+
+  test.each(["authentication", "use case"])(
+    "keeps an internal ZodError from %s separate from invalid client input",
+    async (stage) => {
+      const authenticate = vi.fn(verifiedTestUser);
+      const { POST, unitOfWork, createForSubmission } = await sessionRouteScenario(authenticate);
+      const { z } = await import("zod");
+      const failure = new z.ZodError([{ code: "custom", path: [], message: "private-internal-validation-failure" }]);
+      if (stage === "authentication") authenticate.mockRejectedValueOnce(failure);
+      else unitOfWork.nextUserLoadError = failure;
+      const incoming = postRequest(creationRequest());
+      const readBody = vi.spyOn(incoming, "json");
+
+      const response = await POST(incoming);
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+      });
+      expect(unitOfWork.sessions.size).toBe(0);
+      if (stage === "authentication") {
+        expect(readBody).not.toHaveBeenCalled();
+        expect(createForSubmission).not.toHaveBeenCalled();
+      } else {
+        expect(readBody).toHaveBeenCalledOnce();
+        expect(createForSubmission).toHaveBeenCalledOnce();
+      }
+    },
+  );
 
   test("keeps a hydration RangeError separate from invalid client input", async () => {
     // Arrange

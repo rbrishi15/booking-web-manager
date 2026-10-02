@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BookingLogo } from "@/components/ui/booking-logo";
 
 interface AuthFrameProps {
   /** Grey text in the top bar, e.g. "New to Booking.?" */
@@ -18,8 +19,8 @@ export function AuthFrame({ prompt, switchLabel, switchHref, panel, children }: 
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b px-4 py-4 md:px-10">
-        <Link href="/" className="text-2xl font-bold tracking-tight">
-          Booking.
+        <Link href="/" className="inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <BookingLogo />
         </Link>
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden text-muted-foreground sm:inline">{prompt}</span>

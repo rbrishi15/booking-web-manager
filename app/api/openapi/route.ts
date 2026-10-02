@@ -1,5 +1,5 @@
-import { sessionOpenApiDocument } from "@/app/sessions/openapi";
+import { openApiDocument } from "@/app/openapi";
 
 export function GET(): Response {
-  return Response.json(sessionOpenApiDocument);
+  return Response.json(openApiDocument);
 }

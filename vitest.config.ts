@@ -20,6 +20,8 @@ export default defineConfig({
     projects: [
       {
         extends: true,
+        // Next preserves JSX for its compiler; Node page tests need React's runtime transform.
+        oxc: { jsx: { runtime: "automatic" } },
         test: {
           name: "unit",
           environment: "node",

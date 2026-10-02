@@ -20,3 +20,16 @@ test("returns unavailable for a documented submission instead of creating a sess
     },
   });
 });
+
+test("returns discovery unavailable without configuration and does not cache it", async ({ request }) => {
+  const response = await request.get("/api/sessions");
+
+  expect(response.status()).toBe(503);
+  expect(response.headers()["cache-control"]).toBe("no-store");
+  expect(await response.json()).toEqual({
+    error: {
+      code: "DISCOVERY_API_UNAVAILABLE",
+      message: "Session discovery is not available yet",
+    },
+  });
+});

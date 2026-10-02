@@ -33,4 +33,5 @@ next-env.d.ts
 /test-results/
 # storybook
 /storybook-static
+/public/storybook/
 *storybook.log

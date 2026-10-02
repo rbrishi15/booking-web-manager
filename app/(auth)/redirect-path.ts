@@ -1,9 +1,8 @@
 /**
  * Where users land after registering or logging in.
- * The dialog map says Home & Discover (/discover), but that page (Neoh, UC2-01) isn't built yet,
- * so land on My groups until it is. Change this back to "/discover" when the Discover page merges.
+ * Home lists personal upcoming bookings; Discover is the public-session search page.
  */
-export const HOME_PATH = "/groups";
+export const HOME_PATH = "/";
 
 /**
  * Where to send the user after logging in. Only paths on this site are allowed,

@@ -23,6 +23,17 @@
 /app/payouts/ @rbrishi15
 /app/api/webhooks/ @rbrishi15
 
+# Shared HTTP orchestration and identity helpers: infrastructure and auth owners.
+/app/http/ @rbrishi15 @Jolingoes
+/tests/app/http/ @rbrishi15 @Jolingoes
+
+# Shared API documentation assembly and presentation; features own their definitions.
+/app/openapi/ @rbrishi15 @liang799
+/app/api/openapi/ @rbrishi15 @liang799
+/app/api-docs/ @rbrishi15 @liang799
+/tests/app/openapi/ @rbrishi15 @liang799
+/tests/e2e/api-documentation.spec.ts @rbrishi15 @liang799
+
 # Harrison: wallet ledger, financial integrity, its tests and existing schema.
 /lib/money/ @harr008
 /tests/lib/money/ @harr008
@@ -48,8 +59,6 @@
 /app/sessions/ @liang799
 /app/discover/ @liang799
 /app/api/sessions/ @liang799
-/app/api/openapi/ @liang799
-/app/api-docs/ @liang799
 /use-cases/sessions/CreateSession.ts @liang799
 /use-cases/sessions/CreateSessions.ts @liang799
 /use-cases/sessions/DiscoverSessions.ts @liang799
@@ -58,15 +67,19 @@
 /use-cases/sessions/RemoveParticipant.ts @liang799
 /use-cases/sessions/CancelSession.ts @liang799
 /use-cases/sessions/session-creation-transaction.ts @liang799
+/use-cases/sessions/session-discovery-transaction.ts @liang799
 /use-cases/sessions/README.md @liang799
 /use-case-config/sessions.ts @liang799
+/use-case-config/discovery.ts @liang799
 /lib/sessions/ @liang799
 /tests/app/sessions/ @liang799
+/tests/app/discover/ @liang799
 /tests/lib/sessions/ @liang799
 /tests/integration/sessions-persistence.test.ts @liang799
+/tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
+/tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799
-/tests/e2e/api-documentation.spec.ts @liang799
 /tests/use-cases/support/create-session-unit-of-work.ts @liang799
 /scripts/prepare-session-account.ts @liang799
 /scripts/test-session-integration.mjs @liang799

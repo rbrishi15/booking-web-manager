@@ -1,11 +1,17 @@
 import {
   AuthApiError,
+  createClient,
   type SupabaseClient,
   type User,
 } from "@supabase/supabase-js";
 import { describe, expect, test, vi } from "vitest";
-import { createBearerAuthenticator } from "@/lib/supabase/bearer-auth";
+import { createBearerAuthenticator, createSupabaseIdentityAuthenticator } from "@/lib/supabase/bearer-auth";
 import type { AccountStatus } from "@/lib/supabase/account-status";
+
+vi.mock("@supabase/supabase-js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@supabase/supabase-js")>(),
+  createClient: vi.fn(),
+}));
 
 const identity: User = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -111,5 +117,55 @@ describe("session bearer authentication", () => {
     await expect(setup.authenticate(request("Bearer token"))).rejects.toThrow(
       "Account status could not be checked",
     );
+  });
+});
+
+describe("discovery identity authentication", () => {
+  function identityScenario() {
+    const getUser = vi.fn<SupabaseClient["auth"]["getUser"]>()
+      .mockResolvedValue({ data: { user: identity }, error: null });
+    const from = vi.fn();
+    vi.mocked(createClient).mockReset().mockReturnValue({ auth: { getUser }, from } as never);
+    return {
+      getUser,
+      from,
+      authenticate: createSupabaseIdentityAuthenticator("https://supabase.example", "anon-key"),
+    };
+  }
+
+  test("verifies each bearer identity without reading account status", async () => {
+    const setup = identityScenario();
+    expect(await setup.authenticate(request("bearer\tfirst-token"))).toBe(identity.id);
+    expect(await setup.authenticate(request("Bearer second-token"))).toBe(identity.id);
+    expect(setup.getUser.mock.calls).toEqual([["first-token"], ["second-token"]]);
+    expect(setup.from).not.toHaveBeenCalled();
+    expect(createClient).toHaveBeenCalledExactlyOnceWith("https://supabase.example", "anon-key", {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  });
+
+  test.each([undefined, "Basic token", "Bearer", "Bearer one two", "Bearer one,two"])(
+    "rejects malformed credentials %s before verification",
+    async (header) => {
+      const setup = identityScenario();
+      expect(await setup.authenticate(request(header))).toBeNull();
+      expect(setup.getUser).not.toHaveBeenCalled();
+      expect(setup.from).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([400, 401, 403])("maps rejected bearer status %s to unauthenticated", async (code) => {
+    const setup = identityScenario();
+    setup.getUser.mockResolvedValue({ data: { user: null }, error: new AuthApiError("Rejected", code, undefined) });
+    expect(await setup.authenticate(request("Bearer rejected"))).toBeNull();
+    expect(setup.from).not.toHaveBeenCalled();
+  });
+
+  test("propagates provider outages without reading account status", async () => {
+    const setup = identityScenario();
+    const outage = new AuthApiError("Provider unavailable", 503, undefined);
+    setup.getUser.mockResolvedValue({ data: { user: null }, error: outage });
+    await expect(setup.authenticate(request("Bearer token"))).rejects.toBe(outage);
+    expect(setup.from).not.toHaveBeenCalled();
   });
 });
