@@ -28,7 +28,7 @@ const booking: SessionBooking = {
   endAt: new Date("2030-01-02T12:00:00Z"),
   totalCostCents: 1001,
 };
-const config = { totalSlots: 3, minimumHeadcount: 2 };
+const config = { totalSlots: 3 };
 const operationKey = (userId: string, key: string) =>
   JSON.stringify(["UC2-02", userId, key]);
 
@@ -153,6 +153,38 @@ describe("UC2-02 PostgreSQL persistence", () => {
     }
   });
 
+  test("configuration migration removes its obsolete column and preserves sessions and historical holds", async () => {
+    const migration = await readFile("supabase/migrations/0009_session_capacity.sql", "utf8");
+    const removedColumn = /drop column (\w+)/i.exec(migration)?.[1];
+    if (!removedColumn) throw new Error("Expected one configuration column removal");
+    const previousSchema = await readFile("supabase/migrations/0006_session_creation.sql", "utf8");
+    const definition = previousSchema.split("\n").find((line) => line.trimStart().startsWith(`${removedColumn} `))?.trim().replace(/,$/, "");
+    if (!definition) throw new Error("Expected the original column definition");
+    const connection = await context.pool.connect();
+    try {
+      await connection.query(`create temporary table sessions (session_id text, total_cost_cents bigint,
+        total_slots integer constraint sessions_total_slots_check check (total_slots between 1 and 8),
+        booking_share_cents bigint, ${definition})`);
+      await connection.query("create temporary table fund_holds (session_id text, amount_cents bigint)");
+      await connection.query("insert into sessions values ('legacy',1001,3,333,2),('custom',1001,3,600,3)");
+      await connection.query("insert into fund_holds values ('legacy',333),('custom',600)");
+      const sessions = (await connection.query("select session_id, total_cost_cents, total_slots, booking_share_cents from sessions order by session_id")).rows;
+      const holds = (await connection.query("select * from fund_holds order by session_id")).rows;
+      await connection.query(migration);
+      expect((await connection.query("select * from sessions order by session_id")).rows).toEqual(sessions);
+      expect((await connection.query("select * from fund_holds order by session_id")).rows).toEqual(holds);
+      expect((await connection.query("select count(*)::int as count from pg_attribute where attrelid = 'pg_temp.sessions'::regclass and attname = $1 and not attisdropped", [removedColumn])).rows).toEqual([{ count: 0 }]);
+      await expect(connection.query("insert into sessions values ('one',100,1,100)"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_total_slots_check" });
+      await expect(connection.query("insert into sessions values ('nine',900,9,100)"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_total_slots_check" });
+    } finally {
+      await connection.query("rollback");
+      await connection.query("drop table if exists pg_temp.fund_holds, pg_temp.sessions");
+      connection.release();
+    }
+  });
+
   test("replays changed valid input without rerunning payout or booking-time eligibility", async () => {
     const booker = await context.identity();
     const key = randomUUID();
@@ -179,7 +211,7 @@ describe("UC2-02 PostgreSQL persistence", () => {
       await replayCase.forBooker(
         booker.userId,
         { ...booking, venueName: "Changed venue", totalCostCents: 9999 },
-        { totalSlots: 4, minimumHeadcount: 3 },
+        { totalSlots: 4 },
       ),
     ).toEqual(created);
     await expect(
@@ -359,8 +391,8 @@ describe("UC2-02 PostgreSQL persistence", () => {
       await creator.query("begin");
       await creator.query(
         `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at, total_cost_cents,
-        total_slots, minimum_headcount, booking_share_cents, room_token, holding_account_id, invited_group_id)
-        values ($1,$2,'Concurrent venue','West','Badminton',$3,$4,1001,3,2,333,$5,$6,$7)`,
+        total_slots, booking_share_cents, room_token, holding_account_id, invited_group_id)
+        values ($1,$2,'Concurrent venue','West','Badminton',$3,$4,1001,3,333,$5,$6,$7)`,
         [
           randomUUID(),
           booker.userId,

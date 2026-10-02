@@ -9,6 +9,9 @@ place, wait for an opening, or arrange a named replacement when they leave.
 The shared coordination space for a session at an already-booked venue,
 bringing together its booker and participants.
 
+**Capacity**:
+The maximum number of participant places in a booking session.
+
 **Participant list**:
 The participation records associated with one booking room, including people
 who have joined and past changes to their participation.

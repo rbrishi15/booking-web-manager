@@ -39,8 +39,7 @@ scrolling body; short screens can scroll every field fully into view.
 Details start with Tennis and empty venue, dates and cost. The date dialog uses
 Singapore time, with separate start/end dates for overnight bookings. Cost is
 parsed directly into integer cents. Settings default to Private, eight slots,
-four-person minimum and 4.5/5 reliability (90/100). Capacity is 2–8; decreasing
-it clamps the minimum headcount. Reliability choices are no minimum or 3–5 in
+and 4.5/5 reliability (90/100). Capacity is 2–8. Reliability choices are no minimum or 3–5 in
 half-point increments. Pricing uses the selected sport's local photo and the
 shared framework-independent calculation in `domain/sessions/pricing.ts`.
 
@@ -122,7 +121,9 @@ where `s = floor(cost / slots)`. Above-cost collection is allowed. The accepted
 price is immutable Session state hydrated from `booking_share_cents`; participation,
 refund and settlement use that price and historical holds. Apply migration 0008
 before deploying this behavior. See [ADR-0012](../../docs/adr/0012-booker-selected-session-pricing.md).
-Creation moves no funds.
+Creation moves no funds. Apply migration 0009 before deploying the current
+session contract; it removes the obsolete participant-count configuration column
+without changing session capacity, accepted prices, participation or fund holds.
 
 | Status | Outcome |
 | --- | --- |
@@ -151,7 +152,7 @@ sends a real request; configured creation requires a valid bearer token.
 The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
 Storybook's `Sessions/Create session` examples use the production wizard and
 focused shell, with interaction and accessibility checks for all steps, date
-editing, clamping, price adjustments, lookup/fallback, stale results and submission
+editing, slot limits, price adjustments, lookup/fallback, stale results and submission
 failures. `npm run test:sessions:integration` applies all migrations to a disposable
 stack and verifies persistence, replay, real authentication, success navigation,
 short-screen keyboard operation and the visibility-management regression. Browser

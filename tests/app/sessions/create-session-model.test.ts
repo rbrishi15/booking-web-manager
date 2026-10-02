@@ -16,15 +16,15 @@ describe("Create-session drafts", () => {
     expect(validateStep(complete, 1)).toEqual({});
     expect(validateStep({ ...complete, endDate: complete.startDate }, 1)).toHaveProperty("dateTime");
   });
-  test("clamps headcount and resets customized price when capacity or cost changes", () => {
-    expect(updateDraft({ ...complete, price: "12.00" }, { totalSlots: 2 })).toMatchObject({ minimumHeadcount: 2, price: "30.00" });
+  test("resets customized price when capacity or cost changes", () => {
+    expect(updateDraft({ ...complete, price: "12.00" }, { totalSlots: 2 })).toMatchObject({ price: "30.00" });
     expect(updateDraft({ ...complete, price: "12.00" }, { cost: "80.00" }).price).toBe("10.00");
     expect(updateDraft(complete, { venueName: "New court" }).price).toBe("7.50");
   });
   test("validates details, settings and cent-adjusted pricing", () => {
     expect(validateStep(emptySessionDraft, 1)).toHaveProperty("venueName");
     expect(validateStep({ ...complete, cost: "0.01" }, 1)).toHaveProperty("cost");
-    expect(validateStep({ ...complete, minimumHeadcount: 9 }, 2)).toHaveProperty("minimumHeadcount");
+    expect(validateStep({ ...complete, totalSlots: 1 }, 2)).toHaveProperty("totalSlots");
     expect(validateStep({ ...complete, price: "15.01" }, 3)).toHaveProperty("price");
     expect(validateStep({ ...complete, price: "14.99" }, 3)).toEqual({});
   });

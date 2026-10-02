@@ -145,7 +145,6 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
           </Select><p className="text-xs text-muted-foreground">{draft.visibility === "PRIVATE" ? "Only people with your room link can join." : "People can find this session in Discover."}</p>
         </div>
         <Stepper id="totalSlots" label="No. of Slots" value={draft.totalSlots} min={2} max={8} disabled={locked} onChange={(totalSlots) => change({ totalSlots })} />
-        <Stepper id="minimumHeadcount" label="Minimum Viable Headcount" value={draft.minimumHeadcount} min={2} max={draft.totalSlots} disabled={locked} onChange={(minimumHeadcount) => change({ minimumHeadcount })} />
         <div className="space-y-2"><label htmlFor="reliability" className="text-xs font-semibold">Minimum Reliability Score</label>
           <Select value={draft.reliability} disabled={locked} onValueChange={(reliability) => change({ reliability })}>
             <SelectTrigger id="reliability" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent>

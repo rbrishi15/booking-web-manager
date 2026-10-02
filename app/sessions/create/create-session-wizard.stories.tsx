@@ -69,8 +69,7 @@ export const Settings: Story = {
     await expect(canvas.getByRole("button", { name: "Increase No. of Slots" })).toBeDisabled();
     for (let index = 0; index < 6; index++) await userEvent.click(canvas.getByRole("button", { name: "Decrease No. of Slots" }));
     await expect(canvas.getByRole("button", { name: "Decrease No. of Slots" })).toBeDisabled();
-    await expect(within(canvas.getByRole("group", { name: "Minimum Viable Headcount" })).getByRole("status")).toHaveTextContent("2");
-    await expect(canvas.getByRole("button", { name: "Increase Minimum Viable Headcount" })).toBeDisabled();
+    await expect(within(canvas.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("2");
     await userEvent.click(canvas.getByRole("button", { name: "Increase No. of Slots" }));
     await userEvent.click(canvas.getByRole("combobox", { name: "Minimum Reliability Score" }));
     await userEvent.click(portal().getByRole("option", { name: "No minimum" }));

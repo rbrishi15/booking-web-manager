@@ -137,6 +137,12 @@ Apply migrations through `0008_session_pricing.sql` before deploying the wizard'
 custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
 bounds without updating existing sessions or fund holds.
 
+Apply `0009_session_capacity.sql` before deploying the current session
+contract. It drops the obsolete participant-count configuration column; capacity,
+quoted shares, participation and financial records are retained. The database
+continues to enforce 2–8 slots. Previously
+applied migrations remain in the history so existing installations can upgrade.
+
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
   the test server explicitly clears session settings.

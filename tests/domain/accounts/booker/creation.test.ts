@@ -95,13 +95,13 @@ describe("Booker", () => {
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
   });
 
-  test("createSession_WhenMinimumHeadcountIsOne_ThrowsInvalidInput", () => {
+  test("createSession_WhenCapacityIsOne_ThrowsInvalidInput", () => {
     // Arrange
     const details = creationDetails();
 
     // Act & Assert
     expect(() =>
-      readyBooker().createSession({ ...details, minimumHeadcount: 1 }),
+      readyBooker().createSession({ ...details, totalSlots: 1 }),
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
   });
 

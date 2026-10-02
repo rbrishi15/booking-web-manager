@@ -27,8 +27,8 @@ async function insertSession(context: SessionTestContext, bookerId: string, inpu
 }) {
   await context.pool.query(
     `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-     total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, room_token, holding_account_id)
-     values ($1,$2,$3,$4,$5,$6,$7,1001,3,2,333,'PUBLIC',$8,$9)`,
+     total_cost_cents, total_slots, booking_share_cents, visibility, room_token, holding_account_id)
+     values ($1,$2,$3,$4,$5,$6,$7,1001,3,333,'PUBLIC',$8,$9)`,
     [input.sessionId ?? randomUUID(), bookerId, input.name, input.region ?? "West", input.sport ?? "Badminton", input.startAt,
       new Date(new Date(input.startAt).getTime() + 2 * 60 * 60 * 1000), randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
   );

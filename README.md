@@ -190,7 +190,7 @@ at different levels of detail.
 
 UC2-02 provides request validation, Swagger documentation, Supabase bearer
 authentication and atomic PostgreSQL persistence. With server settings and
-migrations through 0008 applied, `POST /api/sessions` creates or replays a session.
+migrations through 0009 applied, `POST /api/sessions` creates or replays a session.
 Missing settings return `503 SESSION_API_UNAVAILABLE` with
 `Session creation is not available yet`.
 

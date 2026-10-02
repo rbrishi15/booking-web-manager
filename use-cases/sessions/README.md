@@ -39,11 +39,11 @@ returns `{ sessionId, roomToken, bookingShareCents }`.
 `bookerId` comes from authentication. `SessionBooking` contains venue name,
 resolved region, sport, `Date` start/end values, and integer `totalCostCents`.
 `SessionConfig` groups
-`totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`, and
-`invitedGroupId`. The module maps these fields explicitly into domain inputs.
-Client-supplied shares, identities, account facts, or lifecycle fields cannot
-override creation. The domain derives each booking share using integer-cent
-floor division and preserves private visibility by default.
+`totalSlots` and optional `visibility`, `minimumReliability`, `invitedGroupId`, and
+`pricePerSlotCents`. The module maps these fields explicitly into domain inputs.
+Client-supplied identities, account facts, or lifecycle fields cannot override
+creation. The domain validates the chosen booking share, uses integer-cent floor
+division when no price is supplied, and preserves private visibility by default.
 
 [parseCreateSessionInput](../../app/sessions/create-session-input.ts) uses Zod in
 the app layer to validate the authenticated user ID separately from the raw
