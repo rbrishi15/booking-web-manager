@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { emptyFilters, examplePage } from "./discovery-fixtures";
 import { DiscoveryFormController } from "./discovery-form-controller";
 
+/** Simulates new server results while keeping the discovery form mounted to test draft preservation. */
 function RefreshedDiscovery() {
   const [page, setPage] = useState(examplePage);
   return <>

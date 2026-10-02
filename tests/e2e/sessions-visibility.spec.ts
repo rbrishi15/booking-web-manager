@@ -6,6 +6,7 @@ import { sessionTestContext, type SessionTestContext } from "../support/session-
 type Identity = Awaited<ReturnType<SessionTestContext["identity"]>>;
 type Visibility = "PRIVATE" | "PUBLIC";
 
+/** Signs in a fixture identity through the UI and waits for the requested destination. */
 async function login(page: Page, identity: Identity, destination: string) {
   await page.goto(`/login?next=${encodeURIComponent(destination)}`);
   await page.getByLabel("Email", { exact: true }).fill(identity.email);
@@ -17,6 +18,7 @@ async function login(page: Page, identity: Identity, destination: string) {
   }).toBe(destination);
 }
 
+/** Inserts a two-slot session fixture with configurable visibility and start time, returning its ID. */
 async function insertSession(context: SessionTestContext, bookerId: string, venue: string, input: {
   visibility?: Visibility; startAt?: string;
 } = {}) {
@@ -32,6 +34,7 @@ async function insertSession(context: SessionTestContext, bookerId: string, venu
   return sessionId;
 }
 
+/** Seeds a committed participation and its matching held funds to occupy one fixture session slot. */
 async function commitFixture(context: SessionTestContext, sessionId: string, participant: Identity) {
   const participationId = randomUUID();
   await context.pool.query(
@@ -46,10 +49,12 @@ async function commitFixture(context: SessionTestContext, sessionId: string, par
   );
 }
 
+/** Locates a hosted-session list item by its venue text. */
 function row(page: Page, venue: string): Locator {
   return page.getByRole("listitem").filter({ hasText: venue });
 }
 
+/** Clicks the visibility control, checks the server-action HTTP response, and returns the observation time for latency assertions. */
 async function setThroughPage(page: Page, venue: string, visibility: Visibility): Promise<number> {
   const response = page.waitForResponse((candidate) =>
     candidate.request().method() === "POST" &&
@@ -63,6 +68,7 @@ async function setThroughPage(page: Page, venue: string, visibility: Visibility)
   return Date.now();
 }
 
+/** Sends a visibility PATCH using the fixture identity's bearer token. */
 async function patch(request: APIRequestContext, identity: Identity, sessionId: string, visibility: Visibility) {
   return request.patch(`/api/sessions/${sessionId}/visibility`, {
     headers: { Authorization: `Bearer ${identity.token}` }, data: { visibility },

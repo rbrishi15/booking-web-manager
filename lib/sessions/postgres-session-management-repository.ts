@@ -28,8 +28,10 @@ const storedBatch = z.object({
 
 /** Complete aggregate reads and a deliberately visibility-only persistence command. */
 export class PostgresSessionManagementRepository {
+  /** Uses the caller's SQL executor so aggregate reads and writes share its transaction. */
   constructor(private readonly sql: SqlExecutor) {}
 
+  /** Locks and fully hydrates a session for mutation, returning null when it does not exist. */
   async get(sessionId: UUID): Promise<Session | null> {
     const rows = await this.sql.query(
       `select ${sessionColumns} from sessions where session_id = $1 for update`,
@@ -38,6 +40,7 @@ export class PostgresSessionManagementRepository {
     return (await this.hydrate(rows))[0] ?? null;
   }
 
+  /** Loads the booker's OPEN sessions starting strictly after now, ordered by start time and ID, including full sessions. */
   async listUpcoming(bookerId: UUID, now: Date): Promise<readonly Session[]> {
     const rows = await this.sql.query(
       `select ${sessionColumns} from sessions
@@ -48,6 +51,7 @@ export class PostgresSessionManagementRepository {
     return this.hydrate(rows);
   }
 
+  /** Persists only visibility and throws SessionPersistenceError unless exactly one session is updated. */
   async saveVisibility(session: Session): Promise<void> {
     const rows = await this.sql.query(
       "update sessions set visibility = $2 where session_id = $1 returning session_id",
@@ -57,6 +61,7 @@ export class PostgresSessionManagementRepository {
       throw new SessionPersistenceError("Visibility update did not find exactly one session");
   }
 
+  /** Reconstructs complete sessions with ordered participations; wraps invalid stored state while preserving SQL errors for retry. */
   private async hydrate(rows: readonly SqlRow[]): Promise<readonly Session[]> {
     if (rows.length === 0) return [];
     // SQL errors must retain their translated SQLSTATE so the transaction can retry.
@@ -107,6 +112,7 @@ export class PostgresSessionManagementRepository {
   }
 }
 
+/** Validates stored settlement JSON and restores Date and Money values, treating null as no pending settlement. */
 function hydrateBatch(value: unknown): PayoutBatch | undefined {
   if (value === null) return undefined;
   const parsed = storedBatch.parse(value);

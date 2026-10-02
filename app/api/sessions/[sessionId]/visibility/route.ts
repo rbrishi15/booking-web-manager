@@ -6,6 +6,7 @@ import { sessionVisibilityErrorResponse } from "@/app/sessions/visibility-respon
 
 export const runtime = "nodejs";
 
+/** Sets session visibility for the bearer-authenticated owner and returns the committed result or a safe HTTP error. */
 export async function PATCH(request: Request, context: { params: Promise<{ sessionId: string }> }): Promise<Response> {
   try {
     const dependencies = await loadDependencies(getSessionManagementDependencies);

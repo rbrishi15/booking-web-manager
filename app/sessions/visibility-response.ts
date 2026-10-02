@@ -24,6 +24,7 @@ export function sessionVisibilityFailure(error: unknown): { status: number; code
   return { status: 500, code: "INTERNAL_ERROR", message: "Internal server error" };
 }
 
+/** Converts a visibility failure to a non-cacheable JSON error response with a safe message. */
 export function sessionVisibilityErrorResponse(error: unknown): Response {
   const { status, code, message } = sessionVisibilityFailure(error);
   return Response.json({ error: { code, message } }, { status, headers: { "Cache-Control": "no-store" } });

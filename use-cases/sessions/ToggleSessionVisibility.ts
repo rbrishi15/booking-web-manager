@@ -10,11 +10,13 @@ export interface SessionVisibilityResult {
 
 /** UC2-03a: authorize the current account, invoke Booker, and commit visibility. */
 export class ToggleSessionVisibility {
+  /** Supplies the transaction boundary and clock for visibility authorization and persistence. */
   constructor(private readonly dependencies: {
     readonly transaction: SessionManagementTransaction;
     readonly clock: Clock;
   }) {}
 
+  /** Checks the active owner, lifecycle, and capacity even for unchanged visibility, returning only after the transaction commits. */
   async forBooker(bookerId: UUID, sessionId: UUID, visibility: Visibility): Promise<SessionVisibilityResult> {
     return this.dependencies.transaction.run(async ({ users, sessions }) => {
       const user = await requireAggregate(users, bookerId, "User");

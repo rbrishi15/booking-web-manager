@@ -40,6 +40,7 @@ export function DiscoveryController({ filters, outcome, queryKey, returnTo }: {
     }
   }, [outcome.status, pending, foreground]);
 
+  /** Starts foreground navigation, refreshing the current query or pushing new committed filters. */
   function navigate(query?: string) {
     setForeground(true);
     startTransition(() => {

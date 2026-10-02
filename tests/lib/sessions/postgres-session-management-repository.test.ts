@@ -6,6 +6,7 @@ import { createTestSession } from "../../domain/sessions/session/session-fixture
 const startAt = new Date("2040-01-02T10:00:00Z");
 const now = new Date("2040-01-01T10:00:00Z");
 
+/** Builds a valid stored session row with overridable fields for hydration tests. */
 function sessionRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", booker_id: "booker", venue_name: "Sports Hall", sport: "Badminton", region: "West",
@@ -17,6 +18,7 @@ function sessionRow(overrides: SqlRow = {}): SqlRow {
   };
 }
 
+/** Builds a joined participation, wallet, and fund-hold row with overridable fields. */
 function participantRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", participation_id: "p", user_id: "alice", status: "COMMITTED", attendance: "UNVERIFIED",
@@ -28,6 +30,7 @@ function participantRow(overrides: SqlRow = {}): SqlRow {
   };
 }
 
+/** Creates a repository whose SQL mock returns session rows followed by participation rows. */
 function scenario(rows = [sessionRow()], participants: readonly SqlRow[] = []) {
   const query = vi.fn<SqlExecutor["query"]>().mockResolvedValueOnce(rows).mockResolvedValueOnce(participants);
   return { query, repository: new PostgresSessionManagementRepository({ query: query as SqlExecutor["query"] }) };

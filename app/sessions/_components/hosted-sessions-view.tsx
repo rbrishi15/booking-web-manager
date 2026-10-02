@@ -15,6 +15,7 @@ export interface HostedSessionsViewProps {
   readonly onRefresh: () => void;
 }
 
+/** Renders hosted sessions, an empty state, or a retryable loading error. */
 export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRefresh }: HostedSessionsViewProps) {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
@@ -46,6 +47,7 @@ const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
   timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
 });
 
+/** Displays confirmed session visibility with capacity guards and per-session save feedback. */
 function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: Omit<HostedSessionsViewProps, "outcome"> & { readonly session: HostedSessionItem }) {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<SessionVisibilityActionResult | null>(null);
@@ -53,6 +55,7 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: 
   const full = session.availableSlots === 0;
   const target = session.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
 
+  /** Submits one visibility change at a time and refreshes server state after success or a conflict. */
   async function changeVisibility() {
     if (submitting.current || refreshing || full) return;
     submitting.current = true;

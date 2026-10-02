@@ -37,9 +37,11 @@ export const Hosted: Story = {
   },
 };
 
+/** Lets the story control save completion and subsequent server state to test confirmation feedback. */
 function DeferredSave() {
   const [items, setItems] = useState(sessions);
   const [finish, setFinish] = useState<(() => void) | null>(null);
+  /** Defers the saved result and visibility update until the test completes the pending request. */
   function save(sessionId: string, visibility: "PUBLIC" | "PRIVATE") {
     return new Promise<SessionVisibilityActionResult>((resolve) => {
       setFinish(() => () => {
