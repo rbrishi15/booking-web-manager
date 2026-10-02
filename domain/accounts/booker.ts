@@ -267,6 +267,8 @@ export class Booker {
     sessionId: UUID,
     now: Date,
   ): { participation: Participation; result: FinancialResult } {
+    if (participation.status === "REMOVED" || participation.status === "CANCELLED")
+      return { participation, result: { instructions: [] } };
     if (
       participation.hold !== undefined &&
       !["REFUNDED", "RELEASED", "FORFEITED"].includes(participation.hold.state)

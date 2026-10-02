@@ -44,3 +44,16 @@ test("returns management unavailable without configuration", async ({ request })
     error: { code: "SESSION_MANAGEMENT_UNAVAILABLE", message: "Session management is not available yet" },
   });
 });
+
+test("returns cancellation unavailable without configuration", async ({ request }) => {
+  const base = "/api/sessions/10000000-0000-4000-8000-000000000001";
+  const responses = [
+    await request.get(`${base}/cancellation-preview`),
+    await request.post(`${base}/cancel`, { data: {} }),
+  ];
+  for (const response of responses) {
+    expect(response.status()).toBe(503);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(await response.json()).toMatchObject({ error: { code: "SESSION_MANAGEMENT_UNAVAILABLE" } });
+  }
+});

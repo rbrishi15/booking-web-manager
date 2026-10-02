@@ -141,3 +141,13 @@
 /tests/use-cases/UC2-04-*.test.ts @Wyjessie
 /tests/use-cases/UC2-05-*.test.ts @Wyjessie
 /tests/use-cases/UC2-06-*.test.ts @Wyjessie
+
+# UC2-03c: cancellation feature and financial integration review.
+/use-cases/sessions/PreviewSessionCancellation.ts @liang799
+/use-cases/sessions/session-cancellation-transaction.ts @liang799 @rbrishi15
+/use-cases/sessions/cancellation-preview.ts @liang799
+/use-case-config/cancellation.ts @liang799
+/lib/sessions/postgres-session-cancellation*.ts @liang799 @harr008 @rbrishi15
+/tests/integration/session-cancellation-persistence.test.ts @liang799 @harr008
+/tests/e2e/sessions-cancellation.spec.ts @liang799
+/tests/support/cancellation-fixtures.ts @liang799 @harr008

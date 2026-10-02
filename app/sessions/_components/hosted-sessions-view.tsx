@@ -7,22 +7,34 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type { SessionVisibilityActionResult } from "../actions";
 import type { HostedSessionItem, HostedSessionsOutcome } from "../types";
+import { SessionCancellationDialog, type CancellationTransport } from "./session-cancellation-dialog";
+import type { SessionCancellationResult } from "@/use-cases/sessions/session-cancellation-transaction";
+import { Money } from "@/components/ui/money";
 
 export interface HostedSessionsViewProps {
   readonly outcome: HostedSessionsOutcome;
   readonly refreshing: boolean;
   readonly onSetVisibility: (sessionId: string, visibility: "PUBLIC" | "PRIVATE") => Promise<SessionVisibilityActionResult>;
   readonly onRefresh: () => void;
+  readonly cancellation?: CancellationTransport;
 }
 
 /** Renders hosted sessions, an empty state, or a retryable loading error. */
-export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRefresh }: HostedSessionsViewProps) {
+export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRefresh, cancellation }: HostedSessionsViewProps) {
+  const [selected, setSelected] = useState<HostedSessionItem | null>(null);
+  const [cancelled, setCancelled] = useState<SessionCancellationResult | null>(null);
+  const cancellationTrigger = useRef<HTMLButtonElement | null>(null);
   return (
     <div className="mx-auto w-full max-w-5xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Sessions you host</h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Manage the visibility of your upcoming sessions. Public sessions appear in Discover.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Manage your upcoming sessions. Public sessions appear in Discover.</p>
       </header>
+      {cancelled && <p role="status" className="mb-4 rounded-lg border p-4">Session cancelled.{" "}
+        <Money cents={cancelled.totalRefundCents} /> refunded to {cancelled.refundRecipientCount} participants.</p>}
+      {cancellation && <SessionCancellationDialog selected={selected} transport={cancellation}
+        onClose={() => setSelected(null)} onRestoreFocus={() => cancellationTrigger.current?.focus()}
+        onCancelled={setCancelled} onRefresh={onRefresh} />}
       {outcome.status === "error" ? (
         <div className="space-y-3">
           <ErrorMessage>{outcome.kind === "unavailable" ? "Session management is temporarily unavailable." : "We couldn't load your sessions. Please try again."}</ErrorMessage>
@@ -36,7 +48,8 @@ export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRef
       ) : (
         <ul className="space-y-4">
           {outcome.sessions.map((session) => <HostedSessionCard key={session.sessionId} session={session}
-            refreshing={refreshing} onSetVisibility={onSetVisibility} onRefresh={onRefresh} />)}
+            refreshing={refreshing} onSetVisibility={onSetVisibility} onRefresh={onRefresh}
+            onCancel={cancellation ? (trigger) => { cancellationTrigger.current = trigger; setSelected(session); } : undefined} />)}
         </ul>
       )}
     </div>
@@ -48,7 +61,7 @@ const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
 });
 
 /** Displays confirmed session visibility with capacity guards and per-session save feedback. */
-function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: Omit<HostedSessionsViewProps, "outcome"> & { readonly session: HostedSessionItem }) {
+function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh, onCancel }: Omit<HostedSessionsViewProps, "outcome"> & { readonly session: HostedSessionItem; readonly onCancel?: (trigger: HTMLButtonElement) => void }) {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<SessionVisibilityActionResult | null>(null);
   const submitting = useRef(false);
@@ -89,6 +102,7 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: 
           <Button variant="outline" className="min-h-11" disabled={pending || refreshing || full} onClick={changeVisibility}>
             {pending ? "Saving…" : target === "PUBLIC" ? "Make public" : "Make private"}
           </Button>
+          {onCancel && <Button variant="destructive" className="min-h-11" disabled={pending || refreshing} onClick={(event) => onCancel(event.currentTarget)}>Cancel session</Button>}
           {full && <p className="text-sm text-muted-foreground">This session is full. Visibility cannot be changed.</p>}
         </div>
         {result?.status === "error" && <div className="mt-3"><ErrorMessage>{result.message}</ErrorMessage></div>}

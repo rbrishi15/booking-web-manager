@@ -208,3 +208,45 @@ browser tests passed against the merged migration sequence through 0007. The
 authenticated suite verifies both visibility directions within three seconds,
 preserved draft filters and pagination, refresh/navigation races, polling cleanup
 and a 390px mobile layout. Database validation used only the disposable stack.
+
+## Session cancellation configuration
+
+`cancellation.ts` assembles a shared read-only preview and a submission-scoped
+cancellation transaction. No additional settings or schema migration are needed;
+apply migration 0007 from PR #38 before deployment. The complete Session reader
+and User reader are shared with visibility management. No PR #39 or #40 source
+is required by this workflow.
+
+`PostgresSessionCancellationTransaction` uses SERIALIZABLE, session row locks and
+at most three whole-transaction attempts for serialization failures/deadlocks.
+Current User access is checked before the idempotency claim, including replay.
+Keys are namespaced by UC2-03c and actor; the fingerprint includes session ID and
+preview version. The existing idempotency store and ledger writer use the same
+SQL executor as the narrow lifecycle writer. Refund entries, child/session state
+and validated JSON replay response commit or roll back together. No network or
+payment-provider call runs in this transaction. The shared money implementation
+and default transaction isolation remain unchanged.
+All loaded session holds, including preserved terminal holds, are reconciled
+against the ledger projection's identities, original/outstanding cents and
+settlement kind before applying cancellation. Contradictions fail atomically.
+
+Conflicting future lifecycle writers must follow the same serializable contract.
+Concurrency tests model that contract and do not guarantee safety for arbitrary
+lower-isolation direct SQL. Neoh owns cancellation adapters; request Harrison's
+ledger integration review and Rishi's domain/transaction review and independent
+session-area review assignment. This feature stacks on the latest PR #38; merge
+#38 first, update from main, retarget and rerun integration before merging it.
+
+### UC2-03c validation, 2026-10-02
+
+Typecheck, lint, production build, 1,278 unit tests, 142 Storybook tests,
+47 database integration tests, 20 authenticated browser tests and eight public
+browser tests passed. Both UC2-03c acceptance TODOs are replaced. Cancellation
+coverage verifies actual historical refund amounts, retained terminal history,
+atomic rollback, same/different-key concurrency, serializable lifecycle races,
+stale-preview reconfirmation, reload recovery after a lost committed response,
+full sessions and a 390px dialog. Browser acceptance measures discovery removal
+within three seconds of the successful response using separate identities.
+All database/authentication runs used only the disposable 55321/55322 stack,
+with migrations through PR #38's 0007; its containers and volumes were removed.
+Revalidate against main after the parent PR merges before integration.

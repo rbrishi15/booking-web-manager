@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 export default async function SessionsPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login?next=%2Fsessions");
-  return <HostedSessionsController outcome={await loadHostedSessionsScreen(user.id)} />;
+  return <HostedSessionsController userId={user.id} outcome={await loadHostedSessionsScreen(user.id)} />;
 }

@@ -21,6 +21,11 @@ _Avoid_: Membership roster
 **Booker**:
 The person who books the venue for a session and takes the initial booking risk.
 
+**Session cancellation**:
+The booker's closure of an upcoming booking room, returning outstanding held
+shares to participants' wallets while retaining prior participation history.
+Cancelling the venue booking is a separate responsibility of the booker.
+
 **Participant**:
 A person seeking or holding a place in a session.
 
