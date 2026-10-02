@@ -254,6 +254,14 @@ The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
 Signed-in users see their upcoming bookings at `/`, or Singapore weather when
 there are none. Home has no filters; the Search button opens `/discover`.
 
+### Unavailable pages
+
+Unimplemented Wallet links open an explicit development page in the signed-in
+shell. Unknown URLs show a custom 404 that retains account navigation for signed-in
+users. Both offer working links to Home and hosted sessions; anonymous fallback
+content offers Home. These views are documented under Storybook's
+`Navigation/Unavailable pages`.
+
 ### Storybook on the same site
 
 `npm run dev` first builds a static Storybook preview, so the landing page’s
