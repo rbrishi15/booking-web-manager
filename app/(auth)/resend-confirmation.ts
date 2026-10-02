@@ -9,7 +9,7 @@ export interface ResendConfirmationState {
   readonly message?: string;
 }
 
-const SENT_MESSAGE = "If this email has an account awaiting confirmation, a new link is on its way. Check your inbox and spam folder.";
+const SENT_MESSAGE = "If this email has an account awaiting confirmation, check your inbox and spam folder.";
 
 /** UC1-01/UC1-02: recover a missing or expired verification email without starting registration again. */
 export async function resendConfirmation(
@@ -31,10 +31,10 @@ export async function resendConfirmation(
       options: { emailRedirectTo },
     });
 
-    if (error === null || error.code === "user_not_found") {
+    if (error === null || error.code === "user_not_found" || error.code === "over_email_send_rate_limit") {
       return { status: "sent", message: SENT_MESSAGE };
     }
-    if (error.status === 429 || error.code === "over_email_send_rate_limit" || error.code === "over_request_rate_limit") {
+    if (error.status === 429 || error.code === "over_request_rate_limit") {
       return { status: "error", message: "Please wait a minute before requesting another confirmation email." };
     }
     console.error("UC1-01 confirmation resend failed:", error.code);

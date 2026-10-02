@@ -27,6 +27,7 @@ describe("UC1-01 resend email confirmation", () => {
     });
     expect(result.status).toBe("sent");
     expect(result.message).toContain("If this email has an account awaiting confirmation");
+    expect(result.message).not.toContain("a new link is on its way");
   });
 
   test("does not disclose a missing account", async () => {
@@ -36,9 +37,16 @@ describe("UC1-01 resend email confirmation", () => {
     expect(await resendConfirmation(idle, formDataOf({ email: "someone@example.com" }))).toEqual(success);
   });
 
+  test("does not disclose an address that recently received a confirmation email", async () => {
+    const success = await resendConfirmation(idle, formDataOf({ email: "marcus@example.com" }));
+    resend.mockResolvedValue({ error: { code: "over_email_send_rate_limit", status: 429 } });
+
+    expect(await resendConfirmation(idle, formDataOf({ email: "marcus@example.com" }))).toEqual(success);
+  });
+
   test.each([
-    { code: "over_email_send_rate_limit", status: 429 },
     { code: "over_request_rate_limit", status: 429 },
+    { code: "unexpected_rate_limit", status: 429 },
   ])("gives a retry instruction for provider rate limits: $code", async (error) => {
     resend.mockResolvedValue({ error });
 
