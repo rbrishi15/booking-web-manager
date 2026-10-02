@@ -53,6 +53,17 @@
 /use-cases/sessions/*waitlist*.ts @Wyjessie
 /use-cases/sessions/*attendance*.ts @Wyjessie
 /use-cases/sessions/*settlement*.ts @Wyjessie
+/use-cases/sessions/AcceptReplacement.ts @Wyjessie
+/use-cases/sessions/ExpireReplacements.ts @Wyjessie
+/use-cases/sessions/RunScheduledSessionJobs.ts @Wyjessie
+/use-cases/sessions/follow-up-promotion.ts @Wyjessie
+/use-cases/sessions/scheduling-ports.ts @Wyjessie
+/lib/commit/ @Wyjessie
+/tests/app/commit/ @Wyjessie
+/tests/lib/commit/ @Wyjessie
+/tests/use-cases/scheduled-session-jobs.test.ts @Wyjessie
+/tests/use-cases/support/in-memory-unit-of-work.ts @Wyjessie
+/tests/use-cases/support/recording-notifier.ts @Wyjessie
 
 # Neoh: session creation/management/discovery, adapters, wiring and feature tests.
 # Use-case rules are file-specific: this directory also hosts Yajie's workflows.
