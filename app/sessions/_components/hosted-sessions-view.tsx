@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,6 +22,7 @@ export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRef
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Sessions you host</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Manage the visibility of your upcoming sessions. Public sessions appear in Discover.</p>
+        <Button asChild className="mt-4 min-h-11"><Link href="/sessions/create"><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Create a session</Link></Button>
       </header>
       {outcome.status === "error" ? (
         <div className="space-y-3">

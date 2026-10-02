@@ -1,4 +1,5 @@
 import type { ReliabilityScore } from "../reliability/reliability-score";
+import type { Money } from "../finance/money";
 import type { Booking } from "../sessions/booking";
 import type { Participation } from "../sessions/participation";
 import { refundInstruction } from "../sessions/participation-instructions";
@@ -39,6 +40,7 @@ import type { User } from "./user";
 export interface BookerSessionCreation {
   readonly sessionId: UUID;
   readonly booking: Booking;
+  readonly bookingShare?: Money;
   readonly totalSlots: number;
   readonly minimumHeadcount: number;
   readonly roomToken: string;
@@ -103,6 +105,7 @@ export class Booker {
       sessionId: details.sessionId,
       bookerId: this.#user.userId,
       booking: details.booking,
+      bookingShare: details.bookingShare,
       totalSlots: details.totalSlots,
       minimumHeadcount: details.minimumHeadcount,
       roomToken: details.roomToken,

@@ -52,6 +52,12 @@ test("returns null for a missing session without querying its children", async (
   expect(query).toHaveBeenCalledOnce();
 });
 
+test("hydrates a custom price and preserves historical hold amounts", async () => {
+  const session = await scenario([sessionRow({ booking_share_cents: "600" })], [participantRow()]).repository.get("s");
+  expect(session?.bookingShare.toCents()).toBe(600);
+  expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
+});
+
 test("lists only the owner's upcoming open sessions, including full sessions, without update locks", async () => {
   const { query, repository } = scenario();
   await repository.listUpcoming("booker", now);
@@ -77,7 +83,7 @@ describe("stored state validation", () => {
     { payout_attempt_ids: undefined },
     { payout_idempotency_keys: null },
     { total_cost_cents: "9007199254740992" },
-    { booking_share_cents: "334" },
+    { booking_share_cents: "667" },
     { status: "PAYOUT_PENDING" },
     { pending_settlement: {} },
   ])("rejects invalid or missing Session facts: %j", async (invalid) => {
