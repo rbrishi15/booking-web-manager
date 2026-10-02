@@ -67,6 +67,14 @@ test("rolls back callback failure before reusing the connection", async () => {
   expect(driver.release).toHaveBeenCalledExactlyOnceWith(false);
 });
 
+test("allows session management to opt into serializable without changing the default", async () => {
+  await new PostgresTransactor(new Pool(), "serializable").transaction(async () => "result");
+  expect(driver.query.mock.calls).toEqual([
+    ["begin isolation level serializable"],
+    ["commit"],
+  ]);
+});
+
 test("a commit serialization failure remains retryable", async () => {
   driver.query
     .mockResolvedValueOnce({ rows: [] })

@@ -33,3 +33,14 @@ test("returns discovery unavailable without configuration and does not cache it"
     },
   });
 });
+
+test("returns management unavailable without configuration", async ({ request }) => {
+  const response = await request.patch("/api/sessions/10000000-0000-4000-8000-000000000001/visibility", {
+    data: { visibility: "PUBLIC" },
+  });
+  expect(response.status()).toBe(503);
+  expect(response.headers()["cache-control"]).toBe("no-store");
+  expect(await response.json()).toEqual({
+    error: { code: "SESSION_MANAGEMENT_UNAVAILABLE", message: "Session management is not available yet" },
+  });
+});
