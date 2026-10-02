@@ -30,7 +30,8 @@ Cancelling the venue booking is a separate responsibility of the booker.
 A person seeking or holding a place in a session.
 
 **Booking share**:
-The portion of a session's booking cost put on hold when a participant commits.
+The fixed per-slot price put on hold when a participant commits. It may be below
+or above an equal share of the venue booking cost.
 
 **Early withdrawal**:
 A participant's withdrawal at least 30 hours before the session starts,

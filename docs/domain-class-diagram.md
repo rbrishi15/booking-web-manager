@@ -7,6 +7,10 @@ refinement in [ADR-0010](./adr/0010-session-participant-list.md). They document 
 implementation; they do not introduce new domain behavior.
 
 - [Editable PlantUML source](./domain-class-diagram.puml)
+
+Session's `bookingShare` is the immutable accepted per-slot price, rather than
+a derived equal split. [ADR-0012](./adr/0012-booker-selected-session-pricing.md)
+defines defaults, bounds and preservation of historical holds.
 - [Scalable SVG diagram](./assets/domain-class-diagram.svg)
 
 ![Domain UML class diagram](./assets/domain-class-diagram.svg)

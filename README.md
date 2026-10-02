@@ -190,7 +190,7 @@ at different levels of detail.
 
 UC2-02 provides request validation, Swagger documentation, Supabase bearer
 authentication and atomic PostgreSQL persistence. With server settings and
-migrations through 0006 applied, `POST /api/sessions` creates or replays a session.
+migrations through 0008 applied, `POST /api/sessions` creates or replays a session.
 Missing settings return `503 SESSION_API_UNAVAILABLE` with
 `Session creation is not available yet`.
 
@@ -222,7 +222,12 @@ The signed-in [Sessions page](./app/sessions/README.md#uc2-03a-visibility-manage
 lists hosted upcoming sessions with public/private controls. Management requires
 migration 0007 and uses serializable transactions; visible discovery pages poll
 every second to reflect committed changes within three seconds under healthy
-service conditions. Session-creation UI and OneMap integration remain separate work.
+service conditions. The [three-step creation wizard](./app/sessions/README.md#uc2-02-create-session-wizard)
+at `/sessions/create` includes server-side OneMap search, manual venue entry,
+Singapore date/time editing and adjustable cent-valued pricing. Omitted API
+prices retain equal splitting; accepted prices are fixed Session state under
+[ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
+survive reload in user-scoped session storage and replay with their original key.
 
 ## Team
 

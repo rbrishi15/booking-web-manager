@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
 import { PostgresSessionCreationTransaction } from "@/lib/sessions/postgres-session-creation-transaction";
 import { PostgresTransactor } from "@/lib/database/postgres-transactor";
 import { PostgresUserReader } from "@/lib/sessions/postgres-user-reader";
+import { PostgresSessionManagementRepository } from "@/lib/sessions/postgres-session-management-repository";
+import { PostgresSessionDiscoveryReader } from "@/lib/sessions/postgres-session-discovery-reader";
+import type { SqlExecutor } from "@/lib/money/sql";
 import {
   CreateSessions,
   type SessionBooking,
@@ -108,6 +112,45 @@ describe("UC2-02 PostgreSQL persistence", () => {
         )
       ).rows,
     ).toEqual([{ count: 1 }]);
+  });
+
+  test("persists and replays custom prices and enforces the new database bounds", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    const created = await useCase(transaction(key)).forBooker(booker.userId, booking, { ...config, visibility: "PUBLIC", pricePerSlotCents: 600 });
+    expect(created.bookingShareCents).toBe(600);
+    expect((await context.pool.query("select booking_share_cents from sessions where session_id = $1", [created.sessionId])).rows).toEqual([{ booking_share_cents: "600" }]);
+    expect(await useCase(transaction(key)).forBooker(booker.userId, booking, { ...config, pricePerSlotCents: 500 })).toEqual(created);
+    const sql: SqlExecutor = { query: async (statement, values) => (await context.pool.query(statement, values ? [...values] : undefined)).rows };
+    expect((await new PostgresSessionManagementRepository(sql).get(created.sessionId))?.bookingShare.toCents()).toBe(600);
+    expect((await new PostgresSessionDiscoveryReader(sql).search({}, now)).find((session) => session.sessionId === created.sessionId)?.bookingShareCents).toBe(600);
+    for (const invalid of [166, 667]) {
+      await expect(context.pool.query("update sessions set booking_share_cents = $2 where session_id = $1", [created.sessionId, invalid])).rejects.toMatchObject({ code: "23514", constraint: "sessions_price_within_range" });
+    }
+  });
+
+  test("migration preserves equal-split sessions and historical holds without rewriting rows", async () => {
+    const connection = await context.pool.connect();
+    try {
+      // Temporary tables shadow public tables, keeping the migration rehearsal isolated.
+      await connection.query(`create temporary table sessions (session_id text, total_cost_cents bigint, total_slots integer, booking_share_cents bigint,
+        constraint sessions_calculated_share check (booking_share_cents = total_cost_cents / total_slots))`);
+      await connection.query("create temporary table fund_holds (session_id text, amount_cents bigint)");
+      await connection.query("insert into sessions values ('odd',1001,3,333),('cent',2,2,1),('safe',9007199254740991,8,1125899906842623)");
+      await connection.query("insert into fund_holds values ('odd',333),('safe',1125899906842623)");
+      const before = (await connection.query("select * from sessions order by session_id")).rows;
+      const holds = (await connection.query("select * from fund_holds order by session_id")).rows;
+      await connection.query(await readFile("supabase/migrations/0008_session_pricing.sql", "utf8"));
+      expect((await connection.query("select * from sessions order by session_id")).rows).toEqual(before);
+      expect((await connection.query("select * from fund_holds order by session_id")).rows).toEqual(holds);
+      await connection.query("insert into sessions values ('custom',1001,3,600)");
+      await expect(connection.query("update sessions set booking_share_cents = 1125899906842624 where session_id = 'safe'"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_price_within_range" });
+    } finally {
+      await connection.query("rollback");
+      await connection.query("drop table if exists pg_temp.fund_holds, pg_temp.sessions");
+      connection.release();
+    }
   });
 
   test("replays changed valid input without rerunning payout or booking-time eligibility", async () => {
