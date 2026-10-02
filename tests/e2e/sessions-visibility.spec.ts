@@ -193,9 +193,14 @@ test("background visibility updates preserve pagination and do not jump to an ea
     await expect(row(page, `${tag} row 20`)).toBeVisible();
     expect((await patch(request, booker, last, "PRIVATE")).status()).toBe(200);
     await expect(row(page, `${tag} row 20`)).toHaveCount(0, { timeout: 3000 });
-    expect((await patch(request, booker, early, "PUBLIC")).status()).toBe(200);
-    // Wait for a real refreshed server response before asserting the retained cursor.
-    await page.waitForResponse((response) => new URL(response.url()).pathname === "/discover" && response.request().resourceType() === "fetch");
+    // Listen before the PATCH; gate matching refresh requests on its success.
+    const refreshRequest = page.waitForRequest(async (candidate) =>
+      new URL(candidate.url()).pathname === "/discover" && candidate.resourceType() === "fetch" &&
+      (await visibilityUpdate).status() === 200,
+    );
+    const visibilityUpdate = patch(request, booker, early, "PUBLIC");
+    expect((await visibilityUpdate).status()).toBe(200);
+    await refreshRequest;
     expect(page.url()).toBe(url);
     await expect(row(page, `${tag} earlier`)).toHaveCount(0);
     await expect(page.getByText("No sessions found", { exact: true })).toBeVisible();

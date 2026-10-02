@@ -32,3 +32,17 @@ alter table participations
   add constraint participations_session_list_position unique (session_id, list_position);
 
 commit;
+
+-- Manual rollback: unsafe once lifecycle writers have populated these fields.
+-- Stop those writers and verify that no lifecycle data depends on this migration
+-- before executing the following statements in a transaction:
+-- begin;
+-- alter table participations
+--   drop constraint participations_session_list_position,
+--   drop column list_position;
+-- alter table sessions
+--   drop constraint sessions_pending_settlement_object,
+--   drop column payout_attempt_ids,
+--   drop column payout_idempotency_keys,
+--   drop column pending_settlement;
+-- commit;
