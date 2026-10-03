@@ -4,13 +4,11 @@ import type { SqlExecutor, SqlTransactor } from "@/lib/money/sql";
 
 /** All aggregate reads and writes share a consistent transaction snapshot. */
 export class PostgresTransactor implements SqlTransactor {
-  /** Configures the pool and transaction isolation level, defaulting to REPEATABLE READ. */
   constructor(
     private readonly pool: Pool,
     private readonly isolation: "repeatable read" | "serializable" = "repeatable read",
   ) {}
 
-  /** Runs work on one connection, commits before returning, and rolls back on failure; discards the connection if rollback fails. */
   async transaction<T>(work: (sql: SqlExecutor) => Promise<T>): Promise<T> {
     const connection = await this.pool.connect();
     let discard = false;

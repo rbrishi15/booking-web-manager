@@ -4,8 +4,10 @@ Sports venue booking coordination. One person books and pays a venue upfront,
 participants commit their share into an in-app wallet where it is **held**, and
 the held funds are released to the booker after attendance is verified.
 
-The system does not reserve venues and does not take commission. Its single job
-is trust: making sure the person who took the financial risk is reimbursed.
+The system does not reserve venues or take commission. Bookers may choose a
+bounded per-slot price, including above-cost collection; the platform holds and
+releases the accepted amount under the attendance/refund rules.
+See [ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md).
 
 NTU SC2006 group project, Group 3.
 
@@ -216,6 +218,9 @@ creation and cannot be changed.
 
 - Server-side computation for anything financial. Never trust a client-supplied
   amount, refund figure or settlement outcome.
+- Validate a chosen session price through `domain/sessions/pricing.ts`; omitted
+  prices retain equal splitting. Persist the accepted immutable share and hydrate
+  it from `booking_share_cents`. Never recalculate existing holds from booking cost.
 - Validate external input with Zod in `/app`, then pass plain TypeScript DTOs
   into `/use-cases`. Keep business invariants in `/domain`.
 - Waitlist promotion is strictly FIFO on `joined_at`, using
