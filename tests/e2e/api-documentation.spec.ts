@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("serves the shared OpenAPI document with creation, discovery and visibility", async ({ request }) => {
+test("serves the shared OpenAPI document with creation, discovery, visibility and cancellation", async ({ request }) => {
   // Arrange & Act
   const response = await request.get("/api/openapi");
   const document = await response.json();
@@ -29,6 +29,10 @@ test("serves the shared OpenAPI document with creation, discovery and visibility
   expect(visibility.requestBody.content["application/json"].example).toEqual({ visibility: "PUBLIC" });
   expect(visibility.responses["200"]).toBeDefined();
   expect(visibility.responses["503"].content["application/json"].example.error.code).toBe("SESSION_MANAGEMENT_UNAVAILABLE");
+  const cancellation = document.paths["/api/sessions/{sessionId}/cancel"].post;
+  expect(cancellation.security).toEqual([{ bearerAuth: [] }]);
+  expect(cancellation.responses["200"]).toBeDefined();
+  expect(document.paths["/api/sessions/{sessionId}/cancellation-preview"].get.responses["200"]).toBeDefined();
 });
 
 test("loads the shared Swagger page and enables discovery requests", async ({
@@ -48,6 +52,8 @@ test("loads the shared Swagger page and enables discovery requests", async ({
   await expect(page.getByText("UC2-01 Discover Sessions", { exact: true })).toBeVisible();
   await expect(page.getByText("UC2-02 Create Session", { exact: true })).toBeVisible();
   await expect(page.locator(".opblock-patch").getByText("/api/sessions/{sessionId}/visibility", { exact: true })).toBeVisible();
+  await expect(page.getByText("UC2-03c Preview cancellation refunds", { exact: true })).toBeVisible();
+  await expect(page.getByText("UC2-03c Cancel a session and refund outstanding holds", { exact: true })).toBeVisible();
 
   // The shared UI exposes Swagger's normal request controls for GET as well as POST.
   await discovery.locator(".opblock-summary").click();

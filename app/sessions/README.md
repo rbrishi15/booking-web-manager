@@ -4,7 +4,7 @@
 
 `GET /api/sessions` provides UC2-01 discovery; see the
 [discovery contract and page guide](../discover/README.md). Swagger documents
-GET, POST and UC2-03a's visibility PATCH. This guide covers creation and management.
+creation, discovery, visibility and cancellation. This guide covers creation and management.
 
 UC2-02 supplies the Create Session API with Supabase bearer authentication and
 atomic PostgreSQL persistence. When server settings are missing,
@@ -26,9 +26,12 @@ without credentials or a local Supabase stack.
 
 ## UC2-02: create-session wizard
 
-This work starts from visibility commit `a1b7acfc53078220e9c16b522d5b3b6f0eae4324`
-on `tianpok/uc2-03a-session-visibility`. That unmerged visibility work is a
-dependency of `tianpok/uc2-02-create-session-ui`.
+UC2-03a visibility (PR #38) and UC2-03c cancellation (PR #41) are on `main`;
+the creation wizard includes those dependencies by updating from `main`.
+Apply the migration sequence in numbered order, including 0008 for custom pricing
+and 0009 for the capacity-only contract. The wizard, pricing and capacity changes
+retain independent review of every affected area under the
+[contribution workflow](../../docs/contributing-workflow.md).
 
 `/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
 the hosted list has its own route-group layout and a create button in every state.
@@ -167,8 +170,8 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Participant removal, cancellation and
-Realtime subscriptions remain separate work.
+The discovery page is covered by UC2-01. Participant removal and Realtime
+subscriptions remain separate work.
 
 ## UC2-03a: visibility management
 
@@ -220,3 +223,41 @@ foreground page. Draft filters, focus, scroll and the current pagination cursor
 stay in place. Offline or background tabs refresh when they become active again.
 The browser suite exercises actual owner controls and an independently signed-in
 participant's already-open discovery page through the disposable stack.
+
+## UC2-03c: cancellation and wallet refunds
+
+An active owner can cancel any OPEN, upcoming session, including a full one.
+The page loads a server-calculated refund preview before explicit confirmation.
+It shows affected participants separately from refund recipients and returns
+outstanding held shares to in-app wallets. Venue cancellation is external.
+
+Bearer endpoints (all responses use `Cache-Control: no-store`):
+
+- `GET /api/sessions/{sessionId}/cancellation-preview` returns `{ sessionId,
+  affectedParticipantCount, refundRecipientCount, totalRefundCents, previewVersion }`.
+- `POST /api/sessions/{sessionId}/cancel` accepts `{ idempotencyKey, previewVersion }`
+  and returns `{ sessionId, status: "CANCELLED", refundRecipientCount, totalRefundCents }`
+  only after commit. The key is a UUID; the version is an opaque SHA256 string.
+
+Identity comes from the verified bearer token or cookie. API routes and page
+server actions invoke the same coordinators directly. Unknown request fields do
+not override identity or refund amounts. Missing configuration is 503, invalid
+input 400, unauthenticated access 401, inactive/foreign access 403, missing records
+404, and lifecycle/stale-preview/request-key conflicts 409. Unexpected failures
+and financial projection contradictions return opaque 500 errors.
+
+The confirmation version covers authoritative cancellation state; visibility
+changes alone do not invalidate it. A changed participant/hold requires a new
+preview and another confirmation. Same-key retries return the original committed
+result without extra refunds, after checking current active-account access.
+Reuse the identical key and payload after an ambiguous failure. The page stores
+that confirmed request in user-scoped session storage for reload recovery, and
+retains completion feedback after the session disappears from upcoming results.
+Cancellation is never a hard delete. Prior removed/cancelled participants and
+terminal holds remain unchanged; live participants become CANCELLED, invitations
+are cleared and outstanding holds are refunded at their historical amounts.
+No withdrawal fee or payout-account readiness condition applies.
+
+The existing discovery polling removes cancelled sessions within three seconds
+for visible, online pages under healthy service conditions. Production needs
+migration 0007 before the reader/endpoint; cancellation adds no migration.

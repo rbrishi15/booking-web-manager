@@ -342,6 +342,14 @@ export function validateCancellation(
     assertEnrollmentUnchanged(previous, next);
     assertAttendanceUnchanged(previous, next);
     assertHoldIdentity(previous, next);
+    if (previous.status === "REMOVED" || previous.status === "CANCELLED") {
+      DomainError.require(
+        next === previous,
+        "INVALID_STATE",
+        "Cancellation must preserve closed participation history",
+      );
+      continue;
+    }
     DomainError.require(
       ["WAITLISTED", "LEFT_WAITLIST", "COMMITTED", "WITHDRAWN"].includes(
         previous.status,

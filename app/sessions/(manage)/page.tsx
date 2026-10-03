@@ -5,8 +5,9 @@ import { loadHostedSessionsScreen } from "../load-screen";
 
 export const dynamic = "force-dynamic";
 
+/** Loads the current user's hosted sessions, redirecting anonymous visitors to login with a return path. */
 export default async function SessionsPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login?next=%2Fsessions");
-  return <HostedSessionsController outcome={await loadHostedSessionsScreen(user.id)} />;
+  return <HostedSessionsController userId={user.id} outcome={await loadHostedSessionsScreen(user.id)} />;
 }

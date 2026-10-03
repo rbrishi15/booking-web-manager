@@ -248,7 +248,12 @@ test("a delayed background refresh neither blocks draft editing nor overwrites a
     await page.unroute("**/discover?**");
     let discoveryRequestsAfterLeaving = 0;
     page.on("request", (request) => {
-      if (new URL(request.url()).pathname === "/discover" && request.resourceType() === "fetch") discoveryRequestsAfterLeaving++;
+      const url = new URL(request.url());
+      // The Sessions shell prefetches its Discover navigation link. Count
+      // refreshes of the departed committed query, rather than link prefetches.
+      if (url.pathname === "/discover" && url.searchParams.get("q") === second &&
+          request.resourceType() === "fetch" && !request.headers()["next-router-prefetch"])
+        discoveryRequestsAfterLeaving++;
     });
     await page.goto("/sessions");
     await expect(page.getByRole("heading", { name: "Sessions you host", exact: true })).toBeVisible();

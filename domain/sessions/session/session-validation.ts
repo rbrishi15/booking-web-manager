@@ -225,10 +225,10 @@ export function validateSessionState(input: SessionStateValidation): void {
   if (input.status === "CANCELLED")
     DomainError.require(
       input.participantList.participations.every(
-        (participation) => participation.status === "CANCELLED",
+        (participation) => ["CANCELLED", "REMOVED"].includes(participation.status),
       ),
       "INVALID_INPUT",
-      "A cancelled session must cancel its participations",
+      "A cancelled session must cancel its live participations and preserve removals",
     );
 }
 

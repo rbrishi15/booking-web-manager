@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-26
+- Cancellation history refined by [ADR-0013](./0013-cancellation-preserves-terminal-participations.md).
 - Supersedes: callback-based responsibility routing in
   [ADR-0007](./0007-participant-behavior-and-session-roster.md) and
   [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md).
