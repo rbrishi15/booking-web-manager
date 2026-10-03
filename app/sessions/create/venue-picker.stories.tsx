@@ -89,6 +89,57 @@ export const LatePaginationRespectsBlur: Story = {
   },
 };
 
+export const PaginationFailureCanBeRetried: Story = {
+  play: async ({ canvas, args }) => {
+    const pending = deferredPage();
+    const search = args.search as ReturnType<typeof fn<SearchVenues>>;
+    search.mockResolvedValueOnce({ items: venues.items.slice(0, 1), nextPage: 2 })
+      .mockResolvedValueOnce({ items: venues.items.slice(1, 2), nextPage: 3 })
+      .mockRejectedValueOnce(new Error("Venue search unavailable"))
+      .mockRejectedValueOnce(new Error("Venue search unavailable"))
+      .mockImplementationOnce(() => pending.promise);
+    const input = canvas.getByRole("combobox", { name: "Venue" });
+    await userEvent.type(input, "Court");
+    await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(1));
+    await userEvent.click(canvas.getByRole("button", { name: "More venues" }));
+    await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(2));
+    await userEvent.click(canvas.getByRole("button", { name: "More venues" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Retry venues" })).toBeVisible());
+    await expect(canvas.getByRole("option", { name: /First court/ })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: /Second court/ })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Retry venues" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Retry venues" })).toBeVisible());
+    await expect(canvas.getAllByRole("option")).toHaveLength(2);
+    await userEvent.click(canvas.getByRole("button", { name: "Retry venues" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(5));
+    await expect(canvas.getByText("Searching OneMap…")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "More venues" })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "More venues" }));
+    await expect(search).toHaveBeenCalledTimes(5);
+    await expect(search.mock.calls.map(([, page]) => page)).toEqual([1, 2, 3, 3, 3]);
+    await expect(search.mock.calls[3]?.[2]).not.toBe(search.mock.calls[4]?.[2]);
+    pending.resolve({ items: venues.items.slice(2), nextPage: null });
+    await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(3));
+    await expect(canvas.queryByRole("button", { name: /More venues|Retry venues/ })).not.toBeInTheDocument();
+    await userEvent.click(input);
+    await userEvent.keyboard("{ArrowDown}{Enter}");
+    await expect(input).toHaveValue("First court");
+  },
+};
+
+export const InitialPageFailureHasNoResults: Story = {
+  play: async ({ canvas, args }) => {
+    const search = args.search as ReturnType<typeof fn<SearchVenues>>;
+    search.mockRejectedValueOnce(new Error("Venue search unavailable"));
+    await userEvent.type(canvas.getByRole("combobox", { name: "Venue" }), "Court");
+    await waitFor(() => expect(canvas.getByText("Venue search is unavailable. Enter the venue and region manually.")).toBeVisible());
+    await expect(canvas.queryByRole("listbox")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /More venues|Retry venues/ })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Enter venue manually" })).toBeVisible();
+  },
+};
+
 export const ManualEntryCancelsSearch: Story = {
   play: async ({ canvas, args }) => {
     const pending = deferredPage();

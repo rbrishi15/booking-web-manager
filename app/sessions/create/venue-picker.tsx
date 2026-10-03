@@ -17,12 +17,14 @@ interface Props {
 interface SearchResult extends VenueSearchPage {
   readonly query: string;
   readonly page: number;
+  readonly attempt: number;
   readonly status: "ready" | "failed";
 }
 export function VenuePicker({ draft, errors, disabled, onChange, search }: Props) {
   const [manual, setManual] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [page, setPage] = useState(1);
+  const [attempt, setAttempt] = useState(0);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const generation = useRef(0);
@@ -32,7 +34,7 @@ export function VenuePicker({ draft, errors, disabled, onChange, search }: Props
   const currentResult = canSearch && result?.query === query ? result : null;
   const items = currentResult?.items ?? [];
   const nextPage = currentResult?.nextPage ?? null;
-  const status = !canSearch ? "idle" : currentResult?.page === page ? currentResult.status : "loading";
+  const status = !canSearch ? "idle" : currentResult?.page === page && currentResult.attempt === attempt ? currentResult.status : "loading";
 
   // Only the external request needs synchronization; its pending/idle UI is derived above.
   useEffect(() => {
@@ -43,17 +45,21 @@ export function VenuePicker({ draft, errors, disabled, onChange, search }: Props
       void search(query, page, controller.signal).then((response) => {
         if (controller.signal.aborted || current !== generation.current) return;
         setResult((previous) => ({
-          query, page, status: "ready", nextPage: response.nextPage,
+          query, page, attempt, status: "ready", nextPage: response.nextPage,
           items: page === 1 || previous?.query !== query ? response.items : [...previous.items, ...response.items],
         }));
       }).catch(() => {
         if (!controller.signal.aborted && current === generation.current) {
-          setResult({ query, page, status: "failed", items: [], nextPage: null });
+          setResult((previous) => ({
+            query, page, attempt, status: "failed",
+            items: page > 1 && previous?.query === query ? previous.items : [],
+            nextPage: page > 1 ? page : null,
+          }));
         }
       });
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [canSearch, query, page, search]);
+  }, [canSearch, query, page, attempt, search]);
   useEffect(() => { if (open) list.current?.children[active]?.scrollIntoView({ block: "nearest" }); }, [active, open]);
 
   function choose(item: VenueCandidate) {
@@ -110,7 +116,11 @@ export function VenuePicker({ draft, errors, disabled, onChange, search }: Props
         generation.current++; setManual(!manual); setPage(1); setResult(null); setActive(-1); setOpen(manual);
       }}>{manual ? "Search OneMap instead" : "Enter venue manually"}</Button>}
     {nextPage && <Button type="button" variant="outline" className="min-h-11" disabled={disabled} aria-disabled={status === "loading" || undefined}
-      onClick={() => { if (status !== "loading") { setPage(nextPage); setActive(-1); setOpen(true); } }}>More venues</Button>}
+      onClick={() => { if (status !== "loading") {
+        if (status === "failed") setAttempt((previous) => previous + 1);
+        else setPage(nextPage);
+        setActive(-1); setOpen(true);
+      } }}>{status === "failed" ? "Retry venues" : "More venues"}</Button>}
     {!draft.selectedVenue?.region && <div className="space-y-2">
       <label htmlFor="region" className="text-xs font-semibold">Region</label>
       <Select value={draft.region} disabled={disabled} onValueChange={(region) => onChange({ region })}>
