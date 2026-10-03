@@ -64,9 +64,9 @@ test.each(["signup", "resend"])("UC1-01 %s completes the real SSR PKCE flow and 
         Buffer.from(JSON.stringify({ sub: user.id, exp: expiresAt })).toString("base64url"),
         "test-signature",
       ].join(".");
-      return Response.json({ access_token: token, refresh_token: "test-refresh-token", token_type: "bearer", expires_in: 3600, user });
+      return Response.json({ access_token: token, refresh_token: "test-refresh-token", token_type: "bearer", expires_in: 3600, user: { ...user, email_confirmed_at: "2026-10-03T00:00:00Z" } });
     }
-    if (url.pathname === "/auth/v1/user") return Response.json(user);
+    if (url.pathname === "/auth/v1/user") return Response.json({ ...user, email_confirmed_at: "2026-10-03T00:00:00Z" });
     throw new Error(`Unexpected auth request: ${url.pathname}`);
   });
   vi.stubGlobal("fetch", fetch);
@@ -82,7 +82,7 @@ test.each(["signup", "resend"])("UC1-01 %s completes the real SSR PKCE flow and 
 
   const response = await GET(new NextRequest(`${origin}/auth/callback?code=email-code`));
 
-  expect(response.headers.get("location")).toBe(`${origin}/`);
+  expect(response.headers.get("location")).toBe("/");
   expect(jar.has("sb-confirmation-test-auth-token")).toBe(true);
   const subsequentRequestClient = await createClient();
   const currentUser = await subsequentRequestClient.auth.getUser();

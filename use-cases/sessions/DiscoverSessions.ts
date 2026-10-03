@@ -1,6 +1,5 @@
 import type { Region, Sport, UUID } from "@/domain";
 import type { Clock } from "../shared/contracts";
-import { requireAggregate } from "../shared/helpers";
 import type { SessionDiscoveryTransaction } from "./session-discovery-transaction";
 
 /** Public listing projection: no admission, participant, or payment secrets. */
@@ -27,7 +26,7 @@ export interface SessionDiscoveryCriteria {
 }
 
 /**
- * UC2-01: authorize the participant and discover all matches in one consistent snapshot.
+ * UC2-01: discover public matches without requiring an account.
  * Results are public, open and strictly upcoming, including full sessions,
  * ordered by start time and session ID.
  */
@@ -39,16 +38,10 @@ export class DiscoverSessions {
     },
   ) {}
 
-  /** The caller supplies the verified participant identity, never a client-chosen ID. */
-  async forParticipant(
-    participantId: UUID,
-    criteria: SessionDiscoveryCriteria = {},
-  ): Promise<readonly DiscoveredSession[]> {
-    return this.dependencies.transaction.run(async ({ users, sessions }) => {
-      const user = await requireAggregate(users, participantId, "User");
-      user.asParticipant().assertCanDiscoverSessions();
-
-      return sessions.search(criteria, this.dependencies.clock.now());
-    });
+  /** Anonymous and authenticated visitors use the same safe public projection. */
+  async searchPublic(criteria: SessionDiscoveryCriteria = {}): Promise<readonly DiscoveredSession[]> {
+    return this.dependencies.transaction.run(({ sessions }) =>
+      sessions.search(criteria, this.dependencies.clock.now()),
+    );
   }
 }

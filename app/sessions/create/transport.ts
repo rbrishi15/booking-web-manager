@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import type { VenueSearchPage } from "@/lib/venues/contracts";
 import type { CreateSessionPayload } from "./model";
+import { createSessionSubmissionAction, type SubmitSessionAction } from "../session-actions";
 
 export type CreationOutcome = { status: "created" } | { status: "error"; code: string; message: string; ambiguous: boolean };
 export type CreateSession = (payload: CreateSessionPayload) => Promise<CreationOutcome>;
@@ -11,6 +12,7 @@ const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.st
 const messages: Readonly<Record<string, string>> = {
   UNAUTHENTICATED: "Your sign-in has expired. Sign in again to continue.",
   INACTIVE_ACCOUNT: "This account cannot create sessions. Sign in with an active account.",
+  EMAIL_VERIFICATION_REQUIRED: "Verify your email before creating a session. You can still browse sessions.",
   PAYOUT_ACCOUNT_NOT_READY: "Complete your payout account setup before creating a session.",
   INVALID_REQUEST: "Check your booking details and try again.",
   INVALID_INPUT: "Check your booking details and price, then try again.",
@@ -22,15 +24,15 @@ async function bearerToken(): Promise<string | undefined> {
   if (error) throw new Error("Authentication is unavailable");
   return data.session?.access_token;
 }
-export const createSession: CreateSession = async (payload) => {
+export const createSession = async (payload: CreateSessionPayload, action: SubmitSessionAction = createSessionSubmissionAction): Promise<CreationOutcome> => {
   let token: string | undefined;
   try { token = await bearerToken(); } catch {
     return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't verify your sign-in. Please try again.", ambiguous: false };
   }
   if (!token) return { status: "error", code: "UNAUTHENTICATED", message: messages.UNAUTHENTICATED!, ambiguous: false };
   try {
-    const response = await fetch("/api/sessions", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(20_000) });
+    const response = await fetch(action.href, { method: action.method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, ...action.inputs }), signal: AbortSignal.timeout(20_000) });
     const body: unknown = await response.json();
     if (response.ok) { resultSchema.parse(body); return { status: "created" }; }
     const failure = errorSchema.safeParse(body);

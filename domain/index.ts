@@ -1,5 +1,9 @@
 export { Email } from "./accounts/email";
 export {
+  bookingAccountIneligibility,
+  type BookingAccountEligibility,
+} from "./accounts/booking-account-eligibility";
+export {
   Booking,
   type BookingDetails,
 } from "./sessions/booking";

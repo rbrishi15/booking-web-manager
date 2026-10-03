@@ -13,6 +13,20 @@ export interface HostedSession {
   readonly endAt: Date;
   readonly visibility: Visibility;
   readonly availableSlots: number;
+  readonly actions: readonly HostedSessionOperation[];
+}
+
+export type HostedSessionOperation =
+  | { readonly name: "set-visibility"; readonly visibility: Visibility }
+  | { readonly name: "preview-cancellation" };
+
+/** A denied transition is absent; unexpected policy failures must still surface. */
+function permits(check: () => void): boolean {
+  try { check(); return true; }
+  catch (error) {
+    if (error instanceof DomainError && ["UNAUTHORIZED", "SESSION_STARTED", "SESSION_CLOSED", "CAPACITY_EXCEEDED"].includes(error.code)) return false;
+    throw error;
+  }
 }
 
 export class ListHostedSessions {
@@ -29,16 +43,24 @@ export class ListHostedSessions {
       DomainError.require(user.accountStatus === "ACTIVE", "INACTIVE_ACCOUNT", "An inactive account cannot manage sessions");
       const now = this.dependencies.clock.now();
       const hosted = await sessions.listUpcoming(bookerId, now);
-      return hosted.map((session) => ({
-        sessionId: session.sessionId,
-        venueName: session.booking.venueName,
-        sport: session.booking.sport,
-        region: session.booking.region,
-        startAt: session.booking.startAt,
-        endAt: session.booking.endAt,
-        visibility: session.visibility,
-        availableSlots: session.getAvailableSlots(now),
-      }));
+      const booker = user.asBooker();
+      return hosted.map((session) => {
+        const actions: HostedSessionOperation[] = [];
+        const visibility = session.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
+        if (permits(() => booker.assertCanChangeVisibility(session, visibility, now))) actions.push({ name: "set-visibility", visibility });
+        if (permits(() => booker.assertCanCancel(session, now))) actions.push({ name: "preview-cancellation" });
+        return {
+          sessionId: session.sessionId,
+          venueName: session.booking.venueName,
+          sport: session.booking.sport,
+          region: session.booking.region,
+          startAt: session.booking.startAt,
+          endAt: session.booking.endAt,
+          visibility: session.visibility,
+          availableSlots: session.getAvailableSlots(now),
+          actions,
+        };
+      });
     });
   }
 }

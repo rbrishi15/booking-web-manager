@@ -8,6 +8,10 @@ export function registerSessionCancellationApi(registry: OpenAPIRegistry): void 
   const preview = registry.register("SessionCancellationPreview", z.object({
     sessionId: z.string().uuid(), affectedParticipantCount: z.number().int().nonnegative(),
     ...summary, previewVersion: z.string().regex(/^[a-f0-9]{64}$/),
+    actions: z.array(z.object({
+      name: z.literal("cancel-session"), href: z.string(), method: z.literal("POST"),
+      inputs: z.object({ previewVersion: z.string().regex(/^[a-f0-9]{64}$/) }),
+    })),
   }));
   const result = registry.register("SessionCancellationResult", z.object({ sessionId: z.string().uuid(), status: z.literal("CANCELLED"), ...summary }));
   const errors = {
@@ -22,7 +26,7 @@ export function registerSessionCancellationApi(registry: OpenAPIRegistry): void 
   registry.registerPath({
     method: "get", path: "/api/sessions/{sessionId}/cancellation-preview", operationId: "previewSessionCancellation",
     tags: ["Sessions"], summary: "UC2-03c Preview cancellation refunds",
-    description: "Active owner of an OPEN, upcoming session. Includes full sessions. Calculates outstanding refunds in integer cents without saving or moving funds; counts affected participants separately from refund recipients.",
+    description: "Active owner of an OPEN, upcoming session. Includes full sessions. Calculates outstanding refunds in integer cents without saving or moving funds; counts affected participants separately from refund recipients. The actions list supplies the existing cancel URL, POST method and fixed previewVersion for confirmation. Email verification is not required for cancellation.",
     security: [{ bearerAuth: [] }], request: { params: cancellationParamsSchema },
     responses: { 200: { description: "Server-calculated confirmation preview; no financial effects.", content: { "application/json": { schema: preview } } }, ...errors },
   });

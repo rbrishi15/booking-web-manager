@@ -55,3 +55,11 @@ export function readSessionServerSettings(
     supabaseAnonKey: settings.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   };
 }
+
+/** Public discovery requires only database configuration. */
+export function readSessionDatabaseUrl(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  if (!environment.DATABASE_URL?.trim()) return undefined;
+  return settingsSchema.shape.DATABASE_URL.parse(environment.DATABASE_URL);
+}

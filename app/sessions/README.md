@@ -31,7 +31,8 @@ on `tianpok/uc2-03a-session-visibility`. That unmerged visibility work is a
 dependency of `tianpok/uc2-02-create-session-ui`.
 
 `/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
-the hosted list has its own route-group layout and a create button in every state.
+the hosted list has its own route-group layout and offers Create when account
+eligibility allows it. Missing or unconfirmed email offers Verify email.
 The three steps preserve drafts, validate before advancing, and focus the new
 heading or first invalid field. The footer occupies layout space outside the
 scrolling body; short screens can scroll every field fully into view.
@@ -130,7 +131,7 @@ without changing session capacity, accepted prices, participation or fund holds.
 | 201 | Created session or replayed a successful submission |
 | 400 | Malformed JSON or invalid request structure |
 | 401 | No authenticated user |
-| 403 | Inactive account or unauthorized action |
+| 403 | Inactive account, missing/unconfirmed email (`EMAIL_VERIFICATION_REQUIRED`), or unauthorized action |
 | 404 | Authenticated User is missing from storage |
 | 409 | Payout setup or session-state conflict |
 | 422 | Invalid business values |
@@ -140,7 +141,9 @@ without changing session capacity, accepted prices, participation or fund holds.
 Errors use `{ error: { code, message } }`. Unexpected failures return the fixed
 `INTERNAL_ERROR` response. Retrying the same booker's submission key must return
 the original result; an intended new session needs a new key. The authentication
-integration must verify current active-account access before parsing or replay.
+integration must verify current active-account access and present confirmed email
+before parsing or replay. The transaction repeats these checks before claiming
+an idempotency key, including each database retry.
 The persistence integration must commit the Session and replay result atomically.
 See the [integration requirements](../../use-case-config/README.md#authentication-and-atomic-persistence).
 
@@ -173,11 +176,11 @@ Realtime subscriptions remain separate work.
 ## UC2-03a: visibility management
 
 `/sessions` lists every open, upcoming session hosted by the signed-in user,
-ordered by start time and session ID. It includes full sessions with a disabled
-control and explanation. Availability includes direct-invitation reservations
+ordered by start time and session ID. It includes full sessions; their action list omits visibility changes. Availability includes direct-invitation reservations
 through `Session.getAvailableSlots`; the UI does not calculate capacity itself.
 Rows display confirmed visibility with per-row saving, success and error feedback.
-The cookie-authenticated action and bearer API invoke the same use case directly.
+The UI follows the returned HTTP actions. Existing cookie-authenticated server
+actions and bearer APIs invoke the same use cases directly.
 
 `PATCH /api/sessions/{sessionId}/visibility` accepts:
 
@@ -258,3 +261,39 @@ No withdrawal fee or payout-account readiness condition applies.
 The existing discovery polling removes cancelled sessions within three seconds
 for visible, online pages under healthy service conditions. Production needs
 migration 0007 before the reader/endpoint; cancellation adds no migration.
+
+## Lightweight contextual actions
+
+Screen data carries the actions currently available to the actor. Each descriptor
+has a stable `name`, an existing `href`, its HTTP `method`, and fixed `inputs`.
+The existing controls still own presentation, user input and confirmation:
+
+```json
+{ "name": "set-visibility", "href": "/api/sessions/<id>/visibility", "method": "PATCH", "inputs": { "visibility": "PRIVATE" } }
+```
+
+`session-actions.ts` defines a small union for current session screens. Account
+checks share `bookingAccountIneligibility` with creation/admission. Create opens
+the existing wizard; payout readiness and submitted booking details remain
+command-time validation. Hosted-session operations share Booker's pure ownership,
+capacity and lifecycle preflights. The UI follows presence and fixed inputs;
+commands authorize again against current state even if the screen is stale.
+
+The cancellation preview includes a `cancel-session` POST action containing its
+`previewVersion`. The existing dialog still previews refunds, asks for confirmation
+and saves the original key/version before submission. A confirmed ambiguous
+request remains recoverable even after the session and its actions disappear,
+including through expired-login or access failures. Sign-in recovery keeps the
+original request key and preview version.
+Unverified hosts can still manage and cancel under the existing rules.
+
+`/profile/email` adds an address for accounts without one or resends confirmation
+for the server-read unconfirmed address. A nonblocking shell prompt links there.
+Confirmation callbacks and the status recheck refresh the screen's actions; a
+failed callback retains signed-in recovery guidance. Supabase's current
+`email_confirmed_at` is authoritative, including already-confirmed accounts.
+
+Public `/discover` and GET `/api/sessions` require no account. They continue to
+expose only PUBLIC, OPEN, future summaries. Join production wiring is separate;
+its adapter must enforce `403 EMAIL_VERIFICATION_REQUIRED` for entry and replay,
+and use this descriptor shape only for endpoints that are actually integrated.

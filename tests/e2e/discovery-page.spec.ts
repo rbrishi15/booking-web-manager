@@ -139,7 +139,8 @@ test("an empty Home offers weather and search on both layouts, and account logou
     await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Upcoming Bookings", exact: true })).toHaveCount(0);
     await page.goto("/discover");
-    await expect(page).toHaveURL(/\/login\?next=/);
+    await expect(page).toHaveURL(/\/discover$/);
+    await expect(page.getByRole("heading", { name: "Find Your Next Game", exact: true })).toBeVisible();
   } finally {
     await context.pool.end();
   }

@@ -215,7 +215,7 @@ Run `npm run dev`, then open
 [Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
 `/api/openapi` and can also be imported into Postman. Documentation needs no
 credentials or local Supabase stack; an unconfigured server returns 503 for
-session creation. UC2-01 adds the signed-in [discovery page](./app/discover/README.md)
+session creation. UC2-01 adds the public [discovery page](./app/discover/README.md)
 and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
 Swagger documents discovery, creation and UC2-03a visibility management.
 The signed-in [Sessions page](./app/sessions/README.md#uc2-03a-visibility-management)
@@ -228,6 +228,13 @@ Singapore date/time editing and adjustable cent-valued pricing. Omitted API
 prices retain equal splitting; accepted prices are fixed Session state under
 [ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
 survive reload in user-scoped session storage and replay with their original key.
+
+Email verification gates session creation and admission. Signed-out and unverified
+visitors can browse `/discover`; signed-in users see a nonblocking recovery prompt.
+Current session screens receive lightweight `{ name, href, method, inputs }`
+actions from the server, and commands recheck authorization on every request.
+See the [session action contract](./app/sessions/README.md#lightweight-contextual-actions).
+Join production wiring remains separate.
 
 ## Team
 

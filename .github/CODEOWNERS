@@ -89,6 +89,7 @@
 /tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
 /tests/e2e/session-creation.spec.ts @liang799
+/tests/e2e/session-email-verification.spec.ts @liang799 @Jolingoes
 /tests/e2e/sessions-visibility.spec.ts @liang799
 /tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799

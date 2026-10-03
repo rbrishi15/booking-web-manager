@@ -19,6 +19,11 @@ test("sends the exact cent-valued payload through the bearer API", async () => {
   expect(await createSession(payload)).toEqual({ status: "created" });
   expect(fetcher).toHaveBeenCalledWith("/api/sessions", expect.objectContaining({ method: "POST", body: JSON.stringify(payload), headers: { Authorization: "Bearer fixture-bearer", "Content-Type": "application/json" } }));
 });
+test("follows the supplied submission action target and method", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ sessionId: "session", roomToken: "room", bookingShareCents: 1201 }, { status: 201 }));
+  await createSession(payload, { name: "submit-session", href: "/api/sessions?from=creation", method: "POST", inputs: {} });
+  expect(fetcher).toHaveBeenCalledWith("/api/sessions?from=creation", expect.objectContaining({ method: "POST" }));
+});
 test.each([[409, "PAYOUT_ACCOUNT_NOT_READY", false], [422, "INVALID_INPUT", false], [401, "UNAUTHENTICATED", false], [503, "SESSION_API_UNAVAILABLE", false], [500, "INTERNAL_ERROR", true]])("classifies %s %s for safe retry", async (status, code, ambiguous) => {
   fetcher.mockResolvedValueOnce(Response.json({ error: { code, message: "private details" } }, { status }));
   const result = await createSession(payload);
@@ -35,6 +40,11 @@ test("an expired local sign-in cannot send a creation request", async () => {
   getSession.mockResolvedValue({ data: { session: null }, error: null });
   expect(await createSession(payload)).toMatchObject({ code: "UNAUTHENTICATED", ambiguous: false });
   expect(fetcher).not.toHaveBeenCalled();
+});
+test("email rejection is definitive and explains how to recover", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ error: { code: "EMAIL_VERIFICATION_REQUIRED", message: "private details" } }, { status: 403 }));
+  expect(await createSession(payload)).toEqual({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", ambiguous: false,
+    message: "Verify your email before creating a session. You can still browse sessions." });
 });
 test("encodes lookup queries, authenticates, and propagates cancellation", async () => {
   fetcher.mockResolvedValueOnce(Response.json({ items: [], nextPage: 2 }));

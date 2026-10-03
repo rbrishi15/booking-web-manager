@@ -176,6 +176,13 @@ export const PayoutRequired: Story = {
 export const SignInExpired: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "UNAUTHENTICATED", ambiguous: false, message: "Your sign-in has expired. Sign in again to continue." })) }, play: async ({ canvas }) => {
   await userEvent.click(canvas.getByRole("button", { name: "Done" })); await expect(canvas.getByRole("link", { name: "Sign in again" })).toBeVisible();
 } };
+export const VerificationRequired: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", ambiguous: false, message: "Verify your email before creating a session. You can still browse sessions." })) }, play: async ({ canvas, args }) => {
+  await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+  await expect(canvas.getByRole("alert")).toHaveTextContent("Verify your email before creating a session");
+  await expect(canvas.getByRole("link", { name: "Verify email" })).toHaveAttribute("href", "/profile/email");
+  await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
+  await expect(args.onCreated).not.toHaveBeenCalled();
+} };
 export const ServiceUnavailable: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "SESSION_API_UNAVAILABLE", ambiguous: false, message: "Session creation is temporarily unavailable. Please try again." })) }, play: async ({ canvas }) => {
   await userEvent.click(canvas.getByRole("button", { name: "Done" }));
   await expect(canvas.getByRole("alert")).toHaveTextContent("Session creation is temporarily unavailable");

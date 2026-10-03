@@ -223,6 +223,38 @@ describe("UC2-02 PostgreSQL persistence", () => {
     ).rejects.toMatchObject({ code: "PAYOUT_ACCOUNT_NOT_READY" });
   });
 
+  test("refuses durable replay after email confirmation is removed and resumes after reconfirmation", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    const created = await useCase(transaction(key)).forBooker(booker.userId, booking, config);
+    await context.pool.query("update auth.users set email_confirmed_at = null where id = $1", [booker.userId]);
+
+    await expect(useCase(transaction(key)).forBooker(booker.userId, booking, config))
+      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect((await context.pool.query(
+      `select (select count(*)::int from sessions where booker_id = $1) as sessions,
+       (select count(*)::int from idempotency_keys where idempotency_key = $2 and status = 'SUCCEEDED') as replay`,
+      [booker.userId, operationKey(booker.userId, key)],
+    )).rows).toEqual([{ sessions: 1, replay: 1 }]);
+
+    await context.pool.query("update auth.users set email_confirmed_at = $2 where id = $1", [booker.userId, now]);
+    expect(await useCase(transaction(key)).forBooker(booker.userId, booking, config)).toEqual(created);
+  });
+
+  test("rejects fresh creation without an email before persisting a session or replay claim", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    await context.pool.query("update auth.users set email = null, email_confirmed_at = null where id = $1", [booker.userId]);
+
+    await expect(useCase(transaction(key)).forBooker(booker.userId, booking, config))
+      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect((await context.pool.query(
+      `select (select count(*)::int from sessions where booker_id = $1) as sessions,
+       (select count(*)::int from idempotency_keys where idempotency_key = $2) as replay`,
+      [booker.userId, operationKey(booker.userId, key)],
+    )).rows).toEqual([{ sessions: 0, replay: 0 }]);
+  });
+
   test("the same submission text is independently scoped to each booker", async () => {
     const first = await context.identity();
     const second = await context.identity();
@@ -373,6 +405,7 @@ describe("UC2-02 PostgreSQL persistence", () => {
     expect([...(loaded?.preferredRegions ?? [])]).toEqual(["West"]);
     expect(loaded?.payoutAccount?.setupStatus).toBe("COMPLETE");
     expect(loaded?.email?.toString()).toBe(booker.email);
+    expect(loaded?.emailVerified).toBe(true);
   });
 
   test("session group lock makes concurrent archive wait and reject unsettled obligations", async () => {

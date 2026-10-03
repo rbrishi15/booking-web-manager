@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { HostedSessionsController } from "../_components/hosted-sessions-controller";
 import { loadHostedSessionsScreen } from "../load-screen";
+import { getSessionAccountActions } from "../session-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -9,5 +10,5 @@ export const dynamic = "force-dynamic";
 export default async function SessionsPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login?next=%2Fsessions");
-  return <HostedSessionsController userId={user.id} outcome={await loadHostedSessionsScreen(user.id)} />;
+  return <HostedSessionsController userId={user.id} actions={getSessionAccountActions(user)} outcome={await loadHostedSessionsScreen(user.id)} />;
 }

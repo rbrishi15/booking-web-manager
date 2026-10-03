@@ -101,6 +101,7 @@ describe("production Create Session availability", () => {
         Response.json({
           id: "11111111-1111-4111-8111-111111111111",
           email: "user@example.com",
+          email_confirmed_at: "2026-01-01T00:00:00Z",
         }),
       );
       network.mockResolvedValueOnce(
@@ -113,6 +114,34 @@ describe("production Create Session availability", () => {
       expect(network).toHaveBeenCalledTimes(2);
     },
   );
+
+  test.each([
+    ["missing", undefined, undefined],
+    ["empty", "", "2026-01-01T00:00:00Z"],
+    ["unconfirmed", "user@example.com", undefined],
+  ])("rejects %s email on direct requests and identical retries before parsing or persistence", async (_label, email, confirmedAt) => {
+    vi.stubEnv("DATABASE_URL", "postgresql://user:password@localhost:54322/postgres");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.example.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
+    network.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/auth/v1/user")) return Response.json({
+        id: "11111111-1111-4111-8111-111111111111", email, email_confirmed_at: confirmedAt,
+      });
+      if (url.includes("/rest/v1/profiles")) return Response.json([{ account_status: "ACTIVE" }]);
+      throw new Error("Unexpected provider request");
+    });
+    const { POST } = await import("@/app/api/sessions/route");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const incoming = request(validRequestBody(), "Bearer access-token");
+      const parse = vi.spyOn(incoming, "json");
+      const response = await POST(incoming);
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe("EMAIL_VERIFICATION_REQUIRED");
+      expect(parse).not.toHaveBeenCalled();
+    }
+    expect(network).toHaveBeenCalledTimes(4);
+  });
 
   test("malformed configuration is an opaque setup failure and can be retried", async () => {
     vi.stubEnv("DATABASE_URL", "not-a-database-url");

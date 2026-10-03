@@ -176,6 +176,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
       {failure && <div ref={failureMessage} tabIndex={-1} className="space-y-2 outline-none"><ErrorMessage>{failure.message}</ErrorMessage>
         {pending && <p className="text-xs leading-relaxed text-muted-foreground">Your submitted details are saved. Editing is paused until this submission is resolved.</p>}
         {failure.code === "UNAUTHENTICATED" && <Button asChild variant="link"><Link href="/login?next=%2Fsessions%2Fcreate">Sign in again</Link></Button>}
+        {failure.code === "EMAIL_VERIFICATION_REQUIRED" && <Button asChild variant="link"><Link href="/profile/email">Verify email</Link></Button>}
       </div>}
     </div>
     </div>

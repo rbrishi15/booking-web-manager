@@ -39,7 +39,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
     tags: ["Sessions"],
     summary: "UC2-01 Discover Sessions",
     description: [
-      "Lists upcoming PUBLIC, OPEN sessions for an authenticated active account, including full sessions.",
+      "Lists upcoming PUBLIC, OPEN sessions for everyone, including signed-out and unverified visitors and full sessions.",
       "Only sessions starting strictly after the server clock are returned; minimum reliability and current capacity do not hide listings.",
       "Optional q matches a case-insensitive literal substring of the sport or venue name and combines with every other filter. Percent signs, underscores, and backslashes are literal text, not wildcards. Search text is trimmed, blank text is omitted, and the maximum is 100 characters after trimming.",
       "For example, ?q=Jurong&sport=Badminton&region=West&date=2040-01-02 finds matching West-region badminton sessions starting on that Singapore day.",
@@ -51,7 +51,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
       "The response contains listing fields only, never room tokens or participant, wallet, holding-account, payout, or invitation data. totalSlots is capacity, not remaining availability.",
       "Responses use Cache-Control: no-store. Missing settings return 503 DISCOVERY_API_UNAVAILABLE.",
     ].join(" "),
-    security: [{ bearerAuth: [] }],
+    security: [],
     request: {
       query: z.object({
         q: z.string().max(100).optional().openapi({
@@ -103,10 +103,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
         },
       },
       400: errorResponse("Malformed or duplicate filters, search text longer than 100 characters after trimming, invalid calendar date/time range, or invalid cursor.", "INVALID_REQUEST", "Invalid session discovery query"),
-      401: errorResponse("Missing, invalid, or expired bearer token.", "UNAUTHENTICATED", "Authentication is required"),
-      403: errorResponse("The authenticated account is inactive.", "INACTIVE_ACCOUNT", "An inactive account cannot use the session API"),
-      404: errorResponse("The authenticated user has no domain account.", "NOT_FOUND", "User was not found"),
-      500: errorResponse("Unexpected authentication, configuration, or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
+      500: errorResponse("Unexpected configuration or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
       503: errorResponse("Required discovery server settings are missing.", "DISCOVERY_API_UNAVAILABLE", DISCOVERY_API_UNAVAILABLE_MESSAGE),
     },
   });

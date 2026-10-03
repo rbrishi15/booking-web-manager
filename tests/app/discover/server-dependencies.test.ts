@@ -5,8 +5,7 @@ const config = vi.hoisted(() => ({ createDiscoveryDependencies: vi.fn<() => Disc
 vi.mock("@/use-case-config/discovery", () => config);
 
 const dependencies: DiscoveryDependencies = {
-  authenticate: async () => null,
-  discoverSessions: { forParticipant: async () => [] },
+  discoverSessions: { searchPublic: async () => [] },
 };
 
 beforeEach(() => {
@@ -35,10 +34,10 @@ test("shares a failed initialization and permits the next caller to retry", asyn
 });
 
 test("request failures do not reset valid initialization", async () => {
-  const forParticipant = vi.fn().mockRejectedValueOnce(new Error("Temporary database failure")).mockResolvedValue([]);
-  config.createDiscoveryDependencies.mockReturnValue({ ...dependencies, discoverSessions: { forParticipant } });
+  const searchPublic = vi.fn().mockRejectedValueOnce(new Error("Temporary database failure")).mockResolvedValue([]);
+  config.createDiscoveryDependencies.mockReturnValue({ ...dependencies, discoverSessions: { searchPublic } });
   const { getDiscoveryDependencies } = await import("@/app/discover/server-dependencies");
-  await expect((await getDiscoveryDependencies()).discoverSessions.forParticipant("10000000-0000-4000-8000-000000000001")).rejects.toThrow("Temporary database failure");
-  expect(await (await getDiscoveryDependencies()).discoverSessions.forParticipant("10000000-0000-4000-8000-000000000001")).toEqual([]);
+  await expect((await getDiscoveryDependencies()).discoverSessions.searchPublic()).rejects.toThrow("Temporary database failure");
+  expect(await (await getDiscoveryDependencies()).discoverSessions.searchPublic()).toEqual([]);
   expect(config.createDiscoveryDependencies).toHaveBeenCalledOnce();
 });

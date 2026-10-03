@@ -8,15 +8,15 @@ const discoveryOpenApiDocument = createOpenApiDocument([registerDiscoveryApi]);
 describe("session discovery OpenAPI contract", () => {
   test("documents discovery filters, public listing fields, pagination and failures", () => {
     const operation = discoveryOpenApiDocument.paths["/api/sessions"]?.get;
-    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation?.security).toEqual([]);
     expect(operation?.parameters?.map((parameter) => "name" in parameter ? parameter.name : undefined)).toEqual([
       "q", "sport", "region", "date", "timeFrom", "timeTo", "cursor",
     ]);
     expect(Object.keys(operation?.responses ?? {})).toEqual([
-      "200", "400", "401", "403", "404", "500", "503",
+      "200", "400", "500", "503",
     ]);
     expect(operation?.description).toContain("Asia/Singapore");
-    expect(operation?.description).toContain("including full sessions");
+    expect(operation?.description).toContain("and full sessions");
     expect(operation?.description).toContain("OneMap resolution is separate work");
     expect(operation?.description).toContain("case-insensitive literal substring");
     const query = operation?.parameters?.find((parameter) => "name" in parameter && parameter.name === "q");
