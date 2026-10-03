@@ -217,8 +217,12 @@ Run `npm run dev`, then open
 credentials or local Supabase stack; an unconfigured server returns 503 for
 session creation. UC2-01 adds the signed-in [discovery page](./app/discover/README.md)
 and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
-Swagger documents discovery and creation. Session-creation UI and OneMap
-integration remain separate work.
+Swagger documents discovery, creation and UC2-03a visibility management.
+The signed-in [Sessions page](./app/sessions/README.md#uc2-03a-visibility-management)
+lists hosted upcoming sessions with public/private controls. Management requires
+migration 0007 and uses serializable transactions; visible discovery pages poll
+every second to reflect committed changes within three seconds under healthy
+service conditions. Session-creation UI and OneMap integration remain separate work.
 
 ## Team
 

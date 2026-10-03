@@ -4,7 +4,7 @@
 
 `GET /api/sessions` provides UC2-01 discovery; see the
 [discovery contract and page guide](../discover/README.md). Swagger documents
-both GET and POST. The remainder of this guide describes session creation.
+GET, POST and UC2-03a's visibility PATCH. This guide covers creation and management.
 
 UC2-02 supplies the Create Session API with Supabase bearer authentication and
 atomic PostgreSQL persistence. When server settings are missing,
@@ -117,5 +117,56 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Session-creation UI, OneMap, and later
-session management and Realtime features remain separate work.
+The discovery page is covered by UC2-01. Session-creation UI, OneMap,
+participant removal, cancellation and Realtime subscriptions remain separate work.
+
+## UC2-03a: visibility management
+
+`/sessions` lists every open, upcoming session hosted by the signed-in user,
+ordered by start time and session ID. It includes full sessions with a disabled
+control and explanation. Availability includes direct-invitation reservations
+through `Session.getAvailableSlots`; the UI does not calculate capacity itself.
+Rows display confirmed visibility with per-row saving, success and error feedback.
+The cookie-authenticated action and bearer API invoke the same use case directly.
+
+`PATCH /api/sessions/{sessionId}/visibility` accepts:
+
+```json
+{ "visibility": "PUBLIC" }
+```
+
+The alternative value is `PRIVATE`. A successful commit returns 200 with
+`{ sessionId, visibility }`. The authenticated user supplies the booker identity;
+the request cannot impersonate another owner. This sets a target value rather
+than inverting stored state. Same-value requests still check current eligibility.
+No funds move and no creation-style replay key is required.
+
+| Status | Outcome |
+| --- | --- |
+| 200 | Visibility committed |
+| 400 | Invalid session ID, malformed JSON, or invalid visibility |
+| 401 | Missing or invalid authentication |
+| 403 | Inactive application account or another session's owner |
+| 404 | Missing User or Session |
+| 409 | Session is full, started, or closed |
+| 500 | Unexpected provider, hydration, transaction, or initialization failure |
+| 503 | Management server settings are missing |
+
+Errors retain the shared `{ error: { code, message } }` envelope. Application
+access requires an active account, checked again on the complete User inside
+the transaction. The underlying Booker behavior still allows an inactive owner;
+that domain policy is deliberately unchanged. Ownership and session lifecycle
+rules remain in `Booker.changeVisibility`.
+
+Management requires migration 0007. It adds complete Session hydration facts and
+ordered participation storage; see the [configuration guide](../../use-case-config/README.md#session-management-configuration).
+The writer changes only visibility, preserving participants, holds, settlement
+facts and ledger entries. The use case obtains its clock after loading and
+locking state, so time spent waiting cannot authorize an already-started session.
+
+Discovery refreshes in the background every second while visible and online.
+The three-second acceptance target is measured after mutation success on a healthy
+foreground page. Draft filters, focus, scroll and the current pagination cursor
+stay in place. Offline or background tabs refresh when they become active again.
+The browser suite exercises actual owner controls and an independently signed-in
+participant's already-open discovery page through the disposable stack.
