@@ -52,15 +52,72 @@ export const DetailsAndNavigation: Story = {
 export const OvernightDates: Story = {
   args: { initialDraft: complete },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Edit booking dates and times" }));
-    await userEvent.clear(portal().getByLabelText("Start time", { exact: true }));
-    await userEvent.type(portal().getByLabelText("Start time", { exact: true }), "23:00");
-    await userEvent.click(portal().getByRole("button", { name: "Save dates and times" }));
-    await expect(portal().getByRole("alert")).toHaveTextContent("End must be after start");
-    await userEvent.clear(portal().getByLabelText("End date", { exact: true }));
-    await userEvent.type(portal().getByLabelText("End date", { exact: true }), "2045-06-18");
-    await userEvent.click(portal().getByRole("button", { name: "Save dates and times" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(dialog.queryByLabelText("End date", { exact: true })).not.toBeInTheDocument();
+    await expect(dialog.queryByLabelText("End time", { exact: true })).not.toBeInTheDocument();
+    await userEvent.clear(dialog.getByLabelText("Start time", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start time", { exact: true }), "23:00");
+    await userEvent.clear(dialog.getByLabelText("Duration (minutes)"));
+    await userEvent.type(dialog.getByLabelText("Duration (minutes)"), "120");
+    await expect(dialog.getByText(/Ends 18 Jun 2045/)).toHaveTextContent(/next day/);
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
     await expect(canvas.getByText(/Ends 18 Jun 2045/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const reopened = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(reopened.getByLabelText("Start time", { exact: true })).toHaveValue("23:00");
+    await expect(reopened.getByLabelText("Duration (minutes)")).toHaveValue(120);
+    await userEvent.click(reopened.getByRole("button", { name: "Cancel" }));
+  },
+};
+export const InvalidDuration: Story = {
+  args: { initialDraft: complete },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    const duration = dialog.getByLabelText("Duration (minutes)");
+    await userEvent.clear(duration);
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await expect(dialog.getByRole("alert")).toHaveTextContent(/duration/i);
+    await expect(duration).toHaveFocus();
+    await userEvent.type(duration, "0");
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await expect(dialog.getByRole("alert")).toHaveTextContent(/duration/i);
+    await expect(duration).toHaveFocus();
+    await userEvent.clear(duration);
+    await userEvent.type(duration, "45");
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    await expect(portal().getByLabelText("Duration (minutes)")).toHaveValue(45);
+    await userEvent.click(portal().getByRole("button", { name: "Cancel" }));
+  },
+};
+export const SchedulePresetsAndCancel: Story = {
+  args: { initialDraft: complete },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await userEvent.clear(dialog.getByLabelText("Start date", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start date", { exact: true }), "2045-06-18");
+    await userEvent.clear(dialog.getByLabelText("Start time", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start time", { exact: true }), "10:00");
+    await userEvent.click(dialog.getByRole("button", { name: "1 hour 30 minutes" }));
+    await expect(dialog.getByLabelText("Duration (minutes)")).toHaveValue(90);
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const reopened = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(reopened.getByLabelText("Start date", { exact: true })).toHaveValue("2045-06-17");
+    await expect(reopened.getByLabelText("Start time", { exact: true })).toHaveValue("07:00");
+    await expect(reopened.getByLabelText("Duration (minutes)")).toHaveValue(60);
+    await userEvent.click(reopened.getByRole("button", { name: "1 hour 30 minutes" }));
+    await userEvent.click(reopened.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    await expect(portal().getByLabelText("Duration (minutes)")).toHaveValue(90);
+    await userEvent.click(portal().getByRole("button", { name: "Cancel" }));
   },
 };
 export const Settings: Story = {

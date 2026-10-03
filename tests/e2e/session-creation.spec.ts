@@ -16,13 +16,16 @@ async function details(page: Page, venue: string) {
   await page.getByRole("combobox", { name: "Venue", exact: true }).fill(venue);
   await page.getByRole("combobox", { name: "Region", exact: true }).click();
   await page.getByRole("option", { name: "West", exact: true }).click();
-  await page.getByRole("button", { name: "Edit booking dates and times" }).click();
+  await page.getByRole("button", { name: "Edit booking schedule" }).click();
   await page.getByLabel("Start date", { exact: true }).fill("2045-06-17");
   await page.getByLabel("Start time", { exact: true }).fill("23:00");
-  await page.getByLabel("End date", { exact: true }).fill("2045-06-18");
-  await page.getByLabel("End time", { exact: true }).fill("01:00");
-  await page.getByRole("button", { name: "Save dates and times" }).click();
+  await page.getByLabel("Duration (minutes)").fill("120");
+  await expect(page.getByLabel("End date", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("End time", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("dialog").getByText(/Ends 18 Jun 2045/)).toContainText("next day");
+  await page.getByRole("button", { name: "Save schedule" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText(/Ends 18 Jun 2045/)).toBeVisible();
   await page.getByLabel("Booking cost (SGD)").fill("60.00");
 }
 async function pricing(page: Page, venue: string) {

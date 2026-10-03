@@ -37,6 +37,24 @@ export function singaporeTimestamp(date: string, time: string): string | undefin
   const local = new Date(instant.getTime() + 8 * 3_600_000).toISOString().slice(0, 16);
   return local === `${date}T${time}` ? instant.toISOString() : undefined;
 }
+/** Keep the persisted start/end contract while the editor asks for a duration. */
+export function bookingDates(startDate: string, startTime: string, duration: string): Pick<SessionDraft, "startDate" | "startTime" | "endDate" | "endTime"> | undefined {
+  const start = singaporeTimestamp(startDate, startTime);
+  const minutes = Number(duration);
+  if (!start || !duration.trim() || !Number.isSafeInteger(minutes) || minutes <= 0) return undefined;
+  const end = new Date(new Date(start).getTime() + minutes * 60_000 + 8 * 3_600_000);
+  if (!Number.isFinite(end.getTime())) return undefined;
+  const localEnd = end.toISOString();
+  if (!/^\d{4}-/.test(localEnd)) return undefined;
+  return { startDate, startTime, endDate: localEnd.slice(0, 10), endTime: localEnd.slice(11, 16) };
+}
+export function durationMinutes(draft: SessionDraft): number | undefined {
+  const start = singaporeTimestamp(draft.startDate, draft.startTime);
+  const end = singaporeTimestamp(draft.endDate, draft.endTime);
+  if (!start || !end) return undefined;
+  const minutes = (new Date(end).getTime() - new Date(start).getTime()) / 60_000;
+  return Number.isSafeInteger(minutes) && minutes > 0 ? minutes : undefined;
+}
 export function draftPricing(draft: SessionDraft) {
   const cost = parseSgdCents(draft.cost);
   if (cost === undefined) return undefined;
@@ -54,9 +72,9 @@ export function updateDraft(draft: SessionDraft, patch: Partial<SessionDraft>): 
 export function validateDates(draft: SessionDraft, now = Date.now()): FieldErrors {
   const start = singaporeTimestamp(draft.startDate, draft.startTime);
   const end = singaporeTimestamp(draft.endDate, draft.endTime);
-  if (!start || !end) return { dateTime: "Enter valid start and end dates and times." };
+  if (!start || !end) return { dateTime: "Enter a valid start date, start time, and duration." };
   if (new Date(start).getTime() <= now) return { dateTime: "Choose a start time in the future." };
-  if (end <= start) return { dateTime: "End must be after start. For overnight bookings, choose the next end date." };
+  if (end <= start) return { dateTime: "Choose a duration greater than zero." };
   return {};
 }
 export function validateStep(draft: SessionDraft, step: number, now = Date.now()): FieldErrors {
