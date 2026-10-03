@@ -30,6 +30,7 @@ class Session <<AggregateRoot>> {
   +status : SessionStatus
   +visibility : Visibility
   +totalSlots : number
+  +minimumHeadcount : number
   +bookingShare : Money {readOnly}
   +minimumReliability : ReliabilityScore [0..1]
   +participantList : ParticipantListView

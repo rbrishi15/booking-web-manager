@@ -38,9 +38,9 @@ export async function cancellationFixture(context: SessionTestContext, participa
   const venueName = `Cancel-${randomUUID().slice(0, 8)}`;
   await context.pool.query(
     `insert into sessions(session_id,booker_id,venue_name,region,sport,start_at,end_at,total_cost_cents,
-      total_slots,booking_share_cents,visibility,room_token,holding_account_id)
+      total_slots,minimum_headcount,booking_share_cents,visibility,room_token,holding_account_id)
       values ($1,$2,$3,'West','Badminton','2045-04-02T10:00:00Z','2045-04-02T12:00:00Z',
-      1000,2,500,'PUBLIC',$4,$5)`,
+      1000,2,2,500,'PUBLIC',$4,$5)`,
     [sessionId, booker.userId, venueName, randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
   );
   const participants = [];

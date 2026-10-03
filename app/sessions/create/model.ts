@@ -8,13 +8,13 @@ export type CreateSessionPayload = z.infer<typeof createSessionRequestSchema>;
 export interface SessionDraft {
   sport: string; venueName: string; region: string;
   startDate: string; startTime: string; endDate: string; endTime: string;
-  cost: string; totalSlots: number;
+  cost: string; totalSlots: number; minimumHeadcount: number;
   visibility: "PRIVATE" | "PUBLIC"; reliability: string; price: string;
   selectedVenue: VenueCandidate | null;
 }
 export const emptySessionDraft: SessionDraft = {
   sport: "Tennis", venueName: "", region: "", startDate: "", startTime: "", endDate: "", endTime: "",
-  cost: "", totalSlots: 8, visibility: "PRIVATE", reliability: "90", price: "", selectedVenue: null,
+  cost: "", totalSlots: 8, minimumHeadcount: 4, visibility: "PRIVATE", reliability: "90", price: "", selectedVenue: null,
 };
 export type FieldErrors = Partial<Record<keyof SessionDraft | "dateTime", string>>;
 
@@ -44,6 +44,7 @@ export function draftPricing(draft: SessionDraft) {
 }
 export function updateDraft(draft: SessionDraft, patch: Partial<SessionDraft>): SessionDraft {
   const next = { ...draft, ...patch };
+  if (patch.totalSlots !== undefined) next.minimumHeadcount = Math.min(next.minimumHeadcount, next.totalSlots);
   if (patch.cost !== undefined || patch.totalSlots !== undefined) {
     const pricing = draftPricing(next);
     next.price = pricing ? decimalCents(pricing.suggestedCents) : "";
@@ -68,6 +69,8 @@ export function validateStep(draft: SessionDraft, step: number, now = Date.now()
   };
   if (step === 2) return {
     ...(!Number.isInteger(draft.totalSlots) || draft.totalSlots < 2 || draft.totalSlots > 8 ? { totalSlots: "Choose 2 to 8 slots." } : {}),
+    ...(!Number.isInteger(draft.minimumHeadcount) || draft.minimumHeadcount < 2 || draft.minimumHeadcount > draft.totalSlots
+      ? { minimumHeadcount: "Choose a minimum headcount between 2 and the number of slots." } : {}),
     ...(!["none", "60", "70", "80", "90", "100"].includes(draft.reliability) && { reliability: "Choose a reliability requirement." }),
   };
   const range = draftPricing(draft);
@@ -81,7 +84,7 @@ export function submissionPayload(draft: SessionDraft, idempotencyKey: string): 
     booking: { sport: draft.sport, venueName: draft.venueName.trim(), region: draft.region,
       startAt: singaporeTimestamp(draft.startDate, draft.startTime), endAt: singaporeTimestamp(draft.endDate, draft.endTime),
       totalCostCents: parseSgdCents(draft.cost) },
-    config: { totalSlots: draft.totalSlots, visibility: draft.visibility,
+    config: { totalSlots: draft.totalSlots, minimumHeadcount: draft.minimumHeadcount, visibility: draft.visibility,
       ...(draft.reliability !== "none" && { minimumReliability: Number(draft.reliability) }),
       pricePerSlotCents: parseSgdCents(draft.price) },
   });
@@ -94,7 +97,7 @@ export function draftFromSubmission({ booking, config }: CreateSessionPayload): 
   const start = local(booking.startAt), end = local(booking.endAt);
   return { ...emptySessionDraft, sport: booking.sport, venueName: booking.venueName, region: booking.region,
     startDate: start.slice(0, 10), startTime: start.slice(11, 16), endDate: end.slice(0, 10), endTime: end.slice(11, 16),
-    cost: decimalCents(booking.totalCostCents), totalSlots: config.totalSlots,
+    cost: decimalCents(booking.totalCostCents), totalSlots: config.totalSlots, minimumHeadcount: config.minimumHeadcount,
     visibility: config.visibility ?? "PRIVATE", reliability: config.minimumReliability === undefined ? "none" : String(config.minimumReliability),
     price: decimalCents(config.pricePerSlotCents ?? sessionPricing(booking.totalCostCents, config.totalSlots).suggestedCents) };
 }

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Minus, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { SPORTS } from "@/app/(auth)/schemas";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -25,45 +25,59 @@ export interface CreateSessionWizardProps {
 const headings = ["Booked Venue Details", "Booked Venue Settings", "Auto-Generated Pricing"];
 const descriptions = ["Tell us where and when you want to play.", "Set access, group size, and player reliability preferences.", "A suggested price based on your booking cost and number of slots."];
 
-export function CreateSessionWizard({ userId, create, search, onCreated, initialDraft = emptySessionDraft, initialStep = 1, storage }: CreateSessionWizardProps) {
-  const [draft, setDraft] = useState(initialDraft);
-  const [step, setStep] = useState<number>(initialStep);
+type CreationFailure = Extract<CreationOutcome, { status: "error" }>;
+interface InitialWizardState {
+  draft: SessionDraft;
+  step: number;
+  pending: PendingSubmission | null;
+  recoveryRequired: boolean;
+  failure: CreationFailure | null;
+}
+
+function restoreWizard(props: CreateSessionWizardProps): InitialWizardState {
+  const initial: InitialWizardState = { draft: props.initialDraft ?? emptySessionDraft, step: props.initialStep ?? 1,
+    pending: null, recoveryRequired: false, failure: null };
+  try {
+    const value = (props.storage ?? window.sessionStorage).getItem(pendingStorageKey(props.userId));
+    if (value === null) return initial;
+    const pending = pendingSubmissionSchema.parse(JSON.parse(value));
+    return { ...initial, draft: draftFromSubmission(pending.payload), pending, step: 3,
+      failure: { status: "error", code: "PENDING_SUBMISSION", ambiguous: true,
+        message: "A submission is awaiting confirmation. Retry it to safely recover the result." } };
+  } catch {
+    return { ...initial, recoveryRequired: true,
+      failure: { status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
+        message: "We couldn't read your pending submission. It may already have created a session. Check your hosted sessions before starting again." } };
+  }
+}
+
+export function CreateSessionWizard(props: CreateSessionWizardProps) {
+  return <SessionWizard key={props.userId} {...props} />;
+}
+
+function SessionWizard(props: CreateSessionWizardProps) {
+  const { userId, create, search, onCreated, initialDraft = emptySessionDraft, initialStep = 1, storage } = props;
+  const [initial] = useState(() => restoreWizard(props));
+  const [draft, setDraft] = useState(initial.draft);
+  const [step, setStep] = useState(initial.step);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [ready, setReady] = useState(false);
-  const [recoveryRequired, setRecoveryRequired] = useState(false);
-  const [pending, setPending] = useState<PendingSubmission | null>(null);
+  const [recoveryRequired, setRecoveryRequired] = useState(initial.recoveryRequired);
+  const [pending, setPending] = useState(initial.pending);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const [failure, setFailure] = useState<Extract<CreationOutcome, { status: "error" }> | null>(null);
+  const [failure, setFailure] = useState(initial.failure);
   const inFlight = useRef(false);
-  const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLDivElement>(null);
-  const failureMessage = useRef<HTMLDivElement>(null);
-  const firstRender = useRef(true);
+  const focusHeading = useCallback((node: HTMLHeadingElement | null) => {
+    if (!node) return;
+    node.focus();
+    if (body.current) body.current.scrollTop = 0;
+  }, []);
+  const focusFailure = useCallback((node: HTMLDivElement | null) => { node?.focus(); }, []);
   const key = pendingStorageKey(userId);
   const getStorage = () => storage ?? window.sessionStorage;
 
-  useEffect(() => {
-    try {
-      const value = (storage ?? window.sessionStorage).getItem(key);
-      if (value !== null) {
-        const saved = pendingSubmissionSchema.parse(JSON.parse(value));
-        setDraft(draftFromSubmission(saved.payload)); setPending(saved); setStep(3);
-        setFailure({ status: "error", code: "PENDING_SUBMISSION", ambiguous: true, message: "A submission is awaiting confirmation. Retry it to safely recover the result." });
-      }
-    } catch {
-      setRecoveryRequired(true);
-      setFailure({ status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
-        message: "We couldn't read your pending submission. It may already have created a session. Check your hosted sessions before starting again." });
-    } finally { setReady(true); }
-  }, [key, storage]);
-  useEffect(() => {
-    if (firstRender.current) { firstRender.current = false; return; }
-    heading.current?.focus();
-    if (body.current) body.current.scrollTop = 0;
-  }, [step]);
-  useEffect(() => { if (failure) failureMessage.current?.focus(); }, [failure]);
-  const locked = submitting || completed || !!pending || !ready || recoveryRequired;
+  const locked = submitting || completed || !!pending || recoveryRequired;
   const range = draftPricing(draft);
   const price = parseSgdCents(draft.price);
   function restartAfterRecovery() {
@@ -92,7 +106,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
     requestAnimationFrame(() => document.getElementById(field ?? "")?.focus());
   }
   async function submit() {
-    if (inFlight.current || completed || !ready || recoveryRequired) return;
+    if (inFlight.current || completed || recoveryRequired) return;
     const replaying = pending !== null;
     let saved = pending;
     if (!saved) {
@@ -134,7 +148,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
         <div role="progressbar" aria-label="Creation progress" aria-valuemin={1} aria-valuemax={3} aria-valuenow={step} className="h-0.5 flex-1 bg-background/30"><div className="h-full bg-background" style={{ width: `${step / 3 * 100}%` }} /></div>
         <span className="text-xs font-semibold tabular-nums">0{step} / 03</span>
       </div>
-      <h1 ref={heading} tabIndex={-1} className="max-w-72 text-3xl font-bold leading-tight tracking-tight outline-none">{headings[step - 1]}</h1>
+      <h1 key={step} ref={focusHeading} tabIndex={-1} className="max-w-72 text-3xl font-bold leading-tight tracking-tight outline-none">{headings[step - 1]}</h1>
       <p className="mt-3 max-w-72 text-sm leading-relaxed text-background/80">{descriptions[step - 1]}</p>
     </header>
     <div ref={body} role="region" aria-label="Session form" tabIndex={0}
@@ -162,6 +176,8 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
           </Select><p className="text-xs text-muted-foreground">{draft.visibility === "PRIVATE" ? "Only people with your room link can join." : "People can find this session in Discover."}</p>
         </div>
         <Stepper id="totalSlots" label="No. of Slots" value={draft.totalSlots} min={2} max={8} disabled={locked} onChange={(totalSlots) => change({ totalSlots })} />
+        <Stepper id="minimumHeadcount" label="Minimum viable headcount" value={draft.minimumHeadcount} min={2} max={draft.totalSlots} disabled={locked} onChange={(minimumHeadcount) => change({ minimumHeadcount })} />
+        {errors.minimumHeadcount && <p role="alert" className="text-xs text-destructive">{errors.minimumHeadcount}</p>}
         <div className="space-y-2"><label htmlFor="reliability" className="text-xs font-semibold">Minimum Reliability Score</label>
           <Select value={draft.reliability} disabled={locked} onValueChange={(reliability) => change({ reliability })}>
             <SelectTrigger id="reliability" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent>
@@ -190,7 +206,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
           <p id="price-error" role={errors.price ? "alert" : undefined} className="text-xs text-destructive">{errors.price}</p>
         </div>}
       </>}
-      {failure && <div ref={failureMessage} tabIndex={-1} className="space-y-2 outline-none"><ErrorMessage>{failure.message}</ErrorMessage>
+      {failure && <div key={`${failure.code}:${failure.message}`} ref={focusFailure} tabIndex={-1} className="space-y-2 outline-none"><ErrorMessage>{failure.message}</ErrorMessage>
         {recoveryRequired && <>
           <Button asChild variant="link"><Link href="/sessions" target="_blank" rel="noopener noreferrer">Check hosted sessions (new tab)</Link></Button>
           <p className="text-xs leading-relaxed text-muted-foreground">Starting again keeps a backup of the saved details. Only continue if you have confirmed the session was not created.</p>
@@ -203,7 +219,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
     </div>
     <footer className="flex shrink-0 gap-6 border-t bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 md:px-8">
       {step > 1 && <Button type="button" variant="outline" className="min-h-12 flex-1" disabled={locked} onClick={() => { setErrors({}); setStep((value) => value - 1); }}>Back</Button>}
-      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || !ready || recoveryRequired} onClick={step === 3 ? () => void submit() : advance}>
+      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || recoveryRequired} onClick={step === 3 ? () => void submit() : advance}>
         {step === 3 ? submitting ? "Creating…" : pending ? "Retry submission" : "Done" : <>Next<ArrowRight aria-hidden="true" className="ml-auto h-5 w-5" /></>}
       </Button>
     </footer>

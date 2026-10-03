@@ -184,7 +184,7 @@ function validRequestBody(): string {
       endAt: "2030-01-01T12:00:00Z",
       totalCostCents: 1001,
     },
-    config: { totalSlots: 3 },
+    config: { totalSlots: 3, minimumHeadcount: 2 },
   });
 }
 

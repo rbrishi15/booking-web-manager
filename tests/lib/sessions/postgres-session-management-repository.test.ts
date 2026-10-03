@@ -11,7 +11,7 @@ function sessionRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", booker_id: "booker", venue_name: "Sports Hall", sport: "Badminton", region: "West",
     start_at: startAt, end_at: new Date("2040-01-02T12:00:00Z"), total_cost_cents: "1001",
-    total_slots: 3, booking_share_cents: "333", visibility: "PRIVATE", status: "OPEN",
+    total_slots: 3, minimum_headcount: 2, booking_share_cents: "333", visibility: "PRIVATE", status: "OPEN",
     minimum_reliability: "75.5", room_token: "room", holding_account_id: "platform", invited_group_id: null,
     next_queue_sequence: 1, payout_attempt_ids: [], payout_idempotency_keys: [], pending_settlement: null,
     ...overrides,
@@ -41,6 +41,7 @@ test("hydrates the full booking, participant list and optional configuration und
   const session = await repository.get("s");
   expect(session).toMatchObject({ sessionId: "s", bookerId: "booker", invitedGroupId: "group", visibility: "PRIVATE" });
   expect(session?.booking.totalCost.toCents()).toBe(1001);
+  expect(session?.minimumHeadcount).toBe(2);
   expect(session?.minimumReliability?.toNumber()).toBe(75.5);
   expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
   expect(session?.getAvailableSlots(now)).toBe(2);
@@ -88,6 +89,9 @@ test("preserves participant-list order for equal withdrawal times and subtracts 
 
 describe("stored state validation", () => {
   test.each([
+    { minimum_headcount: undefined },
+    { minimum_headcount: 1 },
+    { minimum_headcount: 4 },
     { payout_attempt_ids: undefined },
     { payout_idempotency_keys: null },
     { total_cost_cents: "9007199254740992" },

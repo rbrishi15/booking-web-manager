@@ -28,10 +28,19 @@ describe("Create-session drafts", () => {
     expect(validateStep({ ...complete, price: "15.01" }, 3)).toHaveProperty("price");
     expect(validateStep({ ...complete, price: "14.99" }, 3)).toEqual({});
   });
+  test("keeps the minimum headcount within capacity without changing a chosen price", () => {
+    expect(updateDraft(complete, { totalSlots: 2 })).toMatchObject({ minimumHeadcount: 2 });
+    expect(updateDraft({ ...complete, totalSlots: 4, minimumHeadcount: 3 }, { totalSlots: 8 }).minimumHeadcount).toBe(3);
+    expect(updateDraft({ ...complete, price: "12.01" }, { minimumHeadcount: 5 })).toMatchObject({ minimumHeadcount: 5, price: "12.01" });
+    for (const minimumHeadcount of [1, 9, 2.5]) {
+      expect(validateStep({ ...complete, minimumHeadcount }, 2)).toHaveProperty("minimumHeadcount");
+    }
+    expect(validateStep({ ...complete, minimumHeadcount: 8 }, 2)).toEqual({});
+  });
   test("retains chosen price and reliability scale when restoring a user-scoped pending payload", () => {
-    const payload = submissionPayload({ ...complete, price: "12.01" }, "key");
-    expect(payload.config).toMatchObject({ minimumReliability: 90, pricePerSlotCents: 1201 });
-    expect(draftFromSubmission(payload)).toEqual({ ...complete, price: "12.01" });
+    const payload = submissionPayload({ ...complete, price: "12.01", minimumHeadcount: 5 }, "key");
+    expect(payload.config).toMatchObject({ minimumReliability: 90, pricePerSlotCents: 1201, minimumHeadcount: 5 });
+    expect(draftFromSubmission(payload)).toEqual({ ...complete, price: "12.01", minimumHeadcount: 5 });
     expect(pendingStorageKey("alice")).not.toBe(pendingStorageKey("bob"));
     expect(submissionPayload({ ...complete, reliability: "none" }, "key").config.minimumReliability).toBeUndefined();
   });

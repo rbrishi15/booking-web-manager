@@ -66,11 +66,18 @@ export const OvernightDates: Story = {
 export const Settings: Story = {
   args: { initialDraft: complete, initialStep: 2 },
   play: async ({ canvas }) => {
+    const minimum = within(canvas.getByRole("group", { name: "Minimum viable headcount" }));
+    await expect(minimum.getByRole("status")).toHaveTextContent("4");
     await expect(canvas.getByRole("button", { name: "Increase No. of Slots" })).toBeDisabled();
     for (let index = 0; index < 6; index++) await userEvent.click(canvas.getByRole("button", { name: "Decrease No. of Slots" }));
     await expect(canvas.getByRole("button", { name: "Decrease No. of Slots" })).toBeDisabled();
     await expect(within(canvas.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("2");
+    await expect(minimum.getByRole("status")).toHaveTextContent("2");
+    await expect(minimum.getByRole("button", { name: "Increase Minimum viable headcount" })).toBeDisabled();
+    await expect(minimum.getByRole("button", { name: "Decrease Minimum viable headcount" })).toBeDisabled();
     await userEvent.click(canvas.getByRole("button", { name: "Increase No. of Slots" }));
+    await userEvent.click(minimum.getByRole("button", { name: "Increase Minimum viable headcount" }));
+    await expect(minimum.getByRole("status")).toHaveTextContent("3");
     await userEvent.click(canvas.getByRole("combobox", { name: "Minimum Reliability Score" }));
     await userEvent.click(portal().getByRole("option", { name: "No minimum" }));
     await userEvent.click(await canvas.findByRole("button", { name: "Next" }));
@@ -170,6 +177,7 @@ export const PayoutRequired: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Done" }));
     await expect(canvas.getByRole("alert")).toHaveTextContent("Complete your payout account setup");
+    await expect(canvas.getByRole("alert").parentElement).toHaveFocus();
     await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
   },
 };
@@ -209,6 +217,26 @@ export const PendingReload: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Retry submission" }));
     await expect(args.create).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "retained-key" }));
     await expect(args.storage?.getItem(pendingStorageKey("storybook"))).toBeNull();
+  },
+};
+function ChangeBooker(props: CreateSessionWizardProps) {
+  const [userId, setUserId] = useState("storybook");
+  const storage = useMemo(() => memoryStorage(JSON.stringify({
+    version: 1, payload: submissionPayload(complete, "previous-booker-key"),
+  })), []);
+  return <><CreateSessionWizard {...props} userId={userId} storage={storage} />
+    <Button onClick={() => setUserId("another-booker")}>Change booker</Button></>;
+}
+export const ChangedBookerStartsFresh: Story = {
+  render: (args) => <ChangeBooker {...args} />,
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("button", { name: "Retry submission" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Change booker" }));
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    await expect(canvas.getByRole("combobox", { name: "Venue" })).toHaveValue("");
+    await expect(canvas.getByRole("button", { name: "Next" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Retry submission" })).not.toBeInTheDocument();
+    await expect(args.create).not.toHaveBeenCalled();
   },
 };
 export const ReplaySignInExpired: Story = {

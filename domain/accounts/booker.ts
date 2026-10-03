@@ -42,6 +42,7 @@ export interface BookerSessionCreation {
   readonly booking: Booking;
   readonly bookingShare?: Money;
   readonly totalSlots: number;
+  readonly minimumHeadcount: number;
   readonly roomToken: string;
   readonly holdingAccountId: UUID;
   readonly now: Date;
@@ -106,6 +107,7 @@ export class Booker {
       booking: details.booking,
       bookingShare: details.bookingShare,
       totalSlots: details.totalSlots,
+      minimumHeadcount: details.minimumHeadcount,
       roomToken: details.roomToken,
       holdingAccountId: details.holdingAccountId,
       visibility: details.visibility ?? "PRIVATE",

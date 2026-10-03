@@ -137,11 +137,9 @@ Apply migrations through `0008_session_pricing.sql` before deploying the wizard'
 custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
 bounds without updating existing sessions or fund holds.
 
-Apply `0009_session_capacity.sql` before deploying the current session
-contract. It drops the obsolete participant-count configuration column; capacity,
-quoted shares, participation and financial records are retained. The database
-continues to enforce 2–8 slots. Previously
-applied migrations remain in the history so existing installations can upgrade.
+The session contract retains the UC2-02 minimum headcount in `minimum_headcount`.
+Migration 0006 continues to enforce 2–8 slots and a minimum headcount between
+two and the session capacity. No column-removal migration is required.
 
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
@@ -271,7 +269,7 @@ ledger integration review and Rishi's domain/transaction review and independent
 session-area review assignment. Visibility (PR #38) and cancellation (PR #41)
 are now on `main`; creation (PR #39) integrates both by updating from `main` and
 rerunning creation, visibility and cancellation coverage with migrations through
-0009 before its independent review and merge.
+0008 before its independent review and merge.
 
 ### UC2-03c validation, 2026-10-02
 

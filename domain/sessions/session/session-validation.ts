@@ -54,7 +54,7 @@ export function validateSessionDetails(details: SessionDetails): void {
 
 type SessionConfiguration = Pick<
   SessionDetails,
-  "status" | "visibility" | "totalSlots"
+  "status" | "visibility" | "totalSlots" | "minimumHeadcount"
 >;
 
 export function validateSessionConfiguration(
@@ -84,6 +84,15 @@ export function validateSessionConfiguration(
     hasValidSlotCount,
     "INVALID_INPUT",
     "totalSlots must be a safe integer from 2 to 8",
+  );
+  const hasValidMinimumHeadcount =
+    Number.isSafeInteger(input.minimumHeadcount) &&
+    input.minimumHeadcount >= 2 &&
+    input.minimumHeadcount <= input.totalSlots;
+  DomainError.require(
+    hasValidMinimumHeadcount,
+    "INVALID_INPUT",
+    "minimumHeadcount must be between 2 and totalSlots",
   );
 }
 
