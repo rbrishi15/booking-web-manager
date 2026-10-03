@@ -292,6 +292,24 @@ npm test
 npm run test:concurrency
 ```
 
+### Debugging session creation with Redux DevTools
+
+With the Redux DevTools browser extension installed, run `npm run dev`, open
+`/sessions/create`, and select **Session creation #N** in the Redux panel's
+store selector. Each mounted wizard has its own connection. The timeline names
+draft edits, step changes, submission results and retries (for example,
+`session/change`, `session/submitStarted` and `session/retryStarted`).
+
+The integration uses [Zustand's DevTools middleware](https://zustand.docs.pmnd.rs/reference/middlewares/devtools),
+connects after mount, and cleans up on unmount, including React StrictMode's
+setup/cleanup replay. It is disabled in production builds and optional when the
+browser extension is absent. The npm development dependency supplies TypeScript
+integration types; it does not install the browser extension.
+
+Time travel changes the in-memory UI snapshot only. It does not rewind pending
+session storage, undo a request, or roll back a created session; a request still
+in flight can subsequently update the inspected snapshot.
+
 ### Environment variables
 
 The public landing, Storybook, Swagger/OpenAPI, and the unconfigured session

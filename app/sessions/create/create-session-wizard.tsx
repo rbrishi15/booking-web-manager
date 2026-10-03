@@ -15,6 +15,7 @@ import { sportImage } from "@/lib/sessions/sport-image";
 import { DateTimeEditor } from "./date-time-editor";
 import { VenuePicker } from "./venue-picker";
 import { createSessionStore } from "./create-session-store";
+import { connectSessionDevtools } from "./create-session-devtools";
 import { decimalCents, draftPricing, parseSgdCents, type FieldErrors, type SessionDraft } from "./model";
 import type { CreateSession, SearchVenues } from "./transport";
 
@@ -42,11 +43,12 @@ function SessionWizard(props: CreateSessionWizardProps) {
   const workflow = useStore(store, (state) => state.workflow);
   const { change, advance, back, restartAfterRecovery } = store.getState();
   const mounted = useRef(false);
-  // Only lifecycle cleanup uses an effect: an old user's request may finish,
-  // but must not navigate a new wizard. State transitions live in the store.
+  // Connect external debugging only after commit, and ignore late navigation
+  // after unmount. State transitions live in the store.
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    const disconnectDevtools = connectSessionDevtools(store);
+    return () => { mounted.current = false; disconnectDevtools(); };
   }, [store]);
   const body = useRef<HTMLDivElement>(null);
   const focusHeading = useCallback((node: HTMLHeadingElement | null) => {

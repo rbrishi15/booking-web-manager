@@ -60,6 +60,7 @@
     "@biomejs/biome": "^1.9.0",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "1.63.0",
+    "@redux-devtools/extension": "4.0.0",
     "@storybook/addon-a11y": "^10.6.1",
     "@storybook/addon-docs": "^10.6.1",
     "@storybook/addon-themes": "^10.6.1",

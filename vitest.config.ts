@@ -53,6 +53,7 @@ export default defineConfig({
             "tailwind-merge",
             "zustand",
             "zustand/vanilla",
+            "zustand/middleware",
           ],
         },
         test: {

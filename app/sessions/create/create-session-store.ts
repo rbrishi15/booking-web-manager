@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { NamedSet } from "zustand/middleware";
 import {
   draftFromSubmission, emptySessionDraft, pendingStorageKey, pendingSubmissionSchema,
   submissionPayload, updateDraft, validateStep,
@@ -98,8 +99,12 @@ export function createSessionStore({
     if (current && JSON.stringify(current) === JSON.stringify(pending)) storage.removeItem(key);
   };
 
-  return createStore<CreateSessionStoreState>()((set, get) => {
-    const transition = (state: CreateSessionState) => set(state);
+  return createStore<CreateSessionStoreState>()((_set, get, api) => {
+    // Read the current setter so mounted DevTools instrumentation can attach/detach.
+    const transition = (state: CreateSessionState, action: string) => {
+      const set: NamedSet<CreateSessionStoreState> = api.setState;
+      set(state, undefined, action);
+    };
     const snapshot = (): CreateSessionState => {
       const { draft, step, workflow } = get();
       return { draft, step, workflow };
@@ -109,22 +114,22 @@ export function createSessionStore({
       change(patch) {
         const current = snapshot();
         if (current.workflow.status !== "editing") return;
-        transition({ ...current, draft: updateDraft(current.draft, patch), workflow: { status: "editing", errors: {}, failure: null } });
+        transition({ ...current, draft: updateDraft(current.draft, patch), workflow: { status: "editing", errors: {}, failure: null } }, "session/change");
       },
       advance() {
         const current = snapshot();
         if (current.workflow.status !== "editing" || current.step === 3) return;
         const errors = validateStep(current.draft, current.step, now());
         if (Object.keys(errors).length) {
-          transition({ ...current, workflow: { status: "editing", errors, failure: null } });
+          transition({ ...current, workflow: { status: "editing", errors, failure: null } }, "session/stepInvalid");
           return errors;
         }
-        transition({ ...current, step: current.step === 1 ? 2 : 3, workflow: { status: "editing", errors: {}, failure: null } });
+        transition({ ...current, step: current.step === 1 ? 2 : 3, workflow: { status: "editing", errors: {}, failure: null } }, "session/next");
       },
       back() {
         const current = snapshot();
         if (current.workflow.status !== "editing" || current.step === 1) return;
-        transition({ ...current, step: current.step === 3 ? 2 : 1, workflow: { status: "editing", errors: {}, failure: null } });
+        transition({ ...current, step: current.step === 3 ? 2 : 1, workflow: { status: "editing", errors: {}, failure: null } }, "session/back");
       },
       restartAfterRecovery() {
         const current = snapshot();
@@ -135,21 +140,21 @@ export function createSessionStore({
           if (original !== null) {
             // A newly readable pending request must be retried, not discarded as corrupt.
             const recovered = restore(original, current);
-            if (recovered.workflow.status === "awaitingConfirmation") { transition(recovered); return; }
+            if (recovered.workflow.status === "awaitingConfirmation") { transition(recovered, "session/recoveryRestored"); return; }
             storage.setItem(`${key}:unresolved:${newId()}`, original);
             const latest = storage.getItem(key);
             if (latest !== original) {
-              transition(latest === null ? freshState() : restore(latest, current));
+              transition(latest === null ? freshState() : restore(latest, current), "session/recoveryReconciled");
               return;
             }
             storage.removeItem(key);
           }
-          transition(freshState());
+          transition(freshState(), "session/recoveryRestarted");
         } catch {
           transition({ ...current, workflow: { status: "recoveryRequired", failure: {
             status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
             message: "We couldn't preserve your pending submission. Enable session storage or free up storage space, then try starting again.",
-          } } });
+          } } }, "session/recoveryFailed");
         }
       },
       async submit(create) {
@@ -164,7 +169,7 @@ export function createSessionStore({
           for (const step of [1, 2, 3] as const) {
             const errors = validateStep(current.draft, step, instant);
             if (Object.keys(errors).length) {
-              transition({ ...current, step, workflow: { status: "editing", errors, failure: null } });
+              transition({ ...current, step, workflow: { status: "editing", errors, failure: null } }, "session/submitInvalid");
               return { status: "invalid", errors };
             }
           }
@@ -174,11 +179,11 @@ export function createSessionStore({
             const existing = storage.getItem(key);
             if (existing !== null) {
               const recovered = restore(existing, current);
-              transition(recovered);
+              transition(recovered, "session/pendingDiscovered");
               return { status: recovered.workflow.status === "awaitingConfirmation" ? "ignored" : "failed" };
             }
           } catch {
-            transition({ ...current, workflow: { status: "recoveryRequired", failure: recoveryFailure } });
+            transition({ ...current, workflow: { status: "recoveryRequired", failure: recoveryFailure } }, "session/storageReadFailed");
             return { status: "failed" };
           }
           pending = { version: 1, payload: submissionPayload(current.draft, newId()) };
@@ -186,28 +191,28 @@ export function createSessionStore({
             transition({ ...current, workflow: { status: "editing", errors: {}, failure: {
               status: "error", code: "STORAGE_UNAVAILABLE", ambiguous: false,
               message: "Enable session storage so your submission can be retried safely.",
-            } } });
+            } } }, "session/storageWriteFailed");
             return { status: "failed" };
           }
         }
 
         const submitted = { draft: current.draft, step: 3 as const };
-        transition({ ...submitted, workflow: { status: "submitting", pending, replaying } });
+        transition({ ...submitted, workflow: { status: "submitting", pending, replaying } }, replaying ? "session/retryStarted" : "session/submitStarted");
         try {
           const result = await create(pending.payload);
           if (result.status === "created") {
             clearPending(pending);
-            transition({ ...submitted, workflow: { status: "completed" } });
+            transition({ ...submitted, workflow: { status: "completed" } }, "session/submitSucceeded");
             return { status: "created" };
           }
           if (!result.ambiguous && !replaying) {
             clearPending(pending);
-            transition({ ...submitted, workflow: { status: "editing", errors: {}, failure: result } });
+            transition({ ...submitted, workflow: { status: "editing", errors: {}, failure: result } }, "session/submitRejected");
           } else {
-            transition({ ...submitted, workflow: { status: "awaitingConfirmation", pending, failure: result } });
+            transition({ ...submitted, workflow: { status: "awaitingConfirmation", pending, failure: result } }, "session/confirmationRequired");
           }
         } catch {
-          transition({ ...submitted, workflow: { status: "awaitingConfirmation", pending, failure: unknownResult } });
+          transition({ ...submitted, workflow: { status: "awaitingConfirmation", pending, failure: unknownResult } }, "session/submitUnconfirmed");
         }
         return { status: "failed" };
       },
