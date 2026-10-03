@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
-import { InfoNote } from "@/components/ui/info-note";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { EmailConfirmationNotice } from "../_components/email-confirmation-notice";
 import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
 import { REGIONS, SPORTS } from "../schemas";
@@ -38,7 +38,7 @@ export function RegisterForm() {
   if (state.status === "check-email") {
     return (
       <div className="space-y-4">
-        <InfoNote icon>{state.message}</InfoNote>
+        <EmailConfirmationNotice email={state.email} />
         <Button asChild className="w-full">
           <Link href="/login">Go to log in</Link>
         </Button>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { headers } from "next/headers";
 import { HOME_PATH } from "@/app/(auth)/redirect-path";
 import { registerUser } from "@/app/(auth)/register/actions";
 import { passwordStrength } from "@/app/(auth)/register/password-strength";
@@ -10,6 +11,7 @@ import { fakeSupabase, formDataOf } from "./support/fake-supabase-auth";
 // The profile + S$0.00 wallet that the sign-up trigger creates is covered against real
 // Postgres in UC1-01-provisioning.db.test.ts.
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("next/headers", () => ({ headers: vi.fn() }));
 vi.mock("next/navigation", async () => {
   const { RedirectCalled } = await import("./support/fake-supabase-auth");
   return {
@@ -23,6 +25,7 @@ vi.mock("next/navigation", async () => {
 describe("UC1-01 Register User", () => {
   beforeEach(() => {
     vi.mocked(createClient).mockReset();
+    vi.mocked(headers).mockResolvedValue(new Headers({ origin: "https://booking-web-manager.vercel.app" }) as never);
   });
 
   test("registers a new user with a unique email", async () => {
@@ -40,6 +43,7 @@ describe("UC1-01 Register User", () => {
       email: "marcus@example.com",
       password: "password123",
       options: {
+        emailRedirectTo: "https://booking-web-manager.vercel.app/auth/callback",
         data: { display_name: "Marcus Lim", preferred_sports: ["Tennis"], preferred_regions: ["West"] },
       },
     });
@@ -89,6 +93,11 @@ describe("UC1-01 Register User", () => {
 
     // Assert
     expect(result.status).toBe("check-email");
+    expect(supabase.auth.signUp).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({
+        emailRedirectTo: "https://booking-web-manager.vercel.app/auth/callback",
+      }),
+    }));
   });
 
   test("does not contact Supabase when the form is invalid", async () => {

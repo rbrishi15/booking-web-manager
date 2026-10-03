@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { emailConfirmationRedirectTo } from "../email-confirmation-url";
 import { HOME_PATH } from "../redirect-path";
 import { registerSchema } from "../schemas";
 
@@ -11,6 +12,7 @@ type RegisterField = "displayName" | "email" | "password" | "region" | "sport";
 
 export interface RegisterState {
   readonly status: "idle" | "error" | "check-email";
+  readonly email?: string;
   readonly message?: string;
   readonly fieldErrors?: Partial<Record<RegisterField, string[]>>;
   /** True when the email already has an account (UC1-01 exception 4a). */
@@ -40,11 +42,16 @@ export async function registerUser(
 
   // 2. Create the account. Migration 0004's trigger then creates the profile and S$0.00 wallet.
   const { displayName, email, password, region, sport } = parsed.data;
+  const emailRedirectTo = await emailConfirmationRedirectTo();
+  if (emailRedirectTo === null) {
+    return { status: "error", message: "We couldn't prepare your confirmation link. Reload this page and try again." };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo,
       data: {
         display_name: displayName,
         preferred_sports: [sport],
@@ -78,6 +85,7 @@ export async function registerUser(
   if (data.session === null) {
     return {
       status: "check-email",
+      email,
       message: "Account created. Check your email for a confirmation link, then log in.",
     };
   }

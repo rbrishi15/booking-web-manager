@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmailConfirmationNotice } from "../_components/email-confirmation-notice";
 import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
 import { logIn, type LoginState } from "./actions";
@@ -32,50 +33,53 @@ export function LoginForm({ next }: LoginFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
-      {state.status === "error" && state.message !== undefined && (
-        <ErrorMessage>{state.message}</ErrorMessage>
-      )}
+    <div className="space-y-5">
+      {state.status === "check-email" && <EmailConfirmationNotice key={state.email} email={state.email} />}
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        {state.status === "error" && state.message !== undefined && (
+          <ErrorMessage>{state.message}</ErrorMessage>
+        )}
 
-      {next !== undefined && <input type="hidden" name="next" value={next} />}
+        {next !== undefined && <input type="hidden" name="next" value={next} />}
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="name@example.com"
-          aria-invalid={errors.email !== undefined}
-          aria-describedby={describedBy(errors.email !== undefined && "email-error")}
-        />
-        <FieldError id="email-error" messages={errors.email} />
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="name@example.com"
+            aria-invalid={errors.email !== undefined}
+            aria-describedby={describedBy(errors.email !== undefined && "email-error")}
+          />
+          <FieldError id="email-error" messages={errors.email} />
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <PasswordInput
-          id="password"
-          name="password"
-          autoComplete="current-password"
-          placeholder="Enter your password"
-          aria-invalid={errors.password !== undefined}
-          aria-describedby={describedBy(errors.password !== undefined && "password-error")}
-        />
-        <FieldError id="password-error" messages={errors.password} />
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            aria-invalid={errors.password !== undefined}
+            aria-describedby={describedBy(errors.password !== undefined && "password-error")}
+          />
+          <FieldError id="password-error" messages={errors.password} />
+        </div>
 
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Logging in…" : "Log in"}
-      </Button>
+        <Button type="submit" className="w-full" disabled={pending}>
+          {pending ? "Logging in…" : "Log in"}
+        </Button>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Do not have an account?{" "}
-        <Link href="/register" className="font-semibold text-foreground underline-offset-4 hover:underline">
-          Create one
-        </Link>
-      </p>
-    </form>
+        <p className="text-center text-sm text-muted-foreground">
+          Do not have an account?{" "}
+          <Link href="/register" className="font-semibold text-foreground underline-offset-4 hover:underline">
+            Create one
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }

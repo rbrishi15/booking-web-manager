@@ -118,6 +118,14 @@ describe("UC1-02 Authenticate User", () => {
   });
 
   describe("establishes a session that subsequent requests can use (middleware)", () => {
+    test("lets an email confirmation return reach the callback before a session exists", async () => {
+      vi.mocked(createServerClient).mockReturnValue(fakeSupabase({ user: null }) as never);
+
+      const response = await middleware(new NextRequest("https://booking-web-manager.vercel.app/auth/callback?code=confirmation-code"));
+
+      expect(response.headers.get("location")).toBeNull();
+    });
+
     test("lets a later request with a valid login cookie through", async () => {
       // Arrange
       const supabase = fakeSupabase({ user: MARCUS, profile: activeProfile });
