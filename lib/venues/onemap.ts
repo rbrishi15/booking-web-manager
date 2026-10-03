@@ -12,21 +12,31 @@ const responseSchema = z.object({
   })),
 });
 
+type Authentication = { readonly email: string; readonly password: string } | { readonly accessToken: string };
+function hasProviderError(payload: unknown): payload is { error: unknown } {
+  return typeof payload === "object" && payload !== null && "error" in payload;
+}
+function isAuthenticationError(payload: unknown): boolean {
+  return hasProviderError(payload) && typeof payload.error === "string" &&
+    /^(?:Authentication token (?:missing|expired)|Invalid authentication token)\b/i.test(payload.error.trim());
+}
+
 /** OneMap's credentials, token lifecycle and response translation stay outside the core. */
 export class OneMapVenueSearch {
   private token: z.infer<typeof tokenSchema> | undefined;
   private tokenRequest: Promise<string> | undefined;
 
-  constructor(private readonly credentials: { readonly email: string; readonly password: string },
+  constructor(private readonly authentication: Authentication,
     private readonly fetcher: typeof fetch = fetch, private readonly now: () => number = Date.now) {}
 
   private async accessToken(): Promise<string> {
+    if ("accessToken" in this.authentication) return this.authentication.accessToken;
     if (this.token && this.token.expiry_timestamp * 1000 > this.now() + 60_000) return this.token.access_token;
     if (this.tokenRequest) return this.tokenRequest;
     this.tokenRequest = (async () => {
       const response = await this.fetcher("https://www.onemap.gov.sg/api/auth/post/getToken", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(this.credentials), signal: AbortSignal.timeout(5000), cache: "no-store",
+        body: JSON.stringify(this.authentication), signal: AbortSignal.timeout(5000), cache: "no-store",
       });
       if (!response.ok) throw new VenueSearchProviderError("Venue provider authentication failed");
       this.token = tokenSchema.parse(await response.json());
@@ -41,13 +51,21 @@ export class OneMapVenueSearch {
     try {
       const url = new URL("https://www.onemap.gov.sg/api/common/elastic/search");
       url.search = new URLSearchParams({ searchVal: query, returnGeom: "Y", getAddrDetails: "Y", pageNum: String(page) }).toString();
-      const request = async () => this.fetcher(url, {
-        headers: { Authorization: await this.accessToken() }, signal: AbortSignal.timeout(5000), cache: "no-store",
-      });
-      let response = await request();
-      if (response.status === 401) { this.token = undefined; response = await request(); }
-      if (!response.ok) throw new VenueSearchProviderError("Venue search failed");
-      const result = responseSchema.parse(await response.json());
+      const request = async () => {
+        const response = await this.fetcher(url, {
+          headers: { Authorization: await this.accessToken() }, signal: AbortSignal.timeout(5000), cache: "no-store",
+        });
+        const payload: unknown = response.ok ? await response.json() : undefined;
+        return { response, payload };
+      };
+      let { response, payload } = await request();
+      // Search also reports token rejection in HTTP 200 JSON responses.
+      if ("email" in this.authentication && (response.status === 401 || isAuthenticationError(payload))) {
+        this.token = undefined;
+        ({ response, payload } = await request());
+      }
+      if (!response.ok || hasProviderError(payload)) throw new VenueSearchProviderError("Venue search failed");
+      const result = responseSchema.parse(payload);
       return {
         items: result.results.map((item) => ({
           venueName: item.BUILDING !== "NIL" && item.BUILDING.trim() ? item.BUILDING : item.SEARCHVAL,
@@ -57,8 +75,8 @@ export class OneMapVenueSearch {
         })),
         nextPage: result.pageNum < result.totalNumPages ? result.pageNum + 1 : null,
       };
-    } catch (cause) {
-      throw new VenueSearchProviderError("Venue search is temporarily unavailable", { cause });
+    } catch {
+      throw new VenueSearchProviderError("Venue search is temporarily unavailable");
     }
   }
 }

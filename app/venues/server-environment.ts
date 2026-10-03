@@ -11,6 +11,7 @@ export function readVenueSettings(environment: Readonly<Record<string, string | 
   }).parse(url);
   const email = environment.ONEMAP_API_EMAIL?.trim();
   const password = environment.ONEMAP_API_PASSWORD;
-  return { supabaseUrl, supabaseAnonKey: key,
+  const accessToken = environment.ONEMAP_API_TOKEN?.trim() || undefined;
+  return { supabaseUrl, supabaseAnonKey: key, accessToken,
     credentials: email && password?.trim() ? { email: z.string().email().parse(email), password } : undefined };
 }
