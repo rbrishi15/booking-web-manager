@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import SessionsPage, { dynamic } from "@/app/sessions/(manage)/page";
+import SessionsPage, { dynamic } from "@/app/sessions/page";
 import { getSessionManagementDependencies } from "@/app/sessions/management-server-dependencies";
 import { SessionManagementUnavailableError } from "@/app/sessions/session-management-unavailable";
 import { DomainError } from "@/domain";

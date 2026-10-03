@@ -30,7 +30,6 @@ type Story = StoryObj<typeof meta>;
 export const Hosted: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Sessions you host" })).toBeVisible();
-    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
     await expect(canvas.getByRole("button", { name: "Make public" })).toBeEnabled();
     await expect(canvas.getByRole("button", { name: "Make private" })).toBeDisabled();
     await expect(canvas.getByText("This session is full. Visibility cannot be changed.")).toBeVisible();
@@ -38,9 +37,11 @@ export const Hosted: Story = {
   },
 };
 
+/** Lets the story control save completion and subsequent server state to test confirmation feedback. */
 function DeferredSave() {
   const [items, setItems] = useState(sessions);
   const [finish, setFinish] = useState<(() => void) | null>(null);
+  /** Defers the saved result and visibility update until the test completes the pending request. */
   function save(sessionId: string, visibility: "PUBLIC" | "PRIVATE") {
     return new Promise<SessionVisibilityActionResult>((resolve) => {
       setFinish(() => () => {
@@ -102,7 +103,6 @@ export const Empty: Story = {
   args: { outcome: { status: "ready", sessions: [] } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No upcoming sessions to manage")).toBeVisible();
-    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
     await expect(canvas.getByRole("link", { name: "Find a session" })).toHaveAttribute("href", "/discover?returnTo=%2Fsessions");
   },
 };

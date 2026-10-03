@@ -3,6 +3,7 @@
  * Home lists personal upcoming bookings; Discover is the public-session search page.
  */
 export const HOME_PATH = "/";
+export const AUTH_CALLBACK_PATH = "/auth/callback";
 
 /**
  * Where to send the user after logging in. Only paths on this site are allowed,
@@ -15,7 +16,7 @@ export function safeRedirectPath(value: unknown): string {
   if (hasUnsafeCharacters(value)) return HOME_PATH;
   if (!value.startsWith("/") || value.startsWith("//")) return HOME_PATH;
   const pathname = value.split(/[?#]/, 1)[0] ?? "";
-  if (isAuthPage(pathname)) return HOME_PATH;
+  if (isAuthPage(pathname) || pathname === AUTH_CALLBACK_PATH) return HOME_PATH;
   return value;
 }
 
@@ -29,7 +30,7 @@ function hasUnsafeCharacters(value: string): boolean {
 }
 
 /** Pages anyone can open without logging in: Landing, Register and Log in (dialog map). */
-const PUBLIC_PATHS: readonly string[] = ["/", "/login", "/register"];
+const PUBLIC_PATHS: readonly string[] = ["/", "/login", "/register", AUTH_CALLBACK_PATH];
 
 /** Pages a logged-in user has no reason to see; they are sent Home instead. */
 const AUTH_PATHS: readonly string[] = ["/login", "/register"];

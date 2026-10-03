@@ -7,9 +7,11 @@ import { createSupabaseIdentityAuthenticator } from "@/lib/supabase/bearer-auth"
 import { ListHostedSessions } from "@/use-cases/sessions/ListHostedSessions";
 import { ToggleSessionVisibility } from "@/use-cases/sessions/ToggleSessionVisibility";
 
+/** Builds authentication and session use cases from server settings, or failing adapters when configuration is missing. */
 export function createSessionManagementDependencies(): SessionManagementDependencies {
   const settings = readSessionServerSettings();
   if (settings === undefined) {
+    /** Rejects operations with the public unavailable error when required server settings are absent. */
     const unavailable = async (): Promise<never> => { throw new SessionManagementUnavailableError(); };
     return { authenticate: unavailable, toggleVisibility: { forBooker: unavailable }, listHostedSessions: { forBooker: unavailable } };
   }

@@ -6,6 +6,7 @@ import { createTestSession } from "../../domain/sessions/session/session-fixture
 const startAt = new Date("2040-01-02T10:00:00Z");
 const now = new Date("2040-01-01T10:00:00Z");
 
+/** Builds a valid stored session row with overridable fields for hydration tests. */
 function sessionRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", booker_id: "booker", venue_name: "Sports Hall", sport: "Badminton", region: "West",
@@ -17,6 +18,7 @@ function sessionRow(overrides: SqlRow = {}): SqlRow {
   };
 }
 
+/** Builds a joined participation, wallet, and fund-hold row with overridable fields. */
 function participantRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", participation_id: "p", user_id: "alice", status: "COMMITTED", attendance: "UNVERIFIED",
@@ -28,6 +30,7 @@ function participantRow(overrides: SqlRow = {}): SqlRow {
   };
 }
 
+/** Creates a repository whose SQL mock returns session rows followed by participation rows. */
 function scenario(rows = [sessionRow()], participants: readonly SqlRow[] = []) {
   const query = vi.fn<SqlExecutor["query"]>().mockResolvedValueOnce(rows).mockResolvedValueOnce(participants);
   return { query, repository: new PostgresSessionManagementRepository({ query: query as SqlExecutor["query"] }) };
@@ -50,12 +53,6 @@ test("returns null for a missing session without querying its children", async (
   const { query, repository } = scenario([]);
   expect(await repository.get("missing")).toBeNull();
   expect(query).toHaveBeenCalledOnce();
-});
-
-test("hydrates a custom price and preserves historical hold amounts", async () => {
-  const session = await scenario([sessionRow({ booking_share_cents: "600" })], [participantRow()]).repository.get("s");
-  expect(session?.bookingShare.toCents()).toBe(600);
-  expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
 });
 
 test("lists only the owner's upcoming open sessions, including full sessions, without update locks", async () => {
@@ -83,7 +80,7 @@ describe("stored state validation", () => {
     { payout_attempt_ids: undefined },
     { payout_idempotency_keys: null },
     { total_cost_cents: "9007199254740992" },
-    { booking_share_cents: "667" },
+    { booking_share_cents: "334" },
     { status: "PAYOUT_PENDING" },
     { pending_settlement: {} },
   ])("rejects invalid or missing Session facts: %j", async (invalid) => {

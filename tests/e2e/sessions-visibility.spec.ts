@@ -6,6 +6,7 @@ import { sessionTestContext, type SessionTestContext } from "../support/session-
 type Identity = Awaited<ReturnType<SessionTestContext["identity"]>>;
 type Visibility = "PRIVATE" | "PUBLIC";
 
+/** Signs in a fixture identity through the UI and waits for the requested destination. */
 async function login(page: Page, identity: Identity, destination: string) {
   await page.goto(`/login?next=${encodeURIComponent(destination)}`);
   await page.getByLabel("Email", { exact: true }).fill(identity.email);
@@ -17,6 +18,7 @@ async function login(page: Page, identity: Identity, destination: string) {
   }).toBe(destination);
 }
 
+/** Inserts a two-slot session fixture with configurable visibility and start time, returning its ID. */
 async function insertSession(context: SessionTestContext, bookerId: string, venue: string, input: {
   visibility?: Visibility; startAt?: string;
 } = {}) {
@@ -32,6 +34,7 @@ async function insertSession(context: SessionTestContext, bookerId: string, venu
   return sessionId;
 }
 
+/** Seeds a committed participation and its matching held funds to occupy one fixture session slot. */
 async function commitFixture(context: SessionTestContext, sessionId: string, participant: Identity) {
   const participationId = randomUUID();
   await context.pool.query(
@@ -46,10 +49,12 @@ async function commitFixture(context: SessionTestContext, sessionId: string, par
   );
 }
 
+/** Locates a hosted-session list item by its venue text. */
 function row(page: Page, venue: string): Locator {
   return page.getByRole("listitem").filter({ hasText: venue });
 }
 
+/** Clicks the visibility control, checks the server-action HTTP response, and returns the observation time for latency assertions. */
 async function setThroughPage(page: Page, venue: string, visibility: Visibility): Promise<number> {
   const response = page.waitForResponse((candidate) =>
     candidate.request().method() === "POST" &&
@@ -63,6 +68,7 @@ async function setThroughPage(page: Page, venue: string, visibility: Visibility)
   return Date.now();
 }
 
+/** Sends a visibility PATCH using the fixture identity's bearer token. */
 async function patch(request: APIRequestContext, identity: Identity, sessionId: string, visibility: Visibility) {
   return request.patch(`/api/sessions/${sessionId}/visibility`, {
     headers: { Authorization: `Bearer ${identity.token}` }, data: { visibility },
@@ -187,9 +193,14 @@ test("background visibility updates preserve pagination and do not jump to an ea
     await expect(row(page, `${tag} row 20`)).toBeVisible();
     expect((await patch(request, booker, last, "PRIVATE")).status()).toBe(200);
     await expect(row(page, `${tag} row 20`)).toHaveCount(0, { timeout: 3000 });
-    expect((await patch(request, booker, early, "PUBLIC")).status()).toBe(200);
-    // Wait for a real refreshed server response before asserting the retained cursor.
-    await page.waitForResponse((response) => new URL(response.url()).pathname === "/discover" && response.request().resourceType() === "fetch");
+    // Listen before the PATCH; gate matching refresh requests on its success.
+    const refreshRequest = page.waitForRequest(async (candidate) =>
+      new URL(candidate.url()).pathname === "/discover" && candidate.resourceType() === "fetch" &&
+      (await visibilityUpdate).status() === 200,
+    );
+    const visibilityUpdate = patch(request, booker, early, "PUBLIC");
+    expect((await visibilityUpdate).status()).toBe(200);
+    await refreshRequest;
     expect(page.url()).toBe(url);
     await expect(row(page, `${tag} earlier`)).toHaveCount(0);
     await expect(page.getByText("No sessions found", { exact: true })).toBeVisible();
@@ -237,10 +248,7 @@ test("a delayed background refresh neither blocks draft editing nor overwrites a
     await page.unroute("**/discover?**");
     let discoveryRequestsAfterLeaving = 0;
     page.on("request", (request) => {
-      const url = new URL(request.url());
-      // The hosted sidebar can prefetch its own Discover link. Only the departed
-      // query identifies a surviving poll from this controller.
-      if (url.pathname === "/discover" && url.searchParams.get("q") === second && request.resourceType() === "fetch") discoveryRequestsAfterLeaving++;
+      if (new URL(request.url()).pathname === "/discover" && request.resourceType() === "fetch") discoveryRequestsAfterLeaving++;
     });
     await page.goto("/sessions");
     await expect(page.getByRole("heading", { name: "Sessions you host", exact: true })).toBeVisible();

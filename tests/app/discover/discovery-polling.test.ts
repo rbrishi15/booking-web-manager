@@ -3,6 +3,7 @@ import { startDiscoveryPolling } from "@/app/discover/_components/discovery-poll
 
 afterEach(() => vi.useRealTimers());
 
+/** Creates polling with fake timers and controllable visibility, connectivity, and refresh eligibility. */
 function scenario() {
   vi.useFakeTimers();
   const documentEvents = new EventTarget();
@@ -25,8 +26,11 @@ function scenario() {
   });
   return {
     polling, refresh,
+    /** Changes refresh eligibility without emitting a browser event. */
     setAllowed(value: boolean) { allowed = value; },
+    /** Updates simulated page visibility and emits its change event. */
     setVisible(value: boolean) { visible = value; documentEvents.dispatchEvent(new Event("visibilitychange")); },
+    /** Updates simulated connectivity and emits an online event when reconnecting. */
     setOnline(value: boolean) { online = value; if (value) windowEvents.dispatchEvent(new Event("online")); },
   };
 }

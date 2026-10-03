@@ -17,6 +17,7 @@ describe("UC2-03a PostgreSQL management", () => {
   beforeAll(() => { context = sessionTestContext(); });
   afterAll(async () => { await context?.pool.end(); });
 
+  /** Creates a management transaction using the integration pool and fixed test clock. */
   function transaction() {
     return new PostgresSessionManagementTransaction(() => context.pool, clock);
   }
@@ -64,6 +65,7 @@ describe("UC2-03a PostgreSQL management", () => {
     }
   });
 
+  /** Inserts a private two-slot session fixture with optional lifecycle overrides and returns its ID. */
   async function createSession(bookerId: string, options: { status?: string; startAt?: Date } = {}) {
     const sessionId = randomUUID();
     await context.pool.query(
@@ -76,10 +78,12 @@ describe("UC2-03a PostgreSQL management", () => {
     return sessionId;
   }
 
+  /** Adapts the integration pool to the SQL executor used by fixture helpers. */
   function executor(): SqlExecutor {
     return { query: async (statement, values) => (await context.pool.query(statement, values ? [...values] : undefined)).rows };
   }
 
+  /** Seeds a committed participation, hold, and matching top-up and lock ledger entries; returns participation and hold IDs. */
   async function addParticipant(sql: SqlExecutor, sessionId: string, participant: { userId: string; walletId: string }) {
     const participationId = randomUUID();
     const holdId = randomUUID();
@@ -106,6 +110,7 @@ describe("UC2-03a PostgreSQL management", () => {
     return { participationId, holdId };
   }
 
+  /** Loads fixture aggregates, applies Booker visibility policy, and persists the result in a management transaction. */
   async function change(bookerId: string, sessionId: string, visibility: "PUBLIC" | "PRIVATE") {
     return transaction().run(async ({ users, sessions }) => {
       const user = await users.get(bookerId);

@@ -14,6 +14,7 @@ export function startDiscoveryPolling(options: {
 }): DiscoveryPolling {
   let inFlight = false;
   let stopped = false;
+  /** Starts one refresh when the page is visible, online, idle, and still mounted. */
   function refresh() {
     if (stopped || inFlight || options.document.visibilityState !== "visible" || !options.online() || !options.canRefresh()) return;
     inFlight = true;
@@ -23,7 +24,9 @@ export function startDiscoveryPolling(options: {
   options.document.addEventListener("visibilitychange", refresh);
   options.window.addEventListener("online", refresh);
   return {
+    /** Allows the next refresh after the current router transition settles. */
     complete() { inFlight = false; },
+    /** Cancels the timer and event listeners and prevents further refreshes. */
     stop() {
       stopped = true;
       clearInterval(timer);

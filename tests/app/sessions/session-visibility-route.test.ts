@@ -94,9 +94,11 @@ describe("UC2-03a PATCH session visibility", () => {
   });
 });
 
+/** Builds a bearer-authenticated PATCH request with the supplied raw body for route validation tests. */
 function request(body: string) {
   return new Request(`http://localhost/api/sessions/${sessionId}/visibility`, { method: "PATCH", headers: { Authorization: "Bearer trusted", "Content-Type": "application/json" }, body });
 }
+/** Invokes the route with a JSON body and resolved session parameters. */
 function invoke(body: unknown, id = sessionId) {
   return PATCH(request(JSON.stringify(body)), { params: Promise.resolve({ sessionId: id }) });
 }

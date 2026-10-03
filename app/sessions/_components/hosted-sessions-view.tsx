@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,13 +15,13 @@ export interface HostedSessionsViewProps {
   readonly onRefresh: () => void;
 }
 
+/** Renders hosted sessions, an empty state, or a retryable loading error. */
 export function HostedSessionsView({ outcome, refreshing, onSetVisibility, onRefresh }: HostedSessionsViewProps) {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Sessions you host</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Manage the visibility of your upcoming sessions. Public sessions appear in Discover.</p>
-        <Button asChild className="mt-4 min-h-11"><Link href="/sessions/create"><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Create a session</Link></Button>
       </header>
       {outcome.status === "error" ? (
         <div className="space-y-3">
@@ -48,6 +47,7 @@ const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
   timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
 });
 
+/** Displays confirmed session visibility with capacity guards and per-session save feedback. */
 function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: Omit<HostedSessionsViewProps, "outcome"> & { readonly session: HostedSessionItem }) {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<SessionVisibilityActionResult | null>(null);
@@ -55,6 +55,7 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh }: 
   const full = session.availableSlots === 0;
   const target = session.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
 
+  /** Submits one visibility change at a time and refreshes server state after success or a conflict. */
   async function changeVisibility() {
     if (submitting.current || refreshing || full) return;
     submitting.current = true;

@@ -16,11 +16,13 @@ export interface HostedSession {
 }
 
 export class ListHostedSessions {
+  /** Supplies the transaction boundary and clock for account validation and upcoming-session reads. */
   constructor(private readonly dependencies: {
     readonly transaction: SessionManagementTransaction;
     readonly clock: Clock;
   }) {}
 
+  /** Requires an active account and returns display facts and available capacity for its upcoming hosted sessions. */
   async forBooker(bookerId: UUID): Promise<readonly HostedSession[]> {
     return this.dependencies.transaction.run(async ({ users, sessions }) => {
       const user = await requireAggregate(users, bookerId, "User");

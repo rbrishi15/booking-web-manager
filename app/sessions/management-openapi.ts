@@ -3,6 +3,7 @@ import { z, errorResponse } from "@/app/openapi/contracts";
 import { sessionVisibilityParamsSchema, sessionVisibilityRequestSchema } from "./visibility-input";
 import { SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE } from "./session-management-unavailable";
 
+/** Registers the visibility PATCH operation, request and result schemas, and documented error responses. */
 export function registerSessionManagementApi(registry: OpenAPIRegistry): void {
   const request = registry.register("SessionVisibilityRequest", sessionVisibilityRequestSchema);
   const result = registry.register("SessionVisibilityResult", z.object({ sessionId: z.string().uuid(), visibility: z.enum(["PUBLIC", "PRIVATE"]) }));
