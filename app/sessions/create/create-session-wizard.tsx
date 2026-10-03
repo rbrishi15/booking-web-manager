@@ -30,6 +30,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
   const [step, setStep] = useState<number>(initialStep);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [ready, setReady] = useState(false);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [pending, setPending] = useState<PendingSubmission | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -45,16 +46,16 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
   useEffect(() => {
     try {
       const value = (storage ?? window.sessionStorage).getItem(key);
-      if (value) {
+      if (value !== null) {
         const saved = pendingSubmissionSchema.parse(JSON.parse(value));
         setDraft(draftFromSubmission(saved.payload)); setPending(saved); setStep(3);
         setFailure({ status: "error", code: "PENDING_SUBMISSION", ambiguous: true, message: "A submission is awaiting confirmation. Retry it to safely recover the result." });
       }
-      setReady(true);
     } catch {
-      setFailure({ status: "error", code: "STORAGE_UNAVAILABLE", ambiguous: false,
-        message: "We couldn't read your pending submission. Enable session storage and reload before creating a session." });
-    }
+      setRecoveryRequired(true);
+      setFailure({ status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
+        message: "We couldn't read your pending submission. It may already have created a session. Check your hosted sessions before starting again." });
+    } finally { setReady(true); }
   }, [key, storage]);
   useEffect(() => {
     if (firstRender.current) { firstRender.current = false; return; }
@@ -62,9 +63,25 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
     if (body.current) body.current.scrollTop = 0;
   }, [step]);
   useEffect(() => { if (failure) failureMessage.current?.focus(); }, [failure]);
-  const locked = submitting || completed || !!pending || !ready;
+  const locked = submitting || completed || !!pending || !ready || recoveryRequired;
   const range = draftPricing(draft);
   const price = parseSgdCents(draft.price);
+  function restartAfterRecovery() {
+    try {
+      const store = getStorage();
+      const value = store.getItem(key);
+      // Preserve the original evidence before allowing a new submission to replace it.
+      if (value !== null) {
+        store.setItem(`${key}:unresolved:${crypto.randomUUID()}`, value);
+        store.removeItem(key);
+      }
+      setPending(null); setDraft(initialDraft); setStep(initialStep); setErrors({});
+      setRecoveryRequired(false); setFailure(null);
+    } catch {
+      setFailure({ status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
+        message: "We couldn't preserve your pending submission. Enable session storage or free up storage space, then try starting again." });
+    }
+  }
   function change(patch: Partial<SessionDraft>) {
     if (locked) return;
     setDraft((value) => updateDraft(value, patch)); setErrors({}); setFailure(null);
@@ -75,7 +92,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
     requestAnimationFrame(() => document.getElementById(field ?? "")?.focus());
   }
   async function submit() {
-    if (inFlight.current || completed || !ready) return;
+    if (inFlight.current || completed || !ready || recoveryRequired) return;
     const replaying = pending !== null;
     let saved = pending;
     if (!saved) {
@@ -174,6 +191,11 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
         </div>}
       </>}
       {failure && <div ref={failureMessage} tabIndex={-1} className="space-y-2 outline-none"><ErrorMessage>{failure.message}</ErrorMessage>
+        {recoveryRequired && <>
+          <Button asChild variant="link"><Link href="/sessions" target="_blank" rel="noopener noreferrer">Check hosted sessions (new tab)</Link></Button>
+          <p className="text-xs leading-relaxed text-muted-foreground">Starting again keeps a backup of the saved details. Only continue if you have confirmed the session was not created.</p>
+          <Button type="button" variant="outline" onClick={restartAfterRecovery}>I checked my sessions; start again</Button>
+        </>}
         {pending && <p className="text-xs leading-relaxed text-muted-foreground">Your submitted details are saved. Editing is paused until this submission is resolved.</p>}
         {failure.code === "UNAUTHENTICATED" && <Button asChild variant="link"><Link href="/login?next=%2Fsessions%2Fcreate">Sign in again</Link></Button>}
       </div>}
@@ -181,7 +203,7 @@ export function CreateSessionWizard({ userId, create, search, onCreated, initial
     </div>
     <footer className="flex shrink-0 gap-6 border-t bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 md:px-8">
       {step > 1 && <Button type="button" variant="outline" className="min-h-12 flex-1" disabled={locked} onClick={() => { setErrors({}); setStep((value) => value - 1); }}>Back</Button>}
-      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || !ready} onClick={step === 3 ? () => void submit() : advance}>
+      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || !ready || recoveryRequired} onClick={step === 3 ? () => void submit() : advance}>
         {step === 3 ? submitting ? "Creating…" : pending ? "Retry submission" : "Done" : <>Next<ArrowRight aria-hidden="true" className="ml-auto h-5 w-5" /></>}
       </Button>
     </footer>

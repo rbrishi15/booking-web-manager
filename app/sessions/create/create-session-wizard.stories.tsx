@@ -12,7 +12,7 @@ const complete = { ...emptySessionDraft, venueName: "Bukit Timah CC", region: "C
   startDate: "2045-06-17", startTime: "07:00", endDate: "2045-06-17", endTime: "08:00" };
 const venues: VenueSearchPage = { items: [{ venueName: "Bukit Timah CC", address: "20 TOH YI DRIVE", postalCode: "596569", latitude: 1.34, longitude: 103.77, region: "Central" }], nextPage: null };
 function memoryStorage(initial?: string) {
-  const values = new Map<string, string>(initial ? [[pendingStorageKey("storybook"), initial]] : []);
+  const values = new Map<string, string>(initial !== undefined ? [[pendingStorageKey("storybook"), initial]] : []);
   return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
 }
 function Harness(props: CreateSessionWizardProps) {
@@ -221,11 +221,70 @@ export const ReplaySignInExpired: Story = {
   },
 };
 export const StorageUnavailable: Story = {
-  args: { initialDraft: complete, initialStep: 3, storage: { getItem: () => { throw new Error("blocked"); }, setItem: fn(), removeItem: fn() } },
+  args: { initialDraft: complete, initialStep: 3, storage: { getItem: fn((): string | null => { throw new Error("blocked"); }), setItem: fn(), removeItem: fn() } },
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent("Enable session storage and reload");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("It may already have created a session");
     await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
     await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Enable session storage or free up storage space");
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    (args.storage!.getItem as ReturnType<typeof fn<Storage["getItem"]>>).mockReturnValue(null);
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
+  },
+};
+function unreadableStorage(value: string) {
+  const storage = memoryStorage(value);
+  return { ...storage, setItem: fn(storage.setItem), removeItem: fn(storage.removeItem) };
+}
+export const MalformedPendingSubmission: Story = {
+  args: { initialDraft: complete, initialStep: 3, storage: unreadableStorage("{broken") },
+  play: async ({ canvas, args }) => {
+    const storage = args.storage!;
+    const key = pendingStorageKey("storybook");
+    const original = storage.getItem(key);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("It may already have created a session");
+    await expect(canvas.getByRole("link", { name: "Check hosted sessions (new tab)" })).toHaveAttribute("href", "/sessions");
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeDisabled();
+    await expect(storage.removeItem).not.toHaveBeenCalled();
+    await expect(storage.setItem).not.toHaveBeenCalled();
+    await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    const backupKey = (storage.setItem as ReturnType<typeof fn<Storage["setItem"]>>).mock.calls[0]![0];
+    await expect(backupKey).toMatch(`${key}:unresolved:`);
+    await expect(storage.getItem(backupKey)).toBe(original);
+    await expect(storage.getItem(key)).toBeNull();
+    await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
+    await expect(storage.getItem(backupKey)).toBe(original);
+  },
+};
+export const InvalidPendingSubmission: Story = {
+  ...MalformedPendingSubmission,
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage('{"version":2,"payload":{}}') },
+};
+export const EmptyPendingSubmission: Story = {
+  ...MalformedPendingSubmission,
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage("") },
+};
+export const RecoveryBackupUnavailable: Story = {
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage("{broken") },
+  play: async ({ canvas, args }) => {
+    const storage = args.storage!;
+    (storage.setItem as ReturnType<typeof fn<Storage["setItem"]>>).mockImplementationOnce(() => { throw new Error("quota exceeded"); });
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await expect(canvas.getByRole("alert")).toHaveTextContent("We couldn't preserve your pending submission");
+    await expect(storage.getItem(pendingStorageKey("storybook"))).toBe("{broken");
+    await expect(storage.removeItem).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
   },
 };
 function DeferredSubmission(props: CreateSessionWizardProps) {
