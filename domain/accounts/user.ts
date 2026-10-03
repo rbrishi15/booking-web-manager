@@ -15,6 +15,8 @@ import { PayoutAccount } from "./payout-account";
 export interface UserDetails {
   readonly userId: UUID;
   readonly email: Email | null;
+  /** Trusted confirmation state loaded from the identity provider. */
+  readonly emailVerified: boolean;
   readonly preferredSports: ReadonlySet<Sport>;
   readonly preferredRegions: ReadonlySet<Region>;
   readonly accountStatus: AccountStatus;
@@ -47,6 +49,7 @@ export interface UserRegistration {
 export class User {
   readonly #userId: UUID;
   #email: Email | null;
+  #emailVerified: boolean;
   #preferredSports: Set<Sport>;
   #preferredRegions: Set<Region>;
   #accountStatus: AccountStatus;
@@ -60,6 +63,7 @@ export class User {
 
     this.#userId = details.userId;
     this.#email = details.email;
+    this.#emailVerified = details.emailVerified;
     this.#preferredSports = new Set(details.preferredSports);
     this.#preferredRegions = new Set(details.preferredRegions);
     this.#accountStatus = details.accountStatus;
@@ -75,6 +79,7 @@ export class User {
     return new User({
       userId: details.userId,
       email: details.email,
+      emailVerified: false,
       preferredSports: details.preferredSports ?? new Set(),
       preferredRegions: details.preferredRegions ?? new Set(),
       accountStatus: "ACTIVE",
@@ -94,6 +99,7 @@ export class User {
 
   updateProfile(command: { readonly email: Email }): void {
     this.assertActive();
+    if (this.#email?.equals(command.email) !== true) this.#emailVerified = false;
     this.#email = command.email;
   }
 
@@ -187,6 +193,7 @@ export class User {
 
     this.#accountStatus = "INACTIVE";
     this.#email = null;
+    this.#emailVerified = false;
     this.#preferredSports.clear();
     this.#preferredRegions.clear();
   }
@@ -196,6 +203,9 @@ export class User {
   }
   get email(): Email | null {
     return this.#email;
+  }
+  get emailVerified(): boolean {
+    return this.#emailVerified;
   }
   get preferredSports(): ReadonlySet<Sport> {
     return new Set(this.#preferredSports);
@@ -234,12 +244,16 @@ export class User {
       "INVALID_INPUT",
       "Unknown account status",
     );
-    if (this.#accountStatus === "ACTIVE")
-      DomainError.require(
-        this.#email !== null,
-        "INVALID_INPUT",
-        "An active account needs an Email",
-      );
+    DomainError.require(
+      typeof this.#emailVerified === "boolean",
+      "INVALID_INPUT",
+      "A user needs trusted email confirmation state",
+    );
+    DomainError.require(
+      !this.#emailVerified || this.#email !== null,
+      "INVALID_INPUT",
+      "A verified email must be present",
+    );
     if (this.#accountStatus === "INACTIVE")
       DomainError.require(
         this.#email === null,

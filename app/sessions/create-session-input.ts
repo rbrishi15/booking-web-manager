@@ -26,8 +26,8 @@ export const createSessionRequestSchema = z.object({
     totalCostCents: z.number().int().safe(),
   }),
   config: z.object({
+    pricePerSlotCents: z.number().int().safe().positive().optional(),
     totalSlots: z.number().finite(),
-    minimumHeadcount: z.number().finite(),
     visibility: z.enum(["PRIVATE", "PUBLIC"]).optional(),
     minimumReliability: z.number().finite().optional(),
     invitedGroupId: uuid.optional(),

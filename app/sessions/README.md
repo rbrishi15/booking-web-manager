@@ -24,6 +24,42 @@ prerequisite migrations are applied. The [configuration guide](../../use-case-co
 records settings, ownership, and the dependency on PR #34 followed by migration 0006. Documentation and contract tests work
 without credentials or a local Supabase stack.
 
+## UC2-02: create-session wizard
+
+This work starts from visibility commit `a1b7acfc53078220e9c16b522d5b3b6f0eae4324`
+on `tianpok/uc2-03a-session-visibility`. That unmerged visibility work is a
+dependency of `tianpok/uc2-02-create-session-ui`.
+
+`/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
+the hosted list has its own route-group layout and offers Create when account
+eligibility allows it. Missing or unconfirmed email offers Verify email.
+The three steps preserve drafts, validate before advancing, and focus the new
+heading or first invalid field. The footer occupies layout space outside the
+scrolling body; short screens can scroll every field fully into view.
+
+Details start with Tennis and empty venue, dates and cost. The date dialog uses
+Singapore time, with separate start/end dates for overnight bookings. Cost is
+parsed directly into integer cents. Settings default to Private, eight slots,
+and 4.5/5 reliability (90/100). Capacity is 2–8. Reliability choices are no minimum or 3–5 in
+half-point increments. Pricing uses the selected sport's local photo and the
+shared framework-independent calculation in `domain/sessions/pricing.ts`.
+
+Before POST, the browser saves the exact payload and idempotency key in
+user-scoped session storage. Duplicate submission is disabled. Network failures
+and uncertain server errors freeze editing; a retry replays the saved payload.
+Reload restores it. An authentication or service failure during replay retains
+the pending submission because it cannot resolve the original result. A definitive
+first-attempt rejection permits editing and a new key. Success clears pending
+state and refreshes `/sessions?created=1` with feedback. Storage must be available
+before a request is sent. Room tokens are not stored in browser submission state.
+
+OneMap search is debounced, cancels/discards stale responses, and supports keyboard
+selection and pagination. Selecting a venue fills its URA region; editing its name
+clears lookup confirmation and region. Manual entry remains available when lookup
+is unconfigured, fails, finds no results, or cannot resolve a region. This platform
+coordinates venues booked elsewhere; lookup never creates a reservation.
+See [venue configuration](../../use-case-config/README.md#venue-search-configuration).
+
 ## Configured HTTP contract
 
 The [route module](../api/sessions/route.ts) exports ordinary async GET and POST
@@ -78,16 +114,24 @@ const parsed = parseCreateSessionInput(authenticatedUserId, {
 
 Direct use-case callers continue to supply Date-valued booking details.
 Successful creation and replay return 201 with
-`{ sessionId, roomToken, bookingShareCents }`. Shares round down equally:
+`{ sessionId, roomToken, bookingShareCents }`. Omitted `config.pricePerSlotCents` rounds down equally:
 1001 cents over three slots means 333 cents each, 999 cents collected when full,
-and a 2-cent shortfall borne by the booker. Creation moves no funds.
+and a 2-cent shortfall borne by the booker. An optional safe integer chosen price
+is validated against `[max(1, ceil(s / 2)), min(2 × s, floor(MAX_SAFE_INTEGER / slots))]`,
+where `s = floor(cost / slots)`. Above-cost collection is allowed. The accepted
+price is immutable Session state hydrated from `booking_share_cents`; participation,
+refund and settlement use that price and historical holds. Apply migration 0008
+before deploying this behavior. See [ADR-0012](../../docs/adr/0012-booker-selected-session-pricing.md).
+Creation moves no funds. Apply migration 0009 before deploying the current
+session contract; it removes the obsolete participant-count configuration column
+without changing session capacity, accepted prices, participation or fund holds.
 
 | Status | Outcome |
 | --- | --- |
 | 201 | Created session or replayed a successful submission |
 | 400 | Malformed JSON or invalid request structure |
 | 401 | No authenticated user |
-| 403 | Inactive account or unauthorized action |
+| 403 | Inactive account, missing/unconfirmed email (`EMAIL_VERIFICATION_REQUIRED`), or unauthorized action |
 | 404 | Authenticated User is missing from storage |
 | 409 | Payout setup or session-state conflict |
 | 422 | Invalid business values |
@@ -97,7 +141,9 @@ and a 2-cent shortfall borne by the booker. Creation moves no funds.
 Errors use `{ error: { code, message } }`. Unexpected failures return the fixed
 `INTERNAL_ERROR` response. Retrying the same booker's submission key must return
 the original result; an intended new session needs a new key. The authentication
-integration must verify current active-account access before parsing or replay.
+integration must verify current active-account access and present confirmed email
+before parsing or replay. The transaction repeats these checks before claiming
+an idempotency key, including each database retry.
 The persistence integration must commit the Session and replay result atomically.
 See the [integration requirements](../../use-case-config/README.md#authentication-and-atomic-persistence).
 
@@ -107,6 +153,13 @@ See the [integration requirements](../../use-case-config/README.md#authenticatio
 the configured contract and missing-settings response. Swagger's Try it out
 sends a real request; configured creation requires a valid bearer token.
 The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
+Storybook's `Sessions/Create session` examples use the production wizard and
+focused shell, with interaction and accessibility checks for all steps, date
+editing, slot limits, price adjustments, lookup/fallback, stale results and submission
+failures. `npm run test:sessions:integration` applies all migrations to a disposable
+stack and verifies persistence, replay, real authentication, success navigation,
+short-screen keyboard operation and the visibility-management regression. Browser
+screenshots cover 390px, tablet (768px) and desktop (1280px).
 The [shared OpenAPI guide](../openapi/README.md) explains how feature registrations
 are assembled and how to add operations to the reference.
 
@@ -117,17 +170,17 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Session-creation UI, OneMap,
-participant removal and Realtime subscriptions remain separate work.
+The discovery page is covered by UC2-01. Participant removal and
+Realtime subscriptions remain separate work.
 
 ## UC2-03a: visibility management
 
 `/sessions` lists every open, upcoming session hosted by the signed-in user,
-ordered by start time and session ID. It includes full sessions with a disabled
-control and explanation. Availability includes direct-invitation reservations
+ordered by start time and session ID. It includes full sessions; their action list omits visibility changes. Availability includes direct-invitation reservations
 through `Session.getAvailableSlots`; the UI does not calculate capacity itself.
 Rows display confirmed visibility with per-row saving, success and error feedback.
-The cookie-authenticated action and bearer API invoke the same use case directly.
+The UI follows the returned HTTP actions. Existing cookie-authenticated server
+actions and bearer APIs invoke the same use cases directly.
 
 `PATCH /api/sessions/{sessionId}/visibility` accepts:
 
@@ -208,3 +261,39 @@ No withdrawal fee or payout-account readiness condition applies.
 The existing discovery polling removes cancelled sessions within three seconds
 for visible, online pages under healthy service conditions. Production needs
 migration 0007 before the reader/endpoint; cancellation adds no migration.
+
+## Lightweight contextual actions
+
+Screen data carries the actions currently available to the actor. Each descriptor
+has a stable `name`, an existing `href`, its HTTP `method`, and fixed `inputs`.
+The existing controls still own presentation, user input and confirmation:
+
+```json
+{ "name": "set-visibility", "href": "/api/sessions/<id>/visibility", "method": "PATCH", "inputs": { "visibility": "PRIVATE" } }
+```
+
+`session-actions.ts` defines a small union for current session screens. Account
+checks share `bookingAccountIneligibility` with creation/admission. Create opens
+the existing wizard; payout readiness and submitted booking details remain
+command-time validation. Hosted-session operations share Booker's pure ownership,
+capacity and lifecycle preflights. The UI follows presence and fixed inputs;
+commands authorize again against current state even if the screen is stale.
+
+The cancellation preview includes a `cancel-session` POST action containing its
+`previewVersion`. The existing dialog still previews refunds, asks for confirmation
+and saves the original key/version before submission. A confirmed ambiguous
+request remains recoverable even after the session and its actions disappear,
+including through expired-login or access failures. Sign-in recovery keeps the
+original request key and preview version.
+Unverified hosts can still manage and cancel under the existing rules.
+
+`/profile/email` adds an address for accounts without one or resends confirmation
+for the server-read unconfirmed address. A nonblocking shell prompt links there.
+Confirmation callbacks and the status recheck refresh the screen's actions; a
+failed callback retains signed-in recovery guidance. Supabase's current
+`email_confirmed_at` is authoritative, including already-confirmed accounts.
+
+Public `/discover` and GET `/api/sessions` require no account. They continue to
+expose only PUBLIC, OPEN, future summaries. Join production wiring is separate;
+its adapter must enforce `403 EMAIL_VERIFICATION_REQUIRED` for entry and replay,
+and use this descriptor shape only for endpoints that are actually integrated.

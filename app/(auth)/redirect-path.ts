@@ -29,8 +29,8 @@ function hasUnsafeCharacters(value: string): boolean {
   return false;
 }
 
-/** Pages anyone can open without logging in: Landing, Register and Log in (dialog map). */
-const PUBLIC_PATHS: readonly string[] = ["/", "/login", "/register", AUTH_CALLBACK_PATH];
+/** Pages anyone can open without logging in: Landing, discovery, registration and login. */
+const PUBLIC_PATHS: readonly string[] = ["/", "/discover", "/login", "/register", AUTH_CALLBACK_PATH];
 
 /** Pages a logged-in user has no reason to see; they are sent Home instead. */
 const AUTH_PATHS: readonly string[] = ["/login", "/register"];

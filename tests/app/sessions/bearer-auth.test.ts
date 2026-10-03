@@ -169,3 +169,27 @@ describe("discovery identity authentication", () => {
     expect(setup.from).not.toHaveBeenCalled();
   });
 });
+
+
+describe("verified email required for session entry", () => {
+  test.each([
+    { email: undefined, email_confirmed_at: undefined },
+    { email: "", email_confirmed_at: "2026-10-01T00:00:00Z" },
+    { email: "player@example.com", email_confirmed_at: undefined },
+  ])("rejects missing or unconfirmed email before creation or replay: %j", async (email) => {
+    const setup = scenario();
+    setup.getUser.mockResolvedValue({ data: { user: { ...identity, ...email } }, error: null });
+    const authenticate = createBearerAuthenticator({ getUser: setup.getUser }, setup.status, { requireVerifiedEmail: true });
+    await expect(authenticate(request("Bearer token"))).rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+  });
+
+  test("rechecks confirmation when the same request is retried", async () => {
+    const setup = scenario();
+    setup.getUser.mockResolvedValue({ data: { user: { ...identity, email: "player@example.com", email_confirmed_at: "2026-10-01T00:00:00Z" } }, error: null });
+    const authenticate = createBearerAuthenticator({ getUser: setup.getUser }, setup.status, { requireVerifiedEmail: true });
+    expect(await authenticate(request("Bearer token"))).toBe(identity.id);
+    setup.getUser.mockResolvedValue({ data: { user: { ...identity, email: "player@example.com" } }, error: null });
+    await expect(authenticate(request("Bearer token"))).rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect(setup.getUser).toHaveBeenCalledTimes(2);
+  });
+});

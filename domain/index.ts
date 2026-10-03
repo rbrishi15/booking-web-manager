@@ -1,5 +1,9 @@
 export { Email } from "./accounts/email";
 export {
+  bookingAccountIneligibility,
+  type BookingAccountEligibility,
+} from "./accounts/booking-account-eligibility";
+export {
   Booking,
   type BookingDetails,
 } from "./sessions/booking";
@@ -105,4 +109,5 @@ export type {
 } from "./shared/statuses";
 export type { Region, Sport, UUID } from "./shared/types";
 export { Money } from "./finance/money";
+export { sessionPricing, type SessionPricing } from "./sessions/pricing";
 export { ReliabilityScore } from "./reliability/reliability-score";

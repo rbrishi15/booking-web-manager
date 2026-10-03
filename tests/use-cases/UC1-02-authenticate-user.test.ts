@@ -262,7 +262,7 @@ describe("UC1-02 Authenticate User", () => {
   });
 
   describe("which pages need a login", () => {
-    test.each(["/", "/login", "/register"])("%s is open to logged-out visitors", (path) => {
+    test.each(["/", "/discover", "/login", "/register"])("%s is open to logged-out visitors", (path) => {
       // Act
       const result = isPublicPath(path);
 
@@ -270,7 +270,7 @@ describe("UC1-02 Authenticate User", () => {
       expect(result).toBe(true);
     });
 
-    test.each(["/profile", "/groups", "/discover", "/wallet", "/groups/join/abc123"])(
+    test.each(["/profile", "/groups", "/wallet", "/groups/join/abc123"])(
       "%s requires a login",
       (path) => {
         // Act

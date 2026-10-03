@@ -15,8 +15,8 @@ async function insertSession(context: SessionTestContext, bookerId: string, name
   const sessionId = randomUUID();
   await context.pool.query(
     `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-     total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, room_token, holding_account_id)
-     values ($1,$2,$3,'West','Tennis','2042-08-02T23:00:00Z','2042-08-03T00:00:00Z',1001,3,2,333,$4,$5,$6)`,
+     total_cost_cents, total_slots, booking_share_cents, visibility, room_token, holding_account_id)
+     values ($1,$2,$3,'West','Tennis','2042-08-02T23:00:00Z','2042-08-03T00:00:00Z',1001,3,333,$4,$5,$6)`,
     [sessionId, bookerId, name, visibility, randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
   );
   return sessionId;
@@ -139,7 +139,8 @@ test("an empty Home offers weather and search on both layouts, and account logou
     await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Upcoming Bookings", exact: true })).toHaveCount(0);
     await page.goto("/discover");
-    await expect(page).toHaveURL(/\/login\?next=/);
+    await expect(page).toHaveURL(/\/discover$/);
+    await expect(page.getByRole("heading", { name: "Find Your Next Game", exact: true })).toBeVisible();
   } finally {
     await context.pool.end();
   }

@@ -1,0 +1,54 @@
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { createSession, searchVenues } from "@/app/sessions/create/transport";
+import { createClient } from "@/lib/supabase/client";
+import { emptySessionDraft, submissionPayload } from "@/app/sessions/create/model";
+
+vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
+const getSession = vi.fn();
+const fetcher = vi.fn<typeof fetch>();
+const payload = submissionPayload({ ...emptySessionDraft, venueName: "Court", region: "West", cost: "60", price: "12.01", startDate: "2045-06-17", startTime: "07:00", endDate: "2045-06-17", endTime: "08:00" }, "stable-key");
+beforeEach(() => {
+  vi.clearAllMocks();
+  getSession.mockResolvedValue({ data: { session: { access_token: "fixture-bearer" } }, error: null });
+  vi.mocked(createClient).mockReturnValue({ auth: { getSession } } as unknown as ReturnType<typeof createClient>);
+  vi.stubGlobal("fetch", fetcher);
+});
+afterEach(() => vi.unstubAllGlobals());
+test("sends the exact cent-valued payload through the bearer API", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ sessionId: "session", roomToken: "room", bookingShareCents: 1201 }, { status: 201 }));
+  expect(await createSession(payload)).toEqual({ status: "created" });
+  expect(fetcher).toHaveBeenCalledWith("/api/sessions", expect.objectContaining({ method: "POST", body: JSON.stringify(payload), headers: { Authorization: "Bearer fixture-bearer", "Content-Type": "application/json" } }));
+});
+test("follows the supplied submission action target and method", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ sessionId: "session", roomToken: "room", bookingShareCents: 1201 }, { status: 201 }));
+  await createSession(payload, { name: "submit-session", href: "/api/sessions?from=creation", method: "POST", inputs: {} });
+  expect(fetcher).toHaveBeenCalledWith("/api/sessions?from=creation", expect.objectContaining({ method: "POST" }));
+});
+test.each([[409, "PAYOUT_ACCOUNT_NOT_READY", false], [422, "INVALID_INPUT", false], [401, "UNAUTHENTICATED", false], [503, "SESSION_API_UNAVAILABLE", false], [500, "INTERNAL_ERROR", true]])("classifies %s %s for safe retry", async (status, code, ambiguous) => {
+  fetcher.mockResolvedValueOnce(Response.json({ error: { code, message: "private details" } }, { status }));
+  const result = await createSession(payload);
+  expect(result).toMatchObject({ status: "error", code, ambiguous });
+  expect(result).not.toHaveProperty("message", "private details");
+});
+test("treats network and malformed success responses as ambiguous", async () => {
+  fetcher.mockRejectedValueOnce(new Error("private network details"));
+  expect(await createSession(payload)).toMatchObject({ status: "error", ambiguous: true });
+  fetcher.mockResolvedValueOnce(Response.json({ broken: true }, { status: 201 }));
+  expect(await createSession(payload)).toMatchObject({ status: "error", ambiguous: true });
+});
+test("an expired local sign-in cannot send a creation request", async () => {
+  getSession.mockResolvedValue({ data: { session: null }, error: null });
+  expect(await createSession(payload)).toMatchObject({ code: "UNAUTHENTICATED", ambiguous: false });
+  expect(fetcher).not.toHaveBeenCalled();
+});
+test("email rejection is definitive and explains how to recover", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ error: { code: "EMAIL_VERIFICATION_REQUIRED", message: "private details" } }, { status: 403 }));
+  expect(await createSession(payload)).toEqual({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", ambiguous: false,
+    message: "Verify your email before creating a session. You can still browse sessions." });
+});
+test("encodes lookup queries, authenticates, and propagates cancellation", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ items: [], nextPage: 2 }));
+  const controller = new AbortController();
+  expect(await searchVenues("Bukit & Court", 1, controller.signal)).toEqual({ items: [], nextPage: 2 });
+  expect(fetcher).toHaveBeenCalledWith("/api/venues?q=Bukit+%26+Court&page=1", expect.objectContaining({ signal: controller.signal, headers: { Authorization: "Bearer fixture-bearer" } }));
+});

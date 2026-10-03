@@ -190,7 +190,7 @@ at different levels of detail.
 
 UC2-02 provides request validation, Swagger documentation, Supabase bearer
 authentication and atomic PostgreSQL persistence. With server settings and
-migrations through 0006 applied, `POST /api/sessions` creates or replays a session.
+migrations through 0009 applied, `POST /api/sessions` creates or replays a session.
 Missing settings return `503 SESSION_API_UNAVAILABLE` with
 `Session creation is not available yet`.
 
@@ -215,14 +215,26 @@ Run `npm run dev`, then open
 [Swagger UI](http://127.0.0.1:3000/api-docs). The OpenAPI document is served at
 `/api/openapi` and can also be imported into Postman. Documentation needs no
 credentials or local Supabase stack; an unconfigured server returns 503 for
-session creation. UC2-01 adds the signed-in [discovery page](./app/discover/README.md)
+session creation. UC2-01 adds the public [discovery page](./app/discover/README.md)
 and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
 Swagger documents discovery, creation and UC2-03a visibility management.
 The signed-in [Sessions page](./app/sessions/README.md#uc2-03a-visibility-management)
 lists hosted upcoming sessions with public/private controls. Management requires
 migration 0007 and uses serializable transactions; visible discovery pages poll
 every second to reflect committed changes within three seconds under healthy
-service conditions. Session-creation UI and OneMap integration remain separate work.
+service conditions. The [three-step creation wizard](./app/sessions/README.md#uc2-02-create-session-wizard)
+at `/sessions/create` includes server-side OneMap search, manual venue entry,
+Singapore date/time editing and adjustable cent-valued pricing. Omitted API
+prices retain equal splitting; accepted prices are fixed Session state under
+[ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
+survive reload in user-scoped session storage and replay with their original key.
+
+Email verification gates session creation and admission. Signed-out and unverified
+visitors can browse `/discover`; signed-in users see a nonblocking recovery prompt.
+Current session screens receive lightweight `{ name, href, method, inputs }`
+actions from the server, and commands recheck authorization on every request.
+See the [session action contract](./app/sessions/README.md#lightweight-contextual-actions).
+Join production wiring remains separate.
 
 ## Team
 
@@ -248,6 +260,14 @@ The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
 `/storybook`; these resources work without Supabase or database configuration.
 Signed-in users see their upcoming bookings at `/`, or Singapore weather when
 there are none. Home has no filters; the Search button opens `/discover`.
+
+### Unavailable pages
+
+Unimplemented Wallet links open an explicit development page in the signed-in
+shell. Unknown URLs show a custom 404 that retains account navigation for signed-in
+users. Both offer working links to Home and hosted sessions; anonymous fallback
+content offers Home. These views are documented under Storybook's
+`Navigation/Unavailable pages`.
 
 ### Storybook on the same site
 

@@ -26,6 +26,21 @@ const holdingAccountId = "00000000-0000-4000-8000-000000000001";
 
 // Owner: Neoh (liang799) — /app/sessions
 describe("UC2-02 POST /api/sessions", () => {
+  test("accepts and persists the chosen per-slot price, including above-cost collection", async () => {
+    const { POST, unitOfWork } = await sessionRouteScenario();
+    const response = await POST(postRequest(creationRequest({ pricePerSlotCents: 600 })));
+    const result: CreateSessionResult = await response.json();
+    expect(response.status).toBe(201);
+    expect(result.bookingShareCents).toBe(600);
+    expect(unitOfWork.requireSession(result.sessionId).bookingShare.toCents()).toBe(600);
+  });
+
+  test.each([166, 667])("rejects a chosen price of %s outside policy bounds", async (pricePerSlotCents) => {
+    const { POST, unitOfWork } = await sessionRouteScenario();
+    const response = await POST(postRequest(creationRequest({ pricePerSlotCents })));
+    expect(response.status).toBe(422);
+    expect(unitOfWork.sessions.size).toBe(0);
+  });
   test("imports without assembling dependencies or authenticating", async () => {
     const authenticate = vi.fn(verifiedTestUser);
     const { createForSubmission, unitOfWork } = await sessionRouteScenario(authenticate);
@@ -56,7 +71,6 @@ describe("UC2-02 POST /api/sessions", () => {
     expect(session.booking.totalCost.toCents()).toBe(1001);
     expect(session.bookingShare.toCents()).toBe(result.bookingShareCents);
     expect(session.totalSlots).toBe(3);
-    expect(session.minimumHeadcount).toBe(2);
     expect(session.roomToken).toBe(result.roomToken);
     expect(session.holdingAccountId).toBe(holdingAccountId);
     expect(session.visibility).toBe("PRIVATE");
@@ -736,7 +750,7 @@ function creationRequest(config: Partial<SessionConfig> = {}) {
       endAt: sessionEndsAt.toISOString(),
       totalCostCents: 1001,
     },
-    config: { totalSlots: 3, minimumHeadcount: 2, ...config },
+    config: { totalSlots: 3, ...config },
   };
 }
 

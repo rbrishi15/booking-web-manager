@@ -42,6 +42,7 @@ describe("application OpenAPI document", () => {
       get: { operationId: "discoverSessions" },
       post: { operationId: "createSession" },
     });
+    expect(document.paths["/api/venues"]?.get).toMatchObject({ operationId: "searchVenues", security: [{ bearerAuth: [] }] });
   });
 
   test("composes an independent public feature without imposing session authentication", async () => {
@@ -56,7 +57,7 @@ describe("application OpenAPI document", () => {
     });
     expect(document.security).toBeUndefined();
     expect(document.paths["/api/notices"]?.get?.security).toBeUndefined();
-    expect(document.paths["/api/sessions"]?.get?.security).toEqual([{ bearerAuth: [] }]);
+    expect(document.paths["/api/sessions"]?.get?.security).toEqual([]);
     expect(document.paths["/api/sessions"]?.post?.security).toEqual([{ bearerAuth: [] }]);
     await expect(SwaggerParser.validate(await Response.json(document).json())).resolves.toBeDefined();
   });
@@ -75,7 +76,7 @@ describe("application OpenAPI document", () => {
       properties: { error: { properties: { code: { type: "string" }, message: { type: "string" } } } },
     });
     for (const operation of [path?.get, path?.post]) {
-      expect(operation?.responses["401"]).toMatchObject({
+      expect(operation?.responses["400"]).toMatchObject({
         content: { "application/json": { schema: { $ref: "#/components/schemas/ApiError" } } },
       });
     }

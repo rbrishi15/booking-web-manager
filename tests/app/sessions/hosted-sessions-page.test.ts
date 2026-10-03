@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import SessionsPage, { dynamic } from "@/app/sessions/page";
+import SessionsPage, { dynamic } from "@/app/sessions/(manage)/page";
 import { getSessionManagementDependencies } from "@/app/sessions/management-server-dependencies";
 import { SessionManagementUnavailableError } from "@/app/sessions/session-management-unavailable";
 import { DomainError } from "@/domain";
@@ -20,7 +20,7 @@ const forBooker = vi.fn<ListHostedSessions["forBooker"]>();
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getCurrentUser).mockResolvedValue({
-    id: "booker", email: "booker@example.com", displayName: "Booker", profileName: "Booker",
+    id: "booker", email: "booker@example.com", emailVerified: true, pendingEmail: null, accountStatus: "ACTIVE", displayName: "Booker", profileName: "Booker",
     preferredSports: [], preferredRegions: [], reliabilityScore: 100,
   });
   vi.mocked(getAccountStatus).mockResolvedValue({ kind: "active" });
@@ -43,6 +43,7 @@ describe("hosted Sessions page", () => {
       sessionId: `session-${index}`, venueName: "West sports hall", sport: "Tennis", region: "West",
       startAt: new Date("2042-08-02T10:00:00Z"), endAt: new Date("2042-08-02T12:00:00Z"),
       visibility: "PRIVATE" as const, availableSlots: index === 0 ? 0 : 3,
+      actions: index === 0 ? [{ name: "preview-cancellation" as const }] : [{ name: "set-visibility" as const, visibility: "PUBLIC" as const }, { name: "preview-cancellation" as const }],
       roomToken: "must-not-leak", participations: ["must-not-leak"],
     }));
     forBooker.mockResolvedValue(sessions);
@@ -53,7 +54,18 @@ describe("hosted Sessions page", () => {
       sessionId: "session-0", venueName: "West sports hall", sport: "Tennis", region: "West",
       startAt: "2042-08-02T10:00:00.000Z", endAt: "2042-08-02T12:00:00.000Z",
       visibility: "PRIVATE", availableSlots: 0,
+      actions: [{ name: "preview-cancellation", href: "/api/sessions/session-0/cancellation-preview", method: "GET", inputs: {} }],
     });
+    expect(page.props.actions).toEqual([{ name: "create-session", href: "/sessions/create", method: "GET", inputs: {} }]);
+  });
+
+  test("unverified users can view hosted sessions and receive the email recovery action", async () => {
+    const user = await getCurrentUser();
+    vi.mocked(getCurrentUser).mockResolvedValue({ ...user!, emailVerified: false });
+    const page = await SessionsPage();
+    expect(page.props.outcome).toEqual({ status: "ready", sessions: [] });
+    expect(page.props.actions).toEqual([{ name: "verify-email", href: "/profile/email", method: "GET", inputs: {} }]);
+    expect(forBooker).toHaveBeenCalledExactlyOnceWith("booker");
   });
 
   test.each(["inactive", "missing-profile"] as const)("redirects a %s account before management reads", async (kind) => {

@@ -15,10 +15,24 @@ PKCE cookie was created, without a hardcoded localhost fallback or an extra
 Vercel environment variable.
 
 The public callback exchanges Supabase's `code` for a cookie session, then
-redirects Home without the code. Middleware lets it run before checking for
-a session. Failed exchanges go to login with recovery instructions. Signup
+re-reads the Auth user before redirecting Home without the code. Middleware lets
+it run before checking for a session. Failed exchanges go to login with recovery
+instructions, or to `/profile/email` when an existing session is still usable. Signup
 without a session stays signed out; the confirmation notice and unconfirmed
 login both offer a new email link.
+
+Signed-in accounts with a missing or unconfirmed email receive a nonblocking
+prompt. `/profile/email` can add a missing email, resend confirmation and recheck
+the current Auth user after a link is opened in another tab or browser. Signed-in
+resend targets come from the Auth user, never submitted form fields. Adding an
+email uses `updateUser` on that same account; its `new_email` remains pending
+until confirmed. With an empty current email, repeat that update to resend the
+pending addition. The public resend endpoint looks accounts up by current email,
+so passing a pending address to it can silently send nothing.
+
+Session actions use the trusted current email and `email_confirmed_at`, not
+`confirmed_at` or editable user metadata. Existing Supabase-confirmed accounts
+remain accepted; this change does not require all legacy accounts to reconfirm.
 
 ### Required hosted Supabase settings
 
@@ -34,6 +48,10 @@ In [Authentication → URL Configuration](https://supabase.com/dashboard/project
    hardcoded to localhost or using only `{{ .SiteURL }}` will not complete this
    callback flow. This app expects the default confirmation URL and PKCE code,
    not a custom `/auth/confirm?token_hash=...` template.
+5. Keep **Confirm email** enabled. In **Change email**, also retain the default
+   `{{ .ConfirmationURL }}` link for missing-email recovery. Secure email change
+   may require confirmation from both old and new addresses when an old email
+   exists; an email addition with no old address only confirms the new one.
 
 These are hosted Auth settings; deploying code or running database migrations
 does not update them. A redirect outside the allowlist can fall back to Site

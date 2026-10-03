@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { PLATFORM_HOLDING_ACCOUNT_ID } from "@/lib/money/constants";
 import { PostgresSessionCreationTransaction } from "@/lib/sessions/postgres-session-creation-transaction";
 import { PostgresTransactor } from "@/lib/database/postgres-transactor";
 import { PostgresUserReader } from "@/lib/sessions/postgres-user-reader";
+import { PostgresSessionManagementRepository } from "@/lib/sessions/postgres-session-management-repository";
+import { PostgresSessionDiscoveryReader } from "@/lib/sessions/postgres-session-discovery-reader";
+import type { SqlExecutor } from "@/lib/money/sql";
 import {
   CreateSessions,
   type SessionBooking,
@@ -24,7 +28,7 @@ const booking: SessionBooking = {
   endAt: new Date("2030-01-02T12:00:00Z"),
   totalCostCents: 1001,
 };
-const config = { totalSlots: 3, minimumHeadcount: 2 };
+const config = { totalSlots: 3 };
 const operationKey = (userId: string, key: string) =>
   JSON.stringify(["UC2-02", userId, key]);
 
@@ -110,6 +114,77 @@ describe("UC2-02 PostgreSQL persistence", () => {
     ).toEqual([{ count: 1 }]);
   });
 
+  test("persists and replays custom prices and enforces the new database bounds", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    const created = await useCase(transaction(key)).forBooker(booker.userId, booking, { ...config, visibility: "PUBLIC", pricePerSlotCents: 600 });
+    expect(created.bookingShareCents).toBe(600);
+    expect((await context.pool.query("select booking_share_cents from sessions where session_id = $1", [created.sessionId])).rows).toEqual([{ booking_share_cents: "600" }]);
+    expect(await useCase(transaction(key)).forBooker(booker.userId, booking, { ...config, pricePerSlotCents: 500 })).toEqual(created);
+    const sql: SqlExecutor = { query: async (statement, values) => (await context.pool.query(statement, values ? [...values] : undefined)).rows };
+    expect((await new PostgresSessionManagementRepository(sql).get(created.sessionId))?.bookingShare.toCents()).toBe(600);
+    expect((await new PostgresSessionDiscoveryReader(sql).search({}, now)).find((session) => session.sessionId === created.sessionId)?.bookingShareCents).toBe(600);
+    for (const invalid of [166, 667]) {
+      await expect(context.pool.query("update sessions set booking_share_cents = $2 where session_id = $1", [created.sessionId, invalid])).rejects.toMatchObject({ code: "23514", constraint: "sessions_price_within_range" });
+    }
+  });
+
+  test("migration preserves equal-split sessions and historical holds without rewriting rows", async () => {
+    const connection = await context.pool.connect();
+    try {
+      // Temporary tables shadow public tables, keeping the migration rehearsal isolated.
+      await connection.query(`create temporary table sessions (session_id text, total_cost_cents bigint, total_slots integer, booking_share_cents bigint,
+        constraint sessions_calculated_share check (booking_share_cents = total_cost_cents / total_slots))`);
+      await connection.query("create temporary table fund_holds (session_id text, amount_cents bigint)");
+      await connection.query("insert into sessions values ('odd',1001,3,333),('cent',2,2,1),('safe',9007199254740991,8,1125899906842623)");
+      await connection.query("insert into fund_holds values ('odd',333),('safe',1125899906842623)");
+      const before = (await connection.query("select * from sessions order by session_id")).rows;
+      const holds = (await connection.query("select * from fund_holds order by session_id")).rows;
+      await connection.query(await readFile("supabase/migrations/0008_session_pricing.sql", "utf8"));
+      expect((await connection.query("select * from sessions order by session_id")).rows).toEqual(before);
+      expect((await connection.query("select * from fund_holds order by session_id")).rows).toEqual(holds);
+      await connection.query("insert into sessions values ('custom',1001,3,600)");
+      await expect(connection.query("update sessions set booking_share_cents = 1125899906842624 where session_id = 'safe'"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_price_within_range" });
+    } finally {
+      await connection.query("rollback");
+      await connection.query("drop table if exists pg_temp.fund_holds, pg_temp.sessions");
+      connection.release();
+    }
+  });
+
+  test("configuration migration removes its obsolete column and preserves sessions and historical holds", async () => {
+    const migration = await readFile("supabase/migrations/0009_session_capacity.sql", "utf8");
+    const removedColumn = /drop column (\w+)/i.exec(migration)?.[1];
+    if (!removedColumn) throw new Error("Expected one configuration column removal");
+    const previousSchema = await readFile("supabase/migrations/0006_session_creation.sql", "utf8");
+    const definition = previousSchema.split("\n").find((line) => line.trimStart().startsWith(`${removedColumn} `))?.trim().replace(/,$/, "");
+    if (!definition) throw new Error("Expected the original column definition");
+    const connection = await context.pool.connect();
+    try {
+      await connection.query(`create temporary table sessions (session_id text, total_cost_cents bigint,
+        total_slots integer constraint sessions_total_slots_check check (total_slots between 1 and 8),
+        booking_share_cents bigint, ${definition})`);
+      await connection.query("create temporary table fund_holds (session_id text, amount_cents bigint)");
+      await connection.query("insert into sessions values ('legacy',1001,3,333,2),('custom',1001,3,600,3)");
+      await connection.query("insert into fund_holds values ('legacy',333),('custom',600)");
+      const sessions = (await connection.query("select session_id, total_cost_cents, total_slots, booking_share_cents from sessions order by session_id")).rows;
+      const holds = (await connection.query("select * from fund_holds order by session_id")).rows;
+      await connection.query(migration);
+      expect((await connection.query("select * from sessions order by session_id")).rows).toEqual(sessions);
+      expect((await connection.query("select * from fund_holds order by session_id")).rows).toEqual(holds);
+      expect((await connection.query("select count(*)::int as count from pg_attribute where attrelid = 'pg_temp.sessions'::regclass and attname = $1 and not attisdropped", [removedColumn])).rows).toEqual([{ count: 0 }]);
+      await expect(connection.query("insert into sessions values ('one',100,1,100)"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_total_slots_check" });
+      await expect(connection.query("insert into sessions values ('nine',900,9,100)"))
+        .rejects.toMatchObject({ code: "23514", constraint: "sessions_total_slots_check" });
+    } finally {
+      await connection.query("rollback");
+      await connection.query("drop table if exists pg_temp.fund_holds, pg_temp.sessions");
+      connection.release();
+    }
+  });
+
   test("replays changed valid input without rerunning payout or booking-time eligibility", async () => {
     const booker = await context.identity();
     const key = randomUUID();
@@ -136,7 +211,7 @@ describe("UC2-02 PostgreSQL persistence", () => {
       await replayCase.forBooker(
         booker.userId,
         { ...booking, venueName: "Changed venue", totalCostCents: 9999 },
-        { totalSlots: 4, minimumHeadcount: 3 },
+        { totalSlots: 4 },
       ),
     ).toEqual(created);
     await expect(
@@ -146,6 +221,38 @@ describe("UC2-02 PostgreSQL persistence", () => {
         config,
       ),
     ).rejects.toMatchObject({ code: "PAYOUT_ACCOUNT_NOT_READY" });
+  });
+
+  test("refuses durable replay after email confirmation is removed and resumes after reconfirmation", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    const created = await useCase(transaction(key)).forBooker(booker.userId, booking, config);
+    await context.pool.query("update auth.users set email_confirmed_at = null where id = $1", [booker.userId]);
+
+    await expect(useCase(transaction(key)).forBooker(booker.userId, booking, config))
+      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect((await context.pool.query(
+      `select (select count(*)::int from sessions where booker_id = $1) as sessions,
+       (select count(*)::int from idempotency_keys where idempotency_key = $2 and status = 'SUCCEEDED') as replay`,
+      [booker.userId, operationKey(booker.userId, key)],
+    )).rows).toEqual([{ sessions: 1, replay: 1 }]);
+
+    await context.pool.query("update auth.users set email_confirmed_at = $2 where id = $1", [booker.userId, now]);
+    expect(await useCase(transaction(key)).forBooker(booker.userId, booking, config)).toEqual(created);
+  });
+
+  test("rejects fresh creation without an email before persisting a session or replay claim", async () => {
+    const booker = await context.identity();
+    const key = randomUUID();
+    await context.pool.query("update auth.users set email = null, email_confirmed_at = null where id = $1", [booker.userId]);
+
+    await expect(useCase(transaction(key)).forBooker(booker.userId, booking, config))
+      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect((await context.pool.query(
+      `select (select count(*)::int from sessions where booker_id = $1) as sessions,
+       (select count(*)::int from idempotency_keys where idempotency_key = $2) as replay`,
+      [booker.userId, operationKey(booker.userId, key)],
+    )).rows).toEqual([{ sessions: 0, replay: 0 }]);
   });
 
   test("the same submission text is independently scoped to each booker", async () => {
@@ -298,6 +405,7 @@ describe("UC2-02 PostgreSQL persistence", () => {
     expect([...(loaded?.preferredRegions ?? [])]).toEqual(["West"]);
     expect(loaded?.payoutAccount?.setupStatus).toBe("COMPLETE");
     expect(loaded?.email?.toString()).toBe(booker.email);
+    expect(loaded?.emailVerified).toBe(true);
   });
 
   test("session group lock makes concurrent archive wait and reject unsettled obligations", async () => {
@@ -316,8 +424,8 @@ describe("UC2-02 PostgreSQL persistence", () => {
       await creator.query("begin");
       await creator.query(
         `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at, total_cost_cents,
-        total_slots, minimum_headcount, booking_share_cents, room_token, holding_account_id, invited_group_id)
-        values ($1,$2,'Concurrent venue','West','Badminton',$3,$4,1001,3,2,333,$5,$6,$7)`,
+        total_slots, booking_share_cents, room_token, holding_account_id, invited_group_id)
+        values ($1,$2,'Concurrent venue','West','Badminton',$3,$4,1001,3,333,$5,$6,$7)`,
         [
           randomUUID(),
           booker.userId,

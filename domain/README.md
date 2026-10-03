@@ -85,7 +85,11 @@ the pending payout. These histories preserve the rule that payout IDs and
 idempotency keys cannot be reused after a failed attempt, following ADR-0002's
 complete-state construction contract.
 
-`UserDetails` requires a `Wallet`, `ReliabilityScore`, and membership IDs.
+`UserDetails` requires a `Wallet`, `ReliabilityScore`, membership IDs, and trusted
+`emailVerified` state from the identity provider. Active accounts may have no
+email or an unverified email. Creation and admission require a present, verified
+email through the shared `bookingAccountIneligibility` policy; discovery and
+existing-participation exits do not impose that requirement.
 `WalletDetails` requires wallet/user IDs and a complete array of committed
 `LedgerTransaction` objects. It validates entry types, matching wallet IDs,
 unique transaction IDs, and nonnegative derived funds within safe integer cents.
@@ -99,7 +103,7 @@ their writes and protect against concurrent overspending.
 
 Named creation factories remain where they apply business rules or defaults:
 `User.create({ userId, email: new Email(emailText), walletId, now })` registers an active user with a
-wallet with empty transactions and zero funds, empty memberships, and the
+wallet with empty transactions and zero funds, an unverified email, empty memberships, and the
 empty-history reliability default. `user.asBooker().createSession(details)` owns
 the session creation workflow: booker eligibility, payout readiness, an upcoming
 booking, a positive share, and initial defaults. `BookerSessionCreation` contains
@@ -121,7 +125,9 @@ It preserves case and text; `equals()` compares exact text. A dotted domain is
 not required, and syntax validation does not establish deliverability or uniqueness.
 Invalid input throws `DomainError` with code `INVALID_INPUT`.
 Registration and profile updates accept `Email`; hydration and `user.email`
-use `Email | null`, with null reserved for inactive accounts. Application and
+use `Email | null`, with null also representing an active account without an
+email. Inactive accounts remain anonymised. Changing the email clears verification;
+reloading from trusted identity-provider state restores the current fact. Application and
 repository adapters convert incoming strings with `new Email(text)` and extract
 storage/output strings with `user.email?.toString() ?? null`. Older addresses
 that violate these stricter rules fail validation when loaded; they are not
@@ -180,6 +186,13 @@ than raw actor or payout facts. Creation and payout-destination acquisition
 retain their active-account requirements; cancellation, visibility, removal,
 and manual attendance add no new active-account restriction.
 
+`Booker.assertCanCreateSession`, `assertCanChangeVisibility` and `assertCanCancel`
+are pure preflight assertions shared by the commands and server action offers.
+They do not create Sessions, calculate refund instructions or mutate aggregates.
+Creation preflight checks account/email and payout readiness; booking inputs are
+validated by the actual creation command. Offers describe a current snapshot and
+commands still recheck their guards against fresh loaded state.
+
 Session accepts prepared immutable children through these bounded operations,
 all returning `void`:
 
@@ -225,6 +238,13 @@ share. `toDollars()` returns an exact decimal string with two fractional digits
 (for example, `Money.fromCents(333).toDollars()` returns `"3.33"`). Arithmetic and
 persistence continue to use integer cents; currency symbols and locale formatting
 belong at the render layer.
+
+`sessionPricing(costCents, slots)` provides one framework-independent calculation
+for UI suggestions and server validation. `Session.bookingShare` is the accepted,
+immutable per-slot price: omission retains floor division, while a chosen price
+is bounded by [ADR-0012](../docs/adr/0012-booker-selected-session-pricing.md).
+The management repository hydrates it from stored `booking_share_cents`. Holds
+keep their original amounts through refunds and settlement.
 
 `Booking` is an immutable value object requiring a positive total cost and
 `startAt < endAt`. A session has at most eight commitments, including accepted

@@ -18,6 +18,36 @@ import {
 
 describe("Participant", () => {
   describe("Admission and reentry", () => {
+    test("join_WhenEmailIsMissingAndSessionIsFull_RejectsWithoutChangingWaitlist", () => {
+      // Arrange
+      const bookingSession = createTestSession({ committedUserIds: ["alice", "ben"] });
+      const applicant = createTestUser({ userId: "cara", email: null, emailVerified: false });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => applicant.asParticipant().join(bookingSession, {
+        participationId: "p-cara",
+        now: hoursBeforeSessionStart(48),
+      })).toThrow(expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("join_WhenEmailIsUnverified_RejectsWithoutChangingSessionOrFunds", () => {
+      // Arrange
+      const bookingSession = createTestSession();
+      const applicant = createTestUser({ userId: "alice", emailVerified: false });
+      const previousState = sessionState(bookingSession);
+
+      // Act & Assert
+      expect(() => applicant.asParticipant().join(bookingSession, {
+        participationId: "p-alice",
+        holdId: "h-alice",
+        now: hoursBeforeSessionStart(48),
+      })).toThrow(expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+      expect(applicant.wallet.getAvailableBalance().toCents()).toBe(10_000);
+    });
+
     test("join_WhenReplacementRefundFails_LeavesRosterQueueAndHoldsUnchanged", () => {
       // Arrange
       const waitlistDepartureTime = hoursBeforeSessionStart(48);

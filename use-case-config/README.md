@@ -2,23 +2,15 @@
 
 ## Discovery configuration
 
-UC2-01 assembles its dependencies in `discovery.ts`, using the same validated
-Supabase/PostgreSQL settings and lazy pool provider as creation. Its bearer
-verification establishes identity only; the API validates the external query
-before passing that identity to `DiscoverSessions.forParticipant(...)`. The page
-uses cookie identity and invokes the same use case directly. The use case loads
-one complete User and checks active-account eligibility through its Participant
-role on every invocation. Creation retains its existing account checks before
-creation or replay. Discovery has its own unavailable error and dependency getter.
+UC2-01 assembles `DiscoverSessions.searchPublic` in `discovery.ts`, using only
+the validated `DATABASE_URL` and a lazy pool. Supabase credentials and an
+application User are unnecessary for public browsing. Creation keeps its separate
+Supabase/account verification and submission assembly.
 
-`PostgresSessionDiscoveryTransaction` acquires the lazy pool inside `run()` and
-uses the existing `PostgresTransactor` to give `PostgresUserReader` and
-`PostgresSessionDiscoveryReader` one repeatable-read transaction executor. It uses
-ordinary transaction mode because User hydration takes shared locks, and makes
-one attempt with existing infrastructure-error propagation. It writes no ledger
-entries and uses no replay store. Complete User hydration includes wallet history,
-memberships and calculated reliability; incomplete or malformed state fails
-instead of supplying partial facts. Only active account status limits discovery.
+`PostgresSessionDiscoveryTransaction` gives the public summary reader one
+repeatable-read transaction executor. It has no account repository, shared user
+locks, ledger writes or replay store. Missing/malformed settings remain opaque
+errors through discovery's own unavailable response and dependency getter.
 
 The adapter returns all matching public session summaries ordered by start and
 session ID, with no cursor predicate or result cap. The app owns 20-item pagination
@@ -28,6 +20,30 @@ rows, room tokens, or direct browser access to session tables. See the
 [discovery guide](../app/discover/README.md) for filters, pagination, states,
 Swagger and Storybook coverage. OneMap settings are not needed for stored-region
 discovery.
+
+## Venue search configuration
+
+Authenticated `GET /api/venues?q=…&page=…` uses the app-owned contract in
+`app/venues`, dependency assembly in `venues.ts`, and the `OneMapVenueSearch`
+adapter in `lib/venues`. It requires the public Supabase URL/anonymous key for
+bearer verification. Optional server-only `ONEMAP_API_EMAIL` and
+`ONEMAP_API_PASSWORD` are registered OneMap account credentials, not an API key.
+Restart after changing settings because successful assembly is cached per runtime.
+
+The adapter POSTs email/password to OneMap's
+[`/api/auth/post/getToken`](https://www.onemap.gov.sg/apidocs/authentication),
+caches the access token until shortly before `expiry_timestamp`, shares concurrent
+token requests, and refreshes once after a 401. Searches have a five-second timeout.
+Provider tokens, raw responses and credentials are never sent to the browser.
+Lookup occurs outside creation/database transactions and reserves no venue.
+
+The bundled [URA region boundaries](../lib/venues/data/README.md) are resolved
+with `@turf/boolean-point-in-polygon`. The server returns application-owned names,
+addresses, coordinates, regions and pagination only. Unknown/shared-boundary
+coordinates return a null region for manual selection. Missing settings return
+503; provider failures return opaque 502 responses. Manual entry is always usable.
+Deterministic tests cover translation, expiry/refresh and all five regions.
+Live OneMap verification requires credentials, which are absent locally.
 
 ## Session creation configuration
 
@@ -44,7 +60,7 @@ use cases coordinate domain behavior, and infrastructure adapters live in `/lib`
 
 | Capability | Responsibility |
 | --- | --- |
-| `authenticate(request)` | Verify a Supabase bearer token and current account status for every request, including replay. |
+| `authenticate(request)` | Verify a Supabase bearer token, current active status and present confirmed email for every request, including replay. |
 | `createForSubmission(submission)` | Construct a fresh `CreateSessions` and PostgreSQL transaction capturing this submission's retry key. |
 
 The route authenticates, parses JSON, invokes `forBooker(bookerId, booking, config)`
@@ -88,11 +104,12 @@ read session room tokens, payout setup or participation facts directly.
 Missing, malformed, rejected or expired bearer credentials return 401. Current
 inactive accounts return `INACTIVE_ACCOUNT` (403); missing profiles return
 `NOT_FOUND` (404). Provider or lookup failures return opaque 500s. Current account
-status is read before every creation or replay, preventing a deactivated account
-from retrieving a stored private room token.
+status and Supabase `email_confirmed_at` are read before every creation or replay.
+A missing or unconfirmed address returns `403 EMAIL_VERIFICATION_REQUIRED`, even
+when the same key previously succeeded. Existing confirmed accounts stay eligible.
 
 The PostgreSQL reader hydrates a complete User through domain constructors:
-profile and auth email, optional payout setup, wallet identity and **all** committed
+profile, nullable auth email and its confirmation timestamp, optional payout setup, wallet identity and **all** committed
 ledger entries, memberships, and reliability calculated from attendance history.
 Missing required related facts or malformed stored data fail instead of inventing
 an empty wallet or default history. Reads share a repeatable-read transaction;
@@ -101,13 +118,25 @@ account and payout rows are locked during creation.
 The creation adapter uses the existing ledger unit of work and idempotency store.
 Its key is `JSON.stringify(["UC2-02", bookerId, submission.idempotencyKey])`.
 The fingerprint includes only this stable identity, so changed valid booking
-input still replays the first result. Session and response are committed together,
+input still replays the first result. The transaction locks and reads current
+account status, email and confirmation before every idempotency claim, including
+whole-transaction retries; a stored response cannot bypass these checks. Session and response are committed together,
 rolled back together, and competing claims serialize. Serialization failures and
 deadlocks retry the whole transaction up to three attempts. A replay does not
 rerun creation-specific payout or booking-time eligibility; a new creation needs
 a new key. Creation writes no ledger entries or payout intents.
 
 ## Validation
+
+Apply migrations through `0008_session_pricing.sql` before deploying the wizard's
+custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
+bounds without updating existing sessions or fund holds.
+
+Apply `0009_session_capacity.sql` before deploying the current session
+contract. It drops the obsolete participant-count configuration column; capacity,
+quoted shares, participation and financial records are retained. The database
+continues to enforce 2–8 slots. Previously
+applied migrations remain in the history so existing installations can upgrade.
 
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;

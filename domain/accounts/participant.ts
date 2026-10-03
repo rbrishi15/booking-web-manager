@@ -22,6 +22,7 @@ import type {
 } from "../shared/operations";
 import type { UUID } from "../shared/types";
 import type { User } from "./user";
+import { bookingAccountIneligibility } from "./booking-account-eligibility";
 
 /** Action details; the participant supplies its user's loaded admission facts. */
 export interface ParticipantJoinCommand {
@@ -69,7 +70,7 @@ interface CommitmentTerms {
 }
 
 /**
- * User's participant role. Authorizes discovery and coordinates admission, invitation acceptance,
+ * User's participant role. Coordinates admission, invitation acceptance,
  * promotion, withdrawal, and waitlist departure using this user's loaded facts.
  * This is a role view over User, with no independently owned aggregate lifecycle.
  * Each workflow prepares its result and immutable child changes before asking
@@ -88,15 +89,6 @@ export class Participant {
 
   get userId(): UUID {
     return this.#user.userId;
-  }
-
-  /** Discovery needs an active account, without admission or funding requirements. */
-  assertCanDiscoverSessions(): void {
-    DomainError.require(
-      this.#user.accountStatus === "ACTIVE",
-      "INACTIVE_ACCOUNT",
-      "An inactive account cannot use the session API",
-    );
   }
 
   join(
@@ -431,6 +423,11 @@ export class Participant {
         "INACTIVE_ACCOUNT",
         "An inactive account cannot participate",
       );
+    if (reason === "EMAIL_VERIFICATION_REQUIRED")
+      throw new DomainError(
+        "EMAIL_VERIFICATION_REQUIRED",
+        "Confirm your email before joining a session",
+      );
     if (reason === "LOW_RELIABILITY")
       throw new DomainError(
         "LOW_RELIABILITY",
@@ -448,7 +445,12 @@ export class Participant {
     terms: AdmissionTerms,
     requireFunds = true,
   ): PromotionResult["reason"] {
-    if (this.#user.accountStatus !== "ACTIVE") return "INACTIVE_ACCOUNT";
+    const accountReason = bookingAccountIneligibility({
+      accountStatus: this.#user.accountStatus,
+      hasEmail: this.#user.email !== null,
+      emailVerified: this.#user.emailVerified,
+    });
+    if (accountReason !== undefined) return accountReason;
     if (
       terms.minimumReliability !== undefined &&
       !this.#user.reliabilityScore.meetsMinimum(terms.minimumReliability)

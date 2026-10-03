@@ -64,6 +64,7 @@ export interface PromotionResult extends FinancialResult {
   readonly participationId?: UUID;
   readonly reason?:
     | "INACTIVE_ACCOUNT"
+    | "EMAIL_VERIFICATION_REQUIRED"
     | "LOW_RELIABILITY"
     | "INSUFFICIENT_FUNDS";
   readonly refundedParticipationId?: UUID;

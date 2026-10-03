@@ -18,7 +18,7 @@ test("serves the shared OpenAPI document with creation, discovery and visibility
     },
   });
   const discovery = document.paths["/api/sessions"].get;
-  expect(discovery.security).toEqual([{ bearerAuth: [] }]);
+  expect(discovery.security).toEqual([]);
   expect(discovery.responses["200"].content["application/json"].examples.empty.value).toEqual({
     items: [],
     nextCursor: null,
@@ -43,8 +43,11 @@ test("loads the shared Swagger page and enables discovery requests", async ({
 
   // Assert
   await expect(page.getByRole("heading", { name: /^Booking Web Manager API/ })).toBeVisible();
-  const discovery = page.locator(".opblock-get").filter({ has: page.getByText("/api/sessions", { exact: true }) });
+  const discovery = page.locator(".opblock-get").filter({
+    has: page.getByText("/api/sessions", { exact: true }),
+  });
   await expect(discovery.getByText("/api/sessions", { exact: true })).toBeVisible();
+  await expect(page.locator(".opblock-get").getByText("/api/venues", { exact: true })).toBeVisible();
   await expect(page.locator(".opblock-post").getByText("/api/sessions", { exact: true })).toBeVisible();
   await expect(page.getByText("UC2-01 Discover Sessions", { exact: true })).toBeVisible();
   await expect(page.getByText("UC2-02 Create Session", { exact: true })).toBeVisible();

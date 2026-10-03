@@ -8,6 +8,23 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("withdraw_WhenParticipantIsUnverified_StillRefundsAnExistingEarlyCommitment", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const participant = createTestUser({ userId: "alice", emailVerified: false }).asParticipant();
+
+    // Act
+    const result = participant.withdraw(bookingSession, {
+      participationId: "p-alice", now: hoursBeforeSessionStart(48),
+    });
+
+    // Assert
+    expect(result.kind).toBe("REFUNDED");
+    expect(result.instructions[0]?.kind).toBe("REFUND");
+    expect(result.instructions[0]?.amount.toCents()).toBe(500);
+    expect(bookingSession.participantList.requireParticipation("p-alice").status).toBe("WITHDRAWN");
+  });
+
   test("withdraw_WhenParticipantDirectlyInvitesSomeone_ReservesSeatWithoutCommittingInviteeOrRefunding", () => {
     // Arrange
     const withdrawalTime = hoursBeforeSessionStart(10);

@@ -7,6 +7,21 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("leaveWaitlist_WhenEmailIsMissing_StillLeavesAnExistingEntry", () => {
+    // Arrange
+    const bookingSession = createTestSession({ waitlistedUserIds: ["alice"] });
+    const participant = createTestUser({ userId: "alice", email: null, emailVerified: false }).asParticipant();
+
+    // Act
+    participant.leaveWaitlist(bookingSession, {
+      participationId: "p-alice", now: hoursBeforeSessionStart(48),
+    });
+
+    // Assert
+    expect(bookingSession.participantList.requireParticipation("p-alice").status).toBe("LEFT_WAITLIST");
+    expect(bookingSession.participantList.nextWaitlisted()).toBeUndefined();
+  });
+
   test("join_WhenOnlyAvailableSeatIsReserved_JoinsOrdinaryWaitlistWithoutTakingReservation", () => {
     // Arrange
     const withdrawalTime = hoursBeforeSessionStart(10);

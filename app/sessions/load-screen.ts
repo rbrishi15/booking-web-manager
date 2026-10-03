@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionManagementDependencies } from "./management-server-dependencies";
 import { SessionManagementUnavailableError } from "./session-management-unavailable";
 import type { HostedSessionsOutcome } from "./types";
+import { toHostedSessionActions } from "./session-actions";
 
 /** The signed-in app requires an active account; Booker retains its domain policy. */
 export async function loadHostedSessionsScreen(userId: string): Promise<HostedSessionsOutcome> {
@@ -25,6 +26,7 @@ export async function loadHostedSessionsScreen(userId: string): Promise<HostedSe
         sessionId: session.sessionId, venueName: session.venueName, sport: session.sport,
         region: session.region, startAt: session.startAt.toISOString(), endAt: session.endAt.toISOString(),
         visibility: session.visibility, availableSlots: session.availableSlots,
+        actions: toHostedSessionActions(session.sessionId, session.actions),
       })),
     };
   } catch (error) {
