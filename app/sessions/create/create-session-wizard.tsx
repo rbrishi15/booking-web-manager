@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Minus, Plus } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useStore } from "zustand";
 import { SPORTS } from "@/app/(auth)/schemas";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -13,9 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sportImage } from "@/lib/sessions/sport-image";
 import { DateTimeEditor } from "./date-time-editor";
 import { VenuePicker } from "./venue-picker";
-import { decimalCents, draftFromSubmission, draftPricing, emptySessionDraft, parseSgdCents, pendingStorageKey, pendingSubmissionSchema,
-  submissionPayload, updateDraft, validateStep, type FieldErrors, type PendingSubmission, type SessionDraft } from "./model";
-import type { CreateSession, CreationOutcome, SearchVenues } from "./transport";
+import { createSessionStore } from "./create-session-store";
+import { decimalCents, draftPricing, parseSgdCents, type FieldErrors, type SessionDraft } from "./model";
+import type { CreateSession, SearchVenues } from "./transport";
 
 export interface CreateSessionWizardProps {
   readonly userId: string; readonly create: CreateSession; readonly search: SearchVenues; readonly onCreated: () => void;
@@ -25,48 +26,28 @@ export interface CreateSessionWizardProps {
 const headings = ["Booked Venue Details", "Booked Venue Settings", "Auto-Generated Pricing"];
 const descriptions = ["Tell us where and when you want to play.", "Set access, group size, and player reliability preferences.", "A suggested price based on your booking cost and number of slots."];
 
-type CreationFailure = Extract<CreationOutcome, { status: "error" }>;
-interface InitialWizardState {
-  draft: SessionDraft;
-  step: number;
-  pending: PendingSubmission | null;
-  recoveryRequired: boolean;
-  failure: CreationFailure | null;
-}
-
-function restoreWizard(props: CreateSessionWizardProps): InitialWizardState {
-  const initial: InitialWizardState = { draft: props.initialDraft ?? emptySessionDraft, step: props.initialStep ?? 1,
-    pending: null, recoveryRequired: false, failure: null };
-  try {
-    const value = (props.storage ?? window.sessionStorage).getItem(pendingStorageKey(props.userId));
-    if (value === null) return initial;
-    const pending = pendingSubmissionSchema.parse(JSON.parse(value));
-    return { ...initial, draft: draftFromSubmission(pending.payload), pending, step: 3,
-      failure: { status: "error", code: "PENDING_SUBMISSION", ambiguous: true,
-        message: "A submission is awaiting confirmation. Retry it to safely recover the result." } };
-  } catch {
-    return { ...initial, recoveryRequired: true,
-      failure: { status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
-        message: "We couldn't read your pending submission. It may already have created a session. Check your hosted sessions before starting again." } };
-  }
-}
+const noErrors: FieldErrors = {};
 
 export function CreateSessionWizard(props: CreateSessionWizardProps) {
   return <SessionWizard key={props.userId} {...props} />;
 }
 
 function SessionWizard(props: CreateSessionWizardProps) {
-  const { userId, create, search, onCreated, initialDraft = emptySessionDraft, initialStep = 1, storage } = props;
-  const [initial] = useState(() => restoreWizard(props));
-  const [draft, setDraft] = useState(initial.draft);
-  const [step, setStep] = useState(initial.step);
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [recoveryRequired, setRecoveryRequired] = useState(initial.recoveryRequired);
-  const [pending, setPending] = useState(initial.pending);
-  const [submitting, setSubmitting] = useState(false);
-  const [completed, setCompleted] = useState(false);
-  const [failure, setFailure] = useState(initial.failure);
-  const inFlight = useRef(false);
+  const { userId, create, search, onCreated, initialDraft, initialStep, storage } = props;
+  const [store] = useState(() => createSessionStore({
+    userId, initialDraft, initialStep, getStorage: () => storage ?? window.sessionStorage,
+  }));
+  const draft = useStore(store, (state) => state.draft);
+  const step = useStore(store, (state) => state.step);
+  const workflow = useStore(store, (state) => state.workflow);
+  const { change, advance, back, restartAfterRecovery } = store.getState();
+  const mounted = useRef(false);
+  // Only lifecycle cleanup uses an effect: an old user's request may finish,
+  // but must not navigate a new wizard. State transitions live in the store.
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, [store]);
   const body = useRef<HTMLDivElement>(null);
   const focusHeading = useCallback((node: HTMLHeadingElement | null) => {
     if (!node) return;
@@ -74,77 +55,37 @@ function SessionWizard(props: CreateSessionWizardProps) {
     if (body.current) body.current.scrollTop = 0;
   }, []);
   const focusFailure = useCallback((node: HTMLDivElement | null) => { node?.focus(); }, []);
-  const key = pendingStorageKey(userId);
-  const getStorage = () => storage ?? window.sessionStorage;
-
-  const locked = submitting || completed || !!pending || recoveryRequired;
+  const errors = workflow.status === "editing" ? workflow.errors : noErrors;
+  const failure = "failure" in workflow ? workflow.failure : null;
+  const pending = "pending" in workflow ? workflow.pending : null;
+  const submitting = workflow.status === "submitting";
+  const completed = workflow.status === "completed";
+  const recoveryRequired = workflow.status === "recoveryRequired";
+  const locked = workflow.status !== "editing";
   const range = draftPricing(draft);
   const price = parseSgdCents(draft.price);
-  function restartAfterRecovery() {
-    try {
-      const store = getStorage();
-      const value = store.getItem(key);
-      // Preserve the original evidence before allowing a new submission to replace it.
-      if (value !== null) {
-        store.setItem(`${key}:unresolved:${crypto.randomUUID()}`, value);
-        store.removeItem(key);
-      }
-      setPending(null); setDraft(initialDraft); setStep(initialStep); setErrors({});
-      setRecoveryRequired(false); setFailure(null);
-    } catch {
-      setFailure({ status: "error", code: "PENDING_RECOVERY_FAILED", ambiguous: true,
-        message: "We couldn't preserve your pending submission. Enable session storage or free up storage space, then try starting again." });
-    }
-  }
-  function change(patch: Partial<SessionDraft>) {
-    if (locked) return;
-    setDraft((value) => updateDraft(value, patch)); setErrors({}); setFailure(null);
-  }
   function showErrors(found: FieldErrors) {
-    setErrors(found);
     const field = Object.keys(found)[0];
-    requestAnimationFrame(() => document.getElementById(field ?? "")?.focus());
+    if (field) requestAnimationFrame(() => {
+      if (mounted.current) body.current?.querySelector<HTMLElement>(`[id="${field}"]`)?.focus();
+    });
   }
   async function submit() {
-    if (inFlight.current || completed || recoveryRequired) return;
-    const replaying = pending !== null;
-    let saved = pending;
-    if (!saved) {
-      for (const part of [1, 2, 3]) {
-        const found = validateStep(draft, part);
-        if (Object.keys(found).length) { setStep(part); showErrors(found); return; }
-      }
-      saved = { version: 1, payload: submissionPayload(draft, crypto.randomUUID()) };
-      try { getStorage().setItem(key, JSON.stringify(saved)); } catch {
-        setFailure({ status: "error", code: "STORAGE_UNAVAILABLE", ambiguous: false, message: "Enable session storage so your submission can be retried safely." }); return;
-      }
-      setPending(saved);
-    }
-    inFlight.current = true; setSubmitting(true); setFailure(null);
-    try {
-      const result = await create(saved.payload);
-      if (result.status === "created") {
-        getStorage().removeItem(key); setPending(null); setCompleted(true); onCreated();
-      } else {
-        // Authentication or service rejection of a replay cannot resolve an earlier ambiguous result.
-        if (!result.ambiguous && !replaying) { getStorage().removeItem(key); setPending(null); }
-        setFailure(result);
-      }
-    } catch {
-      setFailure({ status: "error", code: "UNKNOWN_RESULT", ambiguous: true,
-        message: "We couldn't confirm the result. Retry this submission to check safely." });
-    } finally { inFlight.current = false; setSubmitting(false); }
+    const result = await store.getState().submit(create);
+    if (!mounted.current) return;
+    if (result.status === "invalid") showErrors(result.errors);
+    // Navigation failures must never turn a confirmed creation into an unknown result.
+    if (result.status === "created") onCreated();
   }
-  function advance() {
-    const found = validateStep(draft, step);
-    if (Object.keys(found).length) { showErrors(found); return; }
-    setErrors({}); setStep((value) => value + 1);
+  function next() {
+    const found = advance();
+    if (found) showErrors(found);
   }
   return <section aria-label="Create a session" className="mx-auto flex h-[100svh] w-full flex-col overflow-hidden bg-card md:my-8 md:h-[calc(100svh-4rem)] md:max-w-xl md:rounded-xl md:border md:shadow-sm">
     <header className="shrink-0 bg-foreground px-6 pb-7 pt-5 text-background md:px-8">
       <div className="mb-8 flex items-center gap-5">
         {step === 1 ? <Button asChild variant="ghost" size="icon" className="h-11 w-11 shrink-0 text-background hover:bg-background/10 hover:text-background" aria-label="Back to hosted sessions"><Link href="/sessions"><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Link></Button>
-          : <Button type="button" variant="ghost" size="icon" aria-label="Previous step" disabled={locked} className="h-11 w-11 shrink-0 text-background hover:bg-background/10 hover:text-background" onClick={() => { setErrors({}); setStep((value) => value - 1); }}><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Button>}
+          : <Button type="button" variant="ghost" size="icon" aria-label="Previous step" disabled={locked} className="h-11 w-11 shrink-0 text-background hover:bg-background/10 hover:text-background" onClick={back}><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Button>}
         <div role="progressbar" aria-label="Creation progress" aria-valuemin={1} aria-valuemax={3} aria-valuenow={step} className="h-0.5 flex-1 bg-background/30"><div className="h-full bg-background" style={{ width: `${step / 3 * 100}%` }} /></div>
         <span className="text-xs font-semibold tabular-nums">0{step} / 03</span>
       </div>
@@ -218,8 +159,8 @@ function SessionWizard(props: CreateSessionWizardProps) {
     </div>
     </div>
     <footer className="flex shrink-0 gap-6 border-t bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 md:px-8">
-      {step > 1 && <Button type="button" variant="outline" className="min-h-12 flex-1" disabled={locked} onClick={() => { setErrors({}); setStep((value) => value - 1); }}>Back</Button>}
-      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || recoveryRequired} onClick={step === 3 ? () => void submit() : advance}>
+      {step > 1 && <Button type="button" variant="outline" className="min-h-12 flex-1" disabled={locked} onClick={back}>Back</Button>}
+      <Button type="button" className="min-h-12 flex-1" disabled={submitting || completed || recoveryRequired} onClick={step === 3 ? () => void submit() : next}>
         {step === 3 ? submitting ? "Creating…" : pending ? "Retry submission" : "Done" : <>Next<ArrowRight aria-hidden="true" className="ml-auto h-5 w-5" /></>}
       </Button>
     </footer>

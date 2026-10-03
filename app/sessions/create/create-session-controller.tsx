@@ -13,7 +13,7 @@ const CreateSessionWizard = dynamic(() => import("./create-session-wizard").then
 
 export function CreateSessionController({ userId }: { readonly userId: string }) {
   const router = useRouter();
-  return <CreateSessionWizard userId={userId} create={createSession} search={searchVenues} onCreated={() => {
+  return <CreateSessionWizard userId={userId} create={(payload) => createSession(payload, userId)} search={searchVenues} onCreated={() => {
     router.replace("/sessions?created=1"); router.refresh();
   }} />;
 }

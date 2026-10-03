@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { useCallback, useMemo, useState } from "react";
+import { StrictMode, useCallback, useMemo, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { AppShell } from "@/components/ui/app-shell";
 import { Button } from "@/components/ui/button";
@@ -293,6 +293,112 @@ export const ChangedBookerStartsFresh: Story = {
     await expect(canvas.getByRole("combobox", { name: "Venue" })).toHaveValue("");
     await expect(canvas.getByRole("button", { name: "Next" })).toBeEnabled();
     await expect(canvas.queryByRole("button", { name: "Retry submission" })).not.toBeInTheDocument();
+    await expect(args.create).not.toHaveBeenCalled();
+  },
+};
+function ChangeBookerDuringSubmission(props: CreateSessionWizardProps) {
+  const [userId, setUserId] = useState("storybook");
+  const [finishPrevious, setFinishPrevious] = useState<(() => void) | null>(null);
+  const [previousFinished, setPreviousFinished] = useState(false);
+  const createPrevious = useCallback<CreateSessionWizardProps["create"]>(async (payload) => {
+    await new Promise<void>((resolve) => setFinishPrevious(() => resolve));
+    const result = await props.create(payload);
+    setPreviousFinished(true);
+    return result;
+  }, [props.create]);
+  return <>
+    <Harness {...props} userId={userId} create={userId === "storybook" ? createPrevious : props.create}
+      initialDraft={userId === "storybook" ? complete : undefined} initialStep={userId === "storybook" ? 3 : 1} />
+    <Button onClick={() => setUserId("another-booker")}>Change booker</Button>
+    {finishPrevious && <Button onClick={() => { finishPrevious(); setFinishPrevious(null); }}>Finish previous booking</Button>}
+    {previousFinished && <p>Previous response delivered</p>}
+  </>;
+}
+export const ChangedBookerIgnoresPreviousCompletion: Story = {
+  render: (args) => <ChangeBookerDuringSubmission {...args} />,
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(canvas.getByRole("button", { name: "Creating…" })).toBeDisabled();
+    await userEvent.click(canvas.getByRole("button", { name: "Change booker" }));
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    const venue = canvas.getByRole("combobox", { name: "Venue" });
+    await expect(venue).toHaveValue("");
+    await userEvent.type(venue, "New booker's court");
+    await userEvent.type(canvas.getByLabelText("Booking cost (SGD)"), "35.50");
+    await userEvent.click(canvas.getByRole("button", { name: "Finish previous booking" }));
+    await expect(await canvas.findByText("Previous response delivered")).toBeVisible();
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(args.onCreated).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    await expect(venue).toHaveValue("New booker's court");
+    await expect(canvas.getByLabelText("Booking cost (SGD)")).toHaveValue("35.50");
+    await expect(canvas.getByRole("button", { name: "Next" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Retry submission" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+function ReplaceCreateCallback(props: CreateSessionWizardProps) {
+  const [updated, setUpdated] = useState(false);
+  const previousCreate = useCallback(async (): Promise<CreationOutcome> => ({
+    status: "error", code: "SESSION_API_UNAVAILABLE", ambiguous: false, message: "The previous create callback was used.",
+  }), []);
+  return <><Harness {...props} create={updated ? props.create : previousCreate} />
+    <Button onClick={() => setUpdated(true)}>Replace create callback</Button></>;
+}
+export const UpdatedCreateCallbackIsUsed: Story = {
+  args: { initialDraft: complete, initialStep: 3 },
+  render: (args) => <ReplaceCreateCallback {...args} />,
+  play: async ({ canvas, args }) => {
+    const price = canvas.getByLabelText("Adjust price per slot (SGD)");
+    await userEvent.clear(price); await userEvent.type(price, "12.01");
+    await userEvent.click(canvas.getByRole("button", { name: "Replace create callback" }));
+    await expect(price).toHaveValue("12.01");
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(args.onCreated).toHaveBeenCalledOnce());
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(args.create).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ pricePerSlotCents: 1201 }) }));
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+export const StrictModeCompletesOnce: Story = {
+  args: { initialDraft: complete, initialStep: 3 },
+  render: (args) => <StrictMode><Harness {...args} /></StrictMode>,
+  play: async ({ canvas, args }) => {
+    await userEvent.dblClick(canvas.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(args.onCreated).toHaveBeenCalledOnce());
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+function IndependentBookers(props: CreateSessionWizardProps) {
+  const [booker, setBooker] = useState(1);
+  return <>
+    <div role="group" aria-label="First booker" hidden={booker !== 1}><Harness {...props} userId="first-booker" /></div>
+    <div role="group" aria-label="Second booker" hidden={booker !== 2}><Harness {...props} userId="second-booker" /></div>
+    <Button onClick={() => setBooker(1)}>Show first booker</Button>
+    <Button onClick={() => setBooker(2)}>Show second booker</Button>
+  </>;
+}
+export const BookerWizardsAreIndependent: Story = {
+  args: { initialDraft: complete, initialStep: 2 },
+  render: (args) => <IndependentBookers {...args} />,
+  play: async ({ canvas, args }) => {
+    const first = within(canvas.getByRole("group", { name: "First booker" }));
+    await userEvent.click(first.getByRole("button", { name: "Decrease No. of Slots" }));
+    await expect(within(first.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("7");
+    await userEvent.click(first.getByRole("button", { name: "Next" }));
+    await expect(first.getByRole("heading", { name: "Auto-Generated Pricing" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Show second booker" }));
+    const second = within(canvas.getByRole("group", { name: "Second booker" }));
+    await expect(second.getByRole("heading", { name: "Booked Venue Settings" })).toBeVisible();
+    await expect(within(second.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("8");
+    await userEvent.click(second.getByRole("button", { name: "Decrease No. of Slots" }));
+    await userEvent.click(second.getByRole("button", { name: "Decrease No. of Slots" }));
+    await expect(within(second.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("6");
+    await userEvent.click(canvas.getByRole("button", { name: "Show first booker" }));
+    await expect(first.getByRole("heading", { name: "Auto-Generated Pricing" })).toBeVisible();
+    await expect(first.getByText("Estimated revenue at full capacity (7 slots)")).toBeVisible();
     await expect(args.create).not.toHaveBeenCalled();
   },
 };

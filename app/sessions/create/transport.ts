@@ -17,14 +17,15 @@ const messages: Readonly<Record<string, string>> = {
   SESSION_STARTED: "The start time has passed. Choose a future booking time.",
   SESSION_API_UNAVAILABLE: "Session creation is temporarily unavailable. Please try again.",
 };
-async function bearerToken(): Promise<string | undefined> {
+async function bearerToken(expectedUserId?: string): Promise<string | undefined> {
   const { data, error } = await createClient().auth.getSession();
   if (error) throw new Error("Authentication is unavailable");
+  if (expectedUserId !== undefined && data.session?.user.id !== expectedUserId) return undefined;
   return data.session?.access_token;
 }
-export const createSession: CreateSession = async (payload) => {
+export async function createSession(payload: CreateSessionPayload, expectedUserId: string): Promise<CreationOutcome> {
   let token: string | undefined;
-  try { token = await bearerToken(); } catch {
+  try { token = await bearerToken(expectedUserId); } catch {
     return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't verify your sign-in. Please try again.", ambiguous: false };
   }
   if (!token) return { status: "error", code: "UNAUTHENTICATED", message: messages.UNAUTHENTICATED!, ambiguous: false };
@@ -43,7 +44,7 @@ export const createSession: CreateSession = async (payload) => {
     return { status: "error", code: "UNKNOWN_RESULT", ambiguous: true,
       message: "We couldn't confirm whether your session was created. Retry this submission to check safely." };
   }
-};
+}
 export const searchVenues: SearchVenues = async (query, page, signal) => {
   const token = await bearerToken();
   if (!token) throw new Error("Sign-in required");

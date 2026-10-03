@@ -51,6 +51,8 @@ export default defineConfig({
             "next-themes",
             "sonner",
             "tailwind-merge",
+            "zustand",
+            "zustand/vanilla",
           ],
         },
         test: {
