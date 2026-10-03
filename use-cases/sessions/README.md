@@ -127,3 +127,19 @@ persistence. It does not expose ledger or payout operations. Production uses
 serializable transactions with bounded retries; every retry reloads state and
 obtains a fresh operation time. See the configuration guide for schema rollout
 and the contract required of future concurrent lifecycle writers.
+
+## UC2-03c: cancel sessions
+
+`PreviewSessionCancellation.forBooker(bookerId, sessionId)` loads fresh complete
+aggregates, checks active application access and invokes Booker cancellation
+without saving it. Refund totals come only from returned financial instructions.
+The version is calculated before mutation and covers cancellation-relevant state.
+
+`CancelSession.forBooker(bookerId, sessionId, previewVersion)` checks loaded User
+access before durable replay, then loads/locks the Session, gets current time,
+invokes Booker, compares the preview and commits cancellation with refund
+instructions and the response. Submission keys are supplied through assembly,
+not business input. Same-key replay skips lifecycle/preview re-evaluation after
+active access is checked; a fresh request against a closed session conflicts.
+The underlying inactive-owner domain behavior is preserved. ADR-0013 records
+preservation of prior terminal participation history.
