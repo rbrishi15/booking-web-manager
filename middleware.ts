@@ -1,13 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_CALLBACK_PATH, HOME_PATH, isAuthPage, isPublicPath } from "@/app/(auth)/redirect-path";
+import { AUTH_CALLBACK_PATH, HOME_PATH, isAuthPage, isProtectedPath, isPublicPath } from "@/app/(auth)/redirect-path";
 import { getAccountStatus } from "@/lib/supabase/account-status";
 import { isAuthenticationConfigured } from "@/lib/supabase/is-configured";
 
 /**
  * Runs before every page. Refreshes the Supabase login cookie, sends logged-out
- * visitors to /login, keeps logged-in users off /login and /register, and signs
- * out deactivated accounts (UC1-04).
+ * visitors on protected routes to /login, keeps logged-in users off /login and
+ * /register, and signs out deactivated accounts (UC1-04).
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -50,7 +50,8 @@ export async function middleware(request: NextRequest) {
   // Keep cookies refreshed, but public discovery never depends on account access.
   if (pathname === "/discover") return response;
   if (user === null) {
-    if (isPublicPath(pathname)) return response;
+    // Unknown routes outside protected sections must reach the public not-found page.
+    if (isPublicPath(pathname) || !isProtectedPath(pathname)) return response;
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return redirectKeepingCookies(loginUrl, response);

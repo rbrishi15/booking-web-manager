@@ -160,6 +160,6 @@ page can leave that page empty. The user is never sent back to page one by polli
 The acceptance target is appearance/disappearance within three seconds after a
 booker's committed change on a healthy, visible, online discovery page. Browser
 throttling, offline periods and provider failures cannot satisfy that timing.
-One-second refresh repeats complete User and matching-session reads; this follows
+One-second refresh repeats matching-session reads; this follows
 the current small-project scale assumption. Larger deployments should revisit
 the query cost and polling frequency together.

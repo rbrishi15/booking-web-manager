@@ -304,7 +304,7 @@ npm run test:concurrency
 The public landing, Storybook, Swagger/OpenAPI, and the unconfigured session
 route need no credentials. Live
 session creation needs `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus migrations through 0006. Remote database
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus migrations through 0009. Remote database
 connections require TLS. See `.env.example` and the configuration guide.
 
 Real values live in the project's Vercel settings, not in git. If you've been
