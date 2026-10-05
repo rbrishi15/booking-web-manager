@@ -4,10 +4,18 @@ import type { SqlExecutor, SqlTransactor } from "@/lib/money/sql";
 
 /** All aggregate reads and writes share a consistent transaction snapshot. */
 export class PostgresTransactor implements SqlTransactor {
-  /** Configures the pool and transaction isolation level, defaulting to REPEATABLE READ. */
+  /**
+   * Configures the pool and transaction isolation level, defaulting to REPEATABLE READ.
+   * READ COMMITTED suits workflows that serialize on an explicit row lock: a
+   * statement that waited for `FOR UPDATE` sees the row the holder committed,
+   * where the snapshot levels abort it with a serialization failure instead.
+   */
   constructor(
     private readonly pool: Pool,
-    private readonly isolation: "repeatable read" | "serializable" = "repeatable read",
+    private readonly isolation:
+      | "read committed"
+      | "repeatable read"
+      | "serializable" = "repeatable read",
   ) {}
 
   /** Runs work on one connection, commits before returning, and rolls back on failure; discards the connection if rollback fails. */
@@ -15,11 +23,7 @@ export class PostgresTransactor implements SqlTransactor {
     const connection = await this.pool.connect();
     let discard = false;
     try {
-      await connection.query(
-        this.isolation === "serializable"
-          ? "begin isolation level serializable"
-          : "begin isolation level repeatable read",
-      );
+      await connection.query(`begin isolation level ${this.isolation}`);
       const sql: SqlExecutor = {
         query: async (statement, values) => {
           try {

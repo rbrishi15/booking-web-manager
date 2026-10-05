@@ -75,6 +75,14 @@ test("allows session management to opt into serializable without changing the de
   ]);
 });
 
+test("allows lock-serialized workflows to opt into read committed", async () => {
+  await new PostgresTransactor(new Pool(), "read committed").transaction(async () => "result");
+  expect(driver.query.mock.calls).toEqual([
+    ["begin isolation level read committed"],
+    ["commit"],
+  ]);
+});
+
 test("a commit serialization failure remains retryable", async () => {
   driver.query
     .mockResolvedValueOnce({ rows: [] })
