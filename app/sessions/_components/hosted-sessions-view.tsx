@@ -99,6 +99,7 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh, on
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground"><time dateTime={session.startAt}>{singaporeDateTime.format(new Date(session.startAt))}</time> – <time dateTime={session.endAt}>{singaporeDateTime.format(new Date(session.endAt))}</time> SGT</p>
         <p className="mt-3 text-sm">{session.visibility === "PUBLIC" ? "Visible in Discover." : "Hidden from Discover."}</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button asChild variant="outline" className="min-h-11"><Link href={`/sessions/${session.sessionId}/participants`}>Manage participants</Link></Button>
           <Button variant="outline" className="min-h-11" disabled={pending || refreshing || full} onClick={changeVisibility}>
             {pending ? "Saving…" : target === "PUBLIC" ? "Make public" : "Make private"}
           </Button>

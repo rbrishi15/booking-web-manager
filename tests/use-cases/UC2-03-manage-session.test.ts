@@ -102,12 +102,6 @@ describe("UC2-03 Manage Session", () => {
     });
   });
 
-  describe("UC2-03b Remove Participant", () => {
-    test.todo(
-      "removes a participant and reverses their held funds appropriately",
-    );
-    test.todo("frees the vacated slot for waitlist promotion");
-  });
 });
 
 describe("Hosted session listing", () => {
