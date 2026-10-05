@@ -3,6 +3,7 @@ import { deletionBlockers } from "@/app/profile/delete/blockers";
 import { Money } from "@/domain";
 import {
   AccountNotActiveError,
+  canDeactivate,
   deleteAccount,
   type AccountStanding,
   type DeleteAccountPorts,
@@ -10,7 +11,7 @@ import {
 } from "@/use-cases/accounts/delete-account";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
-const COMMAND = { userId: USER_ID, email: "marcus@example.com", now: new Date("2026-10-01T00:00:00Z") };
+const COMMAND = { userId: USER_ID };
 
 /** A standing with nothing outstanding; pass only the fields a test changes. */
 function clearStanding(overrides: Partial<AccountStanding> = {}): AccountStanding {
@@ -69,6 +70,29 @@ function fakePorts(
 
 // Owner: Joseph (Jolingoes) — /app/profile
 describe("UC1-04 Delete Account", () => {
+  test("evaluates deletion eligibility from obligation facts alone", () => {
+    // Arrange
+    const standing = clearStanding({ walletId: null });
+
+    // Act
+    const allowed = canDeactivate(standing);
+
+    // Assert
+    expect(allowed).toBe(true);
+  });
+
+  test("invalid obligation facts stop deletion before any profile change", async () => {
+    // Arrange
+    const { ports, steps } = fakePorts([clearStanding({ activeCommitments: -1 })]);
+
+    // Act
+    const attempt = deleteAccount(ports, COMMAND);
+
+    // Assert
+    await expect(attempt).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(steps).toEqual(["check"]);
+  });
+
   test("anonymises the user record rather than deleting it (soft delete)", async () => {
     // Arrange
     const { ports, steps, profile } = fakePorts([clearStanding()]);

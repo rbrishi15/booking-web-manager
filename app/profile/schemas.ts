@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
+import { PROFILE_REGIONS as REGIONS, PROFILE_SPORTS as SPORTS } from "@/domain/accounts/profile";
 
 /** Removes repeated picks, e.g. ["Tennis", "Tennis"] → ["Tennis"]. */
 function unique<T>(values: T[]): T[] {

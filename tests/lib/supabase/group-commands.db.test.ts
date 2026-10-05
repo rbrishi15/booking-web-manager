@@ -32,6 +32,7 @@ const MIGRATIONS = [
   "0003_ledger_rls.sql",
   "0004_profiles.sql",
   "0005_regular_groups.sql",
+  "0010_group_account_guards.sql",
 ];
 const migrationPath = (file: string) => path.join(process.cwd(), "supabase", "migrations", file);
 const HAS_MIGRATIONS = MIGRATIONS.every((file) => existsSync(migrationPath(file)));

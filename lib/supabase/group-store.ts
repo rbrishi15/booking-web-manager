@@ -47,6 +47,8 @@ interface LoadedGroup {
 const GROUP_CHANGED = "40001";
 /** save_regular_group refused to archive: a linked session is still unsettled (0006's own SQLSTATE). */
 const UNSETTLED_LINKED_SESSIONS = "GRP01";
+/** The owner or a newly added member became inactive before the save could commit. */
+const INACTIVE_GROUP_ACCOUNT = "GRP02";
 
 
 /**
@@ -55,6 +57,8 @@ const UNSETTLED_LINKED_SESSIONS = "GRP01";
  * which writes them in one transaction and only if nobody saved the group since this request read
  * it. So a new group always has its owner as a member, and a join can never slip past the owner
  * turning the link off or archiving the group.
+ * Migration 0010 also locks/checks owner and newly added member profiles in that transaction,
+ * coordinating these mutations with account deletion even after request authentication.
  */
 export function supabaseGroupStore(): { groups: Repository<RegularGroup>; queries: GroupQueries } {
   const admin = createAdminClient();
@@ -100,6 +104,9 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
         if (error.code === UNSETTLED_LINKED_SESSIONS) {
           throw new DomainError("ACTIVE_OBLIGATIONS", "A group with unsettled linked sessions cannot be archived");
         }
+        if (error.code === INACTIVE_GROUP_ACCOUNT) {
+          throw new DomainError("INACTIVE_ACCOUNT", "An inactive account cannot create, join or change a group");
+        }
         throw error;
       }
       remember(group, version as number);
@@ -141,4 +148,3 @@ export function supabaseGroupStore(): { groups: Repository<RegularGroup>; querie
 
   return { groups, queries };
 }
-

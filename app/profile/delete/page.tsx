@@ -39,7 +39,7 @@ export default async function DeleteAccountPage() {
       </>
     );
   }
-  const allowed = canDeactivate({ userId: user.id, email: user.email, now: new Date() }, standing);
+  const allowed = canDeactivate(standing);
 
   return (
     <>

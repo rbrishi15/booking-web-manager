@@ -6,6 +6,8 @@ export function groupErrorMessage(error: unknown): string {
   if (error instanceof GroupChangedError) return error.message;
   if (!(error instanceof DomainError)) return "Something went wrong. Please try again.";
   switch (error.code) {
+    case "INACTIVE_ACCOUNT":
+      return "This action is no longer available because an account involved was deactivated.";
     case "UNAUTHORIZED":
       return "Only the group owner can do that.";
     case "OWNER_REMOVAL":

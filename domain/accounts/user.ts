@@ -8,9 +8,11 @@ import type {
 import type { AccountStatus } from "../shared/statuses";
 import type { Region, Sport, UUID } from "../shared/types";
 import { Booker } from "./booker";
+import { assertDeactivationAllowed } from "./deactivation-policy";
 import { Email } from "./email";
 import { Participant } from "./participant";
 import { PayoutAccount } from "./payout-account";
+import { assertValidPreferences } from "./profile";
 
 export interface UserDetails {
   readonly userId: UUID;
@@ -102,8 +104,8 @@ export class User {
     readonly preferredRegions: ReadonlySet<Region>;
   }): void {
     this.assertActive();
-    validatePreferences(command.preferredSports, "preferredSports");
-    validatePreferences(command.preferredRegions, "preferredRegions");
+    assertValidPreferences(command.preferredSports, "preferredSports");
+    assertValidPreferences(command.preferredRegions, "preferredRegions");
     this.#preferredSports = new Set(command.preferredSports);
     this.#preferredRegions = new Set(command.preferredRegions);
   }
@@ -246,8 +248,8 @@ export class User {
         "INVALID_INPUT",
         "An inactive account must be anonymised",
       );
-    validatePreferences(this.#preferredSports, "preferredSports");
-    validatePreferences(this.#preferredRegions, "preferredRegions");
+    assertValidPreferences(this.#preferredSports, "preferredSports");
+    assertValidPreferences(this.#preferredRegions, "preferredRegions");
     DomainError.require(
       this.#payoutAccount === undefined ||
         this.#payoutAccount.userId === this.#userId,
@@ -286,45 +288,6 @@ function validateId(value: string, name: string): void {
     value.trim() !== "",
     "INVALID_INPUT",
     `${name} is required`,
-  );
-}
-function validatePreferences(values: Iterable<string>, name: string): void {
-  for (const value of values)
-    DomainError.require(
-      value.trim() !== "",
-      "INVALID_INPUT",
-      `${name} contains an empty value`,
-    );
-}
-function assertDeactivationAllowed(input: DeactivationInput): void {
-  for (const amount of [input.availableBalance, input.heldBalance])
-    DomainError.require(
-      amount.toCents() >= 0,
-      "INVALID_INPUT",
-      "Balances cannot be negative",
-    );
-  for (const count of [
-    input.activeCommitments,
-    input.unsettledOwnedSessions,
-    input.pendingPayouts,
-    input.activeOwnedGroups,
-  ])
-    DomainError.require(
-      Number.isSafeInteger(count) && count >= 0,
-      "INVALID_INPUT",
-      "Obligation counts must be nonnegative safe integers",
-    );
-  const hasNoOutstandingObligations =
-    input.availableBalance.toCents() === 0 &&
-    input.heldBalance.toCents() === 0 &&
-    input.activeCommitments === 0 &&
-    input.unsettledOwnedSessions === 0 &&
-    input.pendingPayouts === 0 &&
-    input.activeOwnedGroups === 0;
-  DomainError.require(
-    hasNoOutstandingObligations,
-    "ACTIVE_OBLIGATIONS",
-    "Outstanding obligations prevent deactivation",
   );
 }
 
