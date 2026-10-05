@@ -125,6 +125,10 @@ export class PromoteFromWaitlist {
             userId: head.userId,
             reason: result.reason,
           });
+        } else {
+          // Any other result leaves the queue head in place; looping again
+          // would see the same state forever.
+          break;
         }
       }
 

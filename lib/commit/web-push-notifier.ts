@@ -81,11 +81,15 @@ export function pushPayloadFor(
  * subscription its recipient has registered. One failed delivery does not stop
  * the others, and expired subscriptions are removed. Delivery failures are not
  * rethrown: use cases already treat notifications as best-effort.
+ *
+ * Every lookup, send and removal has a deadline, so a push service or store
+ * that never answers cannot hold a request open after its unit of work commits.
  */
 export class WebPushNotifier implements CommitmentNotifier {
   constructor(
     private readonly subscriptions: PushSubscriptionStore,
     private readonly sender: PushSender,
+    private readonly timeoutMs = 5_000,
   ) {}
 
   async notify(
@@ -98,15 +102,38 @@ export class WebPushNotifier implements CommitmentNotifier {
 
   private async deliver(notification: CommitmentNotification): Promise<void> {
     const payload = JSON.stringify(pushPayloadFor(notification));
-    const subscriptions = await this.subscriptions.subscriptionsFor(
-      notification.recipientId,
+    const subscriptions = await withDeadline(
+      this.subscriptions.subscriptionsFor(notification.recipientId),
+      this.timeoutMs,
     );
     await Promise.allSettled(
       subscriptions.map(async (subscription) => {
-        const delivery = await this.sender.send(subscription, payload);
+        const delivery = await withDeadline(
+          this.sender.send(subscription, payload),
+          this.timeoutMs,
+        );
         if (delivery === "EXPIRED")
-          await this.subscriptions.remove(subscription.endpoint);
+          await withDeadline(
+            this.subscriptions.remove(subscription.endpoint),
+            this.timeoutMs,
+          );
       }),
     );
+  }
+}
+
+/** Rejects if `work` has not settled within `timeoutMs`. */
+async function withDeadline<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Push operation exceeded ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
   }
 }

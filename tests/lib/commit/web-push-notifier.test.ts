@@ -83,6 +83,52 @@ describe("WebPushNotifier", () => {
   });
 });
 
+describe("WebPushNotifier deadlines", () => {
+  test("notify_WhenASendNeverSettles_GivesUpAfterTheDeadlineAndDeliversTheRest", async () => {
+    // Arrange
+    const sends: string[] = [];
+    const notifier = new WebPushNotifier(
+      {
+        subscriptionsFor: async (userId) => [subscription(`${userId}-device`)],
+        remove: async () => undefined,
+      },
+      {
+        send: (target) => {
+          if (target.endpoint === "alice-device") return new Promise(() => {});
+          sends.push(target.endpoint);
+          return Promise.resolve("DELIVERED");
+        },
+      },
+      20,
+    );
+
+    // Act
+    await notifier.notify([
+      { kind: "PROMOTED", recipientId: "alice", sessionId: "s1" },
+      { kind: "PROMOTED", recipientId: "bob", sessionId: "s1" },
+    ]);
+
+    // Assert
+    expect(sends).toEqual(["bob-device"]);
+  });
+
+  test("notify_WhenSubscriptionLookupNeverSettles_ResolvesAfterTheDeadline", async () => {
+    // Arrange
+    const notifier = new WebPushNotifier(
+      { subscriptionsFor: () => new Promise(() => {}), remove: async () => undefined },
+      { send: async () => "DELIVERED" },
+      20,
+    );
+
+    // Act & Assert
+    await expect(
+      notifier.notify([
+        { kind: "PROMOTED", recipientId: "alice", sessionId: "s1" },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe("pushPayloadFor", () => {
   test("pushPayloadFor_ForEachKind_LinksToTheSession", () => {
     // Arrange
