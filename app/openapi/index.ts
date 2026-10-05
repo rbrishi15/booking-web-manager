@@ -1,3 +1,4 @@
+import { registerWithdrawalPreviewApi } from "@/app/commit/withdrawal-preview-openapi";
 import { registerDiscoveryApi } from "@/app/discover/openapi";
 import { registerSessionApi } from "@/app/sessions/openapi";
 import { registerSessionManagementApi } from "@/app/sessions/management-openapi";
@@ -10,4 +11,5 @@ export const openApiDocument = createOpenApiDocument([
   registerDiscoveryApi,
   registerSessionManagementApi,
   registerSessionCancellationApi,
+  registerWithdrawalPreviewApi,
 ]);
