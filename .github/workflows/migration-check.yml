@@ -1,0 +1,51 @@
+name: Migration Check
+
+# Applies every migration, in order, to an empty local Supabase database before
+# a pull request can merge. supabase-migrations.yml pushes merged migrations
+# straight to the hosted project, so a broken file must fail here instead.
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/migration-check.yml"
+  workflow_dispatch:
+
+jobs:
+  apply-migrations:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Migration numbers are unique
+        run: |
+          duplicates=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | uniq -d)
+          if [ -n "$duplicates" ]; then
+            echo "::error::Migration numbers used more than once: $duplicates"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Starts only Postgres with the real Supabase auth schema and roles, then
+      # applies supabase/migrations to the fresh database.
+      - name: Apply migrations to an empty database
+        run: supabase db start
+
+      - name: Every migration was recorded
+        run: |
+          expected=$(ls supabase/migrations/*.sql | wc -l)
+          applied=$(docker exec "$(docker ps -qf name=supabase_db_)" \
+            psql -U postgres -tAc "select count(*) from supabase_migrations.schema_migrations")
+          echo "Applied $applied of $expected migrations"
+          test "$applied" -eq "$expected"
+
+      - name: Stop database
+        if: always()
+        run: supabase stop --no-backup
