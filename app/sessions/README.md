@@ -241,9 +241,9 @@ Bearer endpoints and cookie server actions invoke the same coordinators:
   is an opaque SHA256 string. Refunds are integer cents and server-calculated.
 
 Every HTTP response is `no-store`. The shared error envelope distinguishes invalid
-input (400), unauthenticated access (401), inactive/foreign access (403), missing
-records (404), lifecycle/stale-preview/idempotency conflicts (409), invalid domain
-input (422), opaque infrastructure errors (500), and missing settings (503).
+input (400, including `INVALID_INPUT`), unauthenticated access (401), inactive/foreign
+access (403), missing records (404), lifecycle/stale-preview/idempotency conflicts
+(409), opaque infrastructure errors (500), and missing settings (503).
 
 The preview covers the target's participation/hold and session ownership, start
 and lifecycle. Visibility and unrelated participants do not invalidate it. Both
