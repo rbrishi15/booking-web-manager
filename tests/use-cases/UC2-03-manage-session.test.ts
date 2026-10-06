@@ -135,7 +135,6 @@ describe("Hosted session listing", () => {
   });
 });
 
-/** Wires both management use cases to controllable repository mocks and a fixed clock. */
 function management(session = createTestSession()) {
   const getUser = vi.fn<(id: string) => Promise<User | null>>().mockResolvedValue(createTestUser({ userId: "booker" }));
   const getSession = vi.fn<(id: string) => Promise<Session | null>>().mockResolvedValue(session);

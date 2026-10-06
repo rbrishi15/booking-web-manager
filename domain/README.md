@@ -226,9 +226,18 @@ share. `toDollars()` returns an exact decimal string with two fractional digits
 persistence continue to use integer cents; currency symbols and locale formatting
 belong at the render layer.
 
+`sessionPricing(costCents, slots)` provides one framework-independent calculation
+for UI suggestions and server validation. `Session.bookingShare` is the accepted,
+immutable per-slot price: omission retains floor division, while a chosen price
+is bounded by [ADR-0012](../docs/adr/0012-booker-selected-session-pricing.md).
+The management repository hydrates it from stored `booking_share_cents`. Holds
+keep their original amounts through refunds and settlement.
+
 `Booking` is an immutable value object requiring a positive total cost and
 `startAt < endAt`. A session has at most eight commitments, including accepted
-personal replacements; the booker does not receive a reserved place.
+personal replacements; the booker does not receive a reserved place. UC2-02
+requires `minimumHeadcount` between two and `totalSlots`; this configuration is
+retained when the session is copied or hydrated.
 
 Financial operation amounts are positive and wallet balances are nonnegative at
 the server boundary. A `Wallet` stores no balance field. Its synchronous

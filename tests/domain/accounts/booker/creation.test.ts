@@ -95,6 +95,16 @@ describe("Booker", () => {
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
   });
 
+  test("createSession_WhenCapacityIsOne_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = creationDetails();
+
+    // Act & Assert
+    expect(() =>
+      readyBooker().createSession({ ...details, totalSlots: 1 }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+  });
+
   test("createSession_WhenMinimumHeadcountIsOne_ThrowsInvalidInput", () => {
     // Arrange
     const details = creationDetails();
@@ -103,6 +113,27 @@ describe("Booker", () => {
     expect(() =>
       readyBooker().createSession({ ...details, minimumHeadcount: 1 }),
     ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+  });
+
+  test("createSession_WhenMinimumHeadcountExceedsCapacity_ThrowsInvalidInput", () => {
+    // Arrange
+    const details = creationDetails(3);
+
+    // Act & Assert
+    expect(() =>
+      readyBooker().createSession({ ...details, minimumHeadcount: 4 }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+  });
+
+  test("createSession_WhenMinimumHeadcountEqualsCapacity_PreservesMinimumHeadcount", () => {
+    // Arrange
+    const details = creationDetails(3);
+
+    // Act
+    const session = readyBooker().createSession({ ...details, minimumHeadcount: 3 });
+
+    // Assert
+    expect(session.minimumHeadcount).toBe(3);
   });
 
   test("createSession_WhenBookingHasEnded_ThrowsSessionStarted", () => {

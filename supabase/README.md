@@ -9,6 +9,10 @@ at review.
 Run `npx supabase start` for local Postgres and `npx supabase migration new
 <name>` to create the next number in sequence.
 
+Every pull request that touches `supabase/` runs the Migration Check workflow:
+it rejects a reused migration number and applies the whole sequence to an empty
+database. Merging to `main` then pushes the migrations to the hosted project.
+
 ## Current sequence
 
 Check here before picking a number — two people writing the same one is the

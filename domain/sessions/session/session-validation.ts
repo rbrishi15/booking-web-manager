@@ -78,12 +78,12 @@ export function validateSessionConfiguration(
   );
   const hasValidSlotCount =
     Number.isSafeInteger(input.totalSlots) &&
-    input.totalSlots > 0 &&
+    input.totalSlots >= 2 &&
     input.totalSlots <= 8;
   DomainError.require(
     hasValidSlotCount,
     "INVALID_INPUT",
-    "totalSlots must be a safe integer from 1 to 8",
+    "totalSlots must be a safe integer from 2 to 8",
   );
   const hasValidMinimumHeadcount =
     Number.isSafeInteger(input.minimumHeadcount) &&
