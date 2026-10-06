@@ -24,6 +24,45 @@ prerequisite migrations are applied. The [configuration guide](../../use-case-co
 records settings, ownership, and the dependency on PR #34 followed by migration 0006. Documentation and contract tests work
 without credentials or a local Supabase stack.
 
+## UC2-02: create-session wizard
+
+UC2-03a visibility (PR #38) and UC2-03c cancellation (PR #41) are on `main`;
+the creation wizard includes those dependencies by updating from `main`.
+Apply the migration sequence in numbered order, including 0008 for custom pricing.
+The wizard and pricing changes retain independent review of every affected area under the
+[contribution workflow](../../docs/contributing-workflow.md).
+
+`/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
+the hosted list has its own route-group layout and a create button in every state.
+The three steps preserve drafts, validate before advancing, and focus the new
+heading or first invalid field. The footer occupies layout space outside the
+scrolling body; short screens can scroll every field fully into view.
+
+Details start with Tennis and empty venue, dates and cost. The date dialog uses
+Singapore time, with separate start/end dates for overnight bookings. Cost is
+parsed directly into integer cents. Settings default to Private, eight slots,
+a minimum headcount of four, and 4.5/5 reliability (90/100). Capacity is 2–8;
+minimum headcount must be between two and the selected capacity. UC2-02 retains
+this required configuration from the SRS. Reliability choices are no minimum or
+3–5 in half-point increments. Pricing uses the selected sport's local photo and the
+shared framework-independent calculation in `domain/sessions/pricing.ts`.
+
+Before POST, the browser saves the exact payload and idempotency key in
+user-scoped session storage. Duplicate submission is disabled. Network failures
+and uncertain server errors freeze editing; a retry replays the saved payload.
+Reload restores it. An authentication or service failure during replay retains
+the pending submission because it cannot resolve the original result. A definitive
+first-attempt rejection permits editing and a new key. Success clears pending
+state and refreshes `/sessions?created=1` with feedback. Storage must be available
+before a request is sent. Room tokens are not stored in browser submission state.
+
+OneMap search is debounced, cancels/discards stale responses, and supports keyboard
+selection and pagination. Selecting a venue fills its URA region; editing its name
+clears lookup confirmation and region. Manual entry remains available when lookup
+is unconfigured, fails, finds no results, or cannot resolve a region. This platform
+coordinates venues booked elsewhere; lookup never creates a reservation.
+See [venue configuration](../../use-case-config/README.md#venue-search-configuration).
+
 ## Configured HTTP contract
 
 The [route module](../api/sessions/route.ts) exports ordinary async GET and POST
@@ -78,9 +117,17 @@ const parsed = parseCreateSessionInput(authenticatedUserId, {
 
 Direct use-case callers continue to supply Date-valued booking details.
 Successful creation and replay return 201 with
-`{ sessionId, roomToken, bookingShareCents }`. Shares round down equally:
+`{ sessionId, roomToken, bookingShareCents }`. Omitted `config.pricePerSlotCents` rounds down equally:
 1001 cents over three slots means 333 cents each, 999 cents collected when full,
-and a 2-cent shortfall borne by the booker. Creation moves no funds.
+and a 2-cent shortfall borne by the booker. An optional safe integer chosen price
+is validated against `[max(1, ceil(s / 2)), min(2 × s, floor(MAX_SAFE_INTEGER / slots))]`,
+where `s = floor(cost / slots)`. Above-cost collection is allowed. The accepted
+price is immutable Session state hydrated from `booking_share_cents`; participation,
+refund and settlement use that price and historical holds. Apply migration 0008
+before deploying this behavior. See [ADR-0012](../../docs/adr/0012-booker-selected-session-pricing.md).
+Creation moves no funds. `config.minimumHeadcount` remains required and is
+persisted as `minimum_headcount`; it must be an integer between two and
+`config.totalSlots`.
 
 | Status | Outcome |
 | --- | --- |
@@ -107,6 +154,13 @@ See the [integration requirements](../../use-case-config/README.md#authenticatio
 the configured contract and missing-settings response. Swagger's Try it out
 sends a real request; configured creation requires a valid bearer token.
 The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
+Storybook's `Sessions/Create session` examples use the production wizard and
+focused shell, with interaction and accessibility checks for all steps, date
+editing, slot limits, price adjustments, lookup/fallback, stale results and submission
+failures. `npm run test:sessions:integration` applies all migrations to a disposable
+stack and verifies persistence, replay, real authentication, success navigation,
+short-screen keyboard operation and the visibility-management regression. Browser
+screenshots cover 390px, tablet (768px) and desktop (1280px).
 The [shared OpenAPI guide](../openapi/README.md) explains how feature registrations
 are assembled and how to add operations to the reference.
 
@@ -117,8 +171,8 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Session-creation UI, OneMap,
-participant removal and Realtime subscriptions remain separate work.
+The discovery page is covered by UC2-01. Participant removal and Realtime
+subscriptions remain separate work.
 
 ## UC2-03a: visibility management
 

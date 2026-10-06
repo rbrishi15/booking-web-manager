@@ -53,12 +53,25 @@
 /use-cases/sessions/*waitlist*.ts @Wyjessie
 /use-cases/sessions/*attendance*.ts @Wyjessie
 /use-cases/sessions/*settlement*.ts @Wyjessie
+/use-cases/sessions/AcceptReplacement.ts @Wyjessie
+/use-cases/sessions/ExpireReplacements.ts @Wyjessie
+/use-cases/sessions/RunScheduledSessionJobs.ts @Wyjessie
+/use-cases/sessions/follow-up-promotion.ts @Wyjessie
+/use-cases/sessions/scheduling-ports.ts @Wyjessie
+/lib/commit/ @Wyjessie
+/tests/app/commit/ @Wyjessie
+/tests/lib/commit/ @Wyjessie
+/tests/use-cases/scheduled-session-jobs.test.ts @Wyjessie
+/tests/use-cases/support/in-memory-unit-of-work.ts @Wyjessie
+/tests/use-cases/support/recording-notifier.ts @Wyjessie
 
 # Neoh: session creation/management/discovery, adapters, wiring and feature tests.
 # Use-case rules are file-specific: this directory also hosts Yajie's workflows.
 /app/sessions/ @liang799
 /app/discover/ @liang799
 /app/api/sessions/ @liang799
+/app/api/venues/ @liang799
+/app/venues/ @liang799
 /use-cases/sessions/CreateSession.ts @liang799
 /use-cases/sessions/CreateSessions.ts @liang799
 /use-cases/sessions/DiscoverSessions.ts @liang799
@@ -74,14 +87,19 @@
 /use-case-config/sessions.ts @liang799
 /use-case-config/discovery.ts @liang799
 /use-case-config/session-management.ts @liang799
+/use-case-config/venues.ts @liang799
 /lib/sessions/ @liang799
+/lib/venues/ @liang799
 /tests/app/sessions/ @liang799
 /tests/app/discover/ @liang799
 /tests/lib/sessions/ @liang799
+/tests/app/venues/ @liang799
+/tests/lib/venues/ @liang799
 /tests/integration/sessions-persistence.test.ts @liang799
 /tests/integration/session-management-persistence.test.ts @liang799
 /tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
+/tests/e2e/session-creation.spec.ts @liang799
 /tests/e2e/sessions-visibility.spec.ts @liang799
 /tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799
@@ -93,12 +111,18 @@
 /playwright.integration.config.ts @liang799
 /supabase/migrations/0006_session_creation.sql @liang799
 /supabase/migrations/0007_session_management.sql @liang799
+/supabase/migrations/0008_session_pricing.sql @liang799 @harr008
+/supabase/migrations/0009_session_capacity.sql @liang799
 
 # Joseph: identity, shared authentication adapters, groups and frontend platform.
 # The specific auth test overrides the session-test directory rule above.
 /app/(auth)/ @Jolingoes
 /app/profile/ @Jolingoes
 /app/groups/ @Jolingoes
+/app/not-found.tsx @Jolingoes @rbrishi15
+/app/_components/page-unavailable-view.tsx @Jolingoes @rbrishi15
+/app/_components/page-unavailable-view.stories.tsx @Jolingoes @rbrishi15
+/tests/e2e/navigation-fallback.spec.ts @Jolingoes @rbrishi15
 /components/ui/ @Jolingoes
 /lib/supabase/ @Jolingoes
 /middleware.ts @Jolingoes
@@ -108,6 +132,7 @@
 /tests/lib/supabase/ @Jolingoes
 /tests/app/sessions/bearer-auth.test.ts @Jolingoes
 /supabase/migrations/0004_profiles.sql @Jolingoes
+/supabase/migrations/0009_commitment_scheduling.sql @Wyjessie
 
 # Capability-specific adapters/tests override the broad session defaults.
 /lib/sessions/*waitlist*.ts @Wyjessie
@@ -125,6 +150,8 @@
 /tests/lib/sessions/*attendance*.test.ts @Wyjessie
 /tests/lib/sessions/*commitment*.test.ts @Wyjessie
 /tests/lib/sessions/*settlement*.test.ts @Wyjessie
+/app/api/sessions/*/withdrawal-preview/ @Wyjessie
+/use-case-config/withdrawal-preview.ts @Wyjessie
 
 # Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
 /tests/use-cases/UC1-01-*.test.ts @Jolingoes

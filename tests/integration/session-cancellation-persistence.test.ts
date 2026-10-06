@@ -9,7 +9,7 @@ import { CancelSession } from "@/use-cases/sessions/CancelSession";
 import { PreviewSessionCancellation } from "@/use-cases/sessions/PreviewSessionCancellation";
 import { ToggleSessionVisibility } from "@/use-cases/sessions/ToggleSessionVisibility";
 import type { SessionCancellationTransaction } from "@/use-cases/sessions/session-cancellation-transaction";
-import { cancellationFixture, addCancellationParticipant } from "../support/cancellation-fixtures";
+import { cancellationFixture, cancellationSql, addCancellationParticipant } from "../support/cancellation-fixtures";
 import { sessionTestContext, type SessionTestContext } from "../support/session-test-context";
 
 const clock = { now: () => new Date("2045-04-01T00:00:00Z") };
@@ -53,6 +53,32 @@ describe("UC2-03c PostgreSQL cancellation", () => {
     expect(await refundRows(fixture.sessionId)).toHaveLength(2);
     await context.pool.query("update profiles set account_status='INACTIVE' where user_id=$1", [fixture.booker.userId]);
     await expect(submitted.forBooker(fixture.booker.userId, fixture.sessionId, quoted.previewVersion)).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+  });
+
+  test("refunds persisted custom and historical hold amounts instead of recalculating the current quote", async () => {
+    const fixture = await cancellationFixture(context);
+    const historical = fixture.participants[0]!;
+    await context.pool.query("update sessions set booking_share_cents=750 where session_id=$1", [fixture.sessionId]);
+    const current = await addCancellationParticipant(cancellationSql(context), fixture.sessionId, await context.identity(false), 750);
+
+    const quote = await preview().forBooker(fixture.booker.userId, fixture.sessionId);
+    expect(quote).toMatchObject({ affectedParticipantCount: 2, refundRecipientCount: 2, totalRefundCents: 1250 });
+    expect(await cancel().forBooker(fixture.booker.userId, fixture.sessionId, quote.previewVersion))
+      .toMatchObject({ status: "CANCELLED", refundRecipientCount: 2, totalRefundCents: 1250 });
+    const refunds = await refundRows(fixture.sessionId);
+    expect(refunds).toHaveLength(2);
+    for (const [participant, amountCents] of [[historical, 500], [current, 750]] as const) {
+      expect(refunds.find((refund) => refund.hold_id === participant.holdId))
+        .toMatchObject({ wallet_id: participant.walletId, amount_cents: String(amountCents) });
+      expect((await context.pool.query("select available_cents from wallet_balances where wallet_id=$1", [participant.walletId])).rows[0])
+        .toEqual({ available_cents: String(amountCents) });
+      expect((await context.pool.query("select amount_cents,state from fund_holds where hold_id=$1", [participant.holdId])).rows[0])
+        .toEqual({ amount_cents: String(amountCents), state: "REFUNDED" });
+    }
+    const loaded = await management().run(({ sessions }) => sessions.get(fixture.sessionId));
+    expect(loaded?.bookingShare.toCents()).toBe(750);
+    expect(loaded?.participantList.requireParticipation(historical.participationId).hold?.amount.toCents()).toBe(500);
+    expect(loaded?.participantList.requireParticipation(current.participationId).hold?.amount.toCents()).toBe(750);
   });
 
   test("cancels waiting/withdrawn records, clears reservations and leaves removed history untouched", async () => {
