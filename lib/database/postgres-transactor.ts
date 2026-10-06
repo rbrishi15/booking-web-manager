@@ -6,18 +6,17 @@ import type { SqlExecutor, SqlTransactor } from "@/lib/money/sql";
 export class PostgresTransactor implements SqlTransactor {
   constructor(
     private readonly pool: Pool,
-    private readonly isolation: "repeatable read" | "serializable" = "repeatable read",
+    private readonly isolation:
+      | "read committed"
+      | "repeatable read"
+      | "serializable" = "repeatable read",
   ) {}
 
   async transaction<T>(work: (sql: SqlExecutor) => Promise<T>): Promise<T> {
     const connection = await this.pool.connect();
     let discard = false;
     try {
-      await connection.query(
-        this.isolation === "serializable"
-          ? "begin isolation level serializable"
-          : "begin isolation level repeatable read",
-      );
+      await connection.query(`begin isolation level ${this.isolation}`);
       const sql: SqlExecutor = {
         query: async (statement, values) => {
           try {
