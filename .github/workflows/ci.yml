@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Migration numbers are unique
+        run: bash scripts/check-migration-numbers.sh
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json

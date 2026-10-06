@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "supabase/migrations/**"
+      - ".github/workflows/supabase-migrations.yml"
+      - "scripts/check-migration-numbers.sh"
   workflow_dispatch:
 
 jobs:
@@ -16,6 +18,9 @@ jobs:
       SUPABASE_PROJECT_ID: rofrvxezteioulhlnfcj
     steps:
       - uses: actions/checkout@v4
+
+      - name: Migration numbers are unique
+        run: bash scripts/check-migration-numbers.sh
 
       - uses: supabase/setup-cli@v1
         with:

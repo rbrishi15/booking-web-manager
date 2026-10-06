@@ -113,7 +113,6 @@
 /supabase/migrations/0006_session_creation.sql @liang799
 /supabase/migrations/0007_session_management.sql @liang799
 /supabase/migrations/0008_session_pricing.sql @liang799 @harr008
-/supabase/migrations/0009_session_capacity.sql @liang799
 
 # Joseph: identity, shared authentication adapters, groups and frontend platform.
 # The specific auth test overrides the session-test directory rule above.

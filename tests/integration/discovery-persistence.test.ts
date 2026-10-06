@@ -35,9 +35,9 @@ describe("UC2-01 PostgreSQL discovery", () => {
     const endAt = new Date(new Date(input.startAt).getTime() + 2 * 60 * 60 * 1000);
     await context.pool.query(
       `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-        total_cost_cents, total_slots, booking_share_cents, visibility, status,
+        total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, status,
         room_token, holding_account_id, minimum_reliability)
-       values ($1,$2,$11,$3,$4,$5,$6,1001,2,500,$7,$8,$9,$10,100)`,
+       values ($1,$2,$11,$3,$4,$5,$6,1001,2,2,500,$7,$8,$9,$10,100)`,
       [sessionId, bookerId, input.region ?? "West", input.sport ?? "Badminton", input.startAt, endAt,
         input.visibility ?? "PUBLIC", input.status ?? "OPEN", randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID,
         input.venueName ?? "Discovery fixture venue"],

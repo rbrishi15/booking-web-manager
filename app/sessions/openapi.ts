@@ -50,7 +50,7 @@ export function registerSessionApi(registry: OpenAPIRegistry): void {
                 endAt: "2030-10-01T20:00:00+08:00",
                 totalCostCents: 1001,
               },
-              config: { totalSlots: 3 },
+              config: { totalSlots: 3, minimumHeadcount: 2 },
             },
           },
         },
