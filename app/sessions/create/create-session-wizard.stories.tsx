@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { useCallback, useMemo, useState } from "react";
+import { StrictMode, useCallback, useMemo, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { AppShell } from "@/components/ui/app-shell";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ const complete = { ...emptySessionDraft, venueName: "Bukit Timah CC", region: "C
   startDate: "2045-06-17", startTime: "07:00", endDate: "2045-06-17", endTime: "08:00" };
 const venues: VenueSearchPage = { items: [{ venueName: "Bukit Timah CC", address: "20 TOH YI DRIVE", postalCode: "596569", latitude: 1.34, longitude: 103.77, region: "Central" }], nextPage: null };
 function memoryStorage(initial?: string) {
-  const values = new Map<string, string>(initial ? [[pendingStorageKey("storybook"), initial]] : []);
+  const values = new Map<string, string>(initial !== undefined ? [[pendingStorageKey("storybook"), initial]] : []);
   return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
 }
 function Harness(props: CreateSessionWizardProps) {
@@ -52,25 +52,89 @@ export const DetailsAndNavigation: Story = {
 export const OvernightDates: Story = {
   args: { initialDraft: complete },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Edit booking dates and times" }));
-    await userEvent.clear(portal().getByLabelText("Start time", { exact: true }));
-    await userEvent.type(portal().getByLabelText("Start time", { exact: true }), "23:00");
-    await userEvent.click(portal().getByRole("button", { name: "Save dates and times" }));
-    await expect(portal().getByRole("alert")).toHaveTextContent("End must be after start");
-    await userEvent.clear(portal().getByLabelText("End date", { exact: true }));
-    await userEvent.type(portal().getByLabelText("End date", { exact: true }), "2045-06-18");
-    await userEvent.click(portal().getByRole("button", { name: "Save dates and times" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(dialog.queryByLabelText("End date", { exact: true })).not.toBeInTheDocument();
+    await expect(dialog.queryByLabelText("End time", { exact: true })).not.toBeInTheDocument();
+    await userEvent.clear(dialog.getByLabelText("Start time", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start time", { exact: true }), "23:00");
+    await userEvent.clear(dialog.getByLabelText("Duration (minutes)"));
+    await userEvent.type(dialog.getByLabelText("Duration (minutes)"), "120");
+    await expect(dialog.getByText(/Ends 18 Jun 2045/)).toHaveTextContent(/next day/);
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
     await expect(canvas.getByText(/Ends 18 Jun 2045/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const reopened = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(reopened.getByLabelText("Start time", { exact: true })).toHaveValue("23:00");
+    await expect(reopened.getByLabelText("Duration (minutes)")).toHaveValue(120);
+    await userEvent.click(reopened.getByRole("button", { name: "Cancel" }));
+  },
+};
+export const InvalidDuration: Story = {
+  args: { initialDraft: complete },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    const duration = dialog.getByLabelText("Duration (minutes)");
+    await userEvent.clear(duration);
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await expect(dialog.getByRole("alert")).toHaveTextContent(/duration/i);
+    await expect(duration).toHaveFocus();
+    await userEvent.type(duration, "0");
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await expect(dialog.getByRole("alert")).toHaveTextContent(/duration/i);
+    await expect(duration).toHaveFocus();
+    await userEvent.clear(duration);
+    await userEvent.type(duration, "45");
+    await userEvent.click(dialog.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    await expect(portal().getByLabelText("Duration (minutes)")).toHaveValue(45);
+    await userEvent.click(portal().getByRole("button", { name: "Cancel" }));
+  },
+};
+export const SchedulePresetsAndCancel: Story = {
+  args: { initialDraft: complete },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const dialog = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await userEvent.clear(dialog.getByLabelText("Start date", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start date", { exact: true }), "2045-06-18");
+    await userEvent.clear(dialog.getByLabelText("Start time", { exact: true }));
+    await userEvent.type(dialog.getByLabelText("Start time", { exact: true }), "10:00");
+    await userEvent.click(dialog.getByRole("button", { name: "1 hour 30 minutes" }));
+    await expect(dialog.getByLabelText("Duration (minutes)")).toHaveValue(90);
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    const reopened = within(portal().getByRole("dialog", { name: "Booking schedule" }));
+    await expect(reopened.getByLabelText("Start date", { exact: true })).toHaveValue("2045-06-17");
+    await expect(reopened.getByLabelText("Start time", { exact: true })).toHaveValue("07:00");
+    await expect(reopened.getByLabelText("Duration (minutes)")).toHaveValue(60);
+    await userEvent.click(reopened.getByRole("button", { name: "1 hour 30 minutes" }));
+    await userEvent.click(reopened.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(portal().queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "Edit booking schedule" }));
+    await expect(portal().getByLabelText("Duration (minutes)")).toHaveValue(90);
+    await userEvent.click(portal().getByRole("button", { name: "Cancel" }));
   },
 };
 export const Settings: Story = {
   args: { initialDraft: complete, initialStep: 2 },
   play: async ({ canvas }) => {
+    const minimum = within(canvas.getByRole("group", { name: "Minimum viable headcount" }));
+    await expect(minimum.getByRole("status")).toHaveTextContent("4");
     await expect(canvas.getByRole("button", { name: "Increase No. of Slots" })).toBeDisabled();
     for (let index = 0; index < 6; index++) await userEvent.click(canvas.getByRole("button", { name: "Decrease No. of Slots" }));
     await expect(canvas.getByRole("button", { name: "Decrease No. of Slots" })).toBeDisabled();
     await expect(within(canvas.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("2");
+    await expect(minimum.getByRole("status")).toHaveTextContent("2");
+    await expect(minimum.getByRole("button", { name: "Increase Minimum viable headcount" })).toBeDisabled();
+    await expect(minimum.getByRole("button", { name: "Decrease Minimum viable headcount" })).toBeDisabled();
     await userEvent.click(canvas.getByRole("button", { name: "Increase No. of Slots" }));
+    await userEvent.click(minimum.getByRole("button", { name: "Increase Minimum viable headcount" }));
+    await expect(minimum.getByRole("status")).toHaveTextContent("3");
     await userEvent.click(canvas.getByRole("combobox", { name: "Minimum Reliability Score" }));
     await userEvent.click(portal().getByRole("option", { name: "No minimum" }));
     await userEvent.click(await canvas.findByRole("button", { name: "Next" }));
@@ -170,18 +234,12 @@ export const PayoutRequired: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Done" }));
     await expect(canvas.getByRole("alert")).toHaveTextContent("Complete your payout account setup");
+    await expect(canvas.getByRole("alert").parentElement).toHaveFocus();
     await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
   },
 };
 export const SignInExpired: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "UNAUTHENTICATED", ambiguous: false, message: "Your sign-in has expired. Sign in again to continue." })) }, play: async ({ canvas }) => {
   await userEvent.click(canvas.getByRole("button", { name: "Done" })); await expect(canvas.getByRole("link", { name: "Sign in again" })).toBeVisible();
-} };
-export const VerificationRequired: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", ambiguous: false, message: "Verify your email before creating a session. You can still browse sessions." })) }, play: async ({ canvas, args }) => {
-  await userEvent.click(canvas.getByRole("button", { name: "Done" }));
-  await expect(canvas.getByRole("alert")).toHaveTextContent("Verify your email before creating a session");
-  await expect(canvas.getByRole("link", { name: "Verify email" })).toHaveAttribute("href", "/profile/email");
-  await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
-  await expect(args.onCreated).not.toHaveBeenCalled();
 } };
 export const ServiceUnavailable: Story = { ...PayoutRequired, args: { ...PayoutRequired.args, create: fn(async (): Promise<CreationOutcome> => ({ status: "error", code: "SESSION_API_UNAVAILABLE", ambiguous: false, message: "Session creation is temporarily unavailable. Please try again." })) }, play: async ({ canvas }) => {
   await userEvent.click(canvas.getByRole("button", { name: "Done" }));
@@ -218,6 +276,132 @@ export const PendingReload: Story = {
     await expect(args.storage?.getItem(pendingStorageKey("storybook"))).toBeNull();
   },
 };
+function ChangeBooker(props: CreateSessionWizardProps) {
+  const [userId, setUserId] = useState("storybook");
+  const storage = useMemo(() => memoryStorage(JSON.stringify({
+    version: 1, payload: submissionPayload(complete, "previous-booker-key"),
+  })), []);
+  return <><CreateSessionWizard {...props} userId={userId} storage={storage} />
+    <Button onClick={() => setUserId("another-booker")}>Change booker</Button></>;
+}
+export const ChangedBookerStartsFresh: Story = {
+  render: (args) => <ChangeBooker {...args} />,
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("button", { name: "Retry submission" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Change booker" }));
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    await expect(canvas.getByRole("combobox", { name: "Venue" })).toHaveValue("");
+    await expect(canvas.getByRole("button", { name: "Next" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Retry submission" })).not.toBeInTheDocument();
+    await expect(args.create).not.toHaveBeenCalled();
+  },
+};
+function ChangeBookerDuringSubmission(props: CreateSessionWizardProps) {
+  const [userId, setUserId] = useState("storybook");
+  const [finishPrevious, setFinishPrevious] = useState<(() => void) | null>(null);
+  const [previousFinished, setPreviousFinished] = useState(false);
+  const createPrevious = useCallback<CreateSessionWizardProps["create"]>(async (payload) => {
+    await new Promise<void>((resolve) => setFinishPrevious(() => resolve));
+    const result = await props.create(payload);
+    setPreviousFinished(true);
+    return result;
+  }, [props.create]);
+  return <>
+    <Harness {...props} userId={userId} create={userId === "storybook" ? createPrevious : props.create}
+      initialDraft={userId === "storybook" ? complete : undefined} initialStep={userId === "storybook" ? 3 : 1} />
+    <Button onClick={() => setUserId("another-booker")}>Change booker</Button>
+    {finishPrevious && <Button onClick={() => { finishPrevious(); setFinishPrevious(null); }}>Finish previous booking</Button>}
+    {previousFinished && <p>Previous response delivered</p>}
+  </>;
+}
+export const ChangedBookerIgnoresPreviousCompletion: Story = {
+  render: (args) => <ChangeBookerDuringSubmission {...args} />,
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(canvas.getByRole("button", { name: "Creating…" })).toBeDisabled();
+    await userEvent.click(canvas.getByRole("button", { name: "Change booker" }));
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    const venue = canvas.getByRole("combobox", { name: "Venue" });
+    await expect(venue).toHaveValue("");
+    await userEvent.type(venue, "New booker's court");
+    await userEvent.type(canvas.getByLabelText("Booking cost (SGD)"), "35.50");
+    await userEvent.click(canvas.getByRole("button", { name: "Finish previous booking" }));
+    await expect(await canvas.findByText("Previous response delivered")).toBeVisible();
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(args.onCreated).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("heading", { name: "Booked Venue Details" })).toBeVisible();
+    await expect(venue).toHaveValue("New booker's court");
+    await expect(canvas.getByLabelText("Booking cost (SGD)")).toHaveValue("35.50");
+    await expect(canvas.getByRole("button", { name: "Next" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Retry submission" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+function ReplaceCreateCallback(props: CreateSessionWizardProps) {
+  const [updated, setUpdated] = useState(false);
+  const previousCreate = useCallback(async (): Promise<CreationOutcome> => ({
+    status: "error", code: "SESSION_API_UNAVAILABLE", ambiguous: false, message: "The previous create callback was used.",
+  }), []);
+  return <><Harness {...props} create={updated ? props.create : previousCreate} />
+    <Button onClick={() => setUpdated(true)}>Replace create callback</Button></>;
+}
+export const UpdatedCreateCallbackIsUsed: Story = {
+  args: { initialDraft: complete, initialStep: 3 },
+  render: (args) => <ReplaceCreateCallback {...args} />,
+  play: async ({ canvas, args }) => {
+    const price = canvas.getByLabelText("Adjust price per slot (SGD)");
+    await userEvent.clear(price); await userEvent.type(price, "12.01");
+    await userEvent.click(canvas.getByRole("button", { name: "Replace create callback" }));
+    await expect(price).toHaveValue("12.01");
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(args.onCreated).toHaveBeenCalledOnce());
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(args.create).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ pricePerSlotCents: 1201 }) }));
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+export const StrictModeCompletesOnce: Story = {
+  args: { initialDraft: complete, initialStep: 3 },
+  render: (args) => <StrictMode><Harness {...args} /></StrictMode>,
+  play: async ({ canvas, args }) => {
+    await userEvent.dblClick(canvas.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(args.onCreated).toHaveBeenCalledOnce());
+    await expect(args.create).toHaveBeenCalledOnce();
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+  },
+};
+function IndependentBookers(props: CreateSessionWizardProps) {
+  const [booker, setBooker] = useState(1);
+  return <>
+    <div role="group" aria-label="First booker" hidden={booker !== 1}><Harness {...props} userId="first-booker" /></div>
+    <div role="group" aria-label="Second booker" hidden={booker !== 2}><Harness {...props} userId="second-booker" /></div>
+    <Button onClick={() => setBooker(1)}>Show first booker</Button>
+    <Button onClick={() => setBooker(2)}>Show second booker</Button>
+  </>;
+}
+export const BookerWizardsAreIndependent: Story = {
+  args: { initialDraft: complete, initialStep: 2 },
+  render: (args) => <IndependentBookers {...args} />,
+  play: async ({ canvas, args }) => {
+    const first = within(canvas.getByRole("group", { name: "First booker" }));
+    await userEvent.click(first.getByRole("button", { name: "Decrease No. of Slots" }));
+    await expect(within(first.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("7");
+    await userEvent.click(first.getByRole("button", { name: "Next" }));
+    await expect(first.getByRole("heading", { name: "Auto-Generated Pricing" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Show second booker" }));
+    const second = within(canvas.getByRole("group", { name: "Second booker" }));
+    await expect(second.getByRole("heading", { name: "Booked Venue Settings" })).toBeVisible();
+    await expect(within(second.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("8");
+    await userEvent.click(second.getByRole("button", { name: "Decrease No. of Slots" }));
+    await userEvent.click(second.getByRole("button", { name: "Decrease No. of Slots" }));
+    await expect(within(second.getByRole("group", { name: "No. of Slots" })).getByRole("status")).toHaveTextContent("6");
+    await userEvent.click(canvas.getByRole("button", { name: "Show first booker" }));
+    await expect(first.getByRole("heading", { name: "Auto-Generated Pricing" })).toBeVisible();
+    await expect(first.getByText("Estimated revenue at full capacity (7 slots)")).toBeVisible();
+    await expect(args.create).not.toHaveBeenCalled();
+  },
+};
 export const ReplaySignInExpired: Story = {
   args: { ...SignInExpired.args, storage: memoryStorage(JSON.stringify({ version: 1, payload: submissionPayload(complete, "unresolved-key") })) },
   play: async ({ canvas, args }) => {
@@ -228,11 +412,70 @@ export const ReplaySignInExpired: Story = {
   },
 };
 export const StorageUnavailable: Story = {
-  args: { initialDraft: complete, initialStep: 3, storage: { getItem: () => { throw new Error("blocked"); }, setItem: fn(), removeItem: fn() } },
+  args: { initialDraft: complete, initialStep: 3, storage: { getItem: fn((): string | null => { throw new Error("blocked"); }), setItem: fn(), removeItem: fn() } },
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent("Enable session storage and reload");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("It may already have created a session");
     await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
     await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Enable session storage or free up storage space");
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    (args.storage!.getItem as ReturnType<typeof fn<Storage["getItem"]>>).mockReturnValue(null);
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
+  },
+};
+function unreadableStorage(value: string) {
+  const storage = memoryStorage(value);
+  return { ...storage, setItem: fn(storage.setItem), removeItem: fn(storage.removeItem) };
+}
+export const MalformedPendingSubmission: Story = {
+  args: { initialDraft: complete, initialStep: 3, storage: unreadableStorage("{broken") },
+  play: async ({ canvas, args }) => {
+    const storage = args.storage!;
+    const key = pendingStorageKey("storybook");
+    const original = storage.getItem(key);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("It may already have created a session");
+    await expect(canvas.getByRole("link", { name: "Check hosted sessions (new tab)" })).toHaveAttribute("href", "/sessions");
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeDisabled();
+    await expect(storage.removeItem).not.toHaveBeenCalled();
+    await expect(storage.setItem).not.toHaveBeenCalled();
+    await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    const backupKey = (storage.setItem as ReturnType<typeof fn<Storage["setItem"]>>).mock.calls[0]![0];
+    await expect(backupKey).toMatch(`${key}:unresolved:`);
+    await expect(storage.getItem(backupKey)).toBe(original);
+    await expect(storage.getItem(key)).toBeNull();
+    await expect(canvas.getByLabelText("Adjust price per slot (SGD)")).toBeEnabled();
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
+    await expect(storage.getItem(backupKey)).toBe(original);
+  },
+};
+export const InvalidPendingSubmission: Story = {
+  ...MalformedPendingSubmission,
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage('{"version":2,"payload":{}}') },
+};
+export const EmptyPendingSubmission: Story = {
+  ...MalformedPendingSubmission,
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage("") },
+};
+export const RecoveryBackupUnavailable: Story = {
+  args: { ...MalformedPendingSubmission.args, storage: unreadableStorage("{broken") },
+  play: async ({ canvas, args }) => {
+    const storage = args.storage!;
+    (storage.setItem as ReturnType<typeof fn<Storage["setItem"]>>).mockImplementationOnce(() => { throw new Error("quota exceeded"); });
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await expect(canvas.getByRole("alert")).toHaveTextContent("We couldn't preserve your pending submission");
+    await expect(storage.getItem(pendingStorageKey("storybook"))).toBe("{broken");
+    await expect(storage.removeItem).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("button", { name: "Done" })).toBeDisabled();
+    await expect(args.create).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "I checked my sessions; start again" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Done" }));
+    await expect(args.onCreated).toHaveBeenCalledOnce();
   },
 };
 function DeferredSubmission(props: CreateSessionWizardProps) {

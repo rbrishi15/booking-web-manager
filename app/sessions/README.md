@@ -26,13 +26,14 @@ without credentials or a local Supabase stack.
 
 ## UC2-02: create-session wizard
 
-This work starts from visibility commit `a1b7acfc53078220e9c16b522d5b3b6f0eae4324`
-on `tianpok/uc2-03a-session-visibility`. That unmerged visibility work is a
-dependency of `tianpok/uc2-02-create-session-ui`.
+UC2-03a visibility (PR #38) and UC2-03c cancellation (PR #41) are on `main`;
+the creation wizard includes those dependencies by updating from `main`.
+Apply the migration sequence in numbered order, including 0008 for custom pricing.
+The wizard and pricing changes retain independent review of every affected area under the
+[contribution workflow](../../docs/contributing-workflow.md).
 
 `/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
-the hosted list has its own route-group layout and offers Create when account
-eligibility allows it. Missing or unconfirmed email offers Verify email.
+the hosted list has its own route-group layout and a create button in every state.
 The three steps preserve drafts, validate before advancing, and focus the new
 heading or first invalid field. The footer occupies layout space outside the
 scrolling body; short screens can scroll every field fully into view.
@@ -40,8 +41,10 @@ scrolling body; short screens can scroll every field fully into view.
 Details start with Tennis and empty venue, dates and cost. The date dialog uses
 Singapore time, with separate start/end dates for overnight bookings. Cost is
 parsed directly into integer cents. Settings default to Private, eight slots,
-and 4.5/5 reliability (90/100). Capacity is 2–8. Reliability choices are no minimum or 3–5 in
-half-point increments. Pricing uses the selected sport's local photo and the
+a minimum headcount of four, and 4.5/5 reliability (90/100). Capacity is 2–8;
+minimum headcount must be between two and the selected capacity. UC2-02 retains
+this required configuration from the SRS. Reliability choices are no minimum or
+3–5 in half-point increments. Pricing uses the selected sport's local photo and the
 shared framework-independent calculation in `domain/sessions/pricing.ts`.
 
 Before POST, the browser saves the exact payload and idempotency key in
@@ -122,9 +125,9 @@ where `s = floor(cost / slots)`. Above-cost collection is allowed. The accepted
 price is immutable Session state hydrated from `booking_share_cents`; participation,
 refund and settlement use that price and historical holds. Apply migration 0008
 before deploying this behavior. See [ADR-0012](../../docs/adr/0012-booker-selected-session-pricing.md).
-Creation moves no funds. Apply migration 0009 before deploying the current
-session contract; it removes the obsolete participant-count configuration column
-without changing session capacity, accepted prices, participation or fund holds.
+Creation moves no funds. `config.minimumHeadcount` remains required and is
+persisted as `minimum_headcount`; it must be an integer between two and
+`config.totalSlots`.
 
 | Status | Outcome |
 | --- | --- |
@@ -170,8 +173,8 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Participant removal and
-Realtime subscriptions remain separate work.
+The discovery page is covered by UC2-01. Participant removal and Realtime
+subscriptions remain separate work.
 
 ## UC2-03a: visibility management
 

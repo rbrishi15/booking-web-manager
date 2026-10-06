@@ -26,24 +26,56 @@ discovery.
 Authenticated `GET /api/venues?q=…&page=…` uses the app-owned contract in
 `app/venues`, dependency assembly in `venues.ts`, and the `OneMapVenueSearch`
 adapter in `lib/venues`. It requires the public Supabase URL/anonymous key for
+<<<<<<< HEAD
 bearer verification. Optional server-only `ONEMAP_API_EMAIL` and
 `ONEMAP_API_PASSWORD` are registered OneMap account credentials, not an API key.
 Restart after changing settings because successful assembly is cached per runtime.
+=======
+bearer verification. Server-only `ONEMAP_API_EMAIL` and `ONEMAP_API_PASSWORD`
+are registered OneMap account credentials and enable automatic token renewal.
+Alternatively, configure `ONEMAP_API_TOKEN` with an existing access token. A
+complete email/password pair takes precedence when both options are configured.
+Redeploy after changing production settings because successful assembly is cached
+per runtime and Vercel applies new environment values to new deployments.
+>>>>>>> origin/main
 
 The adapter POSTs email/password to OneMap's
 [`/api/auth/post/getToken`](https://www.onemap.gov.sg/apidocs/authentication),
 caches the access token until shortly before `expiry_timestamp`, shares concurrent
+<<<<<<< HEAD
 token requests, and refreshes once after a 401. Searches have a five-second timeout.
 Provider tokens, raw responses and credentials are never sent to the browser.
 Lookup occurs outside creation/database transactions and reserves no venue.
 
+=======
+token requests, and refreshes once after an authentication rejection. OneMap can
+report authentication errors in an HTTP 200 response; those responses are rejected
+as failures even when they include results. Searches have a five-second timeout.
+Provider tokens, raw responses and credentials are never sent to the browser.
+Lookup occurs outside creation/database transactions and reserves no venue.
+
+In token-only mode, the adapter sends the token directly and does not attempt a
+credential login or retry the same rejected token. OneMap access tokens expire
+after three days and cannot renew themselves; replace the token and redeploy
+before expiry, or configure the registered account credentials for renewal.
+Keep all three settings in the hosting provider's server environment, never in
+Git, public environment variables, or browser code. Configure the production
+environment explicitly; a preview or local value does not configure production.
+
+>>>>>>> origin/main
 The bundled [URA region boundaries](../lib/venues/data/README.md) are resolved
 with `@turf/boolean-point-in-polygon`. The server returns application-owned names,
 addresses, coordinates, regions and pagination only. Unknown/shared-boundary
 coordinates return a null region for manual selection. Missing settings return
 503; provider failures return opaque 502 responses. Manual entry is always usable.
 Deterministic tests cover translation, expiry/refresh and all five regions.
+<<<<<<< HEAD
 Live OneMap verification requires credentials, which are absent locally.
+=======
+Live OneMap verification requires one of these authentication options. The
+disposable integration runner clears all three settings and uses fixtures/manual
+entry so it never sends inherited live credentials to the provider.
+>>>>>>> origin/main
 
 ## Session creation configuration
 
@@ -132,11 +164,17 @@ Apply migrations through `0008_session_pricing.sql` before deploying the wizard'
 custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
 bounds without updating existing sessions or fund holds.
 
+<<<<<<< HEAD
 Apply `0009_session_capacity.sql` before deploying the current session
 contract. It drops the obsolete participant-count configuration column; capacity,
 quoted shares, participation and financial records are retained. The database
 continues to enforce 2–8 slots. Previously
 applied migrations remain in the history so existing installations can upgrade.
+=======
+The session contract retains the UC2-02 minimum headcount in `minimum_headcount`.
+Migration 0006 continues to enforce 2–8 slots and a minimum headcount between
+two and the session capacity. No column-removal migration is required.
+>>>>>>> origin/main
 
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
@@ -263,8 +301,10 @@ Conflicting future lifecycle writers must follow the same serializable contract.
 Concurrency tests model that contract and do not guarantee safety for arbitrary
 lower-isolation direct SQL. Neoh owns cancellation adapters; request Harrison's
 ledger integration review and Rishi's domain/transaction review and independent
-session-area review assignment. This feature stacks on the latest PR #38; merge
-#38 first, update from main, retarget and rerun integration before merging it.
+session-area review assignment. Visibility (PR #38) and cancellation (PR #41)
+are now on `main`; creation (PR #39) integrates both by updating from `main` and
+rerunning creation, visibility and cancellation coverage with migrations through
+0008 before its independent review and merge.
 
 ### UC2-03c validation, 2026-10-02
 

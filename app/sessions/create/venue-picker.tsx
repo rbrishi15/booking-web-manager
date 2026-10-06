@@ -6,7 +6,7 @@ import { REGIONS } from "@/app/(auth)/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { VenueCandidate } from "@/lib/venues/contracts";
+import type { VenueCandidate, VenueSearchPage } from "@/lib/venues/contracts";
 import type { FieldErrors, SessionDraft } from "./model";
 import type { SearchVenues } from "./transport";
 
@@ -14,47 +14,63 @@ interface Props {
   readonly draft: SessionDraft; readonly errors: FieldErrors; readonly disabled: boolean;
   readonly onChange: (patch: Partial<SessionDraft>) => void; readonly search: SearchVenues;
 }
+interface SearchResult extends VenueSearchPage {
+  readonly query: string;
+  readonly page: number;
+  readonly attempt: number;
+  readonly status: "ready" | "failed";
+}
 export function VenuePicker({ draft, errors, disabled, onChange, search }: Props) {
   const [manual, setManual] = useState(false);
-  const [items, setItems] = useState<readonly VenueCandidate[]>([]);
-  const [nextPage, setNextPage] = useState<number | null>(null);
+  const [result, setResult] = useState<SearchResult | null>(null);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [attempt, setAttempt] = useState(0);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const generation = useRef(0);
   const list = useRef<HTMLUListElement>(null);
-  const picker = useRef<HTMLDivElement>(null);
   const query = draft.venueName.trim();
+  const canSearch = !manual && !disabled && !draft.selectedVenue && query.length >= 2;
+  const currentResult = canSearch && result?.query === query ? result : null;
+  const items = currentResult?.items ?? [];
+  const nextPage = currentResult?.nextPage ?? null;
+  const status = !canSearch ? "idle" : currentResult?.page === page && currentResult.attempt === attempt ? currentResult.status : "loading";
+
+  // Only the external request needs synchronization; its pending/idle UI is derived above.
   useEffect(() => {
     const current = ++generation.current;
-    if (manual || disabled || draft.selectedVenue || query.length < 2) {
-      setItems([]); setStatus("idle"); setNextPage(null); return;
-    }
+    if (!canSearch) return;
     const controller = new AbortController();
-    setStatus("loading");
     const timer = setTimeout(() => {
-      void search(query, page, controller.signal).then((result) => {
+      void search(query, page, controller.signal).then((response) => {
         if (controller.signal.aborted || current !== generation.current) return;
-        setItems((previous) => page === 1 ? result.items : [...previous, ...result.items]);
-        setNextPage(result.nextPage); setStatus("ready"); setActive(-1);
-        // Pagination is an explicit request to show more candidates; its disabled button may lose focus while loading.
-        setOpen(page > 1 || (picker.current?.contains(document.activeElement) ?? false));
+        setResult((previous) => ({
+          query, page, attempt, status: "ready", nextPage: response.nextPage,
+          items: page === 1 || previous?.query !== query ? response.items : [...previous.items, ...response.items],
+        }));
       }).catch(() => {
-        if (!controller.signal.aborted && current === generation.current) { setStatus("failed"); setItems([]); setNextPage(null); }
+        if (!controller.signal.aborted && current === generation.current) {
+          setResult((previous) => ({
+            query, page, attempt, status: "failed",
+            items: page > 1 && previous?.query === query ? previous.items : [],
+            nextPage: page > 1 ? page : null,
+          }));
+        }
       });
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [draft.venueName, query, page, manual, disabled, draft.selectedVenue, search]);
+  }, [canSearch, query, page, attempt, search]);
   useEffect(() => { if (open) list.current?.children[active]?.scrollIntoView({ block: "nearest" }); }, [active, open]);
 
   function choose(item: VenueCandidate) {
     generation.current++;
     onChange({ venueName: item.venueName, region: item.region ?? "", selectedVenue: item });
-    setOpen(false); setActive(-1);
+    setResult(null); setOpen(false); setActive(-1);
   }
   const expanded = open && items.length > 0 && !disabled;
-  return <div ref={picker} className="space-y-2" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+  return <div className="space-y-2" onBlur={(event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActive(-1); }
+  }}>
     <label htmlFor="venueName" className="text-xs font-semibold">Venue</label>
     <div className="relative">
       <Input id="venueName" role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={expanded}
@@ -63,14 +79,19 @@ export function VenuePicker({ draft, errors, disabled, onChange, search }: Props
         placeholder="Search or enter a venue" value={draft.venueName} className="min-h-11 pr-10"
         onFocus={() => setOpen(true)}
         onChange={(event) => {
-          generation.current++;
-          setPage(1); setItems([]); setActive(-1); setOpen(true);
+          if (event.target.value.trim() !== query || draft.selectedVenue) {
+            generation.current++;
+            setPage(1); setResult(null);
+          }
+          setActive(-1); setOpen(true);
           onChange({ venueName: event.target.value, selectedVenue: null, ...(draft.selectedVenue && { region: "" }) });
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Escape") { setOpen(false); setActive(-1); }
           if ((event.key === "ArrowDown" || event.key === "ArrowUp") && items.length) {
-            event.preventDefault(); setOpen(true); setActive((previous) => event.key === "ArrowDown" ? (previous + 1) % items.length : (previous - 1 + items.length) % items.length);
+            event.preventDefault(); setOpen(true);
+            setActive((previous) => previous < 0 ? (event.key === "ArrowDown" ? 0 : items.length - 1)
+              : (previous + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length);
           }
           if (event.key === "Enter" && expanded && active >= 0) { event.preventDefault(); choose(items[active]!); }
         }} />
@@ -91,9 +112,15 @@ export function VenuePicker({ draft, errors, disabled, onChange, search }: Props
             : manual ? "Enter the name of your booked venue and choose its region." : "Search OneMap or enter your booked venue manually."}
     </p>
     {!draft.selectedVenue && <Button type="button" variant="link" className="h-auto min-h-11 px-0 text-xs" disabled={disabled}
-      onClick={() => { generation.current++; setManual((value) => !value); setPage(1); setOpen(false); }}>{manual ? "Search OneMap instead" : "Enter venue manually"}</Button>}
-    {nextPage && !manual && !draft.selectedVenue && <Button type="button" variant="outline" className="min-h-11" disabled={disabled || status === "loading"}
-      onClick={() => setPage(nextPage)}>More venues</Button>}
+      onClick={() => {
+        generation.current++; setManual(!manual); setPage(1); setResult(null); setActive(-1); setOpen(manual);
+      }}>{manual ? "Search OneMap instead" : "Enter venue manually"}</Button>}
+    {nextPage && <Button type="button" variant="outline" className="min-h-11" disabled={disabled} aria-disabled={status === "loading" || undefined}
+      onClick={() => { if (status !== "loading") {
+        if (status === "failed") setAttempt((previous) => previous + 1);
+        else setPage(nextPage);
+        setActive(-1); setOpen(true);
+      } }}>{status === "failed" ? "Retry venues" : "More venues"}</Button>}
     {!draft.selectedVenue?.region && <div className="space-y-2">
       <label htmlFor="region" className="text-xs font-semibold">Region</label>
       <Select value={draft.region} disabled={disabled} onValueChange={(region) => onChange({ region })}>

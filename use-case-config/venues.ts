@@ -8,7 +8,8 @@ export function createVenueDependencies(): VenueApiDependencies {
   const settings = readVenueSettings();
   const unavailable = async (): Promise<never> => { throw new VenueSearchUnavailableError(); };
   if (!settings) return { authenticate: unavailable, search: unavailable };
-  const provider = settings.credentials ? new OneMapVenueSearch(settings.credentials) : undefined;
+  const authentication = settings.credentials ?? (settings.accessToken ? { accessToken: settings.accessToken } : undefined);
+  const provider = authentication ? new OneMapVenueSearch(authentication) : undefined;
   return { authenticate: createSupabaseSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
     search: provider ? (query, page) => provider.search(query, page) : unavailable };
 }

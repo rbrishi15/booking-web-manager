@@ -1,7 +1,5 @@
 -- UC2-02: preserve existing quoted shares and permit bounded booker pricing.
 -- Apply before deploying clients that supply pricePerSlotCents.
--- Rollback is unsupported once custom prices differ from total_cost_cents / total_slots:
--- restoring sessions_calculated_share would reject those existing sessions.
 begin;
 alter table sessions drop constraint sessions_calculated_share;
 alter table sessions add constraint sessions_price_within_range check (

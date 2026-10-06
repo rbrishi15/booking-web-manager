@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("serves the shared OpenAPI document with creation, discovery and visibility", async ({ request }) => {
+test("serves the shared OpenAPI document with creation, discovery, visibility and cancellation", async ({ request }) => {
   // Arrange & Act
   const response = await request.get("/api/openapi");
   const document = await response.json();

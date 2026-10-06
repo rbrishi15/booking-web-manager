@@ -131,12 +131,40 @@ export const ServerSelectedActions: Story = {
     await expect(canvas.getByText("Visibility cannot be changed for this session.")).toBeVisible();
   },
 };
-export const Unavailable: Story = { args: { outcome: { status: "error", kind: "unavailable" } } };
+export const Unavailable: Story = {
+  args: { outcome: { status: "error", kind: "unavailable" } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
+  },
+};
 export const ReadFailure: Story = {
   args: { outcome: { status: "error", kind: "unexpected" } },
   play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
     await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
     await expect(args.onRefresh).toHaveBeenCalledOnce();
+  },
+};
+export const CreationAndCancellation: Story = {
+  args: { cancellation: {
+    userId: "10000000-0000-4000-8000-000000000001",
+    preview: fn(async (sessionId: string) => ({ status: "ready" as const, preview: {
+      sessionId, affectedParticipantCount: 1, refundRecipientCount: 1, totalRefundCents: 500, previewVersion: "a".repeat(64),
+    } })),
+    cancel: fn(async (sessionId: string) => ({ status: "cancelled" as const, result: {
+      sessionId, status: "CANCELLED" as const, refundRecipientCount: 1, totalRefundCents: 500,
+    } })),
+  } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
+    const full = within(canvas.getByRole("article", { name: "Tennis at Jurong East Sports Hall" }));
+    await expect(full.getByRole("button", { name: "Make private" })).toBeDisabled();
+    await expect(full.getByRole("button", { name: "Cancel session" })).toBeEnabled();
+    await userEvent.click(full.getByRole("button", { name: "Cancel session" }));
+    const dialog = within(await within(document.body).findByRole("dialog"));
+    await waitFor(() => expect(dialog.getByText("Total wallet refunds")).toBeVisible());
+    await userEvent.click(dialog.getByRole("button", { name: "Keep session" }));
+    await waitFor(() => expect(canvas.getByRole("link", { name: "Create a session" })).toBeVisible());
   },
 };
 export const Desktop: Story = { globals: { viewport: { value: "desktop", isRotated: false } } };

@@ -6,7 +6,7 @@ import type { SessionTestContext } from "./session-test-context";
 export type CancellationIdentity = Awaited<ReturnType<SessionTestContext["identity"]>>;
 
 /** Seeds real held ledger funds on the disposable stack, without a commitment endpoint. */
-export async function addCancellationParticipant(sql: SqlExecutor, sessionId: string, participant: CancellationIdentity) {
+export async function addCancellationParticipant(sql: SqlExecutor, sessionId: string, participant: CancellationIdentity, amountCents = 500) {
   const participationId = randomUUID();
   const holdId = randomUUID();
   await sql.query(
@@ -14,16 +14,16 @@ export async function addCancellationParticipant(sql: SqlExecutor, sessionId: st
     [participationId, sessionId, participant.userId],
   );
   await sql.query(
-    "insert into fund_holds(hold_id,participation_id,holding_account_id,wallet_id,amount_cents,state,created_at) values ($1,$2,$3,$4,500,'HELD',now())",
-    [holdId, participationId, PLATFORM_HOLDING_ACCOUNT_ID, participant.walletId],
+    "insert into fund_holds(hold_id,participation_id,holding_account_id,wallet_id,amount_cents,state,created_at) values ($1,$2,$3,$4,$5,'HELD',now())",
+    [holdId, participationId, PLATFORM_HOLDING_ACCOUNT_ID, participant.walletId, amountCents],
   );
   await sql.query(
-    "insert into ledger_entries(kind,amount_cents,occurred_at,idempotency_key,external_reference,wallet_id) values ('TOP_UP',500,now(),$1,$2,$3)",
-    [randomUUID(), randomUUID(), participant.walletId],
+    "insert into ledger_entries(kind,amount_cents,occurred_at,idempotency_key,external_reference,wallet_id) values ('TOP_UP',$4,now(),$1,$2,$3)",
+    [randomUUID(), randomUUID(), participant.walletId, amountCents],
   );
   await sql.query(
-    "insert into ledger_entries(kind,amount_cents,occurred_at,idempotency_key,wallet_id,hold_id,holding_account_id,session_id,participation_id) values ('LOCK',500,now(),$1,$2,$3,$4,$5,$6)",
-    [randomUUID(), participant.walletId, holdId, PLATFORM_HOLDING_ACCOUNT_ID, sessionId, participationId],
+    "insert into ledger_entries(kind,amount_cents,occurred_at,idempotency_key,wallet_id,hold_id,holding_account_id,session_id,participation_id) values ('LOCK',$7,now(),$1,$2,$3,$4,$5,$6)",
+    [randomUUID(), participant.walletId, holdId, PLATFORM_HOLDING_ACCOUNT_ID, sessionId, participationId, amountCents],
   );
   return { ...participant, participationId, holdId };
 }

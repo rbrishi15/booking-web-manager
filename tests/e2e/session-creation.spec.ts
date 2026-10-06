@@ -16,13 +16,16 @@ async function details(page: Page, venue: string) {
   await page.getByRole("combobox", { name: "Venue", exact: true }).fill(venue);
   await page.getByRole("combobox", { name: "Region", exact: true }).click();
   await page.getByRole("option", { name: "West", exact: true }).click();
-  await page.getByRole("button", { name: "Edit booking dates and times" }).click();
+  await page.getByRole("button", { name: "Edit booking schedule" }).click();
   await page.getByLabel("Start date", { exact: true }).fill("2045-06-17");
   await page.getByLabel("Start time", { exact: true }).fill("23:00");
-  await page.getByLabel("End date", { exact: true }).fill("2045-06-18");
-  await page.getByLabel("End time", { exact: true }).fill("01:00");
-  await page.getByRole("button", { name: "Save dates and times" }).click();
+  await page.getByLabel("Duration (minutes)").fill("120");
+  await expect(page.getByLabel("End date", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("End time", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("dialog").getByText(/Ends 18 Jun 2045/)).toContainText("next day");
+  await page.getByRole("button", { name: "Save schedule" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText(/Ends 18 Jun 2045/)).toBeVisible();
   await page.getByLabel("Booking cost (SGD)").fill("60.00");
 }
 async function pricing(page: Page, venue: string) {
@@ -76,14 +79,14 @@ test("UC2-02 validates, creates a custom-priced overnight booking and refreshes 
     await page.getByRole("button", { name: "Done", exact: true }).click();
     expect((await result).status()).toBe(201);
     expect((await result).request().postDataJSON().config).toEqual({
-      totalSlots: 8, visibility: "PUBLIC", minimumReliability: 90, pricePerSlotCents: 1202,
+      totalSlots: 8, minimumHeadcount: 4, visibility: "PUBLIC", minimumReliability: 90, pricePerSlotCents: 1202,
     });
     await expect(page).toHaveURL(/\/sessions\?created=1$/);
     await expect(page.getByRole("status")).toHaveText("Your session was created successfully.");
     await expect(page.getByRole("article", { name: `Tennis at ${venue}` })).toBeVisible();
     expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingStorageKey(booker.userId))).toBeNull();
-    expect((await context.pool.query("select booking_share_cents, minimum_reliability, total_slots, start_at, end_at from sessions where booker_id = $1", [booker.userId])).rows).toEqual([{
-      booking_share_cents: "1202", minimum_reliability: "90", total_slots: 8,
+    expect((await context.pool.query("select booking_share_cents, minimum_reliability, total_slots, minimum_headcount, start_at, end_at from sessions where booker_id = $1", [booker.userId])).rows).toEqual([{
+      booking_share_cents: "1202", minimum_reliability: "90", total_slots: 8, minimum_headcount: 4,
       start_at: new Date("2045-06-17T15:00:00Z"), end_at: new Date("2045-06-17T17:00:00Z"),
     }]);
   } finally { await context.pool.end(); }
@@ -132,7 +135,7 @@ test("payout readiness and server validation reject creation visibly without per
     const ready = await context.identity();
     const invalid = await request.post("/api/sessions", { headers: { Authorization: `Bearer ${ready.token}` }, data: {
       idempotencyKey: randomUUID(), booking: { venueName: "Court", region: "West", sport: "Tennis", startAt: "2045-06-17T07:00:00+08:00", endAt: "2045-06-17T08:00:00+08:00", totalCostCents: 6000 },
-      config: { totalSlots: 8, pricePerSlotCents: 1501 },
+      config: { totalSlots: 8, minimumHeadcount: 4, pricePerSlotCents: 1501 },
     } });
     expect(invalid.status()).toBe(422);
     expect((await context.pool.query("select count(*)::int as count from sessions where booker_id = any($1::uuid[])", [[booker.userId, ready.userId]])).rows).toEqual([{ count: 0 }]);

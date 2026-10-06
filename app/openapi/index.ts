@@ -1,3 +1,4 @@
+import { registerCommitmentApi } from "@/app/commit/openapi";
 import { registerDiscoveryApi } from "@/app/discover/openapi";
 import { registerSessionApi } from "@/app/sessions/openapi";
 import { registerSessionManagementApi } from "@/app/sessions/management-openapi";

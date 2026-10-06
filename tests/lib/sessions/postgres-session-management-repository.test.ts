@@ -11,7 +11,7 @@ function sessionRow(overrides: SqlRow = {}): SqlRow {
   return {
     session_id: "s", booker_id: "booker", venue_name: "Sports Hall", sport: "Badminton", region: "West",
     start_at: startAt, end_at: new Date("2040-01-02T12:00:00Z"), total_cost_cents: "1001",
-    total_slots: 3, booking_share_cents: "333", visibility: "PRIVATE", status: "OPEN",
+    total_slots: 3, minimum_headcount: 2, booking_share_cents: "333", visibility: "PRIVATE", status: "OPEN",
     minimum_reliability: "75.5", room_token: "room", holding_account_id: "platform", invited_group_id: null,
     next_queue_sequence: 1, payout_attempt_ids: [], payout_idempotency_keys: [], pending_settlement: null,
     ...overrides,
@@ -41,6 +41,7 @@ test("hydrates the full booking, participant list and optional configuration und
   const session = await repository.get("s");
   expect(session).toMatchObject({ sessionId: "s", bookerId: "booker", invitedGroupId: "group", visibility: "PRIVATE" });
   expect(session?.booking.totalCost.toCents()).toBe(1001);
+  expect(session?.minimumHeadcount).toBe(2);
   expect(session?.minimumReliability?.toNumber()).toBe(75.5);
   expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
   expect(session?.getAvailableSlots(now)).toBe(2);
@@ -55,10 +56,15 @@ test("returns null for a missing session without querying its children", async (
   expect(query).toHaveBeenCalledOnce();
 });
 
-test("hydrates a custom price and preserves historical hold amounts", async () => {
-  const session = await scenario([sessionRow({ booking_share_cents: "600" })], [participantRow()]).repository.get("s");
-  expect(session?.bookingShare.toCents()).toBe(600);
-  expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
+test.each([167, 334, 666])("preserves the saved %i-cent custom price and historical holds for management reads", async (price) => {
+  const rows = [sessionRow({ booking_share_cents: String(price) })];
+  const participants = [participantRow()];
+  const session = await scenario(rows, participants).repository.get("s");
+  const upcoming = await scenario(rows, participants).repository.listUpcoming("booker", now);
+  for (const loaded of [session, upcoming[0]]) {
+    expect(loaded?.bookingShare.toCents()).toBe(price);
+    expect(loaded?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
+  }
 });
 
 test("lists only the owner's upcoming open sessions, including full sessions, without update locks", async () => {
@@ -83,9 +89,13 @@ test("preserves participant-list order for equal withdrawal times and subtracts 
 
 describe("stored state validation", () => {
   test.each([
+    { minimum_headcount: undefined },
+    { minimum_headcount: 1 },
+    { minimum_headcount: 4 },
     { payout_attempt_ids: undefined },
     { payout_idempotency_keys: null },
     { total_cost_cents: "9007199254740992" },
+    { booking_share_cents: "166" },
     { booking_share_cents: "667" },
     { status: "PAYOUT_PENDING" },
     { pending_settlement: {} },

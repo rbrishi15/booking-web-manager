@@ -47,6 +47,7 @@ describe("session creation OpenAPI contract", () => {
           },
         },
         config: {
+          required: ["totalSlots", "minimumHeadcount"],
           properties: {
             pricePerSlotCents: { type: "integer", minimum: 0, exclusiveMinimum: true, maximum: Number.MAX_SAFE_INTEGER },
             totalSlots: { type: "number" },

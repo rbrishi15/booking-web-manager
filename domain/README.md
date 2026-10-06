@@ -248,7 +248,9 @@ keep their original amounts through refunds and settlement.
 
 `Booking` is an immutable value object requiring a positive total cost and
 `startAt < endAt`. A session has at most eight commitments, including accepted
-personal replacements; the booker does not receive a reserved place.
+personal replacements; the booker does not receive a reserved place. UC2-02
+requires `minimumHeadcount` between two and `totalSlots`; this configuration is
+retained when the session is copied or hydrated.
 
 Financial operation amounts are positive and wallet balances are nonnegative at
 the server boundary. A `Wallet` stores no balance field. Its synchronous

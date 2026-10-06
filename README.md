@@ -190,7 +190,11 @@ at different levels of detail.
 
 UC2-02 provides request validation, Swagger documentation, Supabase bearer
 authentication and atomic PostgreSQL persistence. With server settings and
+<<<<<<< HEAD
 migrations through 0009 applied, `POST /api/sessions` creates or replays a session.
+=======
+migrations through 0008 applied, `POST /api/sessions` creates or replays a session.
+>>>>>>> origin/main
 Missing settings return `503 SESSION_API_UNAVAILABLE` with
 `Session creation is not available yet`.
 
@@ -228,6 +232,7 @@ Singapore date/time editing and adjustable cent-valued pricing. Omitted API
 prices retain equal splitting; accepted prices are fixed Session state under
 [ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
 survive reload in user-scoped session storage and replay with their original key.
+<<<<<<< HEAD
 
 Email verification gates session creation and admission. Signed-out and unverified
 visitors can browse `/discover`; signed-in users see a nonblocking recovery prompt.
@@ -235,6 +240,8 @@ Current session screens receive lightweight `{ name, href, method, inputs }`
 actions from the server, and commands recheck authorization on every request.
 See the [session action contract](./app/sessions/README.md#lightweight-contextual-actions).
 Join production wiring remains separate.
+=======
+>>>>>>> origin/main
 
 ## Team
 
@@ -298,6 +305,24 @@ npm run lint
 npm test
 npm run test:concurrency
 ```
+
+### Debugging session creation with Redux DevTools
+
+With the Redux DevTools browser extension installed, run `npm run dev`, open
+`/sessions/create`, and select **Session creation #N** in the Redux panel's
+store selector. Each mounted wizard has its own connection. The timeline names
+draft edits, step changes, submission results and retries (for example,
+`session/change`, `session/submitStarted` and `session/retryStarted`).
+
+The integration uses [Zustand's DevTools middleware](https://zustand.docs.pmnd.rs/reference/middlewares/devtools),
+connects after mount, and cleans up on unmount, including React StrictMode's
+setup/cleanup replay. It is disabled in production builds and optional when the
+browser extension is absent. The npm development dependency supplies TypeScript
+integration types; it does not install the browser extension.
+
+Time travel changes the in-memory UI snapshot only. It does not rewind pending
+session storage, undo a request, or roll back a created session; a request still
+in flight can subsequently update the inspected snapshot.
 
 ### Environment variables
 

@@ -10,6 +10,63 @@ const providerResult = (overrides = {}) => ({ pageNum: 1, totalNumPages: 2, foun
   results: [{ BUILDING: "JURONG EAST SPORTS HALL", SEARCHVAL: "21 JURONG EAST SPORTS HALL", ADDRESS: "21 JURONG EAST STREET 31", POSTAL: "609517", LATITUDE: "1.333", LONGITUDE: "103.743" }], ...overrides });
 
 describe("OneMap translation and token lifecycle", () => {
+  test("uses a supplied token across pages without requesting account credentials", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(providerResult()))
+      .mockResolvedValueOnce(Response.json(providerResult({ pageNum: 2 })));
+    const search = new OneMapVenueSearch({ accessToken: "supplied-token" }, fetcher, () => now);
+    expect((await search.search("Jurong", 1)).items[0]?.region).toBe("West");
+    expect((await search.search("Jurong", 2)).nextPage).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const [url, request] of fetcher.mock.calls) {
+      expect(String(url)).toContain("/api/common/elastic/search?");
+      expect(request?.headers).toEqual({ Authorization: "supplied-token" });
+      expect(request?.body).toBeUndefined();
+    }
+  });
+  test.each([
+    new Response("supplied-token", { status: 401 }),
+    Response.json(providerResult({ error: "Authentication token expired. supplied-token" })),
+    Response.json(providerResult({ error: "Invalid authentication token. supplied-token" })),
+  ])("rejects an invalid supplied token without retrying or exposing it", async (response) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response);
+    await expect(new OneMapVenueSearch({ accessToken: "supplied-token" }, fetcher, () => now).search("Court", 1))
+      .rejects.toThrow("Venue search is temporarily unavailable");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  test("does not retain upstream secrets in a provider error or its cause", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("rejected supplied-token"));
+    const error = await new OneMapVenueSearch({ accessToken: "supplied-token" }, fetcher, () => now)
+      .search("Court", 1).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(VenueSearchProviderError);
+    expect(String(error)).not.toContain("supplied-token");
+    expect(error).not.toHaveProperty("cause");
+  });
+  test.each([
+    "Authentication token expired. Tokens is valid for 3 days.",
+    "Invalid authentication token. Please register for an account and provide a valid API token.",
+    "Authentication token missing. Please create an account and generate or renew your API Token.",
+  ])("renews credentials once after an HTTP 200 authentication error: %s", async (error) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(Response.json(providerResult({ error })))
+      .mockResolvedValueOnce(token("refreshed")).mockResolvedValueOnce(Response.json(providerResult()));
+    expect((await new OneMapVenueSearch(credentials, fetcher, () => now).search("Court", 1)).items[0]?.region).toBe("West");
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls[3]?.[1]?.headers).toEqual({ Authorization: "refreshed" });
+  });
+  test("fails after a second HTTP 200 authentication error", async () => {
+    const failure = () => Response.json(providerResult({ error: "Authentication token expired. private details" }));
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(token()).mockResolvedValueOnce(failure())
+      .mockResolvedValueOnce(token("refreshed")).mockResolvedValueOnce(failure());
+    await expect(new OneMapVenueSearch(credentials, fetcher, () => now).search("Court", 1))
+      .rejects.toThrow("Venue search is temporarily unavailable");
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+  test.each(["API limit exceeded. private details", { message: "private details" }, null, ""])("rejects other HTTP 200 error payloads without refreshing", async (error) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(token()).mockResolvedValueOnce(Response.json(providerResult({ error })));
+    await expect(new OneMapVenueSearch(credentials, fetcher, () => now).search("Court", 1))
+      .rejects.toThrow("Venue search is temporarily unavailable");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   test("keeps credentials server-side, translates results and reuses the cached token across pages", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(token()).mockResolvedValueOnce(Response.json(providerResult())).mockResolvedValueOnce(Response.json(providerResult({ pageNum: 2 })));
     const search = new OneMapVenueSearch(credentials, fetcher, () => now);

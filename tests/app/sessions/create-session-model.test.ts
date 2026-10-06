@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { decimalCents, draftFromSubmission, emptySessionDraft, parseSgdCents, pendingStorageKey, singaporeTimestamp, submissionPayload, updateDraft, validateStep } from "@/app/sessions/create/model";
+import { bookingDates, decimalCents, draftFromSubmission, durationMinutes, emptySessionDraft, parseSgdCents, pendingStorageKey, pendingSubmissionSchema, singaporeTimestamp, submissionPayload, updateDraft, validateStep } from "@/app/sessions/create/model";
 
 const complete = { ...emptySessionDraft, venueName: "Booked court", region: "West", cost: "60.00", price: "7.50",
   startDate: "2045-06-17", startTime: "23:00", endDate: "2045-06-18", endTime: "01:00" };
@@ -16,6 +16,51 @@ describe("Create-session drafts", () => {
     expect(validateStep(complete, 1)).toEqual({});
     expect(validateStep({ ...complete, endDate: complete.startDate }, 1)).toHaveProperty("dateTime");
   });
+  test.each([
+    ["2045-06-17", "18:30", "45", "2045-06-17", "19:15"],
+    ["2045-06-17", "23:00", "120", "2045-06-18", "01:00"],
+    ["2045-12-31", "23:30", "90", "2046-01-01", "01:00"],
+    ["2048-02-28", "23:30", "60", "2048-02-29", "00:30"],
+    ["2100-02-28", "23:30", "60", "2100-03-01", "00:30"],
+    ["2045-06-17", "23:00", "3000", "2045-06-20", "01:00"],
+  ])("derives %s %s plus %s minutes as %s %s", (startDate, startTime, duration, endDate, endTime) => {
+    const dates = bookingDates(startDate, startTime, duration);
+    expect(dates).toEqual({ startDate, startTime, endDate, endTime });
+    expect(durationMinutes({ ...complete, ...dates })).toBe(Number(duration));
+  });
+  test.each(["", " ", "0", "-1", "0.5", "90.5", "Infinity", "NaN", "not a duration", "9007199254740992", "9007199254740991"])("rejects invalid or overflowing duration %s", (duration) => {
+    expect(bookingDates("2045-06-17", "23:00", duration)).toBeUndefined();
+  });
+  test("rejects invalid starts and end dates beyond the four-digit calendar", () => {
+    expect(bookingDates("2045-02-30", "12:00", "60")).toBeUndefined();
+    expect(bookingDates("2045-06-17", "24:00", "60")).toBeUndefined();
+    expect(bookingDates("", "12:00", "60")).toBeUndefined();
+    expect(bookingDates("9999-12-31", "23:59", "1")).toBeUndefined();
+    expect(bookingDates("9999-12-31", "23:58", "1")).toMatchObject({ endDate: "9999-12-31", endTime: "23:59" });
+  });
+  test("does not restore a duration from missing, invalid, or reversed dates", () => {
+    expect(durationMinutes(emptySessionDraft)).toBeUndefined();
+    expect(durationMinutes({ ...complete, startDate: "2045-02-30" })).toBeUndefined();
+    expect(durationMinutes({ ...complete, endDate: complete.startDate })).toBeUndefined();
+    expect(durationMinutes({ ...complete, endDate: complete.startDate, endTime: complete.startTime })).toBeUndefined();
+  });
+  test("preserves exact timestamps and pending retries when reopening a duration booking", () => {
+    const draft = { ...complete, ...bookingDates("2045-12-31", "23:30", "90") };
+    const payload = submissionPayload(draft, "duration-retry");
+    expect(payload).toEqual({
+      idempotencyKey: "duration-retry",
+      booking: {
+        sport: "Tennis", venueName: "Booked court", region: "West",
+        startAt: "2045-12-31T15:30:00.000Z", endAt: "2045-12-31T17:00:00.000Z", totalCostCents: 6000,
+      },
+      config: { totalSlots: 8, minimumHeadcount: 4, visibility: "PRIVATE", minimumReliability: 90, pricePerSlotCents: 750 },
+    });
+    const pending = pendingSubmissionSchema.parse(JSON.parse(JSON.stringify({ version: 1, payload })));
+    const restored = draftFromSubmission(pending.payload);
+    expect(restored).toEqual(draft);
+    expect(durationMinutes(restored)).toBe(90);
+    expect(submissionPayload(restored, pending.payload.idempotencyKey)).toEqual(payload);
+  });
   test("resets customized price when capacity or cost changes", () => {
     expect(updateDraft({ ...complete, price: "12.00" }, { totalSlots: 2 })).toMatchObject({ price: "30.00" });
     expect(updateDraft({ ...complete, price: "12.00" }, { cost: "80.00" }).price).toBe("10.00");
@@ -28,10 +73,19 @@ describe("Create-session drafts", () => {
     expect(validateStep({ ...complete, price: "15.01" }, 3)).toHaveProperty("price");
     expect(validateStep({ ...complete, price: "14.99" }, 3)).toEqual({});
   });
+  test("keeps the minimum headcount within capacity without changing a chosen price", () => {
+    expect(updateDraft(complete, { totalSlots: 2 })).toMatchObject({ minimumHeadcount: 2 });
+    expect(updateDraft({ ...complete, totalSlots: 4, minimumHeadcount: 3 }, { totalSlots: 8 }).minimumHeadcount).toBe(3);
+    expect(updateDraft({ ...complete, price: "12.01" }, { minimumHeadcount: 5 })).toMatchObject({ minimumHeadcount: 5, price: "12.01" });
+    for (const minimumHeadcount of [1, 9, 2.5]) {
+      expect(validateStep({ ...complete, minimumHeadcount }, 2)).toHaveProperty("minimumHeadcount");
+    }
+    expect(validateStep({ ...complete, minimumHeadcount: 8 }, 2)).toEqual({});
+  });
   test("retains chosen price and reliability scale when restoring a user-scoped pending payload", () => {
-    const payload = submissionPayload({ ...complete, price: "12.01" }, "key");
-    expect(payload.config).toMatchObject({ minimumReliability: 90, pricePerSlotCents: 1201 });
-    expect(draftFromSubmission(payload)).toEqual({ ...complete, price: "12.01" });
+    const payload = submissionPayload({ ...complete, price: "12.01", minimumHeadcount: 5 }, "key");
+    expect(payload.config).toMatchObject({ minimumReliability: 90, pricePerSlotCents: 1201, minimumHeadcount: 5 });
+    expect(draftFromSubmission(payload)).toEqual({ ...complete, price: "12.01", minimumHeadcount: 5 });
     expect(pendingStorageKey("alice")).not.toBe(pendingStorageKey("bob"));
     expect(submissionPayload({ ...complete, reliability: "none" }, "key").config.minimumReliability).toBeUndefined();
   });

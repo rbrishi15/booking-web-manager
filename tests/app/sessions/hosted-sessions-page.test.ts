@@ -49,6 +49,7 @@ describe("hosted Sessions page", () => {
     forBooker.mockResolvedValue(sessions);
     const page = await SessionsPage();
     expect(forBooker).toHaveBeenCalledExactlyOnceWith("booker");
+    expect(page.props.userId).toBe("booker");
     expect(page.props.outcome.sessions).toHaveLength(21);
     expect(page.props.outcome.sessions[0]).toEqual({
       sessionId: "session-0", venueName: "West sports hall", sport: "Tennis", region: "West",

@@ -293,6 +293,7 @@ describe("UC2-02 Create Session input", () => {
       idempotencyKey: request.idempotencyKey,
       booking: request.booking,
       totalSlots: 3,
+      minimumHeadcount: 2,
     };
 
     // Act & Assert
@@ -342,6 +343,23 @@ describe("UC2-02 Create Session input", () => {
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
   });
 
+  test("rejects non-finite minimum headcount", () => {
+    // Arrange
+    const request = creationRequest();
+    request.config.minimumHeadcount = NaN;
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
+  });
+
+  test("requires minimum headcount even when capacity is supplied", () => {
+    // Arrange
+    const request = { ...creationRequest(), config: { totalSlots: 3 } };
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
+  });
+
   test("rejects non-finite minimum reliability", () => {
     // Arrange
     const request = creationRequest();
@@ -370,6 +388,7 @@ describe("UC2-02 Create Session input", () => {
     request.booking.totalCostCents = 0;
     request.booking.endAt = request.booking.startAt;
     request.config.totalSlots = 9.5;
+    request.config.minimumHeadcount = -1;
     request.config.minimumReliability = 101;
 
     // Act
@@ -386,7 +405,7 @@ describe("UC2-02 Create Session input", () => {
 });
 
 function creationRequest() {
-  const config: SessionConfig = { totalSlots: 3 };
+  const config: SessionConfig = { totalSlots: 3, minimumHeadcount: 2 };
   return {
     idempotencyKey: "create-session",
     booking: {
