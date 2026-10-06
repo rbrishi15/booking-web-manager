@@ -178,3 +178,14 @@
 /tests/integration/session-cancellation-persistence.test.ts @liang799 @harr008
 /tests/e2e/sessions-cancellation.spec.ts @liang799
 /tests/support/cancellation-fixtures.ts @liang799 @harr008
+
+# UC2-03b: participant management and atomic wallet refunds.
+/use-cases/sessions/ListSessionParticipants.ts @liang799
+/use-cases/sessions/PreviewParticipantRemoval.ts @liang799
+/use-cases/sessions/session-removal-transaction.ts @liang799 @rbrishi15
+/use-cases/sessions/participant-removal-preview.ts @liang799
+/use-case-config/removal.ts @liang799
+/lib/sessions/postgres-session-removal*.ts @liang799 @harr008 @rbrishi15
+/tests/use-cases/UC2-03b-*.test.ts @liang799
+/tests/integration/session-removal-persistence.test.ts @liang799 @harr008
+/tests/e2e/sessions-removal.spec.ts @liang799

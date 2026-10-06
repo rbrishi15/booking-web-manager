@@ -143,3 +143,16 @@ not business input. Same-key replay skips lifecycle/preview re-evaluation after
 active access is checked; a fresh request against a closed session conflicts.
 The underlying inactive-owner domain behavior is preserved. ADR-0013 records
 preservation of prior terminal participation history.
+
+
+## UC2-03b Remove Participant
+
+`ListSessionParticipants` returns an active owner's ordered participant display
+facts. `PreviewParticipantRemoval` computes an unsaved domain removal and quote;
+`RemoveParticipant` invokes `user.asBooker().removeParticipant`, appends its refund
+instructions, saves only that removal and stores the response atomically.
+Application access precedes replay. The domain continues to own removal timing,
+participant eligibility, full historical refunds and the rejoining restriction.
+The transaction ports and preview-version port live in
+`session-removal-transaction.ts`; PostgreSQL and hashing stay in `/lib/sessions`.
+A successful removal frees capacity without performing waitlist promotion.
