@@ -9,6 +9,9 @@ place, wait for an opening, or arrange a named replacement when they leave.
 The shared coordination space for a session at an already-booked venue,
 bringing together its booker and participants.
 
+**Capacity**:
+The maximum number of participant places in a booking session.
+
 **Participant list**:
 The participation records associated with one booking room, including people
 who have joined and past changes to their participation.
@@ -30,7 +33,8 @@ Cancelling the venue booking is a separate responsibility of the booker.
 A person seeking or holding a place in a session.
 
 **Booking share**:
-The portion of a session's booking cost put on hold when a participant commits.
+The fixed per-slot price put on hold when a participant commits. It may be below
+or above an equal share of the venue booking cost.
 
 **Early withdrawal**:
 A participant's withdrawal at least 30 hours before the session starts,

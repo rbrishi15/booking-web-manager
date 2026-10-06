@@ -111,6 +111,10 @@ try {
     NEXT_PUBLIC_SUPABASE_URL: status.API_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: status.ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+    // Lookup tests use fixtures/manual entry; never call the live provider from this stack.
+    ONEMAP_API_EMAIL: "",
+    ONEMAP_API_PASSWORD: "",
+    ONEMAP_API_TOKEN: "",
   };
   const commands = mode === "all" ? ["db", "http"] : [mode];
   exitCode = 0;
