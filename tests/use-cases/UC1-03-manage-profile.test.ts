@@ -1,5 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { profileSchema } from "@/app/profile/schemas";
+import { UpdateProfile, type ProfileStore } from "@/use-cases/accounts/update-profile";
+import type { AccountStatus } from "@/domain/shared/statuses";
 
 /** A valid Edit profile submission; pass only the fields a test changes. */
 function validProfile(overrides: Record<string, unknown> = {}) {
@@ -13,7 +15,63 @@ function validProfile(overrides: Record<string, unknown> = {}) {
 
 // Owner: Joseph (Jolingoes) — /app/profile
 describe("UC1-03 Manage Profile", () => {
-  test.todo("updates editable profile fields");
+  test("updates editable profile fields through the application policy", async () => {
+    // Arrange
+    const store = profileStore("ACTIVE");
+    const update = new UpdateProfile(store);
+
+    // Act
+    await update.forUser("alice", { displayName: " Alice ", preferredSports: ["Tennis", "Tennis"], preferredRegions: ["West"] });
+
+    // Assert
+    expect(store.saveForActiveUser).toHaveBeenCalledWith("alice", {
+      displayName: "Alice", preferredSports: ["Tennis"], preferredRegions: ["West"],
+    });
+  });
+
+  test("refuses an inactive account even when called without an HTTP handler", async () => {
+    // Arrange
+    const store = profileStore("INACTIVE");
+
+    // Act & Assert
+    await expect(new UpdateProfile(store).forUser("alice", {
+      displayName: "Alice", preferredSports: ["Tennis"], preferredRegions: ["West"],
+    })).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+    expect(store.saveForActiveUser).not.toHaveBeenCalled();
+  });
+
+  test("refuses whitespace preferences without relying on the form schema", async () => {
+    // Arrange
+    const store = profileStore("ACTIVE");
+
+    // Act & Assert
+    await expect(new UpdateProfile(store).forUser("alice", {
+      displayName: "Alice", preferredSports: [" "], preferredRegions: ["West"],
+    })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(store.saveForActiveUser).not.toHaveBeenCalled();
+  });
+
+  test("refuses empty profile edit preferences while bootstrap defaults stay separate", async () => {
+    // Arrange
+    const store = profileStore("ACTIVE");
+
+    // Act & Assert
+    await expect(new UpdateProfile(store).forUser("alice", {
+      displayName: "Alice", preferredSports: [], preferredRegions: ["West"],
+    })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(store.saveForActiveUser).not.toHaveBeenCalled();
+  });
+
+  test("reports missing profiles without inventing an active account", async () => {
+    // Arrange
+    const store = profileStore(null);
+
+    // Act & Assert
+    await expect(new UpdateProfile(store).forUser("alice", {
+      displayName: "Alice", preferredSports: ["Tennis"], preferredRegions: ["West"],
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(store.saveForActiveUser).not.toHaveBeenCalled();
+  });
   test.todo("computes and displays the reliability score");
 
   describe("checks the Edit profile form at the boundary (Zod)", () => {
@@ -72,3 +130,10 @@ describe("UC1-03 Manage Profile", () => {
     });
   });
 });
+
+function profileStore(status: AccountStatus | null) {
+  return {
+    getAccountStatus: async () => status,
+    saveForActiveUser: vi.fn<ProfileStore["saveForActiveUser"]>().mockResolvedValue(undefined),
+  } satisfies ProfileStore;
+}

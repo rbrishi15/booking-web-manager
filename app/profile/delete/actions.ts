@@ -21,8 +21,6 @@ export async function deleteMyAccount(): Promise<DeleteAccountState> {
     // The server re-checks everything here; it never trusts what the page showed earlier.
     const result = await deleteAccount(supabaseDeleteAccountPorts(), {
       userId: user.id,
-      email: user.email,
-      now: new Date(),
     });
     if (result.status === "BLOCKED") {
       return {

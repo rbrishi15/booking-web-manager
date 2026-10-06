@@ -1,4 +1,4 @@
-import { DomainError, Email, User, type DeactivationInput, type UUID } from "@/domain";
+import { assertDeactivationAllowed, DomainError, type DeactivationInput, type UUID } from "@/domain";
 
 /** Everything UC1-04 must check before an account may be deleted (SRS preconditions). */
 export interface AccountStanding extends DeactivationInput {
@@ -39,8 +39,6 @@ export class AccountNotActiveError extends Error {
 
 export interface DeleteAccountCommand {
   readonly userId: UUID;
-  readonly email: string;
-  readonly now: Date;
 }
 
 export type DeleteAccountResult =
@@ -48,18 +46,12 @@ export type DeleteAccountResult =
   | { readonly status: "BLOCKED"; readonly standing: AccountStanding };
 
 /**
- * Asks the domain (User.deactivate) whether this standing allows deletion.
+ * Applies the same obligation policy as User.deactivate to authoritative standing.
  * False means exception 2a: money or commitments are still outstanding.
  */
-export function canDeactivate(command: DeleteAccountCommand, standing: AccountStanding): boolean {
-  const user = User.create({
-    userId: command.userId,
-    email: new Email(command.email),
-    walletId: standing.walletId ?? command.userId, // no wallet yet: nothing to hold money
-    now: command.now,
-  });
+export function canDeactivate(standing: AccountStanding): boolean {
   try {
-    user.deactivate(standing);
+    assertDeactivationAllowed(standing);
     return true;
   } catch (error) {
     if (error instanceof DomainError && error.code === "ACTIVE_OBLIGATIONS") return false;
@@ -76,7 +68,7 @@ export async function deleteAccount(
   command: DeleteAccountCommand,
 ): Promise<DeleteAccountResult> {
   const standing = await ports.loadStanding(command.userId);
-  if (!canDeactivate(command, standing)) return { status: "BLOCKED", standing };
+  if (!canDeactivate(standing)) return { status: "BLOCKED", standing };
 
   // 1. Deactivate first: an INACTIVE account can't log in or start anything new.
   // If another deletion claimed the account first, this throws before anything changes,
@@ -85,7 +77,7 @@ export async function deleteAccount(
   try {
     // 2. Check again, in case money, a commitment or a group arrived between the first check and now.
     const recheck = await ports.loadStanding(command.userId);
-    if (!canDeactivate(command, recheck)) {
+    if (!canDeactivate(recheck)) {
       await ports.restoreProfile(snapshot);
       return { status: "BLOCKED", standing: recheck };
     }

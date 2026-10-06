@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { DomainError } from "@/domain/shared/errors";
+import { createUpdateProfile } from "@/use-case-config/profiles";
 import { profileSchema } from "./schemas";
 
 type ProfileField = "displayName" | "preferredSports" | "preferredRegions";
@@ -28,26 +30,19 @@ export async function updateProfile(_previous: ProfileState, formData: FormData)
     };
   }
 
-  // 2. Only ever update the logged-in user's own row. RLS enforces this too.
+  // 2. Use only the verified identity; persistence rechecks active status atomically.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (user === null) return { status: "error", message: "Please log in again." };
 
-  const { error, count } = await supabase
-    .from("profiles")
-    .update(
-      {
-        display_name: parsed.data.displayName,
-        preferred_sports: parsed.data.preferredSports,
-        preferred_regions: parsed.data.preferredRegions,
-      },
-      { count: "exact" },
-    )
-    .eq("user_id", user.id);
-  if (error !== null || count !== 1) {
-    console.error("UC1-03 profile update failed:", error?.code, error?.message, count);
+  try {
+    await createUpdateProfile(supabase).forUser(user.id, parsed.data);
+  } catch (error) {
+    if (error instanceof DomainError && error.code === "INACTIVE_ACCOUNT")
+      return { status: "error", message: "This account is no longer active." };
+    console.error("UC1-03 profile update failed:", error);
     return { status: "error", message: "We couldn't save your changes. Please try again." };
   }
 

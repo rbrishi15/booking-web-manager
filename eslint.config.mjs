@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import inwardDependencies from "./scripts/eslint/core-dependencies.mjs";
 
 export default tseslint.config(
   {
@@ -33,6 +34,11 @@ export default tseslint.config(
         { blankLine: "never", prev: "import", next: "import" },
       ],
     },
+  },
+  {
+    files: ["domain/**/*.{ts,tsx,mts,cts}", "use-cases/**/*.{ts,tsx,mts,cts}"],
+    plugins: { architecture: { rules: { "inward-dependencies": inwardDependencies } } },
+    rules: { "architecture/inward-dependencies": "error" },
   },
   {
     files: ["**/*.test.ts"],

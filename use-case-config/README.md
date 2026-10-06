@@ -1,5 +1,16 @@
 # Use-case configuration
 
+## Profile configuration
+
+`profiles.ts` assembles `UpdateProfile` with `SupabaseProfileStore` using the
+server action's authenticated, request-scoped Supabase client. No client or
+identity is cached across requests. The adapter reads account status and calls
+the atomic `update_profile` capability from migration 0011; it preserves provider
+failures as infrastructure errors and translates the RPC's explicit business
+rejections. The RPC rechecks active status while holding the profile row lock.
+See the [profile guide](../app/profile/README.md) and
+[ADR-0014](../docs/adr/0014-account-policies-and-transaction-guards.md).
+
 ## Discovery configuration
 
 UC2-01 assembles its dependencies in `discovery.ts`, using the same validated
