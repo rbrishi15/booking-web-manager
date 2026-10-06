@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-27
+- Cancellation history refined by [ADR-0013](./0013-cancellation-preserves-terminal-participations.md).
 - Refines: collection implementation under
   [ADR-0009](./0009-role-workflows-and-session-recording.md).
 

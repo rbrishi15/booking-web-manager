@@ -9,7 +9,8 @@ import { loginSchema } from "../schemas";
 type LoginField = "email" | "password";
 
 export interface LoginState {
-  readonly status: "idle" | "error";
+  readonly status: "idle" | "error" | "check-email";
+  readonly email?: string;
   readonly message?: string;
   readonly fieldErrors?: Partial<Record<LoginField, string[]>>;
 }
@@ -38,7 +39,11 @@ export async function logIn(_previous: LoginState, formData: FormData): Promise<
 
   if (error !== null) {
     if (error.code === "email_not_confirmed") {
-      return { status: "error", message: "Please confirm your email first, using the link we sent you." };
+      return {
+        status: "check-email",
+        email: parsed.data.email,
+        message: "Please confirm your email first, using the link we sent you.",
+      };
     }
     if (error.code !== "invalid_credentials") {
       console.error("UC1-02 log-in failed:", error.code, error.message);

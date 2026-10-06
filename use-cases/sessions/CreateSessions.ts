@@ -14,6 +14,8 @@ import type { SessionCreationTransaction } from "./session-creation-transaction"
 
 /** The booker's choices for one session. */
 export interface SessionConfig {
+  /** A booker choice; the domain validates bounds before persisting it. */
+  pricePerSlotCents?: number;
   totalSlots: number;
   minimumHeadcount: number;
   visibility?: Visibility;
@@ -64,6 +66,7 @@ export class CreateSessions {
       const user = await requireAggregate(repositories.users, bookerId, "User");
       let booking: Booking;
       let minimumReliability: ReliabilityScore | undefined;
+      let bookingShare: Money | undefined;
       try {
         booking = new Booking({
           venueName: bookingDetails.venueName,
@@ -77,6 +80,8 @@ export class CreateSessions {
           config.minimumReliability === undefined
             ? undefined
             : ReliabilityScore.from(config.minimumReliability);
+        bookingShare = config.pricePerSlotCents === undefined
+          ? undefined : Money.fromCents(config.pricePerSlotCents);
       } catch (error) {
         // Only request-derived values are input failures; repository errors propagate.
         if (error instanceof RangeError) {
@@ -89,6 +94,7 @@ export class CreateSessions {
         roomToken: ids.next(),
         holdingAccountId,
         booking,
+        bookingShare,
         totalSlots: config.totalSlots,
         minimumHeadcount: config.minimumHeadcount,
         visibility: config.visibility,

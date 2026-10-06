@@ -39,11 +39,11 @@ returns `{ sessionId, roomToken, bookingShareCents }`.
 `bookerId` comes from authentication. `SessionBooking` contains venue name,
 resolved region, sport, `Date` start/end values, and integer `totalCostCents`.
 `SessionConfig` groups
-`totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`, and
-`invitedGroupId`. The module maps these fields explicitly into domain inputs.
-Client-supplied shares, identities, account facts, or lifecycle fields cannot
-override creation. The domain derives each booking share using integer-cent
-floor division and preserves private visibility by default.
+`totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`,
+`invitedGroupId`, and `pricePerSlotCents`. The module maps these fields explicitly into domain inputs.
+Client-supplied identities, account facts, or lifecycle fields cannot override
+creation. The domain validates the chosen booking share, uses integer-cent floor
+division when no price is supplied, and preserves private visibility by default.
 
 [parseCreateSessionInput](../../app/sessions/create-session-input.ts) uses Zod in
 the app layer to validate the authenticated user ID separately from the raw
@@ -107,3 +107,39 @@ records commands and the prerequisite group migration. The
 [E2E tests](../../tests/e2e) check public documentation and the default 503
 response against a running Next.js server without credentials or Supabase.
 Session-creation UI remains separate work; UC2-01 supplies the discovery page.
+
+## UC2-03a: manage visibility
+
+`ToggleSessionVisibility.forBooker(bookerId, sessionId, visibility)` loads complete
+User and Session state within `SessionManagementTransaction`, checks active
+application access, captures the current time, calls
+`user.asBooker().changeVisibility(...)`, then saves visibility. It returns only
+`{ sessionId, visibility }` after the transaction commits. Repeating an explicit
+target still applies all current access, time, lifecycle and capacity guards.
+The application's active-account gate does not alter the Booker's domain policy.
+
+`ListHostedSessions.forBooker(bookerId)` provides ordered summaries of all owned,
+open, upcoming sessions, including full sessions. It derives available slots from
+hydrated Session objects and exposes no room token, participant or payment details.
+
+The capability supplies User loading, Session loading/listing and visibility-only
+persistence. It does not expose ledger or payout operations. Production uses
+serializable transactions with bounded retries; every retry reloads state and
+obtains a fresh operation time. See the configuration guide for schema rollout
+and the contract required of future concurrent lifecycle writers.
+
+## UC2-03c: cancel sessions
+
+`PreviewSessionCancellation.forBooker(bookerId, sessionId)` loads fresh complete
+aggregates, checks active application access and invokes Booker cancellation
+without saving it. Refund totals come only from returned financial instructions.
+The version is calculated before mutation and covers cancellation-relevant state.
+
+`CancelSession.forBooker(bookerId, sessionId, previewVersion)` checks loaded User
+access before durable replay, then loads/locks the Session, gets current time,
+invokes Booker, compares the preview and commits cancellation with refund
+instructions and the response. Submission keys are supplied through assembly,
+not business input. Same-key replay skips lifecycle/preview re-evaluation after
+active access is checked; a fresh request against a closed session conflicts.
+The underlying inactive-owner domain behavior is preserved. ADR-0013 records
+preservation of prior terminal participation history.

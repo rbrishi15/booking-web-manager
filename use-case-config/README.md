@@ -29,7 +29,49 @@ rows, room tokens, or direct browser access to session tables. See the
 Swagger and Storybook coverage. OneMap settings are not needed for stored-region
 discovery.
 
+## Venue search configuration
+
+Authenticated `GET /api/venues?q=…&page=…` uses the app-owned contract in
+`app/venues`, dependency assembly in `venues.ts`, and the `OneMapVenueSearch`
+adapter in `lib/venues`. It requires the public Supabase URL/anonymous key for
+bearer verification. Server-only `ONEMAP_API_EMAIL` and `ONEMAP_API_PASSWORD`
+are registered OneMap account credentials and enable automatic token renewal.
+Alternatively, configure `ONEMAP_API_TOKEN` with an existing access token. A
+complete email/password pair takes precedence when both options are configured.
+Redeploy after changing production settings because successful assembly is cached
+per runtime and Vercel applies new environment values to new deployments.
+
+The adapter POSTs email/password to OneMap's
+[`/api/auth/post/getToken`](https://www.onemap.gov.sg/apidocs/authentication),
+caches the access token until shortly before `expiry_timestamp`, shares concurrent
+token requests, and refreshes once after an authentication rejection. OneMap can
+report authentication errors in an HTTP 200 response; those responses are rejected
+as failures even when they include results. Searches have a five-second timeout.
+Provider tokens, raw responses and credentials are never sent to the browser.
+Lookup occurs outside creation/database transactions and reserves no venue.
+
+In token-only mode, the adapter sends the token directly and does not attempt a
+credential login or retry the same rejected token. OneMap access tokens expire
+after three days and cannot renew themselves; replace the token and redeploy
+before expiry, or configure the registered account credentials for renewal.
+Keep all three settings in the hosting provider's server environment, never in
+Git, public environment variables, or browser code. Configure the production
+environment explicitly; a preview or local value does not configure production.
+
+The bundled [URA region boundaries](../lib/venues/data/README.md) are resolved
+with `@turf/boolean-point-in-polygon`. The server returns application-owned names,
+addresses, coordinates, regions and pagination only. Unknown/shared-boundary
+coordinates return a null region for manual selection. Missing settings return
+503; provider failures return opaque 502 responses. Manual entry is always usable.
+Deterministic tests cover translation, expiry/refresh and all five regions.
+Live OneMap verification requires one of these authentication options. The
+disposable integration runner clears all three settings and uses fixtures/manual
+entry so it never sends inherited live credentials to the provider.
+
 ## Session creation configuration
+
+See [session management configuration](#session-management-configuration) below
+for UC2-03a's separate dependency assembly and migration requirements.
 
 This folder assembles session API dependencies. The app owns HTTP orchestration,
 use cases coordinate domain behavior, and infrastructure adapters live in `/lib`.
@@ -106,6 +148,14 @@ a new key. Creation writes no ledger entries or payout intents.
 
 ## Validation
 
+Apply migrations through `0008_session_pricing.sql` before deploying the wizard's
+custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
+bounds without updating existing sessions or fund holds.
+
+The session contract retains the UC2-02 minimum headcount in `minimum_headcount`.
+Migration 0006 continues to enforce 2–8 slots and a minimum headcount between
+two and the session capacity. No column-removal migration is required.
+
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
   the test server explicitly clears session settings.
@@ -144,3 +194,108 @@ HTTP tests passed. The service-backed runs used PR #34 at
 `f9481b61211a9e96b24cf808cb6062e18f651787`, with prerequisite SQL SHA256
 `cd1be0e3eeb1a82648a25ff2c9585407ab7f794798599d818ba743d30bd22a0e`.
 This is preview validation; rerun against the merged prerequisite before integration.
+
+## Session management configuration
+
+`session-management.ts` assembles `ToggleSessionVisibility` and
+`ListHostedSessions` using the existing Supabase/PostgreSQL settings, lazy pool,
+complete User reader and a dedicated `PostgresSessionManagementTransaction`.
+The management getter has the same retryable initialization boundary as creation.
+Bearer verification establishes current active-account access; the coordinator
+rechecks that access within its transaction. The page uses verified cookie
+identity and invokes the same coordinator through a server action.
+
+Apply **0007_session_management.sql before deploying management**. Its additions
+are nullable settlement JSON, non-null payout-history arrays, and an
+identity-backed participant `list_position` unique within each session. The
+stored batch uses domain field names, ISO dates and integer `amountCents` values
+in place of Money objects. The reader constructs validated domain values; the
+visibility writer never changes those settlement fields or participant positions.
+
+The migration accepts creation-only data: no participation rows and only OPEN
+sessions. It aborts atomically if that assumption is false because migration 0006
+cannot supply the original participant order or complete settlement history.
+Do not delete rows or invent histories to pass this preflight. Existing lifecycle
+data requires a separately verified backfill before applying the migration.
+The existing creation writer uses the new empty-history defaults unchanged.
+
+Each management operation runs at SERIALIZABLE isolation and retries its complete
+transaction at most three times on serialization failures/deadlocks. The shared
+transaction helper retains REPEATABLE READ as its default for existing callers.
+A visibility mutation loads User, locks Session, hydrates the complete participant
+list and holds, obtains the current time, applies the Booker command and updates
+only visibility. Mapping failures are infrastructure errors; SQL errors retain
+their retry classifications. Rejected operations and failed commits roll back.
+
+**Concurrent-writer contract:** future commitment, withdrawal and other lifecycle
+adapters that read/write these invariants must also use SERIALIZABLE transactions
+and whole-transaction retries. The visibility tests model those writers and
+accept either valid serial ordering. This does not guarantee consistency for
+arbitrary direct SQL or lower-isolation lifecycle writers. Agree that integration
+boundary with Yajie and Rishi before those adapters are merged.
+
+Neoh owns migration 0007 and the feature adapters. Rishi coordinates migration
+numbering/merge order and reviews the shared transaction helper; follow the
+[contribution workflow](../docs/contributing-workflow.md) for independent feature
+review. Recheck the next migration number when updating from main. No review or
+deployment approval is implied by local test success.
+
+Run `npm run test:sessions:integration` for real database and authenticated browser
+coverage. The existing disposable runner applies the full merged migration
+sequence on 55321/55322, never a developer or hosted database. Browser acceptance
+uses two identities to verify an already-open discovery view updates within
+three seconds after an owner changes visibility. The public suite also checks
+the management endpoint's unconfigured response and OpenAPI documentation.
+
+### UC2-03a validation, 2026-10-02
+
+Typecheck, lint, the production build, 1,233 unit tests, 136 Storybook tests,
+33 database integration tests, 16 authenticated browser tests and seven public
+browser tests passed against the merged migration sequence through 0007. The
+authenticated suite verifies both visibility directions within three seconds,
+preserved draft filters and pagination, refresh/navigation races, polling cleanup
+and a 390px mobile layout. Database validation used only the disposable stack.
+
+## Session cancellation configuration
+
+`cancellation.ts` assembles a shared read-only preview and a submission-scoped
+cancellation transaction. No additional settings or schema migration are needed;
+apply migration 0007 from PR #38 before deployment. The complete Session reader
+and User reader are shared with visibility management. No PR #39 or #40 source
+is required by this workflow.
+
+`PostgresSessionCancellationTransaction` uses SERIALIZABLE, session row locks and
+at most three whole-transaction attempts for serialization failures/deadlocks.
+Current User access is checked before the idempotency claim, including replay.
+Keys are namespaced by UC2-03c and actor; the fingerprint includes session ID and
+preview version. The existing idempotency store and ledger writer use the same
+SQL executor as the narrow lifecycle writer. Refund entries, child/session state
+and validated JSON replay response commit or roll back together. No network or
+payment-provider call runs in this transaction. The shared money implementation
+and default transaction isolation remain unchanged.
+All loaded session holds, including preserved terminal holds, are reconciled
+against the ledger projection's identities, original/outstanding cents and
+settlement kind before applying cancellation. Contradictions fail atomically.
+
+Conflicting future lifecycle writers must follow the same serializable contract.
+Concurrency tests model that contract and do not guarantee safety for arbitrary
+lower-isolation direct SQL. Neoh owns cancellation adapters; request Harrison's
+ledger integration review and Rishi's domain/transaction review and independent
+session-area review assignment. Visibility (PR #38) and cancellation (PR #41)
+are now on `main`; creation (PR #39) integrates both by updating from `main` and
+rerunning creation, visibility and cancellation coverage with migrations through
+0008 before its independent review and merge.
+
+### UC2-03c validation, 2026-10-02
+
+Typecheck, lint, production build, 1,278 unit tests, 142 Storybook tests,
+47 database integration tests, 20 authenticated browser tests and eight public
+browser tests passed. Both UC2-03c acceptance TODOs are replaced. Cancellation
+coverage verifies actual historical refund amounts, retained terminal history,
+atomic rollback, same/different-key concurrency, serializable lifecycle races,
+stale-preview reconfirmation, reload recovery after a lost committed response,
+full sessions and a 390px dialog. Browser acceptance measures discovery removal
+within three seconds of the successful response using separate identities.
+All database/authentication runs used only the disposable 55321/55322 stack,
+with migrations through PR #38's 0007; its containers and volumes were removed.
+Revalidate against main after the parent PR merges before integration.

@@ -70,25 +70,37 @@
 /app/sessions/ @liang799
 /app/discover/ @liang799
 /app/api/sessions/ @liang799
+/app/api/venues/ @liang799
+/app/venues/ @liang799
 /use-cases/sessions/CreateSession.ts @liang799
 /use-cases/sessions/CreateSessions.ts @liang799
 /use-cases/sessions/DiscoverSessions.ts @liang799
 /use-cases/sessions/ManageSession.ts @liang799
 /use-cases/sessions/ToggleSessionVisibility.ts @liang799
+/use-cases/sessions/ListHostedSessions.ts @liang799
 /use-cases/sessions/RemoveParticipant.ts @liang799
 /use-cases/sessions/CancelSession.ts @liang799
 /use-cases/sessions/session-creation-transaction.ts @liang799
 /use-cases/sessions/session-discovery-transaction.ts @liang799
+/use-cases/sessions/session-management-transaction.ts @liang799
 /use-cases/sessions/README.md @liang799
 /use-case-config/sessions.ts @liang799
 /use-case-config/discovery.ts @liang799
+/use-case-config/session-management.ts @liang799
+/use-case-config/venues.ts @liang799
 /lib/sessions/ @liang799
+/lib/venues/ @liang799
 /tests/app/sessions/ @liang799
 /tests/app/discover/ @liang799
 /tests/lib/sessions/ @liang799
+/tests/app/venues/ @liang799
+/tests/lib/venues/ @liang799
 /tests/integration/sessions-persistence.test.ts @liang799
+/tests/integration/session-management-persistence.test.ts @liang799
 /tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
+/tests/e2e/session-creation.spec.ts @liang799
+/tests/e2e/sessions-visibility.spec.ts @liang799
 /tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799
 /tests/use-cases/support/create-session-unit-of-work.ts @liang799
@@ -98,12 +110,19 @@
 /vitest.integration.config.ts @liang799
 /playwright.integration.config.ts @liang799
 /supabase/migrations/0006_session_creation.sql @liang799
+/supabase/migrations/0007_session_management.sql @liang799
+/supabase/migrations/0008_session_pricing.sql @liang799 @harr008
+/supabase/migrations/0009_session_capacity.sql @liang799
 
 # Joseph: identity, shared authentication adapters, groups and frontend platform.
 # The specific auth test overrides the session-test directory rule above.
 /app/(auth)/ @Jolingoes
 /app/profile/ @Jolingoes
 /app/groups/ @Jolingoes
+/app/not-found.tsx @Jolingoes @rbrishi15
+/app/_components/page-unavailable-view.tsx @Jolingoes @rbrishi15
+/app/_components/page-unavailable-view.stories.tsx @Jolingoes @rbrishi15
+/tests/e2e/navigation-fallback.spec.ts @Jolingoes @rbrishi15
 /components/ui/ @Jolingoes
 /lib/supabase/ @Jolingoes
 /middleware.ts @Jolingoes
@@ -146,3 +165,13 @@
 /tests/use-cases/UC2-04-*.test.ts @Wyjessie
 /tests/use-cases/UC2-05-*.test.ts @Wyjessie
 /tests/use-cases/UC2-06-*.test.ts @Wyjessie
+
+# UC2-03c: cancellation feature and financial integration review.
+/use-cases/sessions/PreviewSessionCancellation.ts @liang799
+/use-cases/sessions/session-cancellation-transaction.ts @liang799 @rbrishi15
+/use-cases/sessions/cancellation-preview.ts @liang799
+/use-case-config/cancellation.ts @liang799
+/lib/sessions/postgres-session-cancellation*.ts @liang799 @harr008 @rbrishi15
+/tests/integration/session-cancellation-persistence.test.ts @liang799 @harr008
+/tests/e2e/sessions-cancellation.spec.ts @liang799
+/tests/support/cancellation-fixtures.ts @liang799 @harr008

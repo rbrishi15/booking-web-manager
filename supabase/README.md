@@ -22,6 +22,13 @@ most likely way this project loses an afternoon.
 | 0004 | `profiles` — profile table, RLS, sign-up trigger that creates the empty wallet | Joseph |
 | 0005 | `regular_groups` — group tables and concurrency functions; pending PR #34 | Joseph |
 | 0006 | `session_creation` — payout setup, sessions, participation and hold facts; depends on 0005 | Neoh |
+| 0007 | `session_management` — complete Session history and participant ordering for UC2-03a | Neoh |
+
+Apply 0007 before deploying session management. It locks the session and
+participation tables while checking that existing data contains only OPEN
+sessions with no participants. It aborts if legacy lifecycle data needs a
+verified history/order backfill; it never deletes rows or invents that history.
+See the [management configuration guide](../use-case-config/README.md#session-management-configuration).
 
 0006 checks that 0005's group tables and `lock_invited_group()` exist and attaches
 the session trigger. Merge and apply 0005 before 0006. A local database containing
