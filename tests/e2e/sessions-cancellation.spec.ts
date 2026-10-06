@@ -16,9 +16,9 @@ async function login(page: Page, identity: CancellationIdentity, destination: st
 function row(page: Page, venueName: string) {
   return page.getByRole("listitem").filter({ hasText: venueName });
 }
-function mutationResponse(page: Page) {
+function mutationResponse(page: Page, sessionId: string) {
   return page.waitForResponse((response) => response.request().method() === "POST"
-    && Boolean(response.request().headers()["next-action"])
+    && new URL(response.url()).pathname === `/api/sessions/${sessionId}/cancel`
     && (response.request().postData() ?? "").includes("previewVersion"));
 }
 
@@ -37,7 +37,7 @@ test("UC2-03c full session cancellation refunds wallets and disappears from open
     const url = participantPage.url();
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, fixture.booker, "/sessions");
-    await expect(row(page, fixture.venueName).getByRole("button", { name: "Make private" })).toBeDisabled();
+    await expect(row(page, fixture.venueName).getByRole("button", { name: "Make private" })).toHaveCount(0);
     const trigger = row(page, fixture.venueName).getByRole("button", { name: "Cancel session", exact: true });
     await trigger.focus();
     await page.keyboard.press("Enter");
@@ -57,7 +57,7 @@ test("UC2-03c full session cancellation refunds wallets and disappears from open
     expect((await context.pool.query("select status from sessions where session_id=$1", [fixture.sessionId])).rows[0].status).toBe("OPEN");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("session-cancellation-mobile.png"), fullPage: true });
-    const response = mutationResponse(page);
+    const response = mutationResponse(page, fixture.sessionId);
     await dialog.getByRole("button", { name: "Confirm cancellation" }).click();
     expect((await response).status()).toBe(200);
     const committedAt = Date.now();
@@ -110,10 +110,13 @@ test("lost committed response survives reload and replays the identical financia
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("5.00");
     let intercepted = false;
-    await page.route("**/sessions", async (route) => {
+    let confirmedSubmission: unknown;
+    const cancellationUrl = `**/api/sessions/${fixture.sessionId}/cancel`;
+    await page.route(cancellationUrl, async (route) => {
       const incoming = route.request();
-      if (!intercepted && incoming.method() === "POST" && incoming.headers()["next-action"] && (incoming.postData() ?? "").includes("previewVersion")) {
+      if (!intercepted && incoming.method() === "POST" && (incoming.postData() ?? "").includes("previewVersion")) {
         intercepted = true;
+        confirmedSubmission = JSON.parse(incoming.postData()!);
         await route.fetch();
         await route.abort("failed");
       } else await route.continue();
@@ -125,12 +128,13 @@ test("lost committed response survives reload and replays the identical financia
     const saved = await page.evaluate((storageKey) => sessionStorage.getItem(storageKey), key);
     expect(saved).not.toBeNull();
     expect((await context.pool.query("select status from sessions where session_id=$1", [fixture.sessionId])).rows[0].status).toBe("CANCELLED");
-    await page.unroute("**/sessions");
+    await page.unroute(cancellationUrl);
     await page.reload();
     await expect(page.getByRole("dialog")).toContainText("Retry the cancellation you already confirmed");
-    const replay = mutationResponse(page);
+    const replay = mutationResponse(page, fixture.sessionId);
     await page.getByRole("dialog").getByRole("button", { name: "Retry cancellation" }).click();
     const incoming = (await replay).request().postData() ?? "";
+    expect(JSON.parse(incoming)).toEqual(confirmedSubmission);
     expect(incoming).toContain(JSON.parse(saved!).idempotencyKey);
     await expect(page.getByRole("status")).toContainText("Session cancelled");
     expect(await page.evaluate((storageKey) => sessionStorage.getItem(storageKey), key)).toBeNull();
@@ -146,6 +150,8 @@ test("bearer endpoints enforce access, validation, replay and inactive applicati
     const other = await context.identity(false);
     const url = `/api/sessions/${fixture.sessionId}`;
     const ownerHeaders = { Authorization: `Bearer ${fixture.booker.token}` };
+    // Removing an owner's email must preserve cleanup of sessions already hosted.
+    await context.pool.query("update auth.users set email=null, email_confirmed_at=null where id=$1", [fixture.booker.userId]);
     expect((await request.get(`${url}/cancellation-preview`)).status()).toBe(401);
     expect((await request.get(`${url}/cancellation-preview`, { headers: { Authorization: `Bearer ${other.token}` } })).status()).toBe(403);
     const preview = await request.get(`${url}/cancellation-preview`, { headers: ownerHeaders });

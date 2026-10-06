@@ -18,28 +18,18 @@ does not establish OneMap provenance.
 
 ## Query and HTTP contract
 
-`GET /api/sessions` verifies a Supabase bearer token, validates the external query,
-and passes the verified identity to `DiscoverSessions.forParticipant(...)`.
-The use case loads one complete User and checks active-account eligibility through
-its Participant role on every invocation. The page uses cookie authentication and
-invokes the same use case directly on the server; missing or inactive accounts
-redirect to login. Identity verification precedes query validation, and invalid
-queries are rejected before loading the User or checking account eligibility.
-Discovery uses the existing session server settings and database schema through
-migration 0006; it requires no new migration or browser table grants. Results are
-not cached.
+`GET /api/sessions` and `/discover` allow signed-out, unverified and verified
+visitors. The API validates the external query and calls
+`DiscoverSessions.searchPublic(criteria)` without authenticating or loading a
+User. The page invokes the same use case. Cookie authentication is optional for
+the signed-in navigation and verification prompt; an unavailable auth provider
+must not block public browsing. Other personal screens remain protected.
 
-The API exports an ordinary async GET handler from
-[`app/api/sessions/route.ts`](../api/sessions/route.ts). Inside one `try`/`catch`,
-it calls [`loadDependencies`](../http/load-dependencies.ts), then
-[`requireUserId`](../http/require-user-id.ts), reads the query and invokes
-`forParticipant` directly. Dependencies and the verified actor are local values;
-the helpers do not modify the Request or retain shared actor state.
-`loadDependencies` makes initialization failures opaque before the feature's
-error mapper handles them as 500s. `requireUserId` uses the endpoint's own
-authenticator, rejects absent credentials and validates the verified UUID.
-The discovery mapper applies `no-store` to all responses. The exported handler
-keeps the standard `Request` → `Promise<Response>` signature.
+Discovery requires only `DATABASE_URL` and the existing session schema. It has no
+new migration, browser table grants, wallet dependency or cached results. Inside
+one error boundary the GET handler loads dependencies, validates query parameters,
+reads public summaries and paginates them. Configuration and persistence failures
+are opaque; all responses use `Cache-Control: no-store`.
 
 [`readDiscoveryRequest`](./request.ts) adapts the existing query parser to HTTP
 and reports invalid queries through the discovery response mapper. The server
@@ -51,12 +41,9 @@ Blank filters mean no restriction; repeated known parameters are rejected and
 unknown parameters are ignored. `q` is trimmed, limited to 100 characters, and matches
 a case-insensitive literal substring of sport or venue name. SQL wildcard characters
 are treated literally. Search combines with all other filters, preserving the same
-ordering and pagination. Only the acting User is fully hydrated, including wallet
-history, memberships and reliability; matching Sessions remain lightweight public
-summaries. Payout setup, available funds, memberships and reliability do not limit
-browsing. User hydration and listing reads share one repeatable-read transaction.
-Missing required User state or malformed stored state fails as an infrastructure
-error rather than substituting incomplete account facts.
+ordering and pagination. A repeatable-read transaction loads only public summaries;
+no profile, wallet, membership, payout or reliability facts are loaded. Missing
+account records therefore cannot prevent browsing.
 
 Dates use `YYYY-MM-DD`; times use `HH:mm`. Date and time refer to
 `Asia/Singapore`. A date alone selects that calendar day. Time bounds require a
@@ -85,15 +72,12 @@ the latter also depends on replacement reservations.
 | --- | --- |
 | 200 | Results or an empty page |
 | 400 | Invalid filters, dates, time range or cursor |
-| 401 | Missing or invalid bearer credentials |
-| 403 | Inactive account |
-| 404 | Authenticated identity has no profile |
-| 500 | Unexpected configuration, authentication or database failure |
+| 500 | Unexpected configuration or database failure |
 | 503 | Missing server settings (`DISCOVERY_API_UNAVAILABLE`) |
 
 Errors use `{ error: { code, message } }`. Swagger UI at `/api-docs` and the
 public `/api/openapi` document describe both GET discovery and POST creation,
-including examples and bearer-authenticated Try it out.
+including public discovery examples and authenticated creation.
 Discovery registers its operation in [the feature OpenAPI module](./openapi.ts);
 see the [shared OpenAPI guide](../openapi/README.md) for composition and the steps
 to add another feature's operations.
@@ -176,6 +160,6 @@ page can leave that page empty. The user is never sent back to page one by polli
 The acceptance target is appearance/disappearance within three seconds after a
 booker's committed change on a healthy, visible, online discovery page. Browser
 throttling, offline periods and provider failures cannot satisfy that timing.
-One-second refresh repeats complete User and matching-session reads; this follows
+One-second refresh repeats matching-session reads; this follows
 the current small-project scale assumption. Larger deployments should revisit
 the query cost and polling frequency together.

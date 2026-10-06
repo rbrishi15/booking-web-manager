@@ -14,6 +14,17 @@ import { DeleteAccountButton } from "./delete-account-button";
 export default async function DeleteAccountPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login");
+  if (user.email === null) {
+    return (
+      <>
+        <PageHeader breadcrumb="Settings" title="Delete account" />
+        <div className="space-y-4 p-4 md:p-8">
+          <ErrorMessage>Add an email address before deleting your account.</ErrorMessage>
+          <Button asChild variant="outline"><Link href="/profile/email">Add email</Link></Button>
+        </div>
+      </>
+    );
+  }
 
   // Flow step 2: check the wallet and commitments before offering deletion.
   // If they can't be checked, don't offer deletion at all (fail closed).

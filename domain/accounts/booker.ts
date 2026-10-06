@@ -30,6 +30,7 @@ import type {
 import type { Visibility } from "../shared/statuses";
 import type { UUID } from "../shared/types";
 import type { User } from "./user";
+import { bookingAccountIneligibility } from "./booking-account-eligibility";
 
 /**
  * The information a booker supplies when creating a session.
@@ -42,7 +43,6 @@ export interface BookerSessionCreation {
   readonly booking: Booking;
   readonly bookingShare?: Money;
   readonly totalSlots: number;
-  readonly minimumHeadcount: number;
   readonly roomToken: string;
   readonly holdingAccountId: UUID;
   readonly now: Date;
@@ -89,17 +89,29 @@ export class Booker {
     return this.#user.userId;
   }
 
-  createSession(details: BookerSessionCreation): Session {
-    DomainError.require(
-      this.#user.accountStatus === "ACTIVE",
-      "INACTIVE_ACCOUNT",
-      "An inactive booker cannot create a session",
-    );
+  /** Pure account and payout preflight for the creation entry point. */
+  assertCanCreateSession(): void {
+    const reason = bookingAccountIneligibility({
+      accountStatus: this.#user.accountStatus,
+      hasEmail: this.#user.email !== null,
+      emailVerified: this.#user.emailVerified,
+    });
+    if (reason !== undefined)
+      throw new DomainError(
+        reason,
+        reason === "INACTIVE_ACCOUNT"
+          ? "An inactive booker cannot create a session"
+          : "Confirm your email before creating a session",
+      );
     DomainError.require(
       this.#user.payoutAccount?.setupStatus === "COMPLETE",
       "PAYOUT_ACCOUNT_NOT_READY",
       "A session needs a completed payout account",
     );
+  }
+
+  createSession(details: BookerSessionCreation): Session {
+    this.assertCanCreateSession();
     const now = validDate(details.now, "now");
     const session = new Session({
       sessionId: details.sessionId,
@@ -107,7 +119,6 @@ export class Booker {
       booking: details.booking,
       bookingShare: details.bookingShare,
       totalSlots: details.totalSlots,
-      minimumHeadcount: details.minimumHeadcount,
       roomToken: details.roomToken,
       holdingAccountId: details.holdingAccountId,
       visibility: details.visibility ?? "PRIVATE",
@@ -132,9 +143,14 @@ export class Booker {
     return session;
   }
 
-  cancel(session: Session, now: Date): FinancialResult {
+  /** Checks cancellation availability without preparing refunds or changing state. */
+  assertCanCancel(session: Session, now: Date): void {
     this.assertOwnsSession(session.bookerId);
     assertOpenBefore(session.status, session.booking, now);
+  }
+
+  cancel(session: Session, now: Date): FinancialResult {
+    this.assertCanCancel(session, now);
     const cancelled: Participation[] = [];
     const instructions: FinancialInstruction[] = [];
     for (const participation of session.participantList.participations) {
@@ -151,7 +167,8 @@ export class Booker {
     return result;
   }
 
-  changeVisibility(
+  /** Shares visibility authorization and lifecycle checks with read-side offers. */
+  assertCanChangeVisibility(
     session: Session,
     visibility: "PRIVATE" | "PUBLIC",
     now: Date,
@@ -168,6 +185,14 @@ export class Booker {
       "CAPACITY_EXCEEDED",
       "Visibility cannot change after the session is full",
     );
+  }
+
+  changeVisibility(
+    session: Session,
+    visibility: "PRIVATE" | "PUBLIC",
+    now: Date,
+  ): void {
+    this.assertCanChangeVisibility(session, visibility, now);
     session.changeVisibility(visibility, now);
   }
 

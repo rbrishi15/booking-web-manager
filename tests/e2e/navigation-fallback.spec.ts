@@ -67,7 +67,15 @@ test("unknown routes and missing groups show one signed-in shell with usable exi
     await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
     await page.goto("/wallet");
     await expect(page).toHaveURL(/\/login\?next=%2Fwallet$/);
-    await page.goto("/missing-after-logout");
-    await expect(page).toHaveURL(/\/login\?next=%2Fmissing-after-logout$/);
+    const response = await page.goto("/missing-after-logout");
+    expect(response?.status()).toBe(404);
+    await expect(page).toHaveURL(/\/missing-after-logout$/);
+    await expect(page.getByRole("heading", { name: "Page not found", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "View my sessions", exact: true })).toHaveCount(0);
+    await page.getByRole("link", { name: "Back to Home", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
   } finally { await context.pool.end(); }
 });

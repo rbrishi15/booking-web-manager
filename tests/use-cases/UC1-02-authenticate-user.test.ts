@@ -150,6 +150,29 @@ describe("UC1-02 Authenticate User", () => {
       expect(response.headers.get("location")).toBe("http://localhost/login?next=%2Fgroups%3Ftab%3Dmine");
     });
 
+    test.each(["/profile", "/profile/edit", "/groups", "/groups/join/abc123", "/sessions", "/sessions/create", "/wallet"])(
+      "keeps anonymous requests to %s behind login",
+      async (path) => {
+        vi.mocked(createServerClient).mockReturnValue(fakeSupabase({ user: null }) as never);
+
+        const response = await middleware(new NextRequest(`http://localhost${path}`));
+
+        expect(response.headers.get("location")).toBe(`http://localhost/login?next=${encodeURIComponent(path)}`);
+      },
+    );
+
+    test.each(["/missing-after-logout", "/sessions-missing", "/profile-missing", "/groups-missing", "/wallet-missing"])(
+      "lets anonymous requests to unknown route %s reach the not-found page",
+      async (path) => {
+        vi.mocked(createServerClient).mockReturnValue(fakeSupabase({ user: null }) as never);
+
+        const response = await middleware(new NextRequest(`http://localhost${path}`));
+
+        expect(response.headers.get("location")).toBeNull();
+        expect(response.headers.get("x-middleware-next")).toBe("1");
+      },
+    );
+
     test("signs out a deleted (INACTIVE) account on its next request", async () => {
       // Arrange
       const supabase = fakeSupabase({ user: MARCUS, profile: inactiveProfile });
@@ -262,7 +285,7 @@ describe("UC1-02 Authenticate User", () => {
   });
 
   describe("which pages need a login", () => {
-    test.each(["/", "/login", "/register"])("%s is open to logged-out visitors", (path) => {
+    test.each(["/", "/discover", "/login", "/register"])("%s is open to logged-out visitors", (path) => {
       // Act
       const result = isPublicPath(path);
 
@@ -270,7 +293,7 @@ describe("UC1-02 Authenticate User", () => {
       expect(result).toBe(true);
     });
 
-    test.each(["/profile", "/groups", "/discover", "/wallet", "/groups/join/abc123"])(
+    test.each(["/profile", "/groups", "/wallet", "/groups/join/abc123"])(
       "%s requires a login",
       (path) => {
         // Act

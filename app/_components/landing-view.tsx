@@ -21,7 +21,10 @@ export function LandingView() {
           <p className="mb-4 text-sm font-medium text-muted-foreground">Make time for play.</p>
           <h1 className="text-4xl font-black tracking-tight md:text-6xl">Find your next game.</h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">Discover public sports sessions, find a court near you, and get back to the games you love.</p>
-          <Button asChild className="mt-8 min-h-11"><Link href="/register">Create account<ArrowRight aria-hidden /></Link></Button>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild className="min-h-11"><Link href="/discover">Browse sessions<ArrowRight aria-hidden /></Link></Button>
+            <Button asChild variant="outline" className="min-h-11"><Link href="/register">Create account</Link></Button>
+          </div>
         </section>
         <section aria-labelledby="resources-title" className="pb-10">
           <h2 id="resources-title" className="text-xl font-semibold">Explore the project</h2>

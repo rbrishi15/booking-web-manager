@@ -1,13 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_CALLBACK_PATH, HOME_PATH, isAuthPage, isPublicPath } from "@/app/(auth)/redirect-path";
+import { AUTH_CALLBACK_PATH, HOME_PATH, isAuthPage, isProtectedPath, isPublicPath } from "@/app/(auth)/redirect-path";
 import { getAccountStatus } from "@/lib/supabase/account-status";
 import { isAuthenticationConfigured } from "@/lib/supabase/is-configured";
 
 /**
  * Runs before every page. Refreshes the Supabase login cookie, sends logged-out
- * visitors to /login, keeps logged-in users off /login and /register, and signs
- * out deactivated accounts (UC1-04).
+ * visitors on protected routes to /login, keeps logged-in users off /login and
+ * /register, and signs out deactivated accounts (UC1-04).
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -19,31 +19,39 @@ export async function middleware(request: NextRequest) {
   // The callback establishes its own session, including when there is no login cookie yet.
   if (pathname === AUTH_CALLBACK_PATH) return response;
   if (pathname === "/storybook" || pathname.startsWith("/storybook/") || pathname.startsWith("/fonts/")) return response;
-  if (pathname === "/" && !isAuthenticationConfigured()) return response;
+  if ((pathname === "/" || pathname === "/discover") && !isAuthenticationConfigured()) return response;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
-          for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
+  let supabase;
+  let user;
+  try {
+    supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+      {
+        cookies: {
+          getAll: () => request.cookies.getAll(),
+          setAll: (cookiesToSet) => {
+            for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
+            response = NextResponse.next({ request });
+            for (const { name, value, options } of cookiesToSet) {
+              response.cookies.set(name, value, options);
+            }
+          },
         },
       },
-    },
-  );
+    );
 
-  // getUser() checks the login with Supabase and refreshes an expiring cookie.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    // getUser() checks the login with Supabase and refreshes an expiring cookie.
+    ({ data: { user } } = await supabase.auth.getUser());
+  } catch (error) {
+    if (pathname === "/discover") return response;
+    throw error;
+  }
+  // Keep cookies refreshed, but public discovery never depends on account access.
+  if (pathname === "/discover") return response;
   if (user === null) {
-    if (isPublicPath(pathname)) return response;
+    // Unknown routes outside protected sections must reach the public not-found page.
+    if (isPublicPath(pathname) || !isProtectedPath(pathname)) return response;
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return redirectKeepingCookies(loginUrl, response);

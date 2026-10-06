@@ -112,10 +112,27 @@ describe("Hosted session listing", () => {
     const result = await scenario.list.forBooker("booker");
     expect(scenario.listUpcoming).toHaveBeenCalledExactlyOnceWith("booker", hoursBeforeSessionStart(48));
     expect(result).toEqual([
-      { sessionId: "s", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 0 },
-      { sessionId: "second", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 2 },
+      { sessionId: "s", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 0, actions: [{ name: "preview-cancellation" }] },
+      { sessionId: "second", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 2, actions: [{ name: "set-visibility", visibility: "PRIVATE" }, { name: "preview-cancellation" }] },
     ]);
     expect(scenario.saveVisibility).not.toHaveBeenCalled();
+  });
+
+  test("unverified owners retain management actions and projecting them does not mutate session state", async () => {
+    const scenario = management();
+    scenario.getUser.mockResolvedValue(createTestUser({ userId: "booker", emailVerified: false }));
+    scenario.listUpcoming.mockResolvedValue([scenario.session]);
+    const before = sessionState(scenario.session);
+    expect((await scenario.list.forBooker("booker"))[0]!.actions).toEqual([{ name: "set-visibility", visibility: "PRIVATE" }, { name: "preview-cancellation" }]);
+    expect(sessionState(scenario.session)).toEqual(before);
+    expect(scenario.saveVisibility).not.toHaveBeenCalled();
+  });
+
+  test("a session that has started advertises no new management transitions", async () => {
+    const scenario = management();
+    scenario.listUpcoming.mockResolvedValue([scenario.session]);
+    scenario.clock.now.mockReturnValue(sessionStartsAt);
+    expect((await scenario.list.forBooker("booker"))[0]!.actions).toEqual([]);
   });
 
   test("rejects inactive and missing users before querying owned sessions", async () => {

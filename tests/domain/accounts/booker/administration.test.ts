@@ -10,6 +10,56 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Booker", () => {
+  test("assertCanCancel_WhenOwnerIsUnverified_AllowsExitWithoutChangingSession", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+    const booker = createTestUser({ userId: "booker", emailVerified: false }).asBooker();
+    const previousState = sessionState(bookingSession);
+
+    // Act
+    booker.assertCanCancel(bookingSession, hoursBeforeSessionStart(48));
+
+    // Assert
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("assertCanCancel_WhenSessionHasStarted_ReportsCommandLifecycleFailure", () => {
+    // Arrange
+    const bookingSession = createTestSession();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => readyBooker().assertCanCancel(bookingSession, sessionStartsAt)).toThrow(
+      expect.objectContaining({ code: "SESSION_STARTED" }),
+    );
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("assertCanChangeVisibility_WhenOwnerIsUnverified_DoesNotChangeVisibility", () => {
+    // Arrange
+    const bookingSession = createTestSession();
+    const booker = createTestUser({ userId: "booker", emailVerified: false }).asBooker();
+    const previousState = sessionState(bookingSession);
+
+    // Act
+    booker.assertCanChangeVisibility(bookingSession, "PRIVATE", hoursBeforeSessionStart(48));
+
+    // Assert
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
+  test("assertCanChangeVisibility_WhenSessionIsFull_ReportsCommandCapacityFailure", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["alice", "ben"] });
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => readyBooker().assertCanChangeVisibility(
+      bookingSession, "PRIVATE", hoursBeforeSessionStart(48),
+    )).toThrow(expect.objectContaining({ code: "CAPACITY_EXCEEDED" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
   test("cancel_WhenSecondChildFails_PreservesParticipantsHoldsAndStatus", () => {
     // Arrange
     const cancellationTime = hoursBeforeSessionStart(48);

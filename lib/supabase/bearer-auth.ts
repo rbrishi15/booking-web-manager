@@ -1,5 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { DomainError, type UUID } from "@/domain";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { bookingAccountIneligibility, DomainError, type UUID } from "@/domain";
 import { getAccountStatus, type AccountStatus } from "./account-status";
 
 const authOptions = {
@@ -11,7 +11,7 @@ const authOptions = {
 async function verifyBearerIdentity(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   request: Request,
-): Promise<{ readonly token: string; readonly userId: UUID } | null> {
+): Promise<{ readonly token: string; readonly userId: UUID; readonly user: User } | null> {
   const token = request.headers
     .get("authorization")
     ?.match(/^Bearer[ \t]+([^\s,]+)$/i)?.[1];
@@ -23,12 +23,13 @@ async function verifyBearerIdentity(
   }
   if (data.user === null)
     throw new Error("Authentication provider returned no user");
-  return { token, userId: data.user.id };
+  return { token, userId: data.user.id, user: data.user };
 }
 
 export function createBearerAuthenticator(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   readStatus: (token: string, userId: UUID) => Promise<AccountStatus>,
+  options: { readonly requireVerifiedEmail?: boolean } = {},
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
     const identity = await verifyBearerIdentity(auth, request);
@@ -47,13 +48,22 @@ export function createBearerAuthenticator(
         throw new Error("Account status could not be checked", {
           cause: status,
         });
-      case "active":
+      case "active": {
+        if (options.requireVerifiedEmail) {
+          const reason = bookingAccountIneligibility({
+            accountStatus: "ACTIVE",
+            hasEmail: Boolean(identity.user.email?.trim()),
+            emailVerified: Boolean(identity.user.email_confirmed_at),
+          });
+          if (reason !== undefined) throw new DomainError(reason, "Verify your email to create or join sessions");
+        }
         return identity.userId;
+      }
     }
   };
 }
 
-/** Discovery loads the complete participant and checks access in its use case. */
+/** Identity-only authentication for integrations with their own account policy. */
 export function createSupabaseIdentityAuthenticator(
   url: string,
   anonKey: string,
@@ -66,6 +76,7 @@ export function createSupabaseIdentityAuthenticator(
 export function createSupabaseSessionAuthenticator(
   url: string,
   anonKey: string,
+  options: { readonly requireVerifiedEmail?: boolean } = {},
 ) {
   const verifier = createClient(url, anonKey, { auth: authOptions });
   return createBearerAuthenticator(verifier.auth, async (token, userId) => {
@@ -74,5 +85,5 @@ export function createSupabaseSessionAuthenticator(
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
     return getAccountStatus(client, userId);
-  });
+  }, options);
 }

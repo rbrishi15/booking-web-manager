@@ -76,6 +76,7 @@ const wallet = new Wallet({ walletId, userId, transactions });
 const existingUser = new User({
   userId,
   email: null,
+  emailVerified: false,
   accountStatus: "INACTIVE",
   preferredSports: new Set(),
   preferredRegions: new Set(),
@@ -102,7 +103,8 @@ const registeredUser = User.create({
 });
 ```
 
-Registration establishes the wallet with empty transactions and zero funds, empty
+Registration starts with unverified email and establishes the wallet with empty
+transactions and zero funds, empty
 memberships, and the existing empty-history default from `ReliabilityScore.fromHistory`.
 It creates domain state only; durable wallet provisioning belongs to the future
 registration adapter and transaction.
@@ -118,7 +120,12 @@ to express their units and meaning.
 
 Repository adapters map database column names, JSON, stored timestamps, and
 primitives to domain values. They convert email strings to validated `Email`
-objects, preserving null for inactive users. On writes,
+objects, preserving null for users without an address as well as inactive users.
+The email-verification follow-up adds a required trusted `emailVerified` fact:
+Supabase's `email_confirmed_at` supplies it, never editable profile metadata.
+A verified email must be present, but an active user may lack one so public
+browsing and email recovery remain available. Admission and creation apply the
+verification rule. On writes,
 `user.email?.toString() ?? null` supplies the storage value. They assemble children
 and required related values before calling parent constructors.
 User reads load wallet identity, its complete

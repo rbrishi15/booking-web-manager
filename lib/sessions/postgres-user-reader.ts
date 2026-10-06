@@ -14,6 +14,7 @@ import {
   choice,
   date,
   optionalText,
+  optionalDate,
   SessionPersistenceError,
   strings,
   text,
@@ -28,7 +29,8 @@ export class PostgresUserReader {
 
   async get(userId: UUID): Promise<User | null> {
     const profiles = await this.sql.query(
-      `select p.user_id, p.account_status, p.preferred_sports, p.preferred_regions, u.email
+      `select p.user_id, p.account_status, p.preferred_sports, p.preferred_regions,
+              u.email, u.email_confirmed_at
        from profiles p join auth.users u on u.id = p.user_id
        where p.user_id = $1 for share of p, u`,
       [userId],
@@ -70,10 +72,13 @@ export class PostgresUserReader {
     // Keep SQL failures outside this wrapper so transaction retries retain SQLSTATEs.
     try {
       const status = choice(profile.account_status, ["ACTIVE", "INACTIVE"]);
+      const email = status === "INACTIVE" || profile.email === null || profile.email === ""
+        ? null : new Email(text(profile.email));
       return new User({
         userId: text(profile.user_id),
         accountStatus: status,
-        email: status === "INACTIVE" ? null : new Email(text(profile.email)),
+        email,
+        emailVerified: email !== null && optionalDate(profile.email_confirmed_at) !== undefined,
         preferredSports: new Set(strings(profile.preferred_sports)),
         preferredRegions: new Set(strings(profile.preferred_regions)),
         payoutAccount:

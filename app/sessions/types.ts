@@ -8,8 +8,10 @@ export interface HostedSessionItem {
   readonly endAt: string;
   readonly visibility: "PUBLIC" | "PRIVATE";
   readonly availableSlots: number;
+  readonly actions: readonly HostedSessionAction[];
 }
 
 export type HostedSessionsOutcome =
   | { readonly status: "ready"; readonly sessions: readonly HostedSessionItem[] }
   | { readonly status: "error"; readonly kind: "unavailable" | "unexpected" };
+import type { HostedSessionAction } from "./session-actions";

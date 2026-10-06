@@ -26,8 +26,8 @@ async function insertSession(context: SessionTestContext, bookerId: string, venu
   const start = new Date(input.startAt ?? "2045-04-02T10:00:00Z");
   await context.pool.query(
     `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-      total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, room_token, holding_account_id)
-     values ($1,$2,$3,'West','Badminton',$4,$5,200,2,2,100,$6,$7,$8)`,
+      total_cost_cents, total_slots, booking_share_cents, visibility, room_token, holding_account_id)
+     values ($1,$2,$3,'West','Badminton',$4,$5,200,2,100,$6,$7,$8)`,
     [sessionId, bookerId, venue, start, new Date(start.getTime() + 7_200_000),
       input.visibility ?? "PRIVATE", randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
   );
@@ -54,12 +54,11 @@ function row(page: Page, venue: string): Locator {
   return page.getByRole("listitem").filter({ hasText: venue });
 }
 
-/** Clicks the visibility control, checks the server-action HTTP response, and returns the observation time for latency assertions. */
+/** Clicks the visibility control, checks its advertised PATCH response, and returns the observation time for latency assertions. */
 async function setThroughPage(page: Page, venue: string, visibility: Visibility): Promise<number> {
   const response = page.waitForResponse((candidate) =>
-    candidate.request().method() === "POST" &&
-    Boolean(candidate.request().headers()["next-action"]) &&
-    new URL(candidate.url()).pathname === "/sessions",
+    candidate.request().method() === "PATCH" &&
+    /^\/api\/sessions\/[^/]+\/visibility$/.test(new URL(candidate.url()).pathname),
   );
   await row(page, venue).getByRole("button", {
     name: visibility === "PUBLIC" ? "Make public" : "Make private", exact: true,
@@ -149,7 +148,7 @@ test("management lists only hosted upcoming sessions, blocks full ones, and enfo
     await expect(page.getByRole("listitem")).toHaveCount(2);
     await expect(row(page, `${prefix} participant only`)).toHaveCount(0);
     await expect(row(page, `${prefix} past`)).toHaveCount(0);
-    await expect(row(page, `${prefix} full`).getByRole("button", { name: "Make public", exact: true })).toBeDisabled();
+    await expect(row(page, `${prefix} full`).getByRole("button", { name: "Make public", exact: true })).toHaveCount(0);
 
     expect((await request.patch(`/api/sessions/${sessionId}/visibility`, { data: { visibility: "PUBLIC" } })).status()).toBe(401);
     expect((await patch(request, other, sessionId, "PUBLIC")).status()).toBe(403);
@@ -160,6 +159,8 @@ test("management lists only hosted upcoming sessions, blocks full ones, and enfo
       headers: { Authorization: `Bearer ${booker.token}` }, data: { visibility: "everyone" },
     })).status()).toBe(400);
     expect((await patch(request, booker, randomUUID(), "PUBLIC")).status()).toBe(404);
+    // Verification gates booking; an existing owner retains visibility management.
+    await context.pool.query("update auth.users set email_confirmed_at=null where id=$1", [booker.userId]);
     const changed = await patch(request, booker, sessionId, "PUBLIC");
     expect(changed.status()).toBe(200);
     expect(await changed.json()).toEqual({ sessionId, visibility: "PUBLIC" });

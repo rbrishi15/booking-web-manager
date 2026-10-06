@@ -11,6 +11,23 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
+  test("acceptReplacement_WhenNamedInviteeIsUnverified_PreservesReservationAndHeldShare", () => {
+    // Arrange
+    const bookingSession = createTestSession({ committedUserIds: ["ben", "alex"] });
+    createTestUser({ userId: "ben" }).asParticipant().withdraw(bookingSession, {
+      participationId: "p-ben", now: hoursBeforeSessionStart(10),
+      replacementMode: "DIRECT_INVITE", replacementInviteeId: "cara",
+    });
+    const invitee = createTestUser({ userId: "cara", emailVerified: false }).asParticipant();
+    const previousState = sessionState(bookingSession);
+
+    // Act & Assert
+    expect(() => invitee.acceptReplacement(bookingSession, {
+      participationId: "p-cara", holdId: "h-cara", now: hoursBeforeSessionStart(9),
+    })).toThrow(expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }));
+    expect(sessionState(bookingSession)).toEqual(previousState);
+  });
+
   test("join_WhenNamedInviteeHasPendingInvitation_RejectsUntilExplicitAcceptance", () => {
     // Arrange
     const aliceWithdrawalTime = hoursBeforeSessionStart(20);

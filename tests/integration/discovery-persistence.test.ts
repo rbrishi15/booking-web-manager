@@ -35,9 +35,9 @@ describe("UC2-01 PostgreSQL discovery", () => {
     const endAt = new Date(new Date(input.startAt).getTime() + 2 * 60 * 60 * 1000);
     await context.pool.query(
       `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-        total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, status,
+        total_cost_cents, total_slots, booking_share_cents, visibility, status,
         room_token, holding_account_id, minimum_reliability)
-       values ($1,$2,$11,$3,$4,$5,$6,1001,2,2,500,$7,$8,$9,$10,100)`,
+       values ($1,$2,$11,$3,$4,$5,$6,1001,2,500,$7,$8,$9,$10,100)`,
       [sessionId, bookerId, input.region ?? "West", input.sport ?? "Badminton", input.startAt, endAt,
         input.visibility ?? "PUBLIC", input.status ?? "OPEN", randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID,
         input.venueName ?? "Discovery fixture venue"],
@@ -48,67 +48,44 @@ describe("UC2-01 PostgreSQL discovery", () => {
   function discovery(at = now) {
     const clock = { now: () => at };
     return new DiscoverSessions({
-      transaction: new PostgresSessionDiscoveryTransaction(() => context.pool, clock),
+      transaction: new PostgresSessionDiscoveryTransaction(() => context.pool),
       clock,
     });
   }
 
   function discover(criteria: SessionDiscoveryCriteria = {}, at = now) {
-    return discovery(at).forParticipant(bookerId, criteria);
+    return discovery(at).searchPublic(criteria);
   }
 
-  test("loads current participant eligibility on every invocation", async () => {
-    const participant = await context.identity(false);
-    const useCase = discovery();
-    await expect(useCase.forParticipant(participant.userId)).resolves.toEqual(expect.any(Array));
+  test("anonymous discovery continues to list public sessions after the booker is inactive", async () => {
+    const venueName = `Inactive booker public session ${randomUUID()}`;
+    const sessionId = await insertSession({ startAt: "2040-06-08T10:00:00Z", venueName });
+    await context.pool.query("update profiles set account_status = 'INACTIVE' where user_id = $1", [bookerId]);
 
-    await context.pool.query("update profiles set account_status = 'INACTIVE' where user_id = $1", [participant.userId]);
-    await expect(useCase.forParticipant(participant.userId)).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
-    await expect(useCase.forParticipant(randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const result = await discover({ text: venueName });
+
+    expect(result.map((session) => session.sessionId)).toEqual([sessionId]);
+    expect(Object.keys(result[0] ?? {}).sort()).toEqual(publicKeys);
   });
 
-  test("refuses discovery when the actor's complete User cannot be hydrated", async () => {
-    const missing = await context.identity(false);
-    await context.pool.query("delete from wallet_balances where wallet_id = $1", [missing.walletId]);
-    await context.pool.query("delete from wallets where wallet_id = $1", [missing.walletId]);
-    await expect(discovery().forParticipant(missing.userId)).rejects.toMatchObject({ name: "SessionPersistenceError" });
+  test("public search does not hydrate missing wallets or malformed account preferences", async () => {
+    const venueName = `No account hydration ${randomUUID()}`;
+    const sessionId = await insertSession({ startAt: "2040-06-08T12:00:00Z", venueName });
+    const wallet = await context.pool.query<{ wallet_id: string }>("select wallet_id from wallets where user_id = $1", [bookerId]);
+    const walletId = wallet.rows[0]?.wallet_id;
+    await context.pool.query("delete from wallet_balances where wallet_id = $1", [walletId]);
+    await context.pool.query("delete from wallets where wallet_id = $1", [walletId]);
+    await context.pool.query("update profiles set preferred_sports = '{\"\"}' where user_id = $1", [bookerId]);
 
-    const corrupt = await context.identity(false);
-    await context.pool.query("update profiles set preferred_sports = '{\"\"}' where user_id = $1", [corrupt.userId]);
-    await expect(discovery().forParticipant(corrupt.userId)).rejects.toMatchObject({ name: "SessionPersistenceError" });
+    expect((await discover({ text: venueName })).map((session) => session.sessionId)).toEqual([sessionId]);
   });
 
-  test("allows an active participant with no payout setup, no available funds and low reliability to browse", async () => {
-    const participant = await context.identity(false);
-    const pastSession = await insertSession({ startAt: "2039-12-01T10:00:00Z" });
-    const participationId = randomUUID();
-    const holdId = randomUUID();
-    await context.pool.query(
-      `insert into ledger_entries (kind, amount_cents, occurred_at, idempotency_key, external_reference, wallet_id)
-       values ('TOP_UP',500,'2039-11-30T09:00:00Z',$1,$2,$3)`,
-      [randomUUID(), randomUUID(), participant.walletId],
-    );
-    await context.pool.query(
-      `insert into participations (participation_id, session_id, user_id, status, attendance, committed_at, verified_at, verification_method)
-       values ($1,$2,$3,'COMMITTED','ABSENT','2039-11-30T10:00:00Z','2039-12-01T12:00:00Z','BOOKER')`,
-      [participationId, pastSession, participant.userId],
-    );
-    await context.pool.query(
-      `insert into fund_holds (hold_id, participation_id, holding_account_id, wallet_id, amount_cents, state, created_at)
-       values ($1,$2,$3,$4,500,'HELD','2039-11-30T10:00:00Z')`,
-      [holdId, participationId, PLATFORM_HOLDING_ACCOUNT_ID, participant.walletId],
-    );
-    await context.pool.query(
-      `insert into ledger_entries (kind, amount_cents, occurred_at, idempotency_key, wallet_id, hold_id, holding_account_id, session_id, participation_id)
-       values ('LOCK',500,'2039-11-30T10:00:00Z',$1,$2,$3,$4,$5,$6)`,
-      [randomUUID(), participant.walletId, holdId, PLATFORM_HOLDING_ACCOUNT_ID, pastSession, participationId],
-    );
-    const target = await insertSession({ startAt: "2040-06-08T10:00:00Z" });
+  test("public search does not require the booker's email or confirmation", async () => {
+    const venueName = `No email needed to view ${randomUUID()}`;
+    const sessionId = await insertSession({ startAt: "2040-06-08T14:00:00Z", venueName });
+    await context.pool.query("update auth.users set email = null, email_confirmed_at = null where id = $1", [bookerId]);
 
-    const result = await discovery().forParticipant(participant.userId, {
-      startsWithin: { from: new Date("2040-06-08T00:00:00Z"), before: new Date("2040-06-09T00:00:00Z") },
-    });
-    expect(result.map((session) => session.sessionId)).toEqual([target]);
+    expect((await discover({ text: venueName })).map((session) => session.sessionId)).toEqual([sessionId]);
   });
 
   test("matches sport or venue case-insensitively while keeping other filters and exclusions", async () => {

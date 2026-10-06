@@ -41,7 +41,7 @@ type TestUserOptions = Pick<UserDetails, "userId"> &
   );
 
 /**
- * Test defaults: active account, 10_000 available cents, reliability 100, no groups.
+ * Test defaults: active verified account, 10_000 available cents, reliability 100, no groups.
  * Supply a wallet instead of availableFundsCents when its history is the scenario.
  */
 export function createTestUserDetails({
@@ -56,6 +56,7 @@ export function createTestUserDetails({
       overrides.accountStatus === "INACTIVE"
         ? null
         : new Email(`${userId}@example.com`),
+    emailVerified: overrides.accountStatus !== "INACTIVE" && overrides.email !== null,
     accountStatus: "ACTIVE",
     preferredSports: new Set(),
     preferredRegions: new Set(),

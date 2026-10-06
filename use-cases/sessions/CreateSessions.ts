@@ -17,7 +17,6 @@ export interface SessionConfig {
   /** A booker choice; the domain validates bounds before persisting it. */
   pricePerSlotCents?: number;
   totalSlots: number;
-  minimumHeadcount: number;
   visibility?: Visibility;
   minimumReliability?: number;
   invitedGroupId?: UUID;
@@ -96,7 +95,6 @@ export class CreateSessions {
         booking,
         bookingShare,
         totalSlots: config.totalSlots,
-        minimumHeadcount: config.minimumHeadcount,
         visibility: config.visibility,
         minimumReliability,
         invitedGroupId: config.invitedGroupId,

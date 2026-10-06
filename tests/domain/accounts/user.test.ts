@@ -10,6 +10,14 @@ import { createTestUserDetails, userLoadedAt } from "./user-fixtures";
 
 describe("User", () => {
   describe("Construction and registration", () => {
+    test("constructor_WhenVerifiedEmailIsMissing_ThrowsInvalidInput", () => {
+      // Arrange
+      const details = createTestUserDetails({ userId: "owner", email: null, emailVerified: true });
+
+      // Act & Assert
+      expect(() => new User(details)).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+    });
+
     test("constructor_WhenEmailIsProvided_PreservesTheEmailValue", () => {
       // Arrange
       const email = new Email("Owner+bookings@Example.COM");
@@ -23,14 +31,21 @@ describe("User", () => {
       expect(user.email?.toString()).toBe("Owner+bookings@Example.COM");
     });
 
-    test("constructor_WhenActiveAccountHasNoEmail_ThrowsInvalidInput", () => {
+    test("constructor_WhenActiveAccountHasNoEmail_LoadsAnUnverifiedAccount", () => {
       // Arrange
-      const details = createTestUserDetails({ userId: "owner", email: null });
+      const details = createTestUserDetails({
+        userId: "owner",
+        email: null,
+        emailVerified: false,
+      });
 
-      // Act & Assert
-      expect(() => new User(details)).toThrow(
-        expect.objectContaining({ code: "INVALID_INPUT" }),
-      );
+      // Act
+      const user = new User(details);
+
+      // Assert
+      expect(user.accountStatus).toBe("ACTIVE");
+      expect(user.email).toBeNull();
+      expect(user.emailVerified).toBe(false);
     });
 
     test("constructor_WhenInactiveAccountHasEmail_ThrowsInvalidInput", () => {
@@ -123,6 +138,7 @@ describe("User", () => {
       // Assert
       expect(user.accountStatus).toBe("ACTIVE");
       expect(user.email).toBe(email);
+      expect(user.emailVerified).toBe(false);
     });
 
     test("create_WhenSourcePreferencesChange_PreservesStoredPreferences", () => {
@@ -149,6 +165,28 @@ describe("User", () => {
   });
 
   describe("Profile and preferences", () => {
+    test("updateProfile_WhenVerifiedEmailChanges_RequiresFreshVerification", () => {
+      // Arrange
+      const user = new User(createTestUserDetails({ userId: "owner", emailVerified: true }));
+
+      // Act
+      user.updateProfile({ email: new Email("new@example.com") });
+
+      // Assert
+      expect(user.emailVerified).toBe(false);
+    });
+
+    test("updateProfile_WhenVerifiedEmailIsUnchanged_PreservesVerification", () => {
+      // Arrange
+      const user = new User(createTestUserDetails({ userId: "owner", emailVerified: true }));
+
+      // Act
+      user.updateProfile({ email: new Email("owner@example.com") });
+
+      // Assert
+      expect(user.emailVerified).toBe(true);
+    });
+
     test("updateProfile_WhenAccountIsActive_ReplacesEmail", () => {
       // Arrange
       const user = createActiveUser();
@@ -770,6 +808,7 @@ function deactivationWithoutObligations(): DeactivationInput {
 function accountStateOf(user: User) {
   return {
     email: user.email?.toString() ?? null,
+    emailVerified: user.emailVerified,
     accountStatus: user.accountStatus,
     preferredSports: [...user.preferredSports],
     preferredRegions: [...user.preferredRegions],

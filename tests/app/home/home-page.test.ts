@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.mocked(isAuthenticationConfigured).mockReturnValue(true);
   vi.mocked(getCurrentUser).mockResolvedValue({
     id: "viewer", email: "viewer@example.com", displayName: "Viewer", profileName: "Viewer",
+    emailVerified: true, pendingEmail: null, accountStatus: "ACTIVE",
     preferredSports: ["Tennis"], preferredRegions: ["East"], reliabilityScore: 100,
   });
   vi.mocked(getAccountStatus).mockResolvedValue({ kind: "active" });

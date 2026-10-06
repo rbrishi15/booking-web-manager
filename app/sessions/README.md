@@ -134,7 +134,7 @@ persisted as `minimum_headcount`; it must be an integer between two and
 | 201 | Created session or replayed a successful submission |
 | 400 | Malformed JSON or invalid request structure |
 | 401 | No authenticated user |
-| 403 | Inactive account or unauthorized action |
+| 403 | Inactive account, missing/unconfirmed email (`EMAIL_VERIFICATION_REQUIRED`), or unauthorized action |
 | 404 | Authenticated User is missing from storage |
 | 409 | Payout setup or session-state conflict |
 | 422 | Invalid business values |
@@ -144,7 +144,9 @@ persisted as `minimum_headcount`; it must be an integer between two and
 Errors use `{ error: { code, message } }`. Unexpected failures return the fixed
 `INTERNAL_ERROR` response. Retrying the same booker's submission key must return
 the original result; an intended new session needs a new key. The authentication
-integration must verify current active-account access before parsing or replay.
+integration must verify current active-account access and present confirmed email
+before parsing or replay. The transaction repeats these checks before claiming
+an idempotency key, including each database retry.
 The persistence integration must commit the Session and replay result atomically.
 See the [integration requirements](../../use-case-config/README.md#authentication-and-atomic-persistence).
 
@@ -177,11 +179,11 @@ subscriptions remain separate work.
 ## UC2-03a: visibility management
 
 `/sessions` lists every open, upcoming session hosted by the signed-in user,
-ordered by start time and session ID. It includes full sessions with a disabled
-control and explanation. Availability includes direct-invitation reservations
+ordered by start time and session ID. It includes full sessions; their action list omits visibility changes. Availability includes direct-invitation reservations
 through `Session.getAvailableSlots`; the UI does not calculate capacity itself.
 Rows display confirmed visibility with per-row saving, success and error feedback.
-The cookie-authenticated action and bearer API invoke the same use case directly.
+The UI follows the returned HTTP actions. Existing cookie-authenticated server
+actions and bearer APIs invoke the same use cases directly.
 
 `PATCH /api/sessions/{sessionId}/visibility` accepts:
 

@@ -1,4 +1,3 @@
-import { DomainError } from "@/domain";
 import { isRequestFailure } from "@/app/http/request-failure";
 import { DISCOVERY_API_UNAVAILABLE_MESSAGE, DiscoveryApiUnavailableError } from "./discovery-api-unavailable";
 
@@ -19,9 +18,5 @@ export function discoveryErrorResponse(error: unknown): Response {
     return discoveryError(error.status, error.code, error.message);
   if (error instanceof DiscoveryApiUnavailableError)
     return discoveryError(503, "DISCOVERY_API_UNAVAILABLE", DISCOVERY_API_UNAVAILABLE_MESSAGE);
-  if (error instanceof DomainError) {
-    if (error.code === "INACTIVE_ACCOUNT") return discoveryError(403, error.code, error.message);
-    if (error.code === "NOT_FOUND") return discoveryError(404, error.code, error.message);
-  }
   return discoveryInternalError();
 }

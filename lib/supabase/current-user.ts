@@ -1,10 +1,13 @@
 import { cache } from "react";
-import { ReliabilityScore } from "@/domain";
+import { type AccountStatus, ReliabilityScore } from "@/domain";
 import { createClient } from "./server";
 
 export interface CurrentUser {
   readonly id: string;
-  readonly email: string;
+  readonly email: string | null;
+  readonly emailVerified: boolean;
+  readonly pendingEmail: string | null;
+  readonly accountStatus: AccountStatus;
   /** The name to show: the saved name, or the email if no name has been saved yet. */
   readonly displayName: string;
   /** The saved name exactly as stored; may be "" (used to fill the Edit profile form). */
@@ -28,23 +31,27 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const supabase = await createClient();
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
-  if (user === null) return null;
+  if (error !== null || user === null) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("display_name, preferred_sports, preferred_regions")
+    .select("display_name, preferred_sports, preferred_regions, account_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const email = user.email ?? "";
+  const email = user.email?.trim() || null;
   const savedName: unknown = profile?.display_name;
   const profileName = typeof savedName === "string" ? savedName : "";
 
   return {
     id: user.id,
     email,
-    displayName: profileName.trim() !== "" ? profileName : email,
+    emailVerified: email !== null && Boolean(user.email_confirmed_at),
+    pendingEmail: user.new_email?.trim() || null,
+    accountStatus: profileError === null && profile?.account_status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+    displayName: profileName.trim() !== "" ? profileName : email ?? "Your account",
     profileName,
     preferredSports: textList(profile?.preferred_sports),
     preferredRegions: textList(profile?.preferred_regions),

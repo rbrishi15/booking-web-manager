@@ -1,5 +1,3 @@
-import type { User } from "@/domain";
-import type { Repository } from "../shared/contracts";
 import type { DiscoveredSession, SessionDiscoveryCriteria } from "./DiscoverSessions";
 
 /** All PUBLIC, OPEN, strictly upcoming summaries, ordered by start then ID.
@@ -11,11 +9,10 @@ export interface SessionDiscoveryReader {
 }
 
 export interface SessionDiscoveryReads {
-  readonly users: Pick<Repository<User>, "get">;
   readonly sessions: SessionDiscoveryReader;
 }
 
-/** Loads the complete actor and public listings from one consistent transaction snapshot. */
+/** Reads public listings from one consistent transaction snapshot. */
 export interface SessionDiscoveryTransaction {
   run<T>(work: (reads: SessionDiscoveryReads) => Promise<T>): Promise<T>;
 }

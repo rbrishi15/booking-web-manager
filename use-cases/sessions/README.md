@@ -2,15 +2,12 @@
 
 ## UC2-01 Discover Sessions
 
-`DiscoverSessions.forParticipant(participantId, criteria = {})` loads
-one complete User within its discovery transaction and invokes
-`user.asParticipant().assertCanDiscoverSessions()`. Only an active account is
-required; payout setup, funds, memberships and reliability do not restrict browsing.
-The use case captures the listing cutoff from its clock after eligibility succeeds.
-The PostgreSQL reader selects public, open sessions starting after that instant,
-applies text, sport, stored-region and start-time filters, and orders by start time
-and ID. The use case returns `Promise<readonly DiscoveredSession[]>` containing
-every matching summary, without a result cap. Full sessions stay discoverable.
+`DiscoverSessions.searchPublic(criteria = {})` reads public summaries without an
+actor or complete User hydration. The PostgreSQL reader selects public, open
+sessions starting after the current clock, applies text, sport, stored-region and
+start-time filters, and orders by start time and ID. It returns every matching
+summary, including full sessions. Verification gates entering a session, not
+browsing listings.
 
 Criteria group `text`, `sport`, `region` and `startsWithin: { from?, before? }`.
 The reader receives only `criteria` and `now`; SQL has no cursor predicate or
@@ -18,14 +15,11 @@ page limit. Pagination is entirely app-owned: each request, including Next,
 fetches all matching summaries, applies the cursor and selects a 20-item page.
 Only that page reaches browser props or HTTP JSON. This deliberately accepts
 the full-list read cost for school-project simplicity.
-Complete actor hydration and summary reads share a repeatable-read transaction;
-discovered Sessions are not hydrated, and no ledger unit of work or replay store
-is needed. Missing or malformed related User state fails hydration. Each invocation
-loads fresh User state and checks eligibility again. The app verifies identity,
-validates external filters before User loading, converts Singapore date/time
-bounds to instants and encodes/decodes opaque HTTP cursors. HTTP field names and
-responses remain unchanged. See the
-[discovery guide](../../app/discover/README.md) for its API and React state model.
+Summary reads use a repeatable-read transaction, with no account repository,
+ledger unit of work or replay store. Every invocation captures a fresh cutoff.
+The app validates filters, converts Singapore bounds to instants and handles
+opaque cursors. The [discovery guide](../../app/discover/README.md) describes
+its public API and safe summary fields.
 OneMap resolution remains separate; this milestone filters stored regions.
 
 ## UC2-02 Create Session
@@ -33,7 +27,8 @@ OneMap resolution remains separate; this milestone filters stored regions.
 [`CreateSessions.forBooker(bookerId, booking, config)`](./CreateSessions.ts)
 loads the complete User inside the transaction, constructs the Booking, calls
 `user.asBooker().createSession(...)`, and saves the new Session. Business rules
-and booking-share calculation remain in the domain. Creation moves no funds and
+and booking-share calculation remain in the domain. Creation requires a present,
+confirmed email; the HTTP authenticator also checks it before idempotent replay. Creation moves no funds and
 returns `{ sessionId, roomToken, bookingShareCents }`.
 
 `bookerId` comes from authentication. `SessionBooking` contains venue name,

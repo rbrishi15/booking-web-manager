@@ -29,14 +29,21 @@ function hasUnsafeCharacters(value: string): boolean {
   return false;
 }
 
-/** Pages anyone can open without logging in: Landing, Register and Log in (dialog map). */
-const PUBLIC_PATHS: readonly string[] = ["/", "/login", "/register", AUTH_CALLBACK_PATH];
+/** Pages anyone can open without logging in: Landing, discovery, registration and login. */
+const PUBLIC_PATHS: readonly string[] = ["/", "/discover", "/login", "/register", AUTH_CALLBACK_PATH];
+
+/** Page sections whose root and nested routes require a login. */
+const PROTECTED_PATHS: readonly string[] = ["/groups", "/profile", "/sessions", "/wallet"];
 
 /** Pages a logged-in user has no reason to see; they are sent Home instead. */
 const AUTH_PATHS: readonly string[] = ["/login", "/register"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.includes(pathname);
+}
+
+export function isProtectedPath(pathname: string): boolean {
+  return PROTECTED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 export function isAuthPage(pathname: string): boolean {

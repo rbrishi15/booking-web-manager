@@ -14,6 +14,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 import { GET } from "@/app/api/sessions/[sessionId]/cancellation-preview/route";
 import { POST } from "@/app/api/sessions/[sessionId]/cancel/route";
 import { previewSessionCancellation, cancelSession } from "@/app/sessions/cancellation-actions";
+import { withCancellationAction } from "@/app/sessions/session-actions";
 
 const bookerId = "10000000-0000-4000-8000-000000000001";
 const sessionId = "20000000-0000-4000-8000-000000000001";
@@ -42,9 +43,9 @@ function post(body: unknown = submission, id = sessionId) {
 describe("UC2-03c entry points", () => {
   test("API and action previews invoke the same coordinator using authenticated identity", async () => {
     const response = await GET(new Request("http://localhost", { headers: { Authorization: "Bearer trusted" } }), { params: Promise.resolve({ sessionId }) });
-    expect(await response.json()).toEqual(preview);
+    expect(await response.json()).toEqual(withCancellationAction(preview));
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await previewSessionCancellation(sessionId)).toEqual({ status: "ready", preview });
+    expect(await previewSessionCancellation(sessionId)).toEqual({ status: "ready", preview: withCancellationAction(preview) });
     expect(mocks.preview).toHaveBeenNthCalledWith(1, bookerId, sessionId);
     expect(mocks.preview).toHaveBeenNthCalledWith(2, bookerId, sessionId);
     expect(mocks.revalidate).not.toHaveBeenCalled();
@@ -73,7 +74,7 @@ describe("UC2-03c entry points", () => {
     mocks.authenticate.mockResolvedValue(null);
     expect((await POST(request("{"), { params: Promise.resolve({ sessionId }) })).status).toBe(401);
     mocks.user.mockResolvedValue({ data: { user: null }, error: { status: 401 } });
-    expect(await cancelSession(sessionId, submission)).toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(await cancelSession(sessionId, submission)).toMatchObject({ code: "UNAUTHENTICATED", retrySameRequest: true });
     expect(mocks.factory).not.toHaveBeenCalled();
   });
   test.each([
@@ -95,7 +96,7 @@ describe("UC2-03c entry points", () => {
     expect(await response.json()).toMatchObject({ error: { code } });
     const action = await cancelSession(sessionId, submission);
     expect(action).toMatchObject({ status: "error", code, refresh: status === 409,
-      retrySameRequest: status >= 500 || code === "IDEMPOTENCY_IN_FLIGHT" });
+      retrySameRequest: status === 403 || status >= 500 || code === "IDEMPOTENCY_IN_FLIGHT" });
     if (status === 500) expect(action).toMatchObject({ message: "Internal server error" });
   });
   test("does not report success or revalidate before commit resolves", async () => {

@@ -9,6 +9,49 @@ import {
 import { readyBookerUser } from "../user-fixtures";
 
 describe("Booker", () => {
+  test("createSession_WhenEmailIsUnverified_RejectsBeforeCreatingSession", () => {
+    // Arrange
+    const booker = createTestUser({
+      userId: "booker",
+      emailVerified: false,
+      payoutAccount: readyBookerUser().payoutAccount,
+    }).asBooker();
+
+    // Act & Assert
+    expect(() => booker.createSession(creationDetails())).toThrow(
+      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
+    );
+  });
+
+  test("createSession_WhenEmailIsMissing_RejectsWithVerificationRequired", () => {
+    // Arrange
+    const booker = createTestUser({
+      userId: "booker",
+      email: null,
+      emailVerified: false,
+      payoutAccount: readyBookerUser().payoutAccount,
+    }).asBooker();
+
+    // Act & Assert
+    expect(() => booker.createSession(creationDetails())).toThrow(
+      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
+    );
+  });
+
+  test("assertCanCreateSession_WhenEmailIsUnverified_ReportsTheCommandFailure", () => {
+    // Arrange
+    const booker = createTestUser({
+      userId: "booker",
+      emailVerified: false,
+      payoutAccount: readyBookerUser().payoutAccount,
+    }).asBooker();
+
+    // Act & Assert
+    expect(() => booker.assertCanCreateSession()).toThrow(
+      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
+    );
+  });
+
   test("createSession_WhenRoleWasCreatedBeforeDeactivation_ThrowsInactiveAccount", () => {
     // Arrange
     const owner = createTestUser({

@@ -14,7 +14,7 @@ vi.mock("@supabase/ssr", () => ({
 
 describe("public session paths through authentication middleware", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(isAuthenticationConfigured).mockReturnValue(true);
   });
 
@@ -60,5 +60,39 @@ describe("public session paths through authentication middleware", () => {
   test("checks configured root identity so Home can be rendered for an active account", async () => {
     await expect(middleware(new NextRequest("http://localhost/"))).rejects.toThrow("Public session endpoints must not initialize Supabase");
     expect(createServerClient).toHaveBeenCalledOnce();
+  });
+
+  test("serves public discovery without configured authentication", async () => {
+    vi.mocked(isAuthenticationConfigured).mockReturnValue(false);
+    const response = await middleware(new NextRequest("http://localhost/discover?sport=Tennis"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(createServerClient).not.toHaveBeenCalled();
+  });
+
+  test("serves public discovery when configured authentication cannot initialize", async () => {
+    const response = await middleware(new NextRequest("http://localhost/discover"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+    expect(createServerClient).toHaveBeenCalledOnce();
+  });
+
+  test("serves public discovery when the authentication provider is unavailable", async () => {
+    const getUser = vi.fn().mockRejectedValue(new Error("private provider detail"));
+    vi.mocked(createServerClient).mockReturnValue({ auth: { getUser } } as never);
+    const response = await middleware(new NextRequest("http://localhost/discover?sport=Tennis"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+    expect(getUser).toHaveBeenCalledOnce();
+  });
+
+  test("an existing unverified session can browse without a profile authorization lookup", async () => {
+    const from = vi.fn();
+    vi.mocked(createServerClient).mockReturnValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "viewer", email: "viewer@example.com" } }, error: null }) },
+      from,
+    } as never);
+    const response = await middleware(new NextRequest("http://localhost/discover"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(from).not.toHaveBeenCalled();
   });
 });

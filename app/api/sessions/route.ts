@@ -16,12 +16,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request): Promise<Response> {
   try {
     const dependencies = await loadDependencies(getDiscoveryDependencies);
-    const participantId = await requireUserId(request, dependencies.authenticate);
     const { criteria, after } = readDiscoveryRequest(request);
-    const sessions = await dependencies.discoverSessions.forParticipant(
-      participantId,
-      criteria,
-    );
+    const sessions = await dependencies.discoverSessions.searchPublic(criteria);
     return discoveryJson(toDiscoveryPage(sessions, after));
   } catch (error) {
     return discoveryErrorResponse(error);

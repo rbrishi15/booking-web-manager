@@ -8,6 +8,10 @@ export {
   type ProfileChanges,
 } from "./accounts/profile";
 export {
+  bookingAccountIneligibility,
+  type BookingAccountEligibility,
+} from "./accounts/booking-account-eligibility";
+export {
   Booking,
   type BookingDetails,
 } from "./sessions/booking";
