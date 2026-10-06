@@ -39,11 +39,11 @@ returns `{ sessionId, roomToken, bookingShareCents }`.
 `bookerId` comes from authentication. `SessionBooking` contains venue name,
 resolved region, sport, `Date` start/end values, and integer `totalCostCents`.
 `SessionConfig` groups
-`totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`, and
-`invitedGroupId`. The module maps these fields explicitly into domain inputs.
-Client-supplied shares, identities, account facts, or lifecycle fields cannot
-override creation. The domain derives each booking share using integer-cent
-floor division and preserves private visibility by default.
+`totalSlots`, `minimumHeadcount`, and optional `visibility`, `minimumReliability`,
+`invitedGroupId`, and `pricePerSlotCents`. The module maps these fields explicitly into domain inputs.
+Client-supplied identities, account facts, or lifecycle fields cannot override
+creation. The domain validates the chosen booking share, uses integer-cent floor
+division when no price is supplied, and preserves private visibility by default.
 
 [parseCreateSessionInput](../../app/sessions/create-session-input.ts) uses Zod in
 the app layer to validate the authenticated user ID separately from the raw
@@ -143,3 +143,16 @@ not business input. Same-key replay skips lifecycle/preview re-evaluation after
 active access is checked; a fresh request against a closed session conflicts.
 The underlying inactive-owner domain behavior is preserved. ADR-0013 records
 preservation of prior terminal participation history.
+
+
+## UC2-03b Remove Participant
+
+`ListSessionParticipants` returns an active owner's ordered participant display
+facts. `PreviewParticipantRemoval` computes an unsaved domain removal and quote;
+`RemoveParticipant` invokes `user.asBooker().removeParticipant`, appends its refund
+instructions, saves only that removal and stores the response atomically.
+Application access precedes replay. The domain continues to own removal timing,
+participant eligibility, full historical refunds and the rejoining restriction.
+The transaction ports and preview-version port live in
+`session-removal-transaction.ts`; PostgreSQL and hashing stay in `/lib/sessions`.
+A successful removal frees capacity without performing waitlist promotion.

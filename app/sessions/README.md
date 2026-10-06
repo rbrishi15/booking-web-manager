@@ -24,6 +24,45 @@ prerequisite migrations are applied. The [configuration guide](../../use-case-co
 records settings, ownership, and the dependency on PR #34 followed by migration 0006. Documentation and contract tests work
 without credentials or a local Supabase stack.
 
+## UC2-02: create-session wizard
+
+UC2-03a visibility (PR #38) and UC2-03c cancellation (PR #41) are on `main`;
+the creation wizard includes those dependencies by updating from `main`.
+Apply the migration sequence in numbered order, including 0008 for custom pricing.
+The wizard and pricing changes retain independent review of every affected area under the
+[contribution workflow](../../docs/contributing-workflow.md).
+
+`/sessions/create` uses a focused mobile shell and the standard desktop sidebar;
+the hosted list has its own route-group layout and a create button in every state.
+The three steps preserve drafts, validate before advancing, and focus the new
+heading or first invalid field. The footer occupies layout space outside the
+scrolling body; short screens can scroll every field fully into view.
+
+Details start with Tennis and empty venue, dates and cost. The date dialog uses
+Singapore time, with separate start/end dates for overnight bookings. Cost is
+parsed directly into integer cents. Settings default to Private, eight slots,
+a minimum headcount of four, and 4.5/5 reliability (90/100). Capacity is 2–8;
+minimum headcount must be between two and the selected capacity. UC2-02 retains
+this required configuration from the SRS. Reliability choices are no minimum or
+3–5 in half-point increments. Pricing uses the selected sport's local photo and the
+shared framework-independent calculation in `domain/sessions/pricing.ts`.
+
+Before POST, the browser saves the exact payload and idempotency key in
+user-scoped session storage. Duplicate submission is disabled. Network failures
+and uncertain server errors freeze editing; a retry replays the saved payload.
+Reload restores it. An authentication or service failure during replay retains
+the pending submission because it cannot resolve the original result. A definitive
+first-attempt rejection permits editing and a new key. Success clears pending
+state and refreshes `/sessions?created=1` with feedback. Storage must be available
+before a request is sent. Room tokens are not stored in browser submission state.
+
+OneMap search is debounced, cancels/discards stale responses, and supports keyboard
+selection and pagination. Selecting a venue fills its URA region; editing its name
+clears lookup confirmation and region. Manual entry remains available when lookup
+is unconfigured, fails, finds no results, or cannot resolve a region. This platform
+coordinates venues booked elsewhere; lookup never creates a reservation.
+See [venue configuration](../../use-case-config/README.md#venue-search-configuration).
+
 ## Configured HTTP contract
 
 The [route module](../api/sessions/route.ts) exports ordinary async GET and POST
@@ -78,9 +117,17 @@ const parsed = parseCreateSessionInput(authenticatedUserId, {
 
 Direct use-case callers continue to supply Date-valued booking details.
 Successful creation and replay return 201 with
-`{ sessionId, roomToken, bookingShareCents }`. Shares round down equally:
+`{ sessionId, roomToken, bookingShareCents }`. Omitted `config.pricePerSlotCents` rounds down equally:
 1001 cents over three slots means 333 cents each, 999 cents collected when full,
-and a 2-cent shortfall borne by the booker. Creation moves no funds.
+and a 2-cent shortfall borne by the booker. An optional safe integer chosen price
+is validated against `[max(1, ceil(s / 2)), min(2 × s, floor(MAX_SAFE_INTEGER / slots))]`,
+where `s = floor(cost / slots)`. Above-cost collection is allowed. The accepted
+price is immutable Session state hydrated from `booking_share_cents`; participation,
+refund and settlement use that price and historical holds. Apply migration 0008
+before deploying this behavior. See [ADR-0012](../../docs/adr/0012-booker-selected-session-pricing.md).
+Creation moves no funds. `config.minimumHeadcount` remains required and is
+persisted as `minimum_headcount`; it must be an integer between two and
+`config.totalSlots`.
 
 | Status | Outcome |
 | --- | --- |
@@ -107,6 +154,13 @@ See the [integration requirements](../../use-case-config/README.md#authenticatio
 the configured contract and missing-settings response. Swagger's Try it out
 sends a real request; configured creation requires a valid bearer token.
 The creation operation is registered in [this feature's OpenAPI module](./openapi.ts).
+Storybook's `Sessions/Create session` examples use the production wizard and
+focused shell, with interaction and accessibility checks for all steps, date
+editing, slot limits, price adjustments, lookup/fallback, stale results and submission
+failures. `npm run test:sessions:integration` applies all migrations to a disposable
+stack and verifies persistence, replay, real authentication, success navigation,
+short-screen keyboard operation and the visibility-management regression. Browser
+screenshots cover 390px, tablet (768px) and desktop (1280px).
 The [shared OpenAPI guide](../openapi/README.md) explains how feature registrations
 are assembled and how to add operations to the reference.
 
@@ -117,8 +171,8 @@ real use case. The [E2E tests](../../tests/e2e) load the documentation and check
 exercise real authentication, database persistence, concurrent replay and
 rejection after deactivation; see the configuration guide for their commands.
 
-The discovery page is covered by UC2-01. Session-creation UI, OneMap,
-participant removal and Realtime subscriptions remain separate work.
+The discovery page is covered by UC2-01. Participant removal and Realtime
+subscriptions remain separate work.
 
 ## UC2-03a: visibility management
 
@@ -208,3 +262,63 @@ No withdrawal fee or payout-account readiness condition applies.
 The existing discovery polling removes cancelled sessions within three seconds
 for visible, online pages under healthy service conditions. Production needs
 migration 0007 before the reader/endpoint; cancellation adds no migration.
+
+
+## UC2-03b: participant list, removal and wallet refunds
+
+A hosted session's **Manage participants** link opens
+`/sessions/{sessionId}/participants`. Only its active owner can read participant
+names and statuses. Records retain their participant-list order, including
+withdrawn and removed history. Account display names are queried through the
+transaction's PostgreSQL connection; inactive accounts display “Deleted user”.
+No room tokens, emails, wallet IDs or ledger history reach the browser.
+
+Only a COMMITTED participant in an OPEN session strictly before its start is
+removable. The existing Booker domain action refunds the entire historical held
+amount, including within the 30-hour participant-withdrawal window. It leaves
+the Session OPEN, retains the participation as REMOVED and prevents rejoining.
+Removing an accepted replacement does not restore the consumed invitation or
+refund its original participant again. No email-verification or payout-readiness
+requirement is added to the existing active-owner management policy.
+
+Bearer endpoints and cookie server actions invoke the same coordinators:
+
+- `GET /api/sessions/{sessionId}/participants` returns session display facts,
+  available capacity and ordered `{ participationId, displayName, status,
+  canRemove }` rows.
+- `GET /api/sessions/{sessionId}/participants/{participationId}/removal-preview`
+  returns `{ sessionId, participationId, refundCents, previewVersion }`.
+- `POST /api/sessions/{sessionId}/participants/{participationId}/remove` accepts
+  `{ idempotencyKey, previewVersion }` and returns `{ sessionId, participationId,
+  status: "REMOVED", refundCents }` after commit. The key is a UUID and version
+  is an opaque SHA256 string. Refunds are integer cents and server-calculated.
+
+Every HTTP response is `no-store`. The shared error envelope distinguishes invalid
+input (400, including `INVALID_INPUT`), unauthenticated access (401), inactive/foreign
+access (403), missing records (404), lifecycle/stale-preview/idempotency conflicts
+(409), opaque infrastructure errors (500), and missing settings (503).
+
+The preview covers the target's participation/hold and session ownership, start
+and lifecycle. Visibility and unrelated participants do not invalidate it. Both
+preview and submission obtain server time after acquiring the session lock. A
+stale preview requires a new quote and explicit confirmation; an unchanged quote
+cannot authorize a removal after start.
+
+The dialog shows the name and exact wallet refund before confirmation. Before
+sending, it persists the confirmed payload under
+`participant-removal:{userId}:{sessionId}`. Duplicate clicks are disabled. Network
+or server failures retain the request, and reload restores it even when the row
+is already REMOVED. Authentication loss during replay retains the original key.
+Blocked storage prevents sending; unreadable saved requests remain preserved and
+block a new removal until recovery. Successful completion refreshes the list and
+capacity, announces the result and restores focus to the trigger or page heading.
+
+This slice frees capacity and preserves FIFO priority and direct reservations.
+It does not invoke automatic promotion or send notifications. Those production
+workflows belong to Yajie; queued users await that integration. Database and
+browser tests use real ledger-backed participant fixtures until commitment
+endpoints are mounted. Fixtures do not establish production admission coverage.
+
+Feature stories exercise confirmation, retry, stale previews, storage recovery,
+keyboard focus and the 390px layout. `npm run test:sessions:integration` includes
+real PostgreSQL refund/rollback/race checks and authenticated browser/API tests.

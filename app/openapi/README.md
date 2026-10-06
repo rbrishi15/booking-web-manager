@@ -15,6 +15,13 @@ operation. Try it out sends real requests using Swagger's default supported HTTP
 methods. Authorization is not persisted, and the online validator badge is
 disabled.
 
+The [commitment registration](../commit/openapi.ts) also describes UC2-04/05/06
+handler contracts awaiting route implementation. Their URLs are proposed and
+each operation explicitly states that no Next.js route is mounted yet. The feature
+owner will confirm paths and wire production dependencies; publishing these
+schemas does not make the workflows callable. The scheduler uses its own
+`cronAuth` scheme for `CRON_SECRET`, separate from the user `bearerAuth` JWT.
+
 ## Add a feature
 
 1. Add `openapi.ts` beside the feature's HTTP contracts. Export a registration
