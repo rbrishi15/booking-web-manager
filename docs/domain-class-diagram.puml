@@ -40,7 +40,8 @@ class Session <<AggregateRoot>> {
   +sessionId : UUID
   +status : SessionStatus
   +totalSlots : number
-  +bookingShare : Money {derived}
+  +minimumHeadcount : number
+  +bookingShare : Money {readOnly}
 }
 class PayoutAttempt <<AggregateRoot>> {
   +payoutId : UUID
