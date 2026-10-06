@@ -156,6 +156,18 @@ describe("supabaseGroupStore (UC1-06)", () => {
     expect(rpc).toHaveBeenCalledWith("count_unsettled_linked_sessions", { p_group_id: GROUP_ID });
   });
 
+  test("reports INACTIVE_ACCOUNT when deactivation wins before a group save", async () => {
+    fakeAdmin({ rpc: { data: null, error: { code: "GRP02", message: "INACTIVE_ACCOUNT" } } });
+    const group = RegularGroup.create({
+      groupId: GROUP_ID, ownerId: OWNER, name: "Weekend Tennis",
+      invitationToken: "token-1", now: new Date(JOINED_AT),
+    });
+
+    await expect(supabaseGroupStore().groups.save(group)).rejects.toMatchObject({
+      name: "DomainError", code: "INACTIVE_ACCOUNT",
+    });
+  });
+
   test("passes on a database error while counting linked sessions", async () => {
     // Arrange
     fakeAdmin({ rpc: { data: null, error: { code: "57014", message: "canceling statement" } } });

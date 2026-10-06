@@ -9,6 +9,10 @@ at review.
 Run `npx supabase start` for local Postgres and `npx supabase migration new
 <name>` to create the next number in sequence.
 
+Every pull request that touches `supabase/` runs the Migration Check workflow:
+it rejects a reused migration number and applies the whole sequence to an empty
+database. Merging to `main` then pushes the migrations to the hosted project.
+
 ## Current sequence
 
 Check here before picking a number — two people writing the same one is the
@@ -20,9 +24,22 @@ most likely way this project loses an afternoon.
 | 0002 | `idempotency_and_reconciliation` — keys, event de-dup, hourly job | Harrison |
 | 0003 | `ledger_rls` — row level security and privileges for the ledger | Harrison |
 | 0004 | `profiles` — profile table, RLS, sign-up trigger that creates the empty wallet | Joseph |
-| 0005 | `regular_groups` — group tables and concurrency functions; pending PR #34 | Joseph |
+| 0005 | `regular_groups` — group tables and concurrency functions | Joseph |
 | 0006 | `session_creation` — payout setup, sessions, participation and hold facts; depends on 0005 | Neoh |
 | 0007 | `session_management` — complete Session history and participant ordering for UC2-03a | Neoh |
+| 0008 | Reserved by session pricing in PR #39 | Neoh / Harrison |
+| 0009 | Reserved by commitment scheduling in PR #47 | Yajie |
+| 0010 | `group_account_guards` — group writes share active-profile locks with account deactivation | Joseph / Rishi |
+| 0011 | `profile_policy_guards` — guarded profile edits and removal of direct authenticated updates | Joseph / Rishi |
+
+Migrations 0010/0011 use tables already created by 0004/0005 and can be tested
+against the current main sequence. For deployment, Rishi must reconcile the
+reserved 0008/0009 slots before merging them: Supabase's ordinary migration push
+does not insert a later-arriving migration below an already-applied number.
+Do not copy pending migration source into this branch to satisfy ordering.
+Apply 0011 before deploying the profile action, which calls its `update_profile`
+operation. These migrations retain existing rows; rollback requires restoring
+the previous function/privilege definitions, not deleting account or group data.
 
 Apply 0007 before deploying session management. It locks the session and
 participation tables while checking that existing data contains only OPEN

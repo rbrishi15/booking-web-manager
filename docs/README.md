@@ -24,6 +24,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0011: API routes invoke use cases](./adr/0011-api-routes-invoke-use-cases.md).
 - [ADR-0012: Booker-selected session pricing](./adr/0012-booker-selected-session-pricing.md).
 - [ADR-0013: Cancellation preserves terminal participations](./adr/0013-cancellation-preserves-terminal-participations.md).
+- [ADR-0014: Account policies and transaction guards](./adr/0014-account-policies-and-transaction-guards.md) — profile policy exception to ADR-0003, account deactivation, group transaction guards, and dependency enforcement.
 
 Product decisions and remaining discussion:
 

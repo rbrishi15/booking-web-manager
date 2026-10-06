@@ -1,5 +1,16 @@
 # Use-case configuration
 
+## Profile configuration
+
+`profiles.ts` assembles `UpdateProfile` with `SupabaseProfileStore` using the
+server action's authenticated, request-scoped Supabase client. No client or
+identity is cached across requests. The adapter reads account status and calls
+the atomic `update_profile` capability from migration 0011; it preserves provider
+failures as infrastructure errors and translates the RPC's explicit business
+rejections. The RPC rechecks active status while holding the profile row lock.
+See the [profile guide](../app/profile/README.md) and
+[ADR-0014](../docs/adr/0014-account-policies-and-transaction-guards.md).
+
 ## Discovery configuration
 
 UC2-01 assembles `DiscoverSessions.searchPublic` in `discovery.ts`, using only
@@ -319,3 +330,44 @@ within three seconds of the successful response using separate identities.
 All database/authentication runs used only the disposable 55321/55322 stack,
 with migrations through PR #38's 0007; its containers and volumes were removed.
 Revalidate against main after the parent PR merges before integration.
+
+
+## Participant removal configuration (UC2-03b)
+
+`removal.ts` assembles `ListSessionParticipants`, `PreviewParticipantRemoval`
+and submission-scoped `RemoveParticipant` instances with the existing session
+server settings, pool and identity authenticator. Missing settings return
+`SESSION_REMOVAL_UNAVAILABLE` (503); there are no new settings or migrations.
+Apply the merged schema through 0007 before enabling the feature.
+
+Read and write adapters use SERIALIZABLE transactions with whole-operation
+retries, up to three total attempts. Reads hydrate complete Users and Sessions;
+participant names use SQL on the same connection, never an HTTP request inside
+the transaction. All session hold projections are checked against persisted
+holds before computing refunds. Malformed storage is an infrastructure failure.
+
+Writes change only the selected participation's status and hold settlement
+fields. The refund ledger entry, REMOVED/REFUNDED state and durable response
+commit or roll back together. The idempotency namespace is
+`JSON.stringify(["UC2-03b", bookerId, idempotencyKey])`; the fingerprint contains
+session ID, participation ID and preview version. Reusing a key for another
+target conflicts. Replays recheck current active-account access and return the
+original committed response, even if the session later starts or is cancelled.
+
+The same lifecycle-writer concurrency contract as management/cancellation
+applies. Tests model SERIALIZABLE admission and withdrawal under a session row
+lock until Yajie's production adapters reach main. PR #45 proposes READ COMMITTED;
+this feature does not adopt that change or claim compatibility without the
+combined race tests and an agreed contract with Yajie and Rishi.
+
+### Pending integration and review
+
+This feature is based on main and imports no source from other open branches.
+The intended merge order is #39, #44, then this UC2-03b feature. After #44 lands,
+Neoh updates from main and adapts the participant navigation/removal eligibility
+to its contextual action descriptors, retaining the financial preview and retry
+contract. Rerun typecheck, lint, unit, Storybook and disposable database/browser
+checks on the combined tree before marking the PR ready. Rishi coordinates an
+independent session reviewer; Harrison reviews the financial integration.
+Waitlist promotion remains Yajie's separate responsibility, not a prerequisite
+for this removal/refund slice or part of its success response.

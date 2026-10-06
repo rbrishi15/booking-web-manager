@@ -1,4 +1,12 @@
 export { Email } from "./accounts/email";
+export { assertDeactivationAllowed } from "./accounts/deactivation-policy";
+export {
+  PROFILE_REGIONS,
+  PROFILE_SPORTS,
+  assertValidPreferences,
+  prepareProfileUpdate,
+  type ProfileChanges,
+} from "./accounts/profile";
 export {
   bookingAccountIneligibility,
   type BookingAccountEligibility,

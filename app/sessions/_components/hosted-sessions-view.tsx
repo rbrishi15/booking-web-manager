@@ -106,11 +106,12 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh, on
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground"><time dateTime={session.startAt}>{singaporeDateTime.format(new Date(session.startAt))}</time> – <time dateTime={session.endAt}>{singaporeDateTime.format(new Date(session.endAt))}</time> SGT</p>
         <p className="mt-3 text-sm">{session.visibility === "PUBLIC" ? "Visible in Discover." : "Hidden from Discover."}</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          {visibilityAction && <Button variant="outline" className="min-h-11" disabled={pending || refreshing} onClick={changeVisibility}>
-            {pending ? "Saving…" : visibilityAction.inputs.visibility === "PUBLIC" ? "Make public" : "Make private"}
-          </Button>}
-          {onCancel && cancellationAction && <Button variant="destructive" className="min-h-11" disabled={pending || refreshing} onClick={(event) => onCancel(event.currentTarget)}>Cancel session</Button>}
-          {!visibilityAction && <p className="text-sm text-muted-foreground">Visibility cannot be changed for this session.</p>}
+          <Button asChild variant="outline" className="min-h-11"><Link href={`/sessions/${session.sessionId}/participants`}>Manage participants</Link></Button>
+          <Button variant="outline" className="min-h-11" disabled={pending || refreshing || full} onClick={changeVisibility}>
+            {pending ? "Saving…" : target === "PUBLIC" ? "Make public" : "Make private"}
+          </Button>
+          {onCancel && <Button variant="destructive" className="min-h-11" disabled={pending || refreshing} onClick={(event) => onCancel(event.currentTarget)}>Cancel session</Button>}
+          {full && <p className="text-sm text-muted-foreground">This session is full. Visibility cannot be changed.</p>}
         </div>
         {result?.status === "error" && <div className="mt-3"><ErrorMessage>{result.message}</ErrorMessage></div>}
         {result?.status === "saved" && result.visibility === session.visibility && <p role="status" className="mt-3 text-sm text-muted-foreground">Session is now {result.visibility.toLowerCase()}.</p>}

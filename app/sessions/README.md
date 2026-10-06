@@ -265,38 +265,62 @@ The existing discovery polling removes cancelled sessions within three seconds
 for visible, online pages under healthy service conditions. Production needs
 migration 0007 before the reader/endpoint; cancellation adds no migration.
 
-## Lightweight contextual actions
 
-Screen data carries the actions currently available to the actor. Each descriptor
-has a stable `name`, an existing `href`, its HTTP `method`, and fixed `inputs`.
-The existing controls still own presentation, user input and confirmation:
+## UC2-03b: participant list, removal and wallet refunds
 
-```json
-{ "name": "set-visibility", "href": "/api/sessions/<id>/visibility", "method": "PATCH", "inputs": { "visibility": "PRIVATE" } }
-```
+A hosted session's **Manage participants** link opens
+`/sessions/{sessionId}/participants`. Only its active owner can read participant
+names and statuses. Records retain their participant-list order, including
+withdrawn and removed history. Account display names are queried through the
+transaction's PostgreSQL connection; inactive accounts display “Deleted user”.
+No room tokens, emails, wallet IDs or ledger history reach the browser.
 
-`session-actions.ts` defines a small union for current session screens. Account
-checks share `bookingAccountIneligibility` with creation/admission. Create opens
-the existing wizard; payout readiness and submitted booking details remain
-command-time validation. Hosted-session operations share Booker's pure ownership,
-capacity and lifecycle preflights. The UI follows presence and fixed inputs;
-commands authorize again against current state even if the screen is stale.
+Only a COMMITTED participant in an OPEN session strictly before its start is
+removable. The existing Booker domain action refunds the entire historical held
+amount, including within the 30-hour participant-withdrawal window. It leaves
+the Session OPEN, retains the participation as REMOVED and prevents rejoining.
+Removing an accepted replacement does not restore the consumed invitation or
+refund its original participant again. No email-verification or payout-readiness
+requirement is added to the existing active-owner management policy.
 
-The cancellation preview includes a `cancel-session` POST action containing its
-`previewVersion`. The existing dialog still previews refunds, asks for confirmation
-and saves the original key/version before submission. A confirmed ambiguous
-request remains recoverable even after the session and its actions disappear,
-including through expired-login or access failures. Sign-in recovery keeps the
-original request key and preview version.
-Unverified hosts can still manage and cancel under the existing rules.
+Bearer endpoints and cookie server actions invoke the same coordinators:
 
-`/profile/email` adds an address for accounts without one or resends confirmation
-for the server-read unconfirmed address. A nonblocking shell prompt links there.
-Confirmation callbacks and the status recheck refresh the screen's actions; a
-failed callback retains signed-in recovery guidance. Supabase's current
-`email_confirmed_at` is authoritative, including already-confirmed accounts.
+- `GET /api/sessions/{sessionId}/participants` returns session display facts,
+  available capacity and ordered `{ participationId, displayName, status,
+  canRemove }` rows.
+- `GET /api/sessions/{sessionId}/participants/{participationId}/removal-preview`
+  returns `{ sessionId, participationId, refundCents, previewVersion }`.
+- `POST /api/sessions/{sessionId}/participants/{participationId}/remove` accepts
+  `{ idempotencyKey, previewVersion }` and returns `{ sessionId, participationId,
+  status: "REMOVED", refundCents }` after commit. The key is a UUID and version
+  is an opaque SHA256 string. Refunds are integer cents and server-calculated.
 
-Public `/discover` and GET `/api/sessions` require no account. They continue to
-expose only PUBLIC, OPEN, future summaries. Join production wiring is separate;
-its adapter must enforce `403 EMAIL_VERIFICATION_REQUIRED` for entry and replay,
-and use this descriptor shape only for endpoints that are actually integrated.
+Every HTTP response is `no-store`. The shared error envelope distinguishes invalid
+input (400, including `INVALID_INPUT`), unauthenticated access (401), inactive/foreign
+access (403), missing records (404), lifecycle/stale-preview/idempotency conflicts
+(409), opaque infrastructure errors (500), and missing settings (503).
+
+The preview covers the target's participation/hold and session ownership, start
+and lifecycle. Visibility and unrelated participants do not invalidate it. Both
+preview and submission obtain server time after acquiring the session lock. A
+stale preview requires a new quote and explicit confirmation; an unchanged quote
+cannot authorize a removal after start.
+
+The dialog shows the name and exact wallet refund before confirmation. Before
+sending, it persists the confirmed payload under
+`participant-removal:{userId}:{sessionId}`. Duplicate clicks are disabled. Network
+or server failures retain the request, and reload restores it even when the row
+is already REMOVED. Authentication loss during replay retains the original key.
+Blocked storage prevents sending; unreadable saved requests remain preserved and
+block a new removal until recovery. Successful completion refreshes the list and
+capacity, announces the result and restores focus to the trigger or page heading.
+
+This slice frees capacity and preserves FIFO priority and direct reservations.
+It does not invoke automatic promotion or send notifications. Those production
+workflows belong to Yajie; queued users await that integration. Database and
+browser tests use real ledger-backed participant fixtures until commitment
+endpoints are mounted. Fixtures do not establish production admission coverage.
+
+Feature stories exercise confirmation, retry, stale previews, storage recovery,
+keyboard focus and the 390px layout. `npm run test:sessions:integration` includes
+real PostgreSQL refund/rollback/race checks and authenticated browser/API tests.

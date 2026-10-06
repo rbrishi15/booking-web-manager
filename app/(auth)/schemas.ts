@@ -1,13 +1,14 @@
 import { z } from "zod";
+import { PROFILE_REGIONS, PROFILE_SPORTS } from "@/domain/accounts/profile";
 
 /**
  * Singapore regions shown in the region picker (REQ-4).
  * Agree this list with Neoh so Discover filters (UC2-01) use the same values.
  */
-export const REGIONS = ["Central", "East", "North", "North-East", "West"] as const;
+export const REGIONS = PROFILE_REGIONS;
 
 /** Sports shown in the sport picker (REQ-3). Agree this list with Neoh too. */
-export const SPORTS = ["Badminton", "Basketball", "Football", "Futsal", "Tennis", "Volleyball"] as const;
+export const SPORTS = PROFILE_SPORTS;
 
 export type Region = (typeof REGIONS)[number];
 export type Sport = (typeof SPORTS)[number];

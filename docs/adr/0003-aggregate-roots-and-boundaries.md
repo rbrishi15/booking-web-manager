@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-09-15
 
+The requirement for profile edits to enter through a complete User is partially
+superseded by [ADR-0014](./0014-account-policies-and-transaction-guards.md), which
+uses a shared domain profile policy and a guarded persistence interface.
+
 Participant responsibility routing is superseded by
 [ADR-0007](./0007-participant-behavior-and-session-roster.md), and Booker routing
 by [ADR-0008](./0008-booker-behavior-and-session-lifecycle.md). Aggregate ownership

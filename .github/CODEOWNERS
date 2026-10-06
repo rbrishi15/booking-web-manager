@@ -131,8 +131,15 @@
 /tests/app/profile/ @Jolingoes
 /tests/app/groups/ @Jolingoes
 /tests/lib/supabase/ @Jolingoes
+/use-cases/accounts/ @Jolingoes @rbrishi15
+/use-cases/groups/ @Jolingoes
+/use-case-config/profiles.ts @Jolingoes
+/use-case-config/groups.ts @Jolingoes
+/tests/integration/group-account-guards.test.ts @Jolingoes @rbrishi15
+/tests/integration/profile*.test.ts @Jolingoes @rbrishi15
 /tests/app/sessions/bearer-auth.test.ts @Jolingoes
 /supabase/migrations/0004_profiles.sql @Jolingoes
+/supabase/migrations/0009_commitment_scheduling.sql @Wyjessie
 
 # Capability-specific adapters/tests override the broad session defaults.
 /lib/sessions/*waitlist*.ts @Wyjessie
@@ -150,6 +157,8 @@
 /tests/lib/sessions/*attendance*.test.ts @Wyjessie
 /tests/lib/sessions/*commitment*.test.ts @Wyjessie
 /tests/lib/sessions/*settlement*.test.ts @Wyjessie
+/app/api/sessions/*/withdrawal-preview/ @Wyjessie
+/use-case-config/withdrawal-preview.ts @Wyjessie
 
 # Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
 /tests/use-cases/UC1-01-*.test.ts @Jolingoes
@@ -176,3 +185,14 @@
 /tests/integration/session-cancellation-persistence.test.ts @liang799 @harr008
 /tests/e2e/sessions-cancellation.spec.ts @liang799
 /tests/support/cancellation-fixtures.ts @liang799 @harr008
+
+# UC2-03b: participant management and atomic wallet refunds.
+/use-cases/sessions/ListSessionParticipants.ts @liang799
+/use-cases/sessions/PreviewParticipantRemoval.ts @liang799
+/use-cases/sessions/session-removal-transaction.ts @liang799 @rbrishi15
+/use-cases/sessions/participant-removal-preview.ts @liang799
+/use-case-config/removal.ts @liang799
+/lib/sessions/postgres-session-removal*.ts @liang799 @harr008 @rbrishi15
+/tests/use-cases/UC2-03b-*.test.ts @liang799
+/tests/integration/session-removal-persistence.test.ts @liang799 @harr008
+/tests/e2e/sessions-removal.spec.ts @liang799

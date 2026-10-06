@@ -139,22 +139,15 @@ active access is checked; a fresh request against a closed session conflicts.
 The underlying inactive-owner domain behavior is preserved. ADR-0013 records
 preservation of prior terminal participation history.
 
-## Contextual actions and admission handoff
 
-Hosted results contain semantic operations selected by the same pure Booker
-preflights used by visibility/cancellation commands. The app adds existing URLs,
-HTTP methods and fixed inputs; these small descriptors are UI affordances, never
-authorization tokens. Commands always check current state independently.
+## UC2-03b Remove Participant
 
-User hydration carries trusted `emailVerified` from Supabase's
-`email_confirmed_at`; phone confirmation and editable metadata are insufficient.
-An active account may have no email, so it can browse and recover its address.
-Creation and Participant admission require a present, verified address. Waitlist
-entry, replacement acceptance and promotion use that same admission check.
-Withdrawal, waitlist departure and host cancellation keep their existing rules.
-
-Join production wiring remains separate. It must recheck email verification on
-every admission request and retry, return `403 EMAIL_VERIFICATION_REQUIRED`, and
-project only implemented, eligible actions as `{ name, href, method, inputs }`.
-Never advertise a join endpoint before that integration is available. Promotion
-must skip an unverified candidate without moving funds or losing queue position.
+`ListSessionParticipants` returns an active owner's ordered participant display
+facts. `PreviewParticipantRemoval` computes an unsaved domain removal and quote;
+`RemoveParticipant` invokes `user.asBooker().removeParticipant`, appends its refund
+instructions, saves only that removal and stores the response atomically.
+Application access precedes replay. The domain continues to own removal timing,
+participant eligibility, full historical refunds and the rejoining restriction.
+The transaction ports and preview-version port live in
+`session-removal-transaction.ts`; PostgreSQL and hashing stay in `/lib/sessions`.
+A successful removal frees capacity without performing waitlist promotion.
