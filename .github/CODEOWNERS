@@ -132,6 +132,7 @@
 /tests/lib/supabase/ @Jolingoes
 /tests/app/sessions/bearer-auth.test.ts @Jolingoes
 /supabase/migrations/0004_profiles.sql @Jolingoes
+/supabase/migrations/0009_commitment_scheduling.sql @Wyjessie
 
 # Capability-specific adapters/tests override the broad session defaults.
 /lib/sessions/*waitlist*.ts @Wyjessie
