@@ -317,6 +317,21 @@ describe("UC2-02 Create Session", () => {
     expect(unitOfWork.sessions.size).toBe(0);
   });
 
+  test("rejects capacity below the domain limit without persisting a session", async () => {
+    // Arrange
+    const { booking, config } = creationInput();
+    const { createSessions, unitOfWork } = sessionCreationScenario();
+
+    // Act & Assert
+    await expect(
+      createSessions.forBooker(bookerId, booking, {
+        ...config,
+        totalSlots: 1,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(unitOfWork.sessions.size).toBe(0);
+  });
+
   test("rejects minimum headcount greater than capacity", async () => {
     // Arrange
     const { booking, config } = creationInput();

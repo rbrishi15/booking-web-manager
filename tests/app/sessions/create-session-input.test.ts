@@ -352,6 +352,14 @@ describe("UC2-02 Create Session input", () => {
     expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
   });
 
+  test("requires minimum headcount even when capacity is supplied", () => {
+    // Arrange
+    const request = { ...creationRequest(), config: { totalSlots: 3 } };
+
+    // Act & Assert
+    expect(() => parseCreateSessionInput(actorUserId, request)).toThrow(ZodError);
+  });
+
   test("rejects non-finite minimum reliability", () => {
     // Arrange
     const request = creationRequest();

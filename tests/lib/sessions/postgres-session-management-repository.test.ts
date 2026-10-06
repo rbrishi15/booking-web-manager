@@ -41,6 +41,7 @@ test("hydrates the full booking, participant list and optional configuration und
   const session = await repository.get("s");
   expect(session).toMatchObject({ sessionId: "s", bookerId: "booker", invitedGroupId: "group", visibility: "PRIVATE" });
   expect(session?.booking.totalCost.toCents()).toBe(1001);
+  expect(session?.minimumHeadcount).toBe(2);
   expect(session?.minimumReliability?.toNumber()).toBe(75.5);
   expect(session?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
   expect(session?.getAvailableSlots(now)).toBe(2);
@@ -53,6 +54,17 @@ test("returns null for a missing session without querying its children", async (
   const { query, repository } = scenario([]);
   expect(await repository.get("missing")).toBeNull();
   expect(query).toHaveBeenCalledOnce();
+});
+
+test.each([167, 334, 666])("preserves the saved %i-cent custom price and historical holds for management reads", async (price) => {
+  const rows = [sessionRow({ booking_share_cents: String(price) })];
+  const participants = [participantRow()];
+  const session = await scenario(rows, participants).repository.get("s");
+  const upcoming = await scenario(rows, participants).repository.listUpcoming("booker", now);
+  for (const loaded of [session, upcoming[0]]) {
+    expect(loaded?.bookingShare.toCents()).toBe(price);
+    expect(loaded?.participantList.participations[0]?.hold?.amount.toCents()).toBe(333);
+  }
 });
 
 test("lists only the owner's upcoming open sessions, including full sessions, without update locks", async () => {
@@ -77,10 +89,14 @@ test("preserves participant-list order for equal withdrawal times and subtracts 
 
 describe("stored state validation", () => {
   test.each([
+    { minimum_headcount: undefined },
+    { minimum_headcount: 1 },
+    { minimum_headcount: 4 },
     { payout_attempt_ids: undefined },
     { payout_idempotency_keys: null },
     { total_cost_cents: "9007199254740992" },
-    { booking_share_cents: "334" },
+    { booking_share_cents: "166" },
+    { booking_share_cents: "667" },
     { status: "PAYOUT_PENDING" },
     { pending_settlement: {} },
   ])("rejects invalid or missing Session facts: %j", async (invalid) => {

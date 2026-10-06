@@ -89,6 +89,7 @@ export class PostgresSessionManagementRepository {
           }),
           totalSlots: z.number().int().safe().parse(row.total_slots),
           minimumHeadcount: z.number().int().safe().parse(row.minimum_headcount),
+          bookingShare: fromDatabaseCents(row.booking_share_cents, "booking_share_cents"),
           visibility: choice(row.visibility, ["PUBLIC", "PRIVATE"]),
           status: choice(row.status, ["OPEN", "CANCELLED", "AWAITING_PAYOUT", "PAYOUT_PENDING", "SETTLED"]),
           minimumReliability: row.minimum_reliability === null
@@ -102,8 +103,6 @@ export class PostgresSessionManagementRepository {
           payoutIdempotencyKeys: strings(row.payout_idempotency_keys),
           pendingSettlement: hydrateBatch(row.pending_settlement),
         });
-        if (!session.bookingShare.equals(fromDatabaseCents(row.booking_share_cents, "booking_share_cents")))
-          throw new SessionPersistenceError("Stored booking share does not match its booking");
         return session;
       });
     } catch (cause) {

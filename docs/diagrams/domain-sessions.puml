@@ -30,6 +30,8 @@ class Session <<AggregateRoot>> {
   +status : SessionStatus
   +visibility : Visibility
   +totalSlots : number
+  +minimumHeadcount : number
+  +bookingShare : Money {readOnly}
   +minimumReliability : ReliabilityScore [0..1]
   +participantList : ParticipantListView
   +pendingSettlement : PayoutBatch [0..1]
@@ -141,5 +143,5 @@ ReliabilityScore .up.> Participation : finalized outcomes
 Booking -[hidden]right- ParticipantList
 FundHold -[hidden]right- ReliabilityScore
 
-caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session atomically records prepared children through its internal list.\nThe participantList getter exposes only ParticipantListView queries.
+caption Selected public members; (...) abbreviates parameters.\nRoles authorize and calculate; Session atomically records prepared children through its internal list.\nThe accepted bookingShare is fixed at creation (ADR-0012); the participantList getter exposes only queries.
 @enduml
