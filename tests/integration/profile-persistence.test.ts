@@ -132,8 +132,8 @@ describe("UC1-03 profile persistence policy", () => {
       expect(await attempt).toMatchObject({ code: "PRF01" });
       expect((await profile(userId)).display_name).toBe("");
     } finally {
-      await deactivator.query("rollback");
-      await editor.query("rollback");
+      await deactivator.query("rollback").catch(() => undefined);
+      await editor.query("rollback").catch(() => undefined);
       deactivator.release();
       editor.release();
     }

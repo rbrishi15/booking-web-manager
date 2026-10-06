@@ -11,6 +11,10 @@ async function architectureMessages(filePath: string, source: string) {
 describe("core dependency direction", () => {
   test.each([
     ["domain/accounts/example.ts", 'export { value } from "@/lib/example";'],
+    ["domain/accounts/example.mts", 'export { value } from "@/lib/example";'],
+    ["domain/accounts/example.cts", 'export { value } from "@/lib/example";'],
+    ["use-cases/accounts/example.mts", 'export { value } from "@/lib/example";'],
+    ["use-cases/accounts/example.cts", 'export { value } from "@/lib/example";'],
     ["domain/accounts/example.ts", 'export { value } from "../../app/example";'],
     ["domain/accounts/example.ts", 'export type { Value } from "@/use-cases/shared/contracts";'],
     ["domain/accounts/example.ts", 'export { value } from "next/headers";'],
@@ -29,6 +33,10 @@ describe("core dependency direction", () => {
 
   test.each([
     ["domain/accounts/example.ts", 'export { Money } from "../finance/money";'],
+    ["domain/accounts/example.mts", 'export { Money } from "../finance/money";'],
+    ["domain/accounts/example.cts", 'export { Money } from "../finance/money";'],
+    ["use-cases/accounts/example.mts", 'export { User } from "../../domain/accounts/user";'],
+    ["use-cases/accounts/example.cts", 'export { User } from "../../domain/accounts/user";'],
     ["domain/accounts/example.ts", 'export { Money } from "@/domain/finance/money";'],
     ["use-cases/accounts/example.ts", 'export { User } from "../../domain/accounts/user";'],
     ["use-cases/accounts/example.ts", 'export type { Clock } from "../shared/contracts";'],

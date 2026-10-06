@@ -36,7 +36,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["domain/**/*.{ts,tsx}", "use-cases/**/*.{ts,tsx}"],
+    files: ["domain/**/*.{ts,tsx,mts,cts}", "use-cases/**/*.{ts,tsx,mts,cts}"],
     plugins: { architecture: { rules: { "inward-dependencies": inwardDependencies } } },
     rules: { "architecture/inward-dependencies": "error" },
   },

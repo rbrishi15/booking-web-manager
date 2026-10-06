@@ -1,5 +1,8 @@
 -- UC1-04 / UC1-06: group mutations and account deactivation share profile locks.
 -- 0008 and 0009 are reserved by the session work; this migration needs 0005 only.
+-- Rishi must coordinate merging 0008/0009 before 0010/0011, and applying them
+-- in that order. Do not deploy 0010/0011 until both reserved slots are filled
+-- and applied to the target database.
 -- Apply before deploying the GRP02 error translation. No rows or signatures change.
 -- Rollback: restore save_regular_group from 0005 (removes the concurrency guard).
 

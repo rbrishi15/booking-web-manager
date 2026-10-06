@@ -1,5 +1,8 @@
 -- UC1-03: profile commands use an authenticated, atomic write capability.
 -- 0008/0009 are reserved for the separately owned session UI work.
+-- Rishi must coordinate merging 0008/0009 before 0010/0011, and applying them
+-- in that order. Do not deploy 0010/0011 until both reserved slots are filled
+-- and applied to the target database.
 -- Empty preferences remain valid for registration and anonymisation. An explicit
 -- profile edit must supply the supported, nonempty choices required by the domain.
 -- Rollback requires the previous app version: drop update_profile, restore the
