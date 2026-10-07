@@ -1,7 +1,7 @@
-import { Participation, Session, type UserDetails } from "@/domain";
+import { Participant, Participation, Session, type UserDetails } from "@/domain";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
 import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   createTestUser,
   createTestUserDetails,
@@ -497,6 +497,30 @@ describe("UC2-04 Commit to Session", () => {
           .requireSession(sessionId)
           .participantList.requireParticipation("p-carol").status,
       ).toBe("COMMITTED");
+    });
+
+    test("stops when promotion leaves the queue head unchanged", async () => {
+      // Arrange
+      const { promote, unitOfWork } = promotionScenario({
+        totalSlots: 2,
+        committed: ["alice"],
+        waitlisted: ["carol"],
+      });
+      const noChange = vi
+        .spyOn(Participant.prototype, "promoteFromWaitlist")
+        .mockReturnValue({ kind: "NONE", instructions: [] });
+
+      try {
+        // Act
+        const result = await promote.forSession(promotionRequest());
+
+        // Assert
+        expect(result).toMatchObject({ promoted: [], skipped: [] });
+        expect(noChange).toHaveBeenCalledTimes(1);
+        expect(unitOfWork.ledgerInstructions).toHaveLength(0);
+      } finally {
+        noChange.mockRestore();
+      }
     });
 
     test("a repeated trigger key replays its result without locking again", async () => {

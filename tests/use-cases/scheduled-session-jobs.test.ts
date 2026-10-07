@@ -157,6 +157,37 @@ describe("Scheduled session jobs (UC2-05, UC2-06)", () => {
     ]);
   });
 
+  test("releases claimed reminders for a retry when they cannot be handed off", async () => {
+    // Arrange
+    const { runner, notifier, released } = sweepScenario(
+      [],
+      hoursAfterSessionEnd(1),
+      { reminders: [{ sessionId: "s1", bookerId: "booker-1" }] },
+    );
+    notifier.failNext = true;
+
+    // Act
+    const report = await runner.run("run-1");
+
+    // Assert
+    expect(released).toEqual(["s1"]);
+    expect(report.verificationReminders).toEqual([]);
+    expect(report.failures).toEqual([{ job: "VERIFICATION_REMINDERS" }]);
+  });
+
+  test("keeps the claims of reminders that were handed off", async () => {
+    // Arrange
+    const { runner, released } = sweepScenario([], hoursAfterSessionEnd(1), {
+      reminders: [{ sessionId: "s1", bookerId: "booker-1" }],
+    });
+
+    // Act
+    await runner.run("run-1");
+
+    // Assert
+    expect(released).toEqual([]);
+  });
+
   test("records a failed reminder claim without failing the sweep", async () => {
     // Arrange
     const session = rosterSession("s1", { committed: ["alice", "bob"] });
@@ -234,6 +265,7 @@ function sweepScenario(
   });
   let nextId = 0;
   const notifier = new RecordingNotifier();
+  const released: string[] = [];
   const dependencies = {
     unitOfWork,
     clock: { now: () => now },
@@ -252,6 +284,9 @@ function sweepScenario(
         if (options.failReminderClaim) throw new Error("database unavailable");
         return options.reminders ?? [];
       },
+      releaseVerificationReminders: async (sessionIds) => {
+        released.push(...sessionIds);
+      },
     },
     notifier,
     expireReplacements: new ExpireReplacements(dependencies),
@@ -260,5 +295,5 @@ function sweepScenario(
     clock: dependencies.clock,
     batchSize: options.batchSize ?? 50,
   });
-  return { runner, unitOfWork, notifier };
+  return { runner, unitOfWork, notifier, released };
 }

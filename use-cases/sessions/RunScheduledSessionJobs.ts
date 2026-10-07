@@ -1,10 +1,7 @@
 import type { UUID } from "@/domain";
 import type { Clock } from "../shared/contracts";
 import type { AutoVerifyAttendance } from "./AutoVerifyAttendance";
-import {
-  type CommitmentNotifier,
-  notifyBestEffort,
-} from "./commitment-notifications";
+import type { CommitmentNotifier } from "./commitment-notifications";
 import type { ExpireReplacements } from "./ExpireReplacements";
 import type { PromoteFromWaitlist } from "./PromoteFromWaitlist";
 import type {
@@ -58,8 +55,9 @@ export interface RunScheduledSessionJobsDependencies {
  *    withdrawal reported as DEFERRED.
  * 3. AutoVerifyAttendance: 72 hours after the session ends.
  *
- * It then claims due verification reminders and notifies their bookers; the
- * claim makes each reminder at-most-once.
+ * It then claims due verification reminders and notifies their bookers. A
+ * successful claim and hand-off sends each reminder once; if the hand-off
+ * fails, the claims are released and the next run retries them.
  *
  * Each job is its own unit of work keyed by `runId`, so a retried run replays
  * rather than repeats. A failing job is recorded and the sweep continues; the
@@ -126,15 +124,22 @@ export class RunScheduledSessionJobs {
         now,
         batchSize,
       );
-      reminded.push(...due.map((reminder) => reminder.sessionId));
-      await notifyBestEffort(
-        notifier,
-        due.map((reminder) => ({
-          kind: "VERIFICATION_REMINDER" as const,
-          recipientId: reminder.bookerId,
-          sessionId: reminder.sessionId,
-        })),
-      );
+      if (due.length === 0) return;
+      const sessionIds = due.map((reminder) => reminder.sessionId);
+      try {
+        await notifier.notify(
+          due.map((reminder) => ({
+            kind: "VERIFICATION_REMINDER" as const,
+            recipientId: reminder.bookerId,
+            sessionId: reminder.sessionId,
+          })),
+        );
+      } catch (error) {
+        // Release the claims so the next run retries these reminders.
+        await verificationReminders.releaseVerificationReminders(sessionIds);
+        throw error;
+      }
+      reminded.push(...sessionIds);
     });
 
     return {

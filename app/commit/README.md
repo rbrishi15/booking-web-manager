@@ -169,12 +169,14 @@ replays its result and notifies again, so delivery is at-least-once.
 | `REPLACEMENT_INVITATION` | Named invitee | `WithdrawFromSession` (`DIRECT_INVITE`) |
 | `FORFEITURE_WARNING` | Late withdrawer | `WithdrawFromSession` (awaiting replacement) |
 | `FORFEITURE_DUE` | Late withdrawer | `ExpireReplacements` at session start |
-| `VERIFICATION_REMINDER` | Booker | Scheduled sweep, via a `VerificationReminderQuery` claim so each booker is reminded at most once per session |
+| `VERIFICATION_REMINDER` | Booker | Scheduled sweep, via a `VerificationReminderQuery` claim so each booker is reminded once per session; claims are released for retry if the hand-off to the notifier fails |
 
 [`WebPushNotifier`](../../lib/commit/web-push-notifier.ts) is the Web Push
 adapter. It holds the notification text, sends to every subscription the
 recipient registered, and removes subscriptions the push service reports as
-expired. It takes a `PushSubscriptionStore` and a `PushSender`.
+expired. It takes a `PushSubscriptionStore` and a `PushSender`, and gives each
+lookup, send and removal a deadline (5 s by default) so a push service that never
+answers cannot hold a request open after its unit of work commits.
 
 Not yet built: the `web-push` dependency behind `PushSender` (VAPID keys are
 already in `.env.example`), a `push_subscriptions` table and its store, the

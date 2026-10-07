@@ -26,11 +26,15 @@ export interface VerificationReminder {
  * reminded. Claiming marks the reminder as sent in the same statement (for
  * example `UPDATE ... SET verification_reminded_at = now ... RETURNING`), so
  * each booker is reminded at most once per session even across concurrent
- * or repeated sweeps.
+ * or repeated sweeps. If handing the reminders to the notifier fails, the
+ * sweep releases its claims so a later run retries them. A reminder accepted
+ * by the notifier but not delivered to a device is not retried.
  */
 export interface VerificationReminderQuery {
   claimVerificationReminders(
     now: Date,
     limit: number,
   ): Promise<readonly VerificationReminder[]>;
+  /** Clears the sent mark for claimed reminders that could not be handed off. */
+  releaseVerificationReminders(sessionIds: readonly UUID[]): Promise<void>;
 }
