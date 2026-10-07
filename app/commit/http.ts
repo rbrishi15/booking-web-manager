@@ -1,4 +1,8 @@
 import { DomainError, type UUID } from "@/domain";
+import {
+  SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE,
+  SessionManagementUnavailableError,
+} from "@/app/sessions/session-management-unavailable";
 import { z } from "zod";
 
 /** Resolves the verified user ID for a request, or null when signed out. */
@@ -16,6 +20,7 @@ const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
   DUPLICATE_ID: 422,
   UNAUTHORIZED: 403,
   INACTIVE_ACCOUNT: 403,
+  EMAIL_VERIFICATION_REQUIRED: 403,
   INVALID_ACCESS: 403,
   LOW_RELIABILITY: 403,
   NOT_FOUND: 404,
@@ -44,8 +49,9 @@ export interface AuthenticatedJsonAction<Input, Output> {
  * Shared HTTP boundary for commitment actions: authenticate, parse JSON,
  * validate with Zod, run the use case, and map the outcome to a response.
  * The acting user always comes from authentication, never the body. Known
- * domain errors become 4xx responses with their code; anything else becomes
- * an opaque 500 so internal details never reach the client.
+ * domain errors become 4xx responses with their code, and unconfigured
+ * production dependencies become 503; anything else becomes an opaque 500 so
+ * internal details never reach the client.
  */
 export async function handleAuthenticatedJson<Input, Output>(
   request: Request,
@@ -54,8 +60,8 @@ export async function handleAuthenticatedJson<Input, Output>(
   let userId: UUID | null;
   try {
     userId = await action.authenticate(request);
-  } catch {
-    return internalErrorResponse();
+  } catch (error) {
+    return failureResponse(error);
   }
   if (userId === null) {
     return errorResponse(401, "UNAUTHENTICATED", "Authentication is required");
@@ -81,22 +87,41 @@ export async function handleAuthenticatedJson<Input, Output>(
 
   try {
     const result = await action.run(input);
-    return Response.json(result, { status: action.successStatus });
+    return Response.json(result, {
+      status: action.successStatus,
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
-    if (error instanceof DomainError) {
-      const status = domainErrorStatuses[error.code];
-      if (status !== undefined) {
-        return errorResponse(status, error.code, error.message);
-      }
-    }
-    return internalErrorResponse();
+    return failureResponse(error);
   }
 }
 
-function errorResponse(status: number, code: string, message: string): Response {
-  return Response.json({ error: { code, message } }, { status });
+/** Maps an authentication or use-case failure without exposing internals. */
+function failureResponse(error: unknown): Response {
+  if (error instanceof SessionManagementUnavailableError) {
+    return errorResponse(
+      503,
+      "SESSION_MANAGEMENT_UNAVAILABLE",
+      SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE,
+    );
+  }
+  if (error instanceof DomainError) {
+    const status = domainErrorStatuses[error.code];
+    if (status !== undefined) {
+      return errorResponse(status, error.code, error.message);
+    }
+  }
+  return internalErrorResponse();
 }
 
-function internalErrorResponse(): Response {
+function errorResponse(status: number, code: string, message: string): Response {
+  return Response.json(
+    { error: { code, message } },
+    { status, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+/** Opaque 500 for failures that must not reveal internal details. */
+export function internalErrorResponse(): Response {
   return errorResponse(500, "INTERNAL_ERROR", "Internal server error");
 }
