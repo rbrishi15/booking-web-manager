@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import type { VenueSearchPage } from "@/lib/venues/contracts";
 import type { CreateSessionPayload } from "./model";
+import { createSessionSubmissionAction, type SubmitSessionAction } from "../session-actions";
 
 export type CreationOutcome = { status: "created" } | { status: "error"; code: string; message: string; ambiguous: boolean };
 export type CreateSession = (payload: CreateSessionPayload) => Promise<CreationOutcome>;
@@ -23,15 +24,15 @@ async function bearerToken(expectedUserId?: string): Promise<string | undefined>
   if (expectedUserId !== undefined && data.session?.user.id !== expectedUserId) return undefined;
   return data.session?.access_token;
 }
-export async function createSession(payload: CreateSessionPayload, expectedUserId: string): Promise<CreationOutcome> {
+export async function createSession(payload: CreateSessionPayload, expectedUserId: string, action: SubmitSessionAction = createSessionSubmissionAction): Promise<CreationOutcome> {
   let token: string | undefined;
   try { token = await bearerToken(expectedUserId); } catch {
     return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't verify your sign-in. Please try again.", ambiguous: false };
   }
   if (!token) return { status: "error", code: "UNAUTHENTICATED", message: messages.UNAUTHENTICATED!, ambiguous: false };
   try {
-    const response = await fetch("/api/sessions", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(20_000) });
+    const response = await fetch(action.href, { method: action.method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, ...action.inputs }), signal: AbortSignal.timeout(20_000) });
     const body: unknown = await response.json();
     if (response.ok) { resultSchema.parse(body); return { status: "created" }; }
     const failure = errorSchema.safeParse(body);

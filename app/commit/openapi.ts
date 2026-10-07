@@ -24,11 +24,10 @@ const verifyAttendanceRequestSchema = sessionRequestSchema.extend({
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const participationId = "22222222-2222-4222-8222-222222222222";
 const inviteeId = "33333333-3333-4333-8333-333333333333";
-const implementationDescription =
-  "Planned API contract for an existing HTTP handler. This URL is proposed; no Next.js route is mounted here yet. " +
-  "Try it out cannot execute this workflow until the feature owner mounts the route and connects production dependencies.";
+const schedulerDescription =
+  "Planned API contract for an existing HTTP handler. This URL is proposed; no Next.js route is mounted here yet.";
 
-/** Describe handler contracts without changing handlers, mounting routes or reading secrets. */
+/** Describe the commitment action routes and the planned scheduler endpoint. */
 export function registerCommitmentApi(registry: OpenAPIRegistry): void {
   const uuid = z.string().uuid();
   const cents = z.number().int().safe().nonnegative();
@@ -140,8 +139,8 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
       tags: ["Commitment"],
       summary: operation.summary,
       description: [
-        implementationDescription, operation.description,
-        "The actor comes from the handler's injected authenticator; the planned route uses the Supabase bearer scheme. Client-supplied user IDs and amounts are ignored.",
+        operation.description,
+        "The actor comes from the verified Supabase bearer token; the stored account then enforces status, email verification and reliability. Client-supplied user IDs and amounts are ignored.",
         "A nonblank idempotencyKey is required. A retry with the same actor, session and action key replays the original transaction result.",
         "Notifications emitted by the action are best-effort after commit and may repeat on retry. Unknown JSON fields are ignored.",
       ].join(" "),
@@ -153,12 +152,13 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
         [operation.status]: { description: "The action completed, or its successful transaction result replayed.",
           content: { "application/json": { schema: operation.result } } },
         400: errorResponse("Malformed JSON or structurally invalid input.", "INVALID_REQUEST", operation.invalidMessage),
-        401: errorResponse("The injected authenticator did not resolve a signed-in user.", "UNAUTHENTICATED", "Authentication is required"),
-        403: errorResponse("Domain rejects an unauthorized actor, inactive participant, invalid private access or insufficient reliability.", "UNAUTHORIZED", "This action is not authorized"),
+        401: errorResponse("Missing, invalid or expired Supabase bearer token.", "UNAUTHENTICATED", "Authentication is required"),
+        403: errorResponse("Domain rejects an unauthorized actor, inactive or unverified account, invalid private access or insufficient reliability.", "UNAUTHORIZED", "This action is not authorized"),
         404: errorResponse("The user, session, participation or invited user does not exist.", "NOT_FOUND", "Session was not found"),
         409: errorResponse("Invalid session/participation/invitation state, insufficient funds, conflicting attendance or invalid timing.", "INVALID_STATE", "The action conflicts with the current session state"),
         422: errorResponse("Structurally valid input violates domain rules.", "INVALID_INPUT", "Invalid session action"),
         500: errorResponse("Unexpected authentication, setup or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
+        503: errorResponse("Session management server settings are not configured.", "SESSION_MANAGEMENT_UNAVAILABLE", "Session management is not available yet"),
       },
     });
   }
@@ -186,7 +186,7 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
     tags: ["Scheduler"],
     summary: "UC2-05/06 Run Scheduled Session Jobs",
     description: [
-      implementationDescription,
+      schedulerDescription,
       "Scheduler-only operation. The handler requires Authorization: Bearer <CRON_SECRET>; a user JWT does not grant access.",
       "Every accepted call generates a fresh run ID. No body or client-supplied run ID is consumed.",
       "Runs replacement expiry, waitlist promotion and automatic attendance verification in that order.",

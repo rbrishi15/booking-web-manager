@@ -113,7 +113,6 @@
 /supabase/migrations/0006_session_creation.sql @liang799
 /supabase/migrations/0007_session_management.sql @liang799
 /supabase/migrations/0008_session_pricing.sql @liang799 @harr008
-/supabase/migrations/0009_session_capacity.sql @liang799
 
 # Joseph: identity, shared authentication adapters, groups and frontend platform.
 # The specific auth test overrides the session-test directory rule above.
@@ -159,6 +158,12 @@
 /tests/lib/sessions/*settlement*.test.ts @Wyjessie
 /app/api/sessions/*/withdrawal-preview/ @Wyjessie
 /use-case-config/withdrawal-preview.ts @Wyjessie
+/app/api/sessions/commit/ @Wyjessie
+/app/api/sessions/withdraw/ @Wyjessie
+/app/api/sessions/replacements/ @Wyjessie
+/app/api/sessions/waitlist/ @Wyjessie
+/app/api/sessions/attendance/ @Wyjessie
+/use-case-config/commitments.ts @Wyjessie
 
 # Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
 /tests/use-cases/UC1-01-*.test.ts @Jolingoes

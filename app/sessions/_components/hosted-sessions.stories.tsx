@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import type { SessionVisibilityActionResult } from "../actions";
 import type { HostedSessionItem } from "../types";
 import { HostedSessionsView, type HostedSessionsViewProps } from "./hosted-sessions-view";
-import { getSessionAccountActions, toHostedSessionActions, type SetSessionVisibilityAction } from "../session-actions";
+import type { CancellationTransport } from "./session-cancellation-dialog";
+import { getSessionAccountActions, toHostedSessionActions, withCancellationAction, type SetSessionVisibilityAction } from "../session-actions";
 
 const account = { accountStatus: "ACTIVE" as const, email: "player@example.com", emailVerified: true };
 const accountActions = getSessionAccountActions(account);
@@ -125,10 +126,16 @@ export const Unverified: Story = {
   },
 };
 export const ServerSelectedActions: Story = {
-  args: { outcome: { status: "ready", sessions: [{ ...sessions[0]!, actions: [] }] } },
-  play: async ({ canvas }) => {
+  args: {
+    outcome: { status: "ready", sessions: [{ ...sessions[0]!, actions: [] }] },
+    cancellation: { userId: "server-selected-actions", preview: fn<CancellationTransport["preview"]>(), cancel: fn<CancellationTransport["cancel"]>() },
+  },
+  play: async ({ canvas, args }) => {
     await expect(canvas.queryByRole("button", { name: "Make public" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument();
     await expect(canvas.getByText("Visibility cannot be changed for this session.")).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "Manage participants" })).toHaveAttribute("href", "/sessions/private/participants");
+    await expect(args.cancellation?.preview).not.toHaveBeenCalled();
   },
 };
 export const Unavailable: Story = {
@@ -148,9 +155,9 @@ export const ReadFailure: Story = {
 export const CreationAndCancellation: Story = {
   args: { cancellation: {
     userId: "10000000-0000-4000-8000-000000000001",
-    preview: fn(async (sessionId: string) => ({ status: "ready" as const, preview: {
+    preview: fn(async (sessionId: string) => ({ status: "ready" as const, preview: withCancellationAction({
       sessionId, affectedParticipantCount: 1, refundRecipientCount: 1, totalRefundCents: 500, previewVersion: "a".repeat(64),
-    } })),
+    }) })),
     cancel: fn(async (sessionId: string) => ({ status: "cancelled" as const, result: {
       sessionId, status: "CANCELLED" as const, refundRecipientCount: 1, totalRefundCents: 500,
     } })),
@@ -158,7 +165,7 @@ export const CreationAndCancellation: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
     const full = within(canvas.getByRole("article", { name: "Tennis at Jurong East Sports Hall" }));
-    await expect(full.getByRole("button", { name: "Make private" })).toBeDisabled();
+    await expect(full.queryByRole("button", { name: "Make private" })).not.toBeInTheDocument();
     await expect(full.getByRole("button", { name: "Cancel session" })).toBeEnabled();
     await userEvent.click(full.getByRole("button", { name: "Cancel session" }));
     const dialog = within(await within(document.body).findByRole("dialog"));

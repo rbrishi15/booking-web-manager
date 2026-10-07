@@ -9,9 +9,10 @@ at review.
 Run `npx supabase start` for local Postgres and `npx supabase migration new
 <name>` to create the next number in sequence.
 
-Every pull request that touches `supabase/` runs the Migration Check workflow:
-it rejects a reused migration number and applies the whole sequence to an empty
-database. Merging to `main` then pushes the migrations to the hosted project.
+Every pull request checks that migration numbers are unique. Pull requests that
+touch `supabase/` also run the Migration Check workflow, which applies the whole
+sequence to an empty database. Merging to `main` checks the numbers again before
+pushing the migrations to the hosted project.
 
 ## Current sequence
 
@@ -27,16 +28,19 @@ most likely way this project loses an afternoon.
 | 0005 | `regular_groups` — group tables and concurrency functions | Joseph |
 | 0006 | `session_creation` — payout setup, sessions, participation and hold facts; depends on 0005 | Neoh |
 | 0007 | `session_management` — complete Session history and participant ordering for UC2-03a | Neoh |
-| 0008 | Reserved by session pricing in PR #39 | Neoh / Harrison |
-| 0009 | Reserved by commitment scheduling in PR #47 | Yajie |
+| 0008 | `session_pricing` — custom booking shares | Neoh / Harrison |
+| 0009 | `commitment_scheduling` — scheduled commitment jobs and push subscriptions | Yajie |
 | 0010 | `group_account_guards` — group writes share active-profile locks with account deactivation | Joseph / Rishi |
 | 0011 | `profile_policy_guards` — guarded profile edits and removal of direct authenticated updates | Joseph / Rishi |
 
+The deployed sequence ends at 0011. New migrations must use a unique number
+after it; do not reuse a deployed number or insert a file below it. Supabase's
+ordinary migration push rejects later-arriving files below an applied number.
+The superseded `0009_session_capacity.sql` was removed before deployment because
+sessions still require `minimum_headcount`; do not restore or renumber it.
+
 Migrations 0010/0011 use tables already created by 0004/0005 and can be tested
-against the current main sequence. For deployment, Rishi must reconcile the
-reserved 0008/0009 slots before merging them: Supabase's ordinary migration push
-does not insert a later-arriving migration below an already-applied number.
-Do not copy pending migration source into this branch to satisfy ordering.
+against the current main sequence.
 Apply 0011 before deploying the profile action, which calls its `update_profile`
 operation. These migrations retain existing rows; rollback requires restoring
 the previous function/privilege definitions, not deleting account or group data.

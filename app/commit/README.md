@@ -32,8 +32,8 @@ unit-of-work adapter must lock the session row (`SELECT ... FOR UPDATE`) so
 concurrent commits serialize; the in-memory test double does this by running
 transactions one at a time.
 
-Route mounting, the production auth and database adapters, and the UI are
-not yet implemented.
+The route is mounted at `POST /api/sessions/commit`; see [HTTP handlers](#http-handlers).
+The UI is not yet implemented.
 
 ## Waitlist promotion
 
@@ -109,16 +109,28 @@ All handlers take the acting user from authentication and require an
 idempotency key; Zod strips any other field, so a body cannot name another user
 or supply an amount. Known domain errors map to 4xx responses with their code
 (403 for access and authorization, 404 for missing records, 409 for state
-conflicts such as insufficient funds or an unfinished session) and anything else
-to an opaque 500.
+conflicts such as insufficient funds or an unfinished session), unconfigured
+server settings to 503, and anything else to an opaque 500. Responses are not
+cached.
 
-| Handler | Body | Success |
-| --- | --- | --- |
-| [`handleCommitToSession`](./commit-to-session-handler.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
-| [`handleWithdrawFromSession`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
-| [`handleAcceptReplacement`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 201 |
-| [`handleLeaveWaitlist`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 200 |
-| [`handleVerifyAttendance`](./verify-attendance-handler.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
+| Route | Handler | Body | Success |
+| --- | --- | --- | --- |
+| `POST /api/sessions/commit` | [`handleCommitToSession`](./commit-to-session-handler.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
+| `POST /api/sessions/withdraw` | [`handleWithdrawFromSession`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
+| `POST /api/sessions/replacements/accept` | [`handleAcceptReplacement`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 201 |
+| `POST /api/sessions/waitlist/leave` | [`handleLeaveWaitlist`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 200 |
+| `POST /api/sessions/attendance` | [`handleVerifyAttendance`](./verify-attendance-handler.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
+
+The routes share one set of dependencies from
+[`getCommitmentDependencies`](./commitment-server-dependencies.ts), assembled in
+[`use-case-config/commitments.ts`](../../use-case-config/commitments.ts): a
+Supabase bearer-token identity check and the
+[`PostgresCommitmentUnitOfWork`](../../lib/sessions/postgres-commitment-unit-of-work.ts).
+Authentication only verifies identity; the unit of work loads the complete
+User, whose roles enforce account status, email verification and reliability.
+Until Web Push is configured, notifications go to a
+[`NoDeliveryNotifier`](../../lib/commit/no-delivery-notifier.ts) that accepts
+and discards them.
 
 Promotion, forfeiture expiry and auto-verification have no HTTP handler; the
 scheduler calls them.
