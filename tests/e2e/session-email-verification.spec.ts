@@ -17,7 +17,7 @@ function submission(venueName: string) {
   return {
     idempotencyKey: randomUUID(),
     booking: { venueName, region: "West", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", totalCostCents: 1001 },
-    config: { totalSlots: 3, visibility: "PUBLIC" },
+    config: { totalSlots: 3, minimumHeadcount: 2, visibility: "PUBLIC" },
   };
 }
 

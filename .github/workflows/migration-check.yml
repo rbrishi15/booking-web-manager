@@ -9,6 +9,7 @@ on:
     paths:
       - "supabase/**"
       - ".github/workflows/migration-check.yml"
+      - "scripts/check-migration-numbers.sh"
   workflow_dispatch:
 
 jobs:
@@ -22,12 +23,7 @@ jobs:
           persist-credentials: false
 
       - name: Migration numbers are unique
-        run: |
-          duplicates=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | uniq -d)
-          if [ -n "$duplicates" ]; then
-            echo "::error::Migration numbers used more than once: $duplicates"
-            exit 1
-          fi
+        run: bash scripts/check-migration-numbers.sh
 
       - uses: supabase/setup-cli@v1
         with:

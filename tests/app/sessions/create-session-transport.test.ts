@@ -20,6 +20,16 @@ test("sends the exact cent-valued payload through the bearer API", async () => {
   expect(await createSession(payload, userId)).toEqual({ status: "created" });
   expect(fetcher).toHaveBeenCalledWith("/api/sessions", expect.objectContaining({ method: "POST", body: JSON.stringify(payload), headers: { Authorization: "Bearer fixture-bearer", "Content-Type": "application/json" } }));
 });
+test("follows the supplied submission action while checking the current user", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ sessionId: "session", roomToken: "room", bookingShareCents: 1201 }, { status: 201 }));
+  const action = { name: "submit-session" as const, href: "/api/sessions?from=creation", method: "POST" as const, inputs: {} };
+  expect(await createSession(payload, userId, action)).toEqual({ status: "created" });
+  expect(fetcher).toHaveBeenCalledWith(action.href, expect.objectContaining({ method: action.method, body: JSON.stringify(payload) }));
+
+  fetcher.mockClear();
+  expect(await createSession(payload, "different-user", action)).toMatchObject({ code: "UNAUTHENTICATED", ambiguous: false });
+  expect(fetcher).not.toHaveBeenCalled();
+});
 test.each([[409, "PAYOUT_ACCOUNT_NOT_READY", false], [422, "INVALID_INPUT", false], [401, "UNAUTHENTICATED", false], [503, "SESSION_API_UNAVAILABLE", false], [500, "INTERNAL_ERROR", true]])("classifies %s %s for safe retry", async (status, code, ambiguous) => {
   fetcher.mockResolvedValueOnce(Response.json({ error: { code, message: "private details" } }, { status }));
   const result = await createSession(payload, userId);
