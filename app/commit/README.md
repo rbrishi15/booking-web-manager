@@ -151,9 +151,22 @@ withdrawal reported as `DEFERRED`.
 accepts only `Authorization: Bearer <CRON_SECRET>`, compared in constant time,
 and an unset secret authorizes nothing. Each call starts a new run.
 
-Not yet built: the Postgres `DueSessionQuery` adapter (it needs the sessions
-schema; it should select with `FOR UPDATE SKIP LOCKED`) and the schedule itself,
-either a `pg_cron` + `pg_net` migration or a Vercel Cron entry.
+The route is mounted at `GET /api/cron/commitments`
+([route](../api/cron/commitments/route.ts),
+[configuration](../../use-case-config/scheduled-jobs.ts)), with up to 25
+sessions per run.
+[`PostgresDueSessionQuery`](../../lib/commit/postgres-due-session-query.ts)
+selects open sessions that have started with a late withdrawal still awaiting
+replacement, have not started and have people waiting with a free place, or
+ended at least 72 hours ago.
+[`PostgresVerificationReminderQuery`](../../lib/commit/postgres-verification-reminder-query.ts)
+claims and releases reminders through `sessions.verification_reminded_at`
+(migration 0009). It is not wired in yet: until Web Push can deliver
+reminders, the sweep claims none, so none are marked as sent and lost.
+
+Not yet configured: the schedule itself, either a Vercel Cron entry (the Hobby
+plan runs crons at most daily) or a `pg_cron` + `pg_net` job calling the route
+with the secret.
 
 ## Notifications
 

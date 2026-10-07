@@ -121,7 +121,7 @@ describe("commitment Swagger contracts", () => {
     expect(operation?.security).toEqual([{ cronAuth: [] }]);
     expect(operation?.requestBody).toBeUndefined();
     expect(Object.keys(operation?.responses ?? {})).toEqual(["200", "401", "500"]);
-    expect(operation?.description).toContain("GET is proposed");
+    expect(operation?.description).toContain("which Vercel Cron sends");
     expect(openApiDocument.components?.securitySchemes?.cronAuth).toMatchObject({
       type: "http", scheme: "bearer",
     });
