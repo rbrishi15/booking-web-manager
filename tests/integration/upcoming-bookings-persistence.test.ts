@@ -33,9 +33,9 @@ describe("PostgreSQL personal upcoming bookings", () => {
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
     await context.pool.query(
       `insert into sessions (session_id, booker_id, venue_name, region, sport, start_at, end_at,
-        total_cost_cents, total_slots, booking_share_cents, visibility, status,
+        total_cost_cents, total_slots, minimum_headcount, booking_share_cents, visibility, status,
         room_token, holding_account_id)
-       values ($1,$2,'Personal booking fixture','West','Tennis',$3,$4,2000,4,500,$5,$6,$7,$8)`,
+       values ($1,$2,'Personal booking fixture','West','Tennis',$3,$4,2000,4,2,500,$5,$6,$7,$8)`,
       [sessionId, input.bookerId ?? otherBookerId, startAt, endAt,
         input.visibility ?? "PRIVATE", input.status ?? "OPEN", randomUUID(), PLATFORM_HOLDING_ACCOUNT_ID],
     );

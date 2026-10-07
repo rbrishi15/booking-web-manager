@@ -16,7 +16,7 @@ const participationId = "40000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.resetAllMocks();
   driver.query.mockImplementation(async (sql) => {
-    if (sql.includes("from profiles")) return { rows: [{ user_id: bookerId, account_status: "ACTIVE", email: "booker@example.com", preferred_sports: [], preferred_regions: [] }] };
+    if (sql.includes("from profiles")) return { rows: [{ user_id: bookerId, account_status: "ACTIVE", email: "booker@example.com", email_confirmed_at: new Date("2026-01-01T00:00:00Z"), preferred_sports: [], preferred_regions: [] }] };
     if (sql.includes("from wallets")) return { rows: [{ wallet_id: walletId, user_id: bookerId }] };
     return { rows: [] };
   });

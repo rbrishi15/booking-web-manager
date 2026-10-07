@@ -13,7 +13,7 @@ const props = { params: Promise.resolve({ sessionId }) };
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(getCurrentUser).mockResolvedValue({ id: "host", email: "host@example.com", displayName: "Host", profileName: "Host", preferredSports: [], preferredRegions: [], reliabilityScore: 100 });
+  vi.mocked(getCurrentUser).mockResolvedValue({ id: "host", email: "host@example.com", emailVerified: true, pendingEmail: null, accountStatus: "ACTIVE", displayName: "Host", profileName: "Host", preferredSports: [], preferredRegions: [], reliabilityScore: 100 });
 });
 
 describe("session participants page", () => {

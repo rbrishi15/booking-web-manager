@@ -1,8 +1,10 @@
 import { registerCommitmentApi } from "@/app/commit/openapi";
+import { registerWithdrawalPreviewApi } from "@/app/commit/withdrawal-preview-openapi";
 import { registerDiscoveryApi } from "@/app/discover/openapi";
 import { registerSessionApi } from "@/app/sessions/openapi";
 import { registerSessionManagementApi } from "@/app/sessions/management-openapi";
 import { registerSessionCancellationApi } from "@/app/sessions/cancellation-openapi";
+import { registerParticipantRemovalApi } from "@/app/sessions/removal-openapi";
 import { registerVenueApi } from "@/app/venues/openapi";
 import { createOpenApiDocument } from "./document";
 
@@ -10,7 +12,10 @@ import { createOpenApiDocument } from "./document";
 export const openApiDocument = createOpenApiDocument([
   registerSessionApi,
   registerDiscoveryApi,
+  registerCommitmentApi,
+  registerWithdrawalPreviewApi,
   registerSessionManagementApi,
   registerSessionCancellationApi,
+  registerParticipantRemovalApi,
   registerVenueApi,
 ]);

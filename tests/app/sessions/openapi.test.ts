@@ -51,6 +51,7 @@ describe("session creation OpenAPI contract", () => {
           properties: {
             pricePerSlotCents: { type: "integer", minimum: 0, exclusiveMinimum: true, maximum: Number.MAX_SAFE_INTEGER },
             totalSlots: { type: "number" },
+            minimumHeadcount: { type: "number" },
           },
         },
       },
@@ -69,6 +70,7 @@ describe("session creation OpenAPI contract", () => {
     expect(input.booking.startAt).toBeInstanceOf(Date);
     expect(input.booking.totalCostCents).toBe(1001);
     expect(input.config.totalSlots).toBe(3);
+    expect(input.config.minimumHeadcount).toBe(2);
   });
 
 });
