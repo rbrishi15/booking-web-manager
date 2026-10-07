@@ -159,6 +159,12 @@
 /tests/lib/sessions/*settlement*.test.ts @Wyjessie
 /app/api/sessions/*/withdrawal-preview/ @Wyjessie
 /use-case-config/withdrawal-preview.ts @Wyjessie
+/app/api/sessions/commit/ @Wyjessie
+/app/api/sessions/withdraw/ @Wyjessie
+/app/api/sessions/replacements/ @Wyjessie
+/app/api/sessions/waitlist/ @Wyjessie
+/app/api/sessions/attendance/ @Wyjessie
+/use-case-config/commitments.ts @Wyjessie
 
 # Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
 /tests/use-cases/UC1-01-*.test.ts @Jolingoes

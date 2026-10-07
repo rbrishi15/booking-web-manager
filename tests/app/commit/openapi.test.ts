@@ -36,15 +36,14 @@ function requestFor(path: string): Request {
 }
 
 describe("commitment Swagger contracts", () => {
-  test.each(paths)("%s describes an unmounted handler contract with user authentication", (path) => {
+  test.each(paths)("%s describes a mounted route with user authentication", (path) => {
     const operation = openApiDocument.paths[path]?.post;
-    expect(operation?.description).toContain("no Next.js route is mounted here yet");
-    expect(operation?.description).toContain("This URL is proposed");
+    expect(operation?.description).not.toContain("no Next.js route is mounted here yet");
+    expect(operation?.description).toContain("Supabase bearer token");
     expect(operation?.security).toEqual([{ bearerAuth: [] }]);
-    expect(operation?.responses["503"]).toBeUndefined();
     expect(Object.keys(operation?.responses ?? {})).toEqual([
       path.endsWith("/commit") || path.endsWith("/accept") ? "201" : "200",
-      "400", "401", "403", "404", "409", "422", "500",
+      "400", "401", "403", "404", "409", "422", "500", "503",
     ]);
   });
 
