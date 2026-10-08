@@ -174,10 +174,20 @@ replays its result and notifies again, so delivery is at-least-once.
 [`WebPushNotifier`](../../lib/commit/web-push-notifier.ts) is the Web Push
 adapter. It holds the notification text, sends to every subscription the
 recipient registered, and removes subscriptions the push service reports as
-expired. It takes a `PushSubscriptionStore` and a `PushSender`, and gives each
-lookup, send and removal a deadline (5 s by default) so a push service that never
-answers cannot hold a request open after its unit of work commits.
+expired. [`createWebPush`](../../lib/commit/web-push.ts) assembles it over the
+[`PostgresPushSubscriptionStore`](../../lib/commit/postgres-push-subscription-store.ts)
+(`push_subscriptions`, migration 0009, at most 10 browsers per user) and the
+[`WebPushSender`](../../lib/commit/web-push-sender.ts) (`web-push`, VAPID,
+24-hour TTL). The commitment routes use it when `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are set
+([`readPushSettings`](./push-environment.ts)); otherwise notifications go to
+`NoDeliveryNotifier`.
 
-Not yet built: the `web-push` dependency behind `PushSender` (VAPID keys are
-already in `.env.example`), a `push_subscriptions` table and its store, the
-subscribe endpoint, and the service worker that displays payloads.
+A browser registers through `POST /api/push/subscriptions` with the
+`PushSubscription.toJSON()` body and unregisters with `DELETE` and
+`{ endpoint }`; both require a Supabase bearer token and act only on the
+caller's own subscriptions. [`push-client.ts`](./push-client.ts) wraps
+permission, the [`/sw.js`](../../public/sw.js) service worker and those calls,
+and [`PushNotificationsRow`](./_components/push-notifications-row.tsx) is the
+Settings toggle. The service worker shows each payload and opens its same-site
+URL when clicked.

@@ -3,6 +3,7 @@ import { initials } from "@/components/ui/initials";
 import { PageHeader } from "@/components/ui/page-header";
 import { ReliabilityBadge } from "@/components/ui/reliability-badge";
 import { getCurrentUser } from "@/lib/supabase/current-user";
+import { PushNotificationsRow } from "@/app/commit/_components/push-notifications-row";
 import { SettingsRow } from "./_components/settings-row";
 
 /** Shows a saved list as "Badminton, Tennis", or a prompt when nothing is saved yet. */
@@ -60,6 +61,7 @@ export default async function ProfilePage() {
                 description={listOrPrompt(user.preferredRegions)}
                 href="/profile/edit"
               />
+              <PushNotificationsRow />
             </div>
           </section>
         </div>
