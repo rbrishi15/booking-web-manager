@@ -14,7 +14,8 @@ import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
 import { ExpireReplacements } from "@/use-cases/sessions/ExpireReplacements";
 import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
 import { RunScheduledSessionJobs } from "@/use-cases/sessions/RunScheduledSessionJobs";
-import { WithdrawFromSession } from "@/use-cases/sessions/WithdrawFromSession";
+import { type ReplacementChoice, WithdrawFromSession } from "@/use-cases/sessions/WithdrawFromSession";
+import { SCHEDULED_JOBS_BATCH_SIZE } from "@/use-case-config/scheduled-jobs";
 
 /**
  * Runs the scheduled commitment sweep, wired as in production, against a real
@@ -163,15 +164,46 @@ describe.skipIf(!DATABASE_URL)("scheduled commitment sweep (database)", () => {
     expect(ours.sort()).toEqual([...sessions].sort());
   });
 
-  function sweep(): RunScheduledSessionJobs {
+  test("sessions blocked by a pending named invitation never fill a production-sized batch", async () => {
+    const [booker, alice = "", bob = "", carol = "", dave = ""] = await createUsers(5, 100_000);
+    const blocked: UUID[] = [];
+    for (let i = 0; i < SCHEDULED_JOBS_BATCH_SIZE; i += 1) {
+      const sessionId = await createSession(booker);
+      await commit(alice, sessionId);
+      await commit(bob, sessionId);
+      await commit(carol, sessionId);
+      // Alice's place is reserved for Dave, so Carol cannot be promoted.
+      await withdrawWithoutPromotion(alice, sessionId, { mode: "DIRECT_INVITE", inviteeId: dave });
+      blocked.push(sessionId);
+    }
+    const [, erin = "", frank = "", grace = ""] = await createUsers(4);
+    const eligible = await createSession(booker);
+    await commit(erin, eligible);
+    await commit(frank, eligible);
+    await commit(grace, eligible);
+    await withdrawWithoutPromotion(erin, eligible);
+
+    const dueNow = await due(now);
+    for (const sessionId of blocked) expect(dueNow).not.toContain(sessionId);
+    expect(dueNow).toContain(eligible);
+    await sweep(SCHEDULED_JOBS_BATCH_SIZE, false).run(randomUUID());
+
+    expect(await statusOf(eligible, grace)).toMatchObject({ status: "COMMITTED" });
+    for (const sessionId of blocked)
+      expect(await statusOf(sessionId, carol)).toMatchObject({ status: "WAITLISTED" });
+  });
+
+  function sweep(batchSize = 10_000, ownOnly = true): RunScheduledSessionJobs {
     const unitOfWork = new PostgresCommitmentUnitOfWork(() => pool, clock);
     const query = new PostgresDueSessionQuery(sql);
     return new RunScheduledSessionJobs({
       // Only this suite's sessions, so the sweep leaves other data alone.
-      dueSessions: {
-        dueSessionIds: async (at) =>
-          (await query.dueSessionIds(at, 10_000)).filter((id) => ownSessions.has(id)),
-      },
+      dueSessions: ownOnly
+        ? {
+            dueSessionIds: async (at) =>
+              (await query.dueSessionIds(at, 10_000)).filter((id) => ownSessions.has(id)),
+          }
+        : query,
       verificationReminders: {
         claimVerificationReminders: async () => [],
         releaseVerificationReminders: async () => {},
@@ -181,7 +213,7 @@ describe.skipIf(!DATABASE_URL)("scheduled commitment sweep (database)", () => {
       promote: new PromoteFromWaitlist({ unitOfWork, clock, ids, notifier }),
       autoVerify: new AutoVerifyAttendance({ unitOfWork, clock }),
       clock,
-      batchSize: 10_000,
+      batchSize,
     });
   }
 
@@ -208,7 +240,11 @@ describe.skipIf(!DATABASE_URL)("scheduled commitment sweep (database)", () => {
   }
 
   /** Withdraws with the follow-up promotion failing, so it is left to the sweep. */
-  async function withdrawWithoutPromotion(userId: UUID, sessionId: UUID) {
+  async function withdrawWithoutPromotion(
+    userId: UUID,
+    sessionId: UUID,
+    replacement: ReplacementChoice = { mode: "OPEN_SLOT" },
+  ) {
     const unitOfWork = new PostgresCommitmentUnitOfWork(() => pool, clock);
     const result = await new WithdrawFromSession({
       unitOfWork,
@@ -223,12 +259,12 @@ describe.skipIf(!DATABASE_URL)("scheduled commitment sweep (database)", () => {
       userId,
       sessionId,
       idempotencyKey: randomUUID(),
-      replacement: { mode: "OPEN_SLOT" },
+      replacement,
     });
     return result;
   }
 
-  async function createUsers(count: number): Promise<[UUID, ...UUID[]]> {
+  async function createUsers(count: number, cents = 10_000): Promise<[UUID, ...UUID[]]> {
     const users = Array.from({ length: count }, () => randomUUID());
     for (const id of users) {
       await pool.query(
@@ -239,7 +275,7 @@ describe.skipIf(!DATABASE_URL)("scheduled commitment sweep (database)", () => {
         const writer = new PostgresLedgerWriter(executor, `top-up-${id}`);
         await writer.creditTopUp({
           walletId: await writer.ensureWallet(id),
-          amount: Money.fromCents(10_000),
+          amount: Money.fromCents(cents),
           occurredAt: new Date(),
           externalReference: `test-${id}`,
         });

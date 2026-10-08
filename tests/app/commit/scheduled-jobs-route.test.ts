@@ -55,6 +55,43 @@ describe("GET /api/cron/commitments", () => {
     },
   );
 
+  test("each accepted call is a new run, uncached", async () => {
+    let next = 0;
+    mocks.dependencies.mockResolvedValue({
+      cronSecret: "cron-secret",
+      ids: { next: () => `run-${++next}` },
+      runner: { run: mocks.run },
+    });
+
+    const first = await get("Bearer cron-secret");
+    await get("Bearer cron-secret");
+
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.run.mock.calls).toEqual([["run-1"], ["run-2"]]);
+  });
+
+  test("a blank configured secret rejects an empty bearer", async () => {
+    mocks.dependencies.mockResolvedValue({
+      cronSecret: "  ",
+      ids: { next: () => "run-1" },
+      runner: { run: mocks.run },
+    });
+
+    expect((await get("Bearer   ")).status).toBe(401);
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  test("a failed sweep is an opaque 500", async () => {
+    mocks.run.mockRejectedValue(new Error("connection refused at 10.0.0.1"));
+
+    const response = await get("Bearer cron-secret");
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+    });
+  });
+
   test("keeps a dependency setup failure opaque", async () => {
     mocks.dependencies.mockRejectedValue(new Error("pool for postgres://secret"));
 

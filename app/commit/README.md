@@ -147,18 +147,19 @@ rule, so a superset of sessions is safe. A failing job is reported and the sweep
 moves on; the next run retries it. This sweep also recovers promotions that a
 withdrawal reported as `DEFERRED`.
 
-[`handleScheduledJobs`](./scheduled-jobs-handler.ts) is the cron entry point. It
-accepts only `Authorization: Bearer <CRON_SECRET>`, compared in constant time,
-and an unset secret authorizes nothing. Each call starts a new run.
+The cron entry point is
+[`GET /api/cron/commitments`](../api/cron/commitments/route.ts). It accepts only
+`Authorization: Bearer <CRON_SECRET>`, compared in constant time by
+[`isAuthorizedCronRequest`](./cron-auth.ts), and an unset secret authorizes
+nothing. Each call invokes `RunScheduledSessionJobs.run` with a new run ID for
+up to 25 sessions ([configuration](../../use-case-config/scheduled-jobs.ts)).
 
-The route is mounted at `GET /api/cron/commitments`
-([route](../api/cron/commitments/route.ts),
-[configuration](../../use-case-config/scheduled-jobs.ts)), with up to 25
-sessions per run.
 [`PostgresDueSessionQuery`](../../lib/commit/postgres-due-session-query.ts)
 selects open sessions that have started with a late withdrawal still awaiting
-replacement, have not started and have people waiting with a free place, or
-ended at least 72 hours ago.
+replacement, ended at least 72 hours ago, or have not started and can promote:
+a free place after pending personal-invitation reservations, and a queue head
+who is not waiting on their own invitation. Sessions that cannot make progress
+are never selected, so they cannot fill a batch and starve later sessions.
 [`PostgresVerificationReminderQuery`](../../lib/commit/postgres-verification-reminder-query.ts)
 claims and releases reminders through `sessions.verification_reminded_at`
 (migration 0009). It is not wired in yet: until Web Push can deliver

@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { ScheduledJobsHttpDependencies } from "@/app/commit/scheduled-jobs-handler";
+import type { ScheduledJobsDependencies } from "@/app/commit/scheduled-jobs-dependencies";
 import { SessionManagementUnavailableError } from "@/app/sessions/session-management-unavailable";
 import { readSessionServerSettings } from "@/app/sessions/server-environment";
 import { NoDeliveryNotifier } from "@/lib/commit/no-delivery-notifier";
-import { PostgresDueSessionQuery } from "@/lib/commit/postgres-due-session-query";
+import { createPostgresSchedulingQueries } from "@/lib/commit/postgres-scheduling-queries";
 import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
-import type { SqlExecutor } from "@/lib/money/sql";
 import { PostgresCommitmentUnitOfWork } from "@/lib/sessions/postgres-commitment-unit-of-work";
 import { AutoVerifyAttendance } from "@/use-cases/sessions/AutoVerifyAttendance";
 import { ExpireReplacements } from "@/use-cases/sessions/ExpireReplacements";
@@ -14,13 +13,13 @@ import { RunScheduledSessionJobs } from "@/use-cases/sessions/RunScheduledSessio
 import type { VerificationReminderQuery } from "@/use-cases/sessions/scheduling-ports";
 
 /** Sessions per sweep; each one runs up to three short transactions. */
-const BATCH_SIZE = 25;
+export const SCHEDULED_JOBS_BATCH_SIZE = 25;
 
 /**
  * Reminders are not claimed until Web Push can deliver them: a claim marks
  * the booker as reminded, so claiming into NoDeliveryNotifier would lose
- * every reminder. Replace with PostgresVerificationReminderQuery when the
- * notifier is WebPushNotifier.
+ * every reminder. Use createPostgresSchedulingQueries' verificationReminders
+ * once the notifier is WebPushNotifier.
  */
 const remindersHeldUntilPushIsConfigured: VerificationReminderQuery = {
   claimVerificationReminders: async () => [],
@@ -34,7 +33,7 @@ const remindersHeldUntilPushIsConfigured: VerificationReminderQuery = {
  * secret authorizes nothing. Without database settings every authorized run
  * fails with an opaque 500.
  */
-export function createScheduledJobsDependencies(): ScheduledJobsHttpDependencies {
+export function createScheduledJobsDependencies(): ScheduledJobsDependencies {
   const cronSecret = process.env.CRON_SECRET ?? "";
   const ids = { next: randomUUID };
   const settings = readSessionServerSettings();
@@ -50,10 +49,7 @@ export function createScheduledJobsDependencies(): ScheduledJobsHttpDependencies
     };
   }
   const getPool = createPostgresPoolProvider(settings.databaseUrl);
-  const sql: SqlExecutor = {
-    query: async (statement, values) =>
-      (await getPool().query(statement, values ? [...values] : undefined)).rows,
-  };
+  const { dueSessions } = createPostgresSchedulingQueries(getPool);
   const clock = { now: () => new Date() };
   const unitOfWork = new PostgresCommitmentUnitOfWork(getPool, clock);
   const notifier = new NoDeliveryNotifier();
@@ -61,14 +57,14 @@ export function createScheduledJobsDependencies(): ScheduledJobsHttpDependencies
     cronSecret,
     ids,
     runner: new RunScheduledSessionJobs({
-      dueSessions: new PostgresDueSessionQuery(sql),
+      dueSessions,
       verificationReminders: remindersHeldUntilPushIsConfigured,
       notifier,
       expireReplacements: new ExpireReplacements({ unitOfWork, clock, notifier }),
       promote: new PromoteFromWaitlist({ unitOfWork, clock, ids, notifier }),
       autoVerify: new AutoVerifyAttendance({ unitOfWork, clock }),
       clock,
-      batchSize: BATCH_SIZE,
+      batchSize: SCHEDULED_JOBS_BATCH_SIZE,
     }),
   };
 }
