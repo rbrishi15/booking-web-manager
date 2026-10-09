@@ -8,6 +8,13 @@ ownership"), so routine interface changes don't queue behind payment work.
 
 ## Email confirmation (UC1-01 / UC1-02)
 
+Hosted email confirmations are currently disabled; see the
+[hosted Auth configuration](../../supabase/README.md#auth-config-site-url-redirects-email-confirmation).
+Successful registration creates an account and returns a session immediately.
+The register action redirects to Home without sending a confirmation email.
+Enabling confirmations switches registration to the `"check-email"` flow:
+the account stays signed out until confirmation completes.
+
 Signup and resend explicitly use the Server Action request's origin plus
 `/auth/callback` as `emailRedirectTo`. Next.js validates that action origin
 against the host. This keeps the return link on the site where the browser's
@@ -43,31 +50,39 @@ In [Authentication → URL Configuration](https://supabase.com/dashboard/project
 3. For local development, also allow `http://localhost:3000/auth/callback`
    and `http://127.0.0.1:3000/auth/callback` (adjust ports if needed). Add only
    trusted preview origins when testing signup on Vercel previews.
-4. In **Email Templates → Confirm signup**, keep the confirmation link as
+4. When confirmations are enabled, in **Email Templates → Confirm signup**, keep
+   the confirmation link as
    `<a href="{{ .ConfirmationURL }}">Confirm your email</a>`. A custom link
    hardcoded to localhost or using only `{{ .SiteURL }}` will not complete this
    callback flow. This app expects the default confirmation URL and PKCE code,
    not a custom `/auth/confirm?token_hash=...` template.
-5. Keep **Confirm email** enabled. In **Change email**, also retain the default
-   `{{ .ConfirmationURL }}` link for missing-email recovery. Secure email change
-   may require confirmation from both old and new addresses when an old email
-   exists; an email addition with no old address only confirms the new one.
+5. Keep **Confirm email** disabled for the current hosted setup. If enabled,
+   Supabase's built-in sender remains an option; custom SMTP is optional for
+   delivery beyond the built-in sender's restrictions.
+
+For missing-email recovery, in **Change email**, retain the default
+`{{ .ConfirmationURL }}` link. Secure email change may require confirmation from
+both old and new addresses when an old email exists; an email addition with no
+old address only confirms the new one.
 
 These are hosted Auth settings; deploying code or running database migrations
 does not update them. A redirect outside the allowlist can fall back to Site
 URL. See [Supabase redirect configuration](https://supabase.com/docs/guides/auth/redirect-urls).
 
-After deployment and configuration, request a **new** confirmation email;
-existing emails retain their old links. Open it in the browser used to sign up
-or resend. If it opens in another browser, the email may still be verified,
-but automatic sign-in cannot use the original browser's PKCE cookie: log in
+When confirmations are enabled, after deployment and configuration, request a
+**new** confirmation email; existing emails retain their old links. Open it in
+the browser used to sign up or resend. If it opens in another browser, the email
+may still be verified, but automatic sign-in cannot use the original browser's PKCE cookie: log in
 with the account password instead. See [PKCE limitations](https://supabase.com/docs/guides/auth/sessions/pkce-flow).
 
 ### Verification
 
 Run `npm test -- tests/app/auth tests/use-cases/UC1-01-register-user.test.ts tests/use-cases/UC1-02-authenticate-user.test.ts`.
 These cover redirect selection, session completion, failed links, middleware
-access and the unverified state. Hosted configuration still needs a smoke test:
-register a fresh account on production, confirm that it stays signed out, open
-the new email in that browser, and verify that Home is authenticated. Also try
-logging in before confirmation and resending a link.
+access and the unverified state. For the current hosted configuration, smoke-test
+registration with a fresh account on production: verify immediate authenticated
+access to Home without a confirmation email.
+
+If confirmations are enabled, verify registration returns `"check-email"` and
+stays signed out, open the new email in that browser, and verify that Home is
+authenticated. Also try logging in before confirmation and resending a link.

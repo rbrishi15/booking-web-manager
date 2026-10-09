@@ -78,6 +78,37 @@ https://supabase.com/dashboard/account/tokens the first time).
 Nobody should need to run `supabase db push --linked` against it by hand;
 if you find yourself doing that, something upstream of this file didn't work.
 
+### Auth config (site URL, redirects, email confirmation)
+
+The committed `config.toml` in this directory is the **local dev** config —
+`site_url` and `additional_redirect_urls` there deliberately point at
+`127.0.0.1` for `supabase start`. The hosted project's own auth settings are
+separate and were pushed directly, not through this file:
+
+| Setting | Value |
+| --- | --- |
+| `site_url` | `https://booking-web-manager.vercel.app` |
+| `additional_redirect_urls` | `["https://booking-web-manager.vercel.app", "https://booking-web-manager.vercel.app/auth/callback"]` |
+| `auth.email.enable_confirmations` | `false` — sign-up creates the account and logs in immediately |
+| Custom SMTP | off — Supabase's built-in sender only |
+
+Sign-up sends no email: Supabase creates the account, returns a session, and
+the register action redirects to Home. Anyone can register with any address;
+there is no proof-of-ownership step. That's deliberate for a test-mode student
+project, and it's reversible — set `enable_confirmations = true` again (and
+configure custom SMTP, since the built-in sender's rate limit is very low and
+not configurable) if email verification is ever needed.
+
+To change any of this yourself: write a **minimal** `config.toml` declaring
+only the keys you want to change (anything undeclared is left alone), run
+`supabase config diff --project-ref rofrvxezteioulhlnfcj` against it first to
+confirm the blast radius is exactly what you expect, then
+`supabase config push --project-ref rofrvxezteioulhlnfcj`. Secret fields
+use the `env(VAR_NAME)` syntax so the real value never sits in a file —
+export it in your shell first. Don't run `config push` with the
+full committed `config.toml` as-is; it declares the local-dev `site_url` and
+would overwrite the hosted project's correct one.
+
 ## Local development
 
 Use local Postgres when integration work needs a disposable database. The
