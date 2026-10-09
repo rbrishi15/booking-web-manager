@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 // Browser copies of the wallet API response contract (Harrison's PR #59, app/wallet/contracts.ts).
 // Only the fields this page shows are required; unknown fields are ignored.
 const cents = z.number().int().safe().nonnegative();
+// An unparseable date would make the page's date formatting throw, so reject it here.
+const timestamp = z.string().datetime({ offset: true });
 
 const walletSummarySchema = z.object({
   availableBalanceCents: cents,
@@ -15,7 +17,7 @@ const walletSummarySchema = z.object({
     originalCents: cents,
     venueName: z.string().optional(),
     sport: z.string().optional(),
-    startAt: z.string().optional(),
+    startAt: timestamp.optional(),
   })),
 });
 
@@ -25,7 +27,7 @@ const transactionsSchema = z.object({
     transactionId: z.string(),
     kind: transactionKind,
     amountCents: cents,
-    occurredAt: z.string(),
+    occurredAt: timestamp,
   })),
   nextCursor: z.string().nullable(),
 });

@@ -93,6 +93,20 @@ describe("UC1-05 wallet transport", () => {
     expect(await walletTransport.loadSummary()).toMatchObject({ status: "error", code: "UNEXPECTED_RESPONSE" });
   });
 
+  test.each([
+    ["a hold", "summary", () => ({ ...summary, activeHolds: [{ ...summary.activeHolds[0], startAt: "not-a-date" }] })],
+    ["a transaction", "transactions", () => ({ items: [{ transactionId: "t1", kind: "TOP_UP", amountCents: 5000, occurredAt: "not-a-date" }], nextCursor: null })],
+  ] as const)("rejects %s with an invalid date instead of breaking the page", async (_name, endpoint, body) => {
+    // Arrange
+    fetcher.mockResolvedValueOnce(Response.json(body()));
+
+    // Act
+    const result = endpoint === "summary" ? await walletTransport.loadSummary() : await walletTransport.loadTransactions();
+
+    // Assert
+    expect(result).toMatchObject({ status: "error", code: "UNEXPECTED_RESPONSE" });
+  });
+
   test("treats a network failure or non-JSON reply as a load error", async () => {
     // Arrange
     fetcher.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(new Response("<html>Not found</html>", { status: 404 }));

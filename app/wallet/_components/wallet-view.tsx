@@ -1,25 +1,26 @@
-"use client";
-
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { InfoNote } from "@/components/ui/info-note";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
-import {
-  walletTransport,
-  type WalletSummary,
-  type WalletTransactionKind,
-  type WalletTransactionsPage,
-  type WalletTransport,
-} from "../wallet-transport";
+import type { WalletSummary, WalletTransactionKind, WalletTransactionsPage } from "../wallet-transport";
 
-type Load<T> =
+/** One part of the wallet screen: still loading, loaded, or failed (optionally because the login expired). */
+export type WalletLoadState<T> =
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly data: T }
   | { readonly status: "error"; readonly message: string; readonly signIn: boolean };
+
+export interface WalletViewProps {
+  readonly summary: WalletLoadState<WalletSummary>;
+  readonly history: WalletLoadState<WalletTransactionsPage>;
+  readonly loadingMore: boolean;
+  readonly moreError: string | null;
+  readonly onRetry: () => void;
+  readonly onLoadMore: () => void;
+}
 
 const kindLabels: Readonly<Record<WalletTransactionKind, string>> = {
   TOP_UP: "Top-up",
@@ -36,43 +37,9 @@ const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
 
 /**
  * UC1-05 wallet overview: available and held balances, money held per session and the
- * transaction history, all read from the wallet API. This page moves no money.
+ * transaction history. Display only: WalletController loads the data and handles actions.
  */
-export function WalletView({ transport = walletTransport }: { readonly transport?: WalletTransport }) {
-  const [summary, setSummary] = useState<Load<WalletSummary>>({ status: "loading" });
-  const [history, setHistory] = useState<Load<WalletTransactionsPage>>({ status: "loading" });
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [moreError, setMoreError] = useState<string | null>(null);
-  const requested = useRef(0);
-
-  const load = useCallback(async () => {
-    const request = ++requested.current;
-    setSummary({ status: "loading" });
-    setHistory({ status: "loading" });
-    setMoreError(null);
-    const [summaryResult, historyResult] = await Promise.all([transport.loadSummary(), transport.loadTransactions()]);
-    if (request !== requested.current) return;
-    setSummary(summaryResult.status === "ready" ? summaryResult : { status: "error", message: summaryResult.message, signIn: summaryResult.code === "UNAUTHENTICATED" });
-    setHistory(historyResult.status === "ready" ? historyResult : { status: "error", message: historyResult.message, signIn: historyResult.code === "UNAUTHENTICATED" });
-  }, [transport]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  async function loadMore() {
-    if (history.status !== "ready" || history.data.nextCursor === null || loadingMore) return;
-    setLoadingMore(true);
-    setMoreError(null);
-    const next = await transport.loadTransactions(history.data.nextCursor);
-    setLoadingMore(false);
-    if (next.status === "error") { setMoreError(next.message); return; }
-    setHistory((current) => {
-      if (current.status !== "ready") return current;
-      // A timestamp cursor can repeat the boundary row; never show a transaction twice.
-      const seen = new Set(current.data.items.map((item) => item.transactionId));
-      return { status: "ready", data: { items: [...current.data.items, ...next.data.items.filter((item) => !seen.has(item.transactionId))], nextCursor: next.data.nextCursor } };
-    });
-  }
-
+export function WalletView({ summary, history, loadingMore, moreError, onRetry, onLoadMore }: WalletViewProps) {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
       <header className="mb-6">
@@ -83,7 +50,7 @@ export function WalletView({ transport = walletTransport }: { readonly transport
       <section aria-labelledby="balance-heading" className="mb-8">
         <h2 id="balance-heading" className="sr-only">Balance</h2>
         {summary.status === "loading" && <LoadingSpinner label="Loading your balance…" />}
-        {summary.status === "error" && <LoadError message={summary.message} signIn={summary.signIn} onRetry={load} />}
+        {summary.status === "error" && <LoadError message={summary.message} signIn={summary.signIn} onRetry={onRetry} />}
         {summary.status === "ready" && <>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border bg-card p-4 md:p-6">
@@ -128,7 +95,7 @@ export function WalletView({ transport = walletTransport }: { readonly transport
       <section aria-labelledby="history-heading">
         <h2 id="history-heading" className="mb-3 text-lg font-semibold">Transactions</h2>
         {history.status === "loading" && <LoadingSpinner label="Loading transactions…" />}
-        {history.status === "error" && <LoadError message={history.message} signIn={history.signIn} onRetry={load} />}
+        {history.status === "error" && <LoadError message={history.message} signIn={history.signIn} onRetry={onRetry} />}
         {history.status === "ready" && (history.data.items.length === 0
           ? <EmptyState title="No transactions yet" description="Top-ups, held shares, refunds and payouts will appear here." />
           : <>
@@ -145,7 +112,7 @@ export function WalletView({ transport = walletTransport }: { readonly transport
             </ul>
             {moreError && <div className="mt-3"><ErrorMessage>{moreError}</ErrorMessage></div>}
             {history.data.nextCursor !== null && (
-              <Button variant="outline" className="mt-3 min-h-11" disabled={loadingMore} onClick={loadMore}>
+              <Button variant="outline" className="mt-3 min-h-11" disabled={loadingMore} onClick={onLoadMore}>
                 {loadingMore ? "Loading…" : "Load more"}
               </Button>
             )}
