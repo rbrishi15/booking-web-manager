@@ -1,4 +1,4 @@
-import { DomainError, type ParticipationStatus, type SessionStatus, type Sport, type UUID } from "@/domain";
+import { DomainError, type AttendanceStatus, type ParticipationStatus, type SessionStatus, type Sport, type UUID } from "@/domain";
 import type { Clock } from "../shared/contracts";
 import { requireAggregate } from "../shared/helpers";
 import { requireParticipantListOwner } from "./participant-removal-preview";
@@ -12,10 +12,14 @@ export interface SessionParticipants {
   readonly endAt: Date;
   readonly status: SessionStatus;
   readonly availableSlots: number;
+  /** UC2-06: the session has ended and is still OPEN, so the booker can mark attendance. */
+  readonly canVerifyAttendance: boolean;
   readonly participants: readonly {
     readonly participationId: UUID;
     readonly displayName: string;
     readonly status: ParticipationStatus;
+    /** UNVERIFIED until the booker (or the 72h auto-verification) marks a committed participant. */
+    readonly attendance: AttendanceStatus;
     readonly canRemove: boolean;
   }[];
 }
@@ -41,10 +45,12 @@ export class ListSessionParticipants {
         sessionId, venueName: session.booking.venueName, sport: session.booking.sport,
         startAt: session.booking.startAt, endAt: session.booking.endAt, status: session.status,
         availableSlots: session.getAvailableSlots(now),
+        canVerifyAttendance: session.status === "OPEN" && session.booking.hasEnded(now),
         participants: participations.map((participation) => ({
           participationId: participation.participationId,
           displayName: names.get(participation.userId) ?? "Unnamed player",
           status: participation.status,
+          attendance: participation.attendance,
           canRemove: openBeforeStart && participation.status === "COMMITTED",
         })),
       };

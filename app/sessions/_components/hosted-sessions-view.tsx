@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type { SessionVisibilityActionResult } from "../actions";
-import type { HostedSessionItem, HostedSessionsOutcome } from "../types";
+import type { AttendanceDueItem, HostedSessionItem, HostedSessionsOutcome } from "../types";
 import { SessionCancellationDialog, type CancellationTransport } from "./session-cancellation-dialog";
 import type { SessionCancellationResult } from "@/use-cases/sessions/session-cancellation-transaction";
 import { Money } from "@/components/ui/money";
@@ -37,6 +37,7 @@ export function HostedSessionsView({ outcome, actions, refreshing, onSetVisibili
         {creation && <Button asChild className="mt-4 min-h-11"><Link href={creation.href}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Create a session</Link></Button>}
         {verification && <div className="mt-4 space-y-2"><p className="text-sm text-muted-foreground">Verify your email before creating a session.</p><Button asChild variant="outline" className="min-h-11"><Link href={verification.href}>Verify email</Link></Button></div>}
       </header>
+      {outcome.status === "ready" && (outcome.awaitingAttendance?.length ?? 0) > 0 && <AttendanceDueList sessions={outcome.awaitingAttendance!} />}
       {cancelled && <p role="status" className="mb-4 rounded-lg border p-4">Session cancelled.{" "}
         <Money cents={cancelled.totalRefundCents} /> refunded to {cancelled.refundRecipientCount} participants.</p>}
       {cancellation && <SessionCancellationDialog selected={selected} transport={cancellation}
@@ -117,5 +118,29 @@ function HostedSessionCard({ session, refreshing, onSetVisibility, onRefresh, on
         {result?.status === "saved" && result.visibility === session.visibility && <p role="status" className="mt-3 text-sm text-muted-foreground">Session is now {result.visibility.toLowerCase()}.</p>}
       </article>
     </li>
+  );
+}
+
+/** UC2-06: ended sessions whose committed players the booker still needs to mark attended or absent. */
+function AttendanceDueList({ sessions }: { readonly sessions: readonly AttendanceDueItem[] }) {
+  return (
+    <section aria-labelledby="attendance-due-heading" className="mb-8">
+      <h2 id="attendance-due-heading" className="text-lg font-semibold">Check attendance</h2>
+      <p className="mt-1 text-sm text-muted-foreground">These sessions have ended. Mark who came so the shares can be paid out to you.</p>
+      <ul className="mt-3 space-y-3">
+        {sessions.map((session) => (
+          <li key={session.sessionId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4 shadow-sm">
+            <div className="min-w-0">
+              <p className="break-words font-medium">{session.venueName}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {session.sport} · ended <time dateTime={session.endAt}>{singaporeDateTime.format(new Date(session.endAt))}</time> SGT
+              </p>
+              <p className="mt-1 text-sm">{session.unverifiedCount} {session.unverifiedCount === 1 ? "player" : "players"} to check</p>
+            </div>
+            <Button asChild className="min-h-11"><Link href={`/sessions/${session.sessionId}/participants`}>Check attendance</Link></Button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

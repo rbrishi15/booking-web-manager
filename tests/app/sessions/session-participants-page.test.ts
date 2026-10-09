@@ -25,7 +25,7 @@ describe("session participants page", () => {
   });
 
   test("passes the authenticated owner's safe display outcome to the user-scoped controller", async () => {
-    const outcome = { status: "ready" as const, session: { sessionId, venueName: "Sports Hall", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", status: "OPEN" as const, availableSlots: 4, participants: [] } };
+    const outcome = { status: "ready" as const, session: { sessionId, venueName: "Sports Hall", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", status: "OPEN" as const, availableSlots: 4, canVerifyAttendance: false, participants: [] } };
     vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
     const page = await SessionParticipantsPage(props);
     expect(listSessionParticipants).toHaveBeenCalledExactlyOnceWith(sessionId);

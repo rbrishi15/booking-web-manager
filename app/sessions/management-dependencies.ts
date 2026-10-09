@@ -6,5 +6,5 @@ import type { ToggleSessionVisibility } from "@/use-cases/sessions/ToggleSession
 export interface SessionManagementDependencies {
   readonly authenticate: (request: Request) => Promise<UUID | null>;
   readonly toggleVisibility: Pick<ToggleSessionVisibility, "forBooker">;
-  readonly listHostedSessions: Pick<ListHostedSessions, "forBooker">;
+  readonly listHostedSessions: Pick<ListHostedSessions, "forBooker" | "attendanceDueForBooker">;
 }

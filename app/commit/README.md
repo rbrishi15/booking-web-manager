@@ -103,6 +103,15 @@ Once every committed participant is verified the session becomes
 booker's payout, and the payout flow (`/app/payouts`) writes those ledger lines
 when the provider confirms.
 
+**UI.** My sessions lists ended sessions with players still to check
+(`ListHostedSessions.attendanceDueForBooker`). Their participant page shows
+[`AttendanceVerificationForm`](./_components/attendance-verification-form.tsx):
+the booker marks each unverified committed player attended or absent, confirms,
+and the marks go to `POST /api/sessions/attendance` through
+[`verifyAttendance`](./verify-attendance-transport.ts). After an unconfirmed
+result the same key and marks are kept and the choices locked, so a retry
+can only replay that request.
+
 ## HTTP routes
 
 Each route file names only its parser and its use-case call:
