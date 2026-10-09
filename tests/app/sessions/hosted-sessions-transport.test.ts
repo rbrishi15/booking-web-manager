@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HOSTED_SESSIONS_URL, HostedSessionsLoadError, loadHostedSessions } from "@/app/sessions/hosted-sessions-transport";
-import { createClient } from "@/lib/supabase/client";
 
-vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
-const getSession = vi.fn();
 const fetcher = vi.fn<typeof fetch>();
 
 const body = {
@@ -20,8 +17,6 @@ const body = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getSession.mockResolvedValue({ data: { session: { access_token: "fixture-bearer" } }, error: null });
-  vi.mocked(createClient).mockReturnValue({ auth: { getSession } } as unknown as ReturnType<typeof createClient>);
   vi.stubGlobal("fetch", fetcher);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -32,22 +27,22 @@ async function failure(): Promise<HostedSessionsLoadError> {
   return error;
 }
 
-test("reads the hosted sessions with the bearer token and no caching", async () => {
+test("reads the hosted sessions with the login cookies and no caching", async () => {
   fetcher.mockResolvedValueOnce(Response.json(body));
   expect(await loadHostedSessions()).toEqual(body);
-  expect(fetcher).toHaveBeenCalledExactlyOnceWith(HOSTED_SESSIONS_URL, expect.objectContaining({ cache: "no-store" }));
-  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer fixture-bearer");
+  expect(fetcher).toHaveBeenCalledExactlyOnceWith(HOSTED_SESSIONS_URL, expect.objectContaining({ credentials: "same-origin", cache: "no-store" }));
+  // The API reads the login from the cookies; the page never handles the token.
+  expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty("headers");
 });
 
-test("sends a signed-out browser to login without calling the API", async () => {
-  getSession.mockResolvedValueOnce({ data: { session: null }, error: null });
-  expect(await failure()).toMatchObject({ code: "UNAUTHENTICATED", signIn: true });
-  expect(fetcher).not.toHaveBeenCalled();
-});
-
-test("reports a failed sign-in check as retryable", async () => {
-  getSession.mockRejectedValueOnce(new Error("storage unavailable"));
-  expect(await failure()).toMatchObject({ code: "AUTH_UNAVAILABLE", kind: "unexpected", signIn: false });
+test("stops the request when React Query cancels it", async () => {
+  const controller = new AbortController();
+  fetcher.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+  }));
+  const pending = loadHostedSessions(controller.signal).then(() => null, (thrown: unknown) => thrown);
+  controller.abort();
+  expect(await pending).toMatchObject({ code: "NETWORK_ERROR" });
 });
 
 test.each([
@@ -58,6 +53,15 @@ test.each([
 ] as const)("maps a %s %s reply", async (status, code, signIn) => {
   fetcher.mockResolvedValueOnce(Response.json({ error: { code, message: "Refused" } }, { status }));
   expect(await failure()).toMatchObject({ code, kind: "unexpected", signIn });
+});
+
+test.each([
+  [401, "UNAUTHENTICATED", "unexpected", true],
+  [503, "SESSION_MANAGEMENT_UNAVAILABLE", "unavailable", false],
+  [502, "UNEXPECTED_ERROR", "unexpected", false],
+] as const)("keeps the meaning of a %s reply whose body is not JSON", async (status, code, kind, signIn) => {
+  fetcher.mockResolvedValueOnce(new Response("<html>Gateway error</html>", { status }));
+  expect(await failure()).toMatchObject({ code, kind, signIn });
 });
 
 test("maps missing server settings to the unavailable screen", async () => {

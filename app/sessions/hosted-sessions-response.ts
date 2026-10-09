@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { AttendanceDueSession, HostedSession } from "@/use-cases/sessions/ListHostedSessions";
+import { DomainError, type UUID } from "@/domain";
+import type { AttendanceDueSession, HostedSession, ListHostedSessions } from "@/use-cases/sessions/ListHostedSessions";
 import { toHostedSessionActions } from "./session-actions";
 import type { AttendanceDueItem, HostedSessionItem } from "./types";
 
@@ -56,4 +57,23 @@ export function toHostedSessionsResponse(sessions: readonly HostedSession[], att
       startAt: session.startAt.toISOString(), endAt: session.endAt.toISOString(), unverifiedCount: session.unverifiedCount,
     })),
   };
+}
+
+/**
+ * Reads both lists for the booker. The attendance reminder is secondary: if only it fails,
+ * the hosted sessions are still returned. Account problems are still reported.
+ */
+export async function readHostedSessions(
+  listHostedSessions: Pick<ListHostedSessions, "forBooker" | "attendanceDueForBooker">,
+  bookerId: UUID,
+): Promise<HostedSessionsResponse> {
+  const [sessions, attendanceDue] = await Promise.all([
+    listHostedSessions.forBooker(bookerId),
+    listHostedSessions.attendanceDueForBooker(bookerId).catch((error: unknown) => {
+      if (error instanceof DomainError && (error.code === "INACTIVE_ACCOUNT" || error.code === "NOT_FOUND")) throw error;
+      console.error("UC2-06 attendance-due list failed:", error instanceof Error ? error.name : "unknown");
+      return [];
+    }),
+  ]);
+  return toHostedSessionsResponse(sessions, attendanceDue);
 }

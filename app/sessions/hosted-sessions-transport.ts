@@ -1,12 +1,13 @@
 "use client";
 
 import { z } from "zod";
-import { fetchAsSignedInUser, SignInUnavailableError } from "@/lib/supabase/authorized-fetch";
 import { hostedSessionsResponseSchema, type HostedSessionsResponse } from "./hosted-sessions-response";
 
 export const HOSTED_SESSIONS_URL = "/api/sessions/hosted";
 
 const failureSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+/** The error code to assume when a failure reply has no readable code. */
+const statusCodes: Readonly<Record<number, string>> = { 401: "UNAUTHENTICATED", 503: "SESSION_MANAGEMENT_UNAVAILABLE" };
 
 /** A failed hosted-sessions read; `signIn` means the user must log in again. */
 export class HostedSessionsLoadError extends Error {
@@ -16,20 +17,31 @@ export class HostedSessionsLoadError extends Error {
   }
 }
 
-export type LoadHostedSessions = () => Promise<HostedSessionsResponse>;
+/** `signal` cancels a request React Query no longer needs. */
+export type LoadHostedSessions = (signal?: AbortSignal) => Promise<HostedSessionsResponse>;
 
-/** UC2-03 / UC2-06: reads the signed-in booker's hosted sessions from GET /api/sessions/hosted. */
-export const loadHostedSessions: LoadHostedSessions = async () => {
-  let response: Response | null;
+/**
+ * UC2-03 / UC2-06: reads the signed-in booker's hosted sessions from GET /api/sessions/hosted.
+ * The browser sends its login cookies with this same-origin request; the API checks them.
+ */
+export const loadHostedSessions: LoadHostedSessions = async (signal) => {
+  let response: Response;
+  try {
+    const timeout = AbortSignal.timeout(20_000);
+    response = await fetch(HOSTED_SESSIONS_URL, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+  } catch {
+    throw new HostedSessionsLoadError("NETWORK_ERROR", "unexpected", false);
+  }
+  // An unreadable success is unusable; an unreadable failure still has its status.
   let body: unknown;
   try {
-    response = await fetchAsSignedInUser(HOSTED_SESSIONS_URL, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
-    if (response === null) throw new HostedSessionsLoadError("UNAUTHENTICATED", "unexpected", true);
     body = await response.json();
-  } catch (error) {
-    if (error instanceof HostedSessionsLoadError) throw error;
-    if (error instanceof SignInUnavailableError) throw new HostedSessionsLoadError("AUTH_UNAVAILABLE", "unexpected", false);
-    throw new HostedSessionsLoadError("NETWORK_ERROR", "unexpected", false);
+  } catch {
+    if (response.ok) throw new HostedSessionsLoadError("NETWORK_ERROR", "unexpected", false);
   }
   if (response.ok) {
     const parsed = hostedSessionsResponseSchema.safeParse(body);
@@ -37,7 +49,7 @@ export const loadHostedSessions: LoadHostedSessions = async () => {
     return parsed.data as HostedSessionsResponse;
   }
   const failure = failureSchema.safeParse(body);
-  const code = failure.success ? failure.data.error.code : "UNEXPECTED_ERROR";
+  const code = failure.success ? failure.data.error.code : statusCodes[response.status] ?? "UNEXPECTED_ERROR";
   const signIn = code === "UNAUTHENTICATED" || code === "INACTIVE_ACCOUNT" || code === "NOT_FOUND";
   throw new HostedSessionsLoadError(code, code === "SESSION_MANAGEMENT_UNAVAILABLE" ? "unavailable" : "unexpected", signIn);
 };

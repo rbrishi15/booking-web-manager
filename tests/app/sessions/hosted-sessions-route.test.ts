@@ -112,7 +112,7 @@ describe("UC2-03 / UC2-06 GET hosted sessions", () => {
   test("is published in the OpenAPI document with every response status", () => {
     const operation = openApiDocument.paths["/api/sessions/hosted"]?.get;
     expect(operation?.operationId).toBe("listHostedSessions");
-    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation?.security).toEqual([{ bearerAuth: [] }, { loginCookie: [] }]);
     expect(Object.keys(operation?.responses ?? {})).toEqual(["200", "401", "403", "404", "500", "503"]);
   });
 });

@@ -13,8 +13,8 @@ export function registerSessionManagementApi(registry: OpenAPIRegistry): void {
     operationId: "listHostedSessions",
     tags: ["Sessions"],
     summary: "UC2-03 / UC2-06 List the booker's hosted sessions",
-    description: "Requires an active authenticated booker. Returns their OPEN, upcoming hosted sessions in start order, each with the actions the booker may take now (`set-visibility`, `preview-cancellation`), and their ended OPEN sessions that still have unverified committed participants (`awaitingAttendance`). If only the attendance list cannot be read, the sessions are still returned with an empty `awaitingAttendance`. Read-only; no money moves. Identity always comes from the bearer token.",
-    security: [{ bearerAuth: [] }],
+    description: "Requires an active authenticated booker. Returns their OPEN, upcoming hosted sessions in start order, each with the actions the booker may take now (`set-visibility`, `preview-cancellation`), and their ended OPEN sessions that still have unverified committed participants (`awaitingAttendance`). If only the attendance list cannot be read, the sessions are still returned with an empty `awaitingAttendance`. Read-only; no money moves. Identity comes from the bearer token or, when no `Authorization` header is sent, from the Supabase login cookies sent by this site's pages.",
+    security: [{ bearerAuth: [] }, { loginCookie: [] }],
     responses: {
       200: { description: "The booker's hosted sessions and sessions awaiting attendance.", content: { "application/json": { schema: hosted } } },
       401: errorResponse("Missing, invalid or expired bearer token.", "UNAUTHENTICATED", "Authentication is required"),

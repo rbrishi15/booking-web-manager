@@ -25,7 +25,7 @@ export function HostedSessionsController({ userId, actions, loadHostedSessions =
   const router = useRouter();
   const params = useSearchParams();
   const queryClient = useQueryClient();
-  const hosted = useQuery({ queryKey: [...hostedSessionsQueryKey, userId], queryFn: loadHostedSessions });
+  const hosted = useQuery({ queryKey: [...hostedSessionsQueryKey, userId], queryFn: ({ signal }) => loadHostedSessions(signal) });
 
   const signIn = hosted.error instanceof HostedSessionsLoadError && hosted.error.signIn;
   // An expired login returns here after signing in; an inactive or missing account does not.
