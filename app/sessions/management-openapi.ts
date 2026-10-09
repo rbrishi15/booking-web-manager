@@ -2,7 +2,7 @@ import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z, errorResponse } from "@/app/openapi/contracts";
 import { sessionVisibilityParamsSchema, sessionVisibilityRequestSchema } from "./visibility-input";
 import { SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE } from "./session-management-unavailable";
-import { hostedSessionsResponseSchema } from "./hosted-sessions-response";
+import { hostedSessionsResponseSchema } from "./hosted-sessions-contract";
 
 /** Registers the hosted-sessions GET and visibility PATCH operations, their schemas, and documented error responses. */
 export function registerSessionManagementApi(registry: OpenAPIRegistry): void {
@@ -13,7 +13,7 @@ export function registerSessionManagementApi(registry: OpenAPIRegistry): void {
     operationId: "listHostedSessions",
     tags: ["Sessions"],
     summary: "UC2-03 / UC2-06 List the booker's hosted sessions",
-    description: "Requires an active authenticated booker. Returns their OPEN, upcoming hosted sessions in start order, each with the actions the booker may take now (`set-visibility`, `preview-cancellation`), and their ended OPEN sessions that still have unverified committed participants (`awaitingAttendance`). If only the attendance list cannot be read, the sessions are still returned with an empty `awaitingAttendance`. Read-only; no money moves. Identity comes from the bearer token or, when no `Authorization` header is sent, from the Supabase login cookies sent by this site's pages.",
+    description: "Requires an active authenticated booker. Returns their OPEN, upcoming hosted sessions in start order, each with the actions the booker may take now (`set-visibility`, `preview-cancellation`), and their ended OPEN sessions that still have unverified committed participants (`awaitingAttendance`). Read-only; no money moves. Identity comes from the bearer token or, when no `Authorization` header is sent, from the Supabase login cookies sent by this site's pages.",
     security: [{ bearerAuth: [] }, { loginCookie: [] }],
     responses: {
       200: { description: "The booker's hosted sessions and sessions awaiting attendance.", content: { "application/json": { schema: hosted } } },

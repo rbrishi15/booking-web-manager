@@ -1,7 +1,7 @@
 "use client";
 
 import { z } from "zod";
-import { hostedSessionsResponseSchema, type HostedSessionsResponse } from "./hosted-sessions-response";
+import { hostedSessionsResponseSchema, type HostedSessionsResponse } from "./hosted-sessions-contract";
 
 export const HOSTED_SESSIONS_URL = "/api/sessions/hosted";
 
@@ -46,7 +46,7 @@ export const loadHostedSessions: LoadHostedSessions = async (signal) => {
   if (response.ok) {
     const parsed = hostedSessionsResponseSchema.safeParse(body);
     if (!parsed.success) throw new HostedSessionsLoadError("UNEXPECTED_RESPONSE", "unexpected", false);
-    return parsed.data as HostedSessionsResponse;
+    return parsed.data;
   }
   const failure = failureSchema.safeParse(body);
   const code = failure.success ? failure.data.error.code : statusCodes[response.status] ?? "UNEXPECTED_ERROR";

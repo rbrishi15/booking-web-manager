@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DomainError } from "@/domain";
 import { openApiDocument } from "@/app/openapi";
-import { hostedSessionsResponseSchema } from "@/app/sessions/hosted-sessions-response";
+import { hostedSessionsResponseSchema } from "@/app/sessions/hosted-sessions-contract";
 import { SessionManagementUnavailableError } from "@/app/sessions/session-management-unavailable";
 
 const mocks = vi.hoisted(() => ({ getDependencies: vi.fn(), authenticate: vi.fn(), forBooker: vi.fn(), attendanceDueForBooker: vi.fn() }));
@@ -68,14 +68,12 @@ describe("UC2-03 / UC2-06 GET hosted sessions", () => {
     expect(hostedSessionsResponseSchema.safeParse(body).success).toBe(true);
   });
 
-  test("still returns the hosted sessions when only the attendance-due list fails", async () => {
+  test("reports an attendance-due list failure instead of returning an empty list", async () => {
     mocks.forBooker.mockResolvedValue([hosted(1)]);
     mocks.attendanceDueForBooker.mockRejectedValue(new Error("Temporary database outage"));
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const response = await invoke();
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ sessions: [{ sessionId: "session-1" }], awaitingAttendance: [] });
-    expect(logged).toHaveBeenCalledWith("UC2-06 attendance-due list failed:", "Error");
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
   });
 
   test.each([["INACTIVE_ACCOUNT", 403], ["NOT_FOUND", 404]] as const)("reports %s from the attendance-due list instead of hiding it", async (code, status) => {

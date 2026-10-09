@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { getRouter } from "@storybook/nextjs-vite/navigation.mock";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
 import { AppShell } from "@/components/ui/app-shell";
-import type { HostedSessionsResponse } from "../hosted-sessions-response";
+import type { HostedSessionsResponse } from "../hosted-sessions-contract";
 import { HostedSessionsLoadError } from "../hosted-sessions-transport";
 import { getSessionAccountActions, toHostedSessionActions } from "../session-actions";
 import { HostedSessionsController } from "./hosted-sessions-controller";
@@ -11,7 +11,7 @@ import { HostedSessionsController } from "./hosted-sessions-controller";
 const response: HostedSessionsResponse = {
   sessions: [{
     sessionId: "private", venueName: "Bishan Sports Hall", sport: "Badminton", region: "Central", startAt: "2035-05-12T10:00:00Z", endAt: "2035-05-12T12:00:00Z",
-    visibility: "PRIVATE", availableSlots: 3, actions: toHostedSessionActions("private", [{ name: "set-visibility", visibility: "PUBLIC" }, { name: "preview-cancellation" }]),
+    visibility: "PRIVATE", availableSlots: 3, actions: [...toHostedSessionActions("private", [{ name: "set-visibility", visibility: "PUBLIC" }, { name: "preview-cancellation" }])],
   }],
   awaitingAttendance: [],
 };
@@ -67,6 +67,30 @@ export const FailedThenRetried: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: "Retry" }));
     await expect(await canvas.findByText("Bishan Sports Hall")).toBeVisible();
     await expect(calls).toBe(2);
+  },
+};
+
+/** A failed reload shows Retry instead of the old list; Retry reloads the sessions and the page's account actions. */
+export const ReloadFailedThenRetried: Story = {
+  beforeEach: () => {
+    replies = [
+      () => Promise.resolve(response),
+      () => Promise.reject(new HostedSessionsLoadError("INTERNAL_ERROR", "unexpected", false)),
+      () => Promise.resolve(response),
+    ];
+  },
+  play: async ({ canvas }) => {
+    await canvas.findByText("Bishan Sports Hall");
+    // Returning to the tab reloads the sessions in the background; this reload fails.
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    focusManager.setFocused(undefined);
+    const retry = await canvas.findByRole("button", { name: "Retry" });
+    await expect(canvas.queryByText("Bishan Sports Hall")).not.toBeInTheDocument();
+    await userEvent.click(retry);
+    await expect(getRouter().refresh).toHaveBeenCalledOnce();
+    await expect(await canvas.findByText("Bishan Sports Hall")).toBeVisible();
+    await expect(calls).toBe(3);
   },
 };
 

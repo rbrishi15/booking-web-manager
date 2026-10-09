@@ -15,6 +15,9 @@ export const hostedSessionsQueryKey = ["sessions", "hosted"] as const;
 /**
  * Loads the booker's sessions through GET /api/sessions/hosted (React Query), follows advertised
  * HTTP actions, and refetches after each change. An expired login or inactive account goes to login.
+ *
+ * Two sources, one refresh: session data comes from the API query, while the account actions
+ * (create a session, verify email) come from the server-rendered page. A refresh reloads both.
  */
 export function HostedSessionsController({ userId, actions, loadHostedSessions = defaultLoadHostedSessions }: {
   readonly userId: string;
@@ -34,7 +37,8 @@ export function HostedSessionsController({ userId, actions, loadHostedSessions =
 
   if (hosted.isPending || signIn) return <div className="mx-auto max-w-5xl px-6 pt-10 md:px-8"><LoadingSpinner label="Loading your sessions…" /></div>;
 
-  const outcome: HostedSessionsOutcome = hosted.isError && hosted.data === undefined
+  // A failed reload is shown with Retry, never hidden behind the previous list.
+  const outcome: HostedSessionsOutcome = hosted.isError
     ? { status: "error", kind: hosted.error instanceof HostedSessionsLoadError ? hosted.error.kind : "unexpected" }
     : { status: "ready", sessions: hosted.data!.sessions, awaitingAttendance: hosted.data!.awaitingAttendance };
 
@@ -42,6 +46,6 @@ export function HostedSessionsController({ userId, actions, loadHostedSessions =
     {params.get("created") === "1" && <p role="status" className="mx-auto mt-5 max-w-5xl px-6 text-sm text-success md:px-8">Your session was created successfully.</p>}
     <HostedSessionsView key={userId} outcome={outcome} actions={actions} refreshing={hosted.isFetching} onSetVisibility={(_sessionId, action) => executeSessionVisibility(action)}
       cancellation={{ userId, preview: loadCancellationPreview, cancel: executeSessionCancellation }}
-      onRefresh={() => { void queryClient.invalidateQueries({ queryKey: hostedSessionsQueryKey }); }} />
+      onRefresh={() => { router.refresh(); void queryClient.invalidateQueries({ queryKey: hostedSessionsQueryKey }); }} />
   </>;
 }
