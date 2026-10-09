@@ -11,11 +11,11 @@ exits from the `held` state belong here.
 
 ## UC2-04 Commit to Session
 
-[`handleCommitToSession`](./commit-to-session-handler.ts) is the HTTP
-boundary. Like every handler here, it uses the shared
-[`handleAuthenticatedJson`](./http.ts): it authenticates the request, validates
+[`POST /api/sessions/commit`](../api/sessions/commit/route.ts) is the HTTP
+boundary. Like every commitment route, it is built with
+[`commitmentAction`](./commitment-action.ts): the route validates
 `{ sessionId, idempotencyKey, roomToken? }` with Zod
-([parser](./commit-to-session-input.ts)), and calls
+([parser](./commit-to-session-input.ts)) and calls
 [`CommitToSession.forParticipant`](../../use-cases/sessions/CommitToSession.ts).
 The participant is always the authenticated user. Client-supplied user IDs or
 amounts are stripped, and the share comes from the stored session.
@@ -32,7 +32,7 @@ unit-of-work adapter must lock the session row (`SELECT ... FOR UPDATE`) so
 concurrent commits serialize; the in-memory test double does this by running
 transactions one at a time.
 
-The route is mounted at `POST /api/sessions/commit`; see [HTTP handlers](#http-handlers).
+The route is mounted at `POST /api/sessions/commit`; see [HTTP routes](#http-routes).
 The UI is not yet implemented.
 
 ## Waitlist promotion
@@ -103,9 +103,20 @@ Once every committed participant is verified the session becomes
 booker's payout, and the payout flow (`/app/payouts`) writes those ledger lines
 when the provider confirms.
 
-## HTTP handlers
+## HTTP routes
 
-All handlers take the acting user from authentication and require an
+Each route file names only its parser and its use-case call:
+
+```ts
+export const POST = commitmentAction({
+  parse: parseVerifyAttendanceInput,
+  run: (dependencies, input) => dependencies.verifyAttendance.forBooker(input),
+  invalidRequestMessage: "Invalid attendance verification request",
+});
+```
+
+[`commitmentAction`](./commitment-action.ts) owns the shared HTTP policy
+through [`handleAuthenticatedJson`](./http.ts). All routes take the acting user from authentication and require an
 idempotency key; Zod strips any other field, so a body cannot name another user
 or supply an amount. Known domain errors map to 4xx responses with their code
 (403 for access and authorization, 404 for missing records, 409 for state
@@ -113,13 +124,13 @@ conflicts such as insufficient funds or an unfinished session), unconfigured
 server settings to 503, and anything else to an opaque 500. Responses are not
 cached.
 
-| Route | Handler | Body | Success |
+| Route | Parser | Body | Success |
 | --- | --- | --- | --- |
-| `POST /api/sessions/commit` | [`handleCommitToSession`](./commit-to-session-handler.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
-| `POST /api/sessions/withdraw` | [`handleWithdrawFromSession`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
-| `POST /api/sessions/replacements/accept` | [`handleAcceptReplacement`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 201 |
-| `POST /api/sessions/waitlist/leave` | [`handleLeaveWaitlist`](./withdrawal-handlers.ts) | `{ sessionId, idempotencyKey }` | 200 |
-| `POST /api/sessions/attendance` | [`handleVerifyAttendance`](./verify-attendance-handler.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
+| [`POST /api/sessions/commit`](../api/sessions/commit/route.ts) | [`parseCommitToSessionInput`](./commit-to-session-input.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
+| [`POST /api/sessions/withdraw`](../api/sessions/withdraw/route.ts) | [`parseWithdrawInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
+| [`POST /api/sessions/replacements/accept`](../api/sessions/replacements/accept/route.ts) | [`parseSessionActionInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey }` | 201 |
+| [`POST /api/sessions/waitlist/leave`](../api/sessions/waitlist/leave/route.ts) | [`parseSessionActionInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey }` | 200 |
+| [`POST /api/sessions/attendance`](../api/sessions/attendance/route.ts) | [`parseVerifyAttendanceInput`](./verify-attendance-input.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
 
 The routes share one set of dependencies from
 [`getCommitmentDependencies`](./commitment-server-dependencies.ts), assembled in
@@ -132,7 +143,7 @@ Until Web Push is configured, notifications go to a
 [`NoDeliveryNotifier`](../../lib/commit/no-delivery-notifier.ts) that accepts
 and discards them.
 
-Promotion, forfeiture expiry and auto-verification have no HTTP handler; the
+Promotion, forfeiture expiry and auto-verification have no user route; the
 scheduler calls them.
 
 ## Scheduled jobs
@@ -147,13 +158,27 @@ rule, so a superset of sessions is safe. A failing job is reported and the sweep
 moves on; the next run retries it. This sweep also recovers promotions that a
 withdrawal reported as `DEFERRED`.
 
-[`handleScheduledJobs`](./scheduled-jobs-handler.ts) is the cron entry point. It
-accepts only `Authorization: Bearer <CRON_SECRET>`, compared in constant time,
-and an unset secret authorizes nothing. Each call starts a new run.
+The cron entry point is
+[`GET /api/cron/commitments`](../api/cron/commitments/route.ts). It accepts only
+`Authorization: Bearer <CRON_SECRET>`, compared in constant time by
+[`isAuthorizedCronRequest`](./cron-auth.ts), and an unset secret authorizes
+nothing. Each call invokes `RunScheduledSessionJobs.run` with a new run ID for
+up to 25 sessions ([configuration](../../use-case-config/scheduled-jobs.ts)).
 
-Not yet built: the Postgres `DueSessionQuery` adapter (it needs the sessions
-schema; it should select with `FOR UPDATE SKIP LOCKED`) and the schedule itself,
-either a `pg_cron` + `pg_net` migration or a Vercel Cron entry.
+[`PostgresDueSessionQuery`](../../lib/commit/postgres-due-session-query.ts)
+selects open sessions that have started with a late withdrawal still awaiting
+replacement, ended at least 72 hours ago, or have not started and can promote:
+a free place after pending personal-invitation reservations, and a queue head
+who is not waiting on their own invitation. Sessions that cannot make progress
+are never selected, so they cannot fill a batch and starve later sessions.
+[`PostgresVerificationReminderQuery`](../../lib/commit/postgres-verification-reminder-query.ts)
+claims and releases reminders through `sessions.verification_reminded_at`
+(migration 0009). It is not wired in yet: until Web Push can deliver
+reminders, the sweep claims none, so none are marked as sent and lost.
+
+Not yet configured: the schedule itself, either a Vercel Cron entry (the Hobby
+plan runs crons at most daily) or a `pg_cron` + `pg_net` job calling the route
+with the secret.
 
 ## Notifications
 

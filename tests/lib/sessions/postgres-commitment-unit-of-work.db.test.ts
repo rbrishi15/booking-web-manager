@@ -170,7 +170,7 @@ describe.skipIf(!DATABASE_URL)("PostgresCommitmentUnitOfWork (database)", () => 
   async function createUsers(count: number): Promise<[UUID, ...UUID[]]> {
     const ids = Array.from({ length: count }, () => randomUUID());
     for (const id of ids) {
-      await pool.query("insert into auth.users (id, email) values ($1, $2)", [
+      await pool.query("insert into auth.users (id, email, email_confirmed_at) values ($1, $2, now())", [
         id,
         `${id}@example.com`,
       ]);

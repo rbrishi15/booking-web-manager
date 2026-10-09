@@ -164,9 +164,8 @@
 /app/api/sessions/waitlist/ @Wyjessie
 /app/api/sessions/attendance/ @Wyjessie
 /use-case-config/commitments.ts @Wyjessie
-/app/api/push/ @Wyjessie
-/use-case-config/push-subscriptions.ts @Wyjessie
-/public/sw.js @Wyjessie
+/app/api/cron/commitments/ @Wyjessie
+/use-case-config/scheduled-jobs.ts @Wyjessie
 
 # Acceptance tests follow the feature owner, including DB-backed UC1-01 tests.
 /tests/use-cases/UC1-01-*.test.ts @Jolingoes
