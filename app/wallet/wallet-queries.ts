@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { observeWalletIdentity, type WalletIdentityReader } from "./wallet-identity";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WalletLoadState, WalletViewProps } from "./_components/wallet-view";
 import type { WalletLoad, WalletSummary, WalletTransactionsPage, WalletTransport } from "./wallet-transport";
@@ -43,14 +45,41 @@ export const walletQueryKeys = {
  * loading, errors and paging. Retry resets the wallet queries, which also cancels a Load more
  * still in flight, so an old page can never be appended to the fresh list.
  */
-export function useWalletScreen(transport: WalletTransport): WalletViewProps {
+export function useWalletScreen(transport: WalletTransport, readIdentity: WalletIdentityReader): WalletViewProps {
   const queryClient = useQueryClient();
+  const [identity, setIdentity] = useState<{ userId: string | null; revision: number; failed?: boolean }>();
+  const recheck = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    let previous: string | null | undefined;
+    let revision = 0;
+    const clear = () => {
+      void queryClient.cancelQueries({ queryKey: walletQueryKeys.all });
+      queryClient.removeQueries({ queryKey: walletQueryKeys.all });
+    };
+    const observer = observeWalletIdentity(readIdentity, (userId) => {
+      if (previous === userId) return;
+      previous = userId;
+      clear();
+      setIdentity({ userId, revision: ++revision });
+    }, () => {
+      previous = undefined;
+      clear();
+      setIdentity({ userId: null, revision: ++revision, failed: true });
+    });
+    recheck.current = observer.recheck;
+    return () => { observer.dispose(); recheck.current = undefined; clear(); };
+  }, [queryClient, readIdentity]);
+  const enabled = identity?.userId != null;
   const summary = useQuery({
-    queryKey: walletQueryKeys.summary,
+    queryKey: [...walletQueryKeys.summary, identity?.userId, identity?.revision],
+    enabled,
+    refetchOnWindowFocus: false,
     queryFn: ({ signal }) => unwrap(() => transport.loadSummary(signal)),
   });
   const transactions = useInfiniteQuery({
-    queryKey: walletQueryKeys.transactions,
+    queryKey: [...walletQueryKeys.transactions, identity?.userId, identity?.revision],
+    enabled,
+    refetchOnWindowFocus: false,
     queryFn: ({ pageParam, signal }) => unwrap(() => transport.loadTransactions(pageParam, signal)),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: WalletTransactionsPage) => last.nextCursor ?? undefined,
@@ -74,6 +103,14 @@ export function useWalletScreen(transport: WalletTransport): WalletViewProps {
       seen.has(item.transactionId) ? false : (seen.add(item.transactionId), true));
     history = { status: "ready", data: { items, nextCursor: transactions.data.pages.at(-1)?.nextCursor ?? null } };
     if (transactions.isFetchNextPageError) moreError = failure(transactions.error).message;
+  }
+
+  if (!enabled) {
+    const state: WalletLoadState<WalletSummary> = identity === undefined
+      ? { status: "loading" }
+      : { status: "error", message: identity.failed ? NETWORK_MESSAGE : "Log in again to see your wallet.", signIn: !identity.failed };
+    return { summary: state, history: state, loadingMore: false, moreError: null,
+      onRetry: () => recheck.current?.(), onLoadMore: () => {} };
   }
 
   return {

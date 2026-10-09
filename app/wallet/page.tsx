@@ -1,5 +1,6 @@
 "use client";
 
+import { readWalletIdentity } from "./wallet-identity-action";
 import { WalletView } from "./_components/wallet-view";
 import { walletTransport } from "./wallet-transport";
 import { useWalletScreen } from "./wallet-queries";
@@ -9,5 +10,5 @@ import { useWalletScreen } from "./wallet-queries";
  * (through React Query) to the display-only WalletView. Middleware and the layout require a login.
  */
 export default function WalletPage() {
-  return <WalletView {...useWalletScreen(walletTransport)} />;
+  return <WalletView {...useWalletScreen(walletTransport, readWalletIdentity)} />;
 }
