@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createClient } from "@/lib/supabase/client";
 
 const mocks = vi.hoisted(() => ({ dependencies: vi.fn() }));
 vi.mock("@/app/wallet/server-dependencies", () => ({ getWalletDependencies: mocks.dependencies }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
 
 import { GET as getWallet } from "@/app/api/wallet/route";
 import { GET as listTransactions } from "@/app/api/wallet/transactions/route";
@@ -19,12 +17,10 @@ function routeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respo
 
 describe("UC1-05 wallet page against the wallet API routes", () => {
   beforeEach(() => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getSession: async () => ({ data: { session: { access_token: "player-token" } }, error: null }) },
-    } as unknown as ReturnType<typeof createClient>);
     vi.stubGlobal("fetch", vi.fn(routeFetch));
     mocks.dependencies.mockResolvedValue({
-      authenticate: async () => userId,
+      // The page sends a plain GET with its cookies, which the API may identify without a bearer token.
+      authenticate: async (request: Request) => request.method === "GET" && !request.headers.has("authorization") ? userId : null,
       getWalletSummary: async () => ({
         walletId: "22222222-2222-4222-8222-222222222222", userId,
         availableBalanceCents: 10000, heldBalanceCents: 1500, currency: "SGD",

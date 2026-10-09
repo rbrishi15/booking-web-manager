@@ -47,11 +47,11 @@ export function useWalletScreen(transport: WalletTransport): WalletViewProps {
   const queryClient = useQueryClient();
   const summary = useQuery({
     queryKey: walletQueryKeys.summary,
-    queryFn: () => unwrap(transport.loadSummary),
+    queryFn: ({ signal }) => unwrap(() => transport.loadSummary(signal)),
   });
   const transactions = useInfiniteQuery({
     queryKey: walletQueryKeys.transactions,
-    queryFn: ({ pageParam }) => unwrap(() => transport.loadTransactions(pageParam)),
+    queryFn: ({ pageParam, signal }) => unwrap(() => transport.loadTransactions(pageParam, signal)),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: WalletTransactionsPage) => last.nextCursor ?? undefined,
   });

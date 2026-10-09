@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { fetchAsSignedInUser, SignInUnavailableError } from "@/lib/supabase/authorized-fetch";
 
 // Browser copies of the wallet API response contract (Harrison's PR #59, app/wallet/contracts.ts).
 // Only the fields this page shows are required; unknown fields are ignored.
@@ -41,10 +40,11 @@ export type WalletLoad<T> =
   | { readonly status: "ready"; readonly data: T }
   | { readonly status: "error"; readonly code: string; readonly message: string };
 
+/** `signal` cancels a request React Query no longer needs (for example after Retry). */
 export interface WalletTransport {
-  readonly loadSummary: () => Promise<WalletLoad<WalletSummary>>;
+  readonly loadSummary: (signal?: AbortSignal) => Promise<WalletLoad<WalletSummary>>;
   /** `before` is the previous page's `nextCursor`. */
-  readonly loadTransactions: (before?: string) => Promise<WalletLoad<WalletTransactionsPage>>;
+  readonly loadTransactions: (before?: string, signal?: AbortSignal) => Promise<WalletLoad<WalletTransactionsPage>>;
 }
 
 export const WALLET_URL = "/api/wallet";
@@ -58,11 +58,18 @@ export const WALLET_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   WALLET_API_UNAVAILABLE: "The wallet is temporarily unavailable. Please try again later.",
 };
 
-/** Requests one wallet API resource and validates the reply; signing in is handled by fetchAsSignedInUser. */
-async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<WalletLoad<T>> {
+/**
+ * Requests one wallet API resource and validates the reply. The browser sends its login
+ * cookies with this same-origin request; the API checks them, so no token is handled here.
+ */
+async function getJson<T>(url: string, schema: z.ZodType<T>, signal?: AbortSignal): Promise<WalletLoad<T>> {
   try {
-    const response = await fetchAsSignedInUser(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
-    if (response === null) return { status: "error", code: "UNAUTHENTICATED", message: WALLET_ERROR_MESSAGES.UNAUTHENTICATED! };
+    const timeout = AbortSignal.timeout(20_000);
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
     const body: unknown = await response.json();
     if (response.ok) {
       const parsed = schema.safeParse(body);
@@ -72,18 +79,17 @@ async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<WalletLoad
     const failure = errorSchema.safeParse(body);
     const code = failure.success ? failure.data.error.code : "UNEXPECTED_ERROR";
     return { status: "error", code, message: WALLET_ERROR_MESSAGES[code] ?? "We couldn't load your wallet. Please try again." };
-  } catch (error) {
-    if (error instanceof SignInUnavailableError) return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't check your sign-in. Please try again." };
+  } catch {
     return { status: "error", code: "NETWORK_ERROR", message: "We couldn't load your wallet. Check your connection and try again." };
   }
 }
 
 /** UC1-05: reads the signed-in user's balances and held funds. Reads only; no money moves. */
 export const walletTransport: WalletTransport = {
-  loadSummary: () => getJson(WALLET_URL, walletSummarySchema),
-  loadTransactions: (before) => {
+  loadSummary: (signal) => getJson(WALLET_URL, walletSummarySchema, signal),
+  loadTransactions: (before, signal) => {
     const params = new URLSearchParams({ limit: String(TRANSACTIONS_PAGE_SIZE) });
     if (before !== undefined) params.set("before", before);
-    return getJson(`${WALLET_TRANSACTIONS_URL}?${params}`, transactionsSchema);
+    return getJson(`${WALLET_TRANSACTIONS_URL}?${params}`, transactionsSchema, signal);
   },
 };

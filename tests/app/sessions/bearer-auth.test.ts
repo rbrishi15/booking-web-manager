@@ -193,3 +193,35 @@ describe("verified email required for session entry", () => {
     expect(setup.getUser).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("identity without a bearer token", () => {
+  function fallbackScenario() {
+    const setup = scenario();
+    const withoutBearer = vi.fn<(request: Request) => Promise<{ token: string; userId: string; user: User } | null>>()
+      .mockResolvedValue({ token: "cookie-token", userId: identity.id, user: identity });
+    return { ...setup, withoutBearer, authenticate: createBearerAuthenticator({ getUser: setup.getUser }, setup.status, { withoutBearer }) };
+  }
+
+  test("identifies a request with no Authorization header through the fallback, with the same account checks", async () => {
+    const setup = fallbackScenario();
+    expect(await setup.authenticate(request())).toBe(identity.id);
+    expect(setup.getUser).not.toHaveBeenCalled();
+    expect(setup.status).toHaveBeenCalledExactlyOnceWith("cookie-token", identity.id);
+    setup.status.mockResolvedValueOnce({ kind: "inactive" });
+    await expect(setup.authenticate(request())).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+  });
+
+  test("returns unauthenticated when the fallback finds no login", async () => {
+    const setup = fallbackScenario();
+    setup.withoutBearer.mockResolvedValueOnce(null);
+    expect(await setup.authenticate(request())).toBeNull();
+    expect(setup.status).not.toHaveBeenCalled();
+  });
+
+  test.each(["Bearer rejected", "Bearer", "Basic token"])("never falls back when an Authorization header is sent (%s)", async (header) => {
+    const setup = fallbackScenario();
+    setup.getUser.mockResolvedValue({ data: { user: null }, error: new AuthApiError("Rejected", 401, undefined) });
+    expect(await setup.authenticate(request(header))).toBeNull();
+    expect(setup.withoutBearer).not.toHaveBeenCalled();
+  });
+});

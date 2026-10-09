@@ -42,7 +42,7 @@ export const LoadMore: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: "Load more" }));
     await waitFor(() => expect(canvas.getByText("Top-up")).toBeVisible());
     await expect(within(canvas.getByRole("list", { name: "Transactions" })).getAllByRole("listitem")).toHaveLength(3);
-    await expect(args.transport.loadTransactions).toHaveBeenLastCalledWith("2045-03-30T08:00:00Z");
+    await expect(args.transport.loadTransactions).toHaveBeenLastCalledWith("2045-03-30T08:00:00Z", expect.any(AbortSignal));
     await expect(canvas.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   },
 };

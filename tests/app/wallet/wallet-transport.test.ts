@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { walletTransport } from "@/app/wallet/wallet-transport";
-import { createClient } from "@/lib/supabase/client";
 
-vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
-
-const getSession = vi.fn();
 const fetcher = vi.fn<typeof fetch>();
 
 const summary = {
@@ -23,14 +19,12 @@ const summary = {
 describe("UC1-05 wallet transport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getSession.mockResolvedValue({ data: { session: { access_token: "player-token" } }, error: null });
-    vi.mocked(createClient).mockReturnValue({ auth: { getSession } } as unknown as ReturnType<typeof createClient>);
     vi.stubGlobal("fetch", fetcher);
   });
 
   afterEach(() => vi.unstubAllGlobals());
 
-  test("reads the wallet summary with the bearer token and no caching", async () => {
+  test("reads the wallet summary with the login cookies and no caching", async () => {
     // Arrange
     fetcher.mockResolvedValueOnce(Response.json(summary));
 
@@ -39,8 +33,24 @@ describe("UC1-05 wallet transport", () => {
 
     // Assert
     expect(result).toEqual({ status: "ready", data: expect.objectContaining({ availableBalanceCents: 2500, heldBalanceCents: 1250 }) });
-    expect(fetcher).toHaveBeenCalledWith("/api/wallet", expect.objectContaining({ cache: "no-store" }));
-    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer player-token");
+    expect(fetcher).toHaveBeenCalledWith("/api/wallet", expect.objectContaining({ credentials: "same-origin", cache: "no-store" }));
+    // The API reads the login from the cookies; the page never handles the token.
+    expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty("headers");
+  });
+
+  test("stops the request when React Query cancels it", async () => {
+    // Arrange
+    const controller = new AbortController();
+    fetcher.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    }));
+
+    // Act
+    const pending = walletTransport.loadTransactions(undefined, controller.signal);
+    controller.abort();
+
+    // Assert
+    expect(await pending).toMatchObject({ status: "error", code: "NETWORK_ERROR" });
   });
 
   test("asks for the first page of transactions, then the next page from the cursor", async () => {
@@ -58,25 +68,8 @@ describe("UC1-05 wallet transport", () => {
     expect(fetcher.mock.calls[1]?.[0]).toBe("/api/wallet/transactions?limit=20&before=2045-04-01T09%3A00%3A00.000Z");
   });
 
-  test("reports a signed-out user without calling the API", async () => {
-    // Arrange
-    getSession.mockResolvedValueOnce({ data: { session: null }, error: null });
-
-    // Act & Assert
-    expect(await walletTransport.loadSummary()).toMatchObject({ status: "error", code: "UNAUTHENTICATED" });
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-
-  test("reports a login that cannot be read as retryable, without calling the API", async () => {
-    // Arrange
-    getSession.mockRejectedValueOnce(new Error("storage unavailable"));
-
-    // Act & Assert
-    expect(await walletTransport.loadSummary()).toMatchObject({ status: "error", code: "AUTH_UNAVAILABLE" });
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-
   test.each([
+    [401, "UNAUTHENTICATED", "Log in again"],
     [503, "WALLET_API_UNAVAILABLE", "temporarily unavailable"],
     [403, "INACTIVE_ACCOUNT", "can't use a wallet"],
     [404, "NOT_FOUND", "couldn't find your wallet"],

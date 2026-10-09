@@ -8,10 +8,20 @@ const authOptions = {
   detectSessionInUrl: false,
 };
 
+/** A Supabase user verified for this request, with the access token that proved it. */
+export interface VerifiedIdentity {
+  readonly token: string;
+  readonly userId: UUID;
+  readonly user: User;
+}
+
+/** Identifies a request that carries no Authorization header, or returns null. */
+export type FallbackIdentity = (request: Request) => Promise<VerifiedIdentity | null>;
+
 async function verifyBearerIdentity(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   request: Request,
-): Promise<{ readonly token: string; readonly userId: UUID; readonly user: User } | null> {
+): Promise<VerifiedIdentity | null> {
   const token = request.headers
     .get("authorization")
     ?.match(/^Bearer[ \t]+([^\s,]+)$/i)?.[1];
@@ -29,10 +39,16 @@ async function verifyBearerIdentity(
 export function createBearerAuthenticator(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   readStatus: (token: string, userId: UUID) => Promise<AccountStatus>,
-  options: { readonly requireVerifiedEmail?: boolean } = {},
+  options: {
+    readonly requireVerifiedEmail?: boolean;
+    /** Used only when the request has no Authorization header; a rejected bearer token never falls back. */
+    readonly withoutBearer?: FallbackIdentity;
+  } = {},
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
-    const identity = await verifyBearerIdentity(auth, request);
+    const identity = request.headers.has("authorization") || options.withoutBearer === undefined
+      ? await verifyBearerIdentity(auth, request)
+      : await options.withoutBearer(request);
     if (identity === null) return null;
     // Never cache account access: replay can reveal the private room token.
     const status = await readStatus(identity.token, identity.userId);
@@ -76,7 +92,7 @@ export function createSupabaseIdentityAuthenticator(
 export function createSupabaseSessionAuthenticator(
   url: string,
   anonKey: string,
-  options: { readonly requireVerifiedEmail?: boolean } = {},
+  options: { readonly requireVerifiedEmail?: boolean; readonly withoutBearer?: FallbackIdentity } = {},
 ) {
   const verifier = createClient(url, anonKey, { auth: authOptions });
   return createBearerAuthenticator(verifier.auth, async (token, userId) => {
