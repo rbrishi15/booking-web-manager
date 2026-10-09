@@ -62,7 +62,7 @@ describe("UC2-04 join session transport", () => {
     const outcome = await joinSession(request);
 
     // Assert
-    expect(outcome).toMatchObject({ status: "error", code: "UNAUTHENTICATED" });
+    expect(outcome).toMatchObject({ status: "error", code: "UNAUTHENTICATED", unconfirmed: false });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -71,7 +71,6 @@ describe("UC2-04 join session transport", () => {
     [403, "EMAIL_VERIFICATION_REQUIRED", "Confirm your email"],
     [409, "ALREADY_PARTICIPATING", "already joined"],
     [403, "INVALID_ACCESS", "private"],
-    [503, "SESSION_MANAGEMENT_UNAVAILABLE", "temporarily unavailable"],
   ])("shows a player-facing message for %s %s", async (status, code, text) => {
     // Arrange: the server's own message must not reach the page.
     fetcher.mockResolvedValueOnce(Response.json({ error: { code, message: "internal wording" } }, { status }));
@@ -80,13 +79,15 @@ describe("UC2-04 join session transport", () => {
     const outcome = await joinSession(request);
 
     // Assert
-    expect(outcome).toMatchObject({ status: "error", code });
+    expect(outcome).toMatchObject({ status: "error", code, unconfirmed: false });
     expect(outcome.status === "error" && outcome.message).toContain(text);
     expect(outcome).not.toHaveProperty("message", "internal wording");
   });
 
   test.each([
     ["a server error", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "INTERNAL_ERROR", message: "x" } }, { status: 500 }))],
+    ["a 503 even with a known code", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "SESSION_MANAGEMENT_UNAVAILABLE", message: "x" } }, { status: 503 }))],
+    ["a 5xx without a JSON body", () => fetcher.mockResolvedValueOnce(new Response("Bad gateway", { status: 502 }))],
     ["a network failure", () => fetcher.mockRejectedValueOnce(new Error("offline"))],
     ["a malformed success body", () => fetcher.mockResolvedValueOnce(Response.json({ kind: "SOMETHING_ELSE" }, { status: 201 }))],
   ])("treats %s as unconfirmed so the same request is retried", async (_name, arrange) => {
@@ -94,6 +95,6 @@ describe("UC2-04 join session transport", () => {
     arrange();
 
     // Act & Assert
-    expect(await joinSession(request)).toEqual({ status: "error", code: expect.any(String), message: UNCONFIRMED_JOIN_MESSAGE });
+    expect(await joinSession(request)).toEqual({ status: "error", code: expect.any(String), message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true });
   });
 });

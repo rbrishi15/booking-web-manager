@@ -11,7 +11,16 @@ export interface JoinSessionRequest {
 export type JoinSessionOutcome =
   | { readonly status: "committed"; readonly heldCents: number }
   | { readonly status: "waitlisted" }
-  | { readonly status: "error"; readonly code: string; readonly message: string };
+  | {
+      readonly status: "error";
+      readonly code: string;
+      readonly message: string;
+      /**
+       * True when the hold may or may not have happened (network failure, any 5xx, or an unreadable
+       * reply). The caller must retry with the same idempotency key so the server replays the result.
+       */
+      readonly unconfirmed: boolean;
+    };
 
 export type JoinSession = (request: JoinSessionRequest) => Promise<JoinSessionOutcome>;
 
@@ -38,7 +47,6 @@ export const JOIN_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_STATE: "This session is no longer open for joining.",
   SESSION_STARTED: "This session has already started.",
   NOT_FOUND: "This session no longer exists.",
-  SESSION_MANAGEMENT_UNAVAILABLE: "Joining sessions is temporarily unavailable. Please try again later.",
 };
 
 /** A server or network failure: the hold may or may not have happened, so retrying the same request is the safe step. */
@@ -57,9 +65,9 @@ export const joinSession: JoinSession = async (request) => {
     if (error) throw error;
     token = data.session?.access_token;
   } catch {
-    return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't check your sign-in. Please try again." };
+    return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't check your sign-in. Please try again.", unconfirmed: false };
   }
-  if (!token) return { status: "error", code: "UNAUTHENTICATED", message: JOIN_ERROR_MESSAGES.UNAUTHENTICATED! };
+  if (!token) return { status: "error", code: "UNAUTHENTICATED", message: JOIN_ERROR_MESSAGES.UNAUTHENTICATED!, unconfirmed: false };
 
   let response: Response;
   let body: unknown;
@@ -76,12 +84,12 @@ export const joinSession: JoinSession = async (request) => {
     });
     body = await response.json();
   } catch {
-    return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE };
+    return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true };
   }
 
   if (response.ok) {
     const result = resultSchema.safeParse(body);
-    if (!result.success) return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE };
+    if (!result.success) return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true };
     return result.data.kind === "COMMITTED"
       ? { status: "committed", heldCents: result.data.heldCents }
       : { status: "waitlisted" };
@@ -89,7 +97,7 @@ export const joinSession: JoinSession = async (request) => {
 
   const failure = errorSchema.safeParse(body);
   const code = failure.success ? failure.data.error.code : "UNEXPECTED_ERROR";
-  const known = JOIN_ERROR_MESSAGES[code];
-  if (known !== undefined) return { status: "error", code, message: known };
-  return { status: "error", code, message: response.status >= 500 ? UNCONFIRMED_JOIN_MESSAGE : "We couldn't join this session. Please try again." };
+  // A server failure never proves that nothing was held, so every 5xx is unconfirmed.
+  if (response.status >= 500) return { status: "error", code, message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true };
+  return { status: "error", code, message: JOIN_ERROR_MESSAGES[code] ?? "We couldn't join this session. Please try again.", unconfirmed: false };
 };

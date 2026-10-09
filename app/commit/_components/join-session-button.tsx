@@ -24,8 +24,9 @@ const singaporeStart = new Intl.DateTimeFormat("en-SG", {
 
 /**
  * UC2-04 Commit to Session: a Join button whose dialog shows the amount that will be held
- * before the player confirms. One idempotency key is used for every attempt made while the
- * dialog stays open, so a retry after an unconfirmed result can never hold the share twice.
+ * before the player confirms. After an unconfirmed result the same idempotency key is kept,
+ * even if the dialog is closed and reopened, so a retry can never hold the share twice. A new
+ * key is made only after a confirmed outcome or an explicit rejection.
  */
 export function JoinSessionButton({ session, joinSession = defaultJoinSession, loginHref = "/login?next=%2Fdiscover", roomToken }: {
   readonly session: JoinableSession;
@@ -41,8 +42,11 @@ export function JoinSessionButton({ session, joinSession = defaultJoinSession, l
   const busy = useRef(false);
 
   function openDialog() {
-    idempotencyKey.current = crypto.randomUUID();
-    setOutcome(null);
+    const unconfirmed = outcome?.status === "error" && outcome.unconfirmed;
+    if (!unconfirmed || idempotencyKey.current === null) {
+      idempotencyKey.current = crypto.randomUUID();
+      setOutcome(null);
+    }
     setOpen(true);
   }
 
@@ -53,7 +57,7 @@ export function JoinSessionButton({ session, joinSession = defaultJoinSession, l
     try {
       setOutcome(await joinSession({ sessionId: session.sessionId, idempotencyKey: idempotencyKey.current, roomToken }));
     } catch {
-      setOutcome({ status: "error", code: "UNKNOWN_RESULT", message: "We couldn't confirm whether you joined. Please try again." });
+      setOutcome({ status: "error", code: "UNKNOWN_RESULT", message: "We couldn't confirm whether you joined. Please try again.", unconfirmed: true });
     } finally {
       busy.current = false;
       setPending(false);

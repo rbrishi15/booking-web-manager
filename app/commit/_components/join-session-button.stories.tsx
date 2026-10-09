@@ -56,7 +56,7 @@ export const Waitlisted: Story = {
 };
 
 export const InsufficientFunds: Story = {
-  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "INSUFFICIENT_FUNDS", message: JOIN_ERROR_MESSAGES.INSUFFICIENT_FUNDS! })) },
+  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "INSUFFICIENT_FUNDS", message: JOIN_ERROR_MESSAGES.INSUFFICIENT_FUNDS!, unconfirmed: false })) },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: /join/i }));
     const dialog = within(document.body).getByRole("dialog");
@@ -67,7 +67,7 @@ export const InsufficientFunds: Story = {
 };
 
 export const EmailNotVerified: Story = {
-  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", message: JOIN_ERROR_MESSAGES.EMAIL_VERIFICATION_REQUIRED! })) },
+  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", message: JOIN_ERROR_MESSAGES.EMAIL_VERIFICATION_REQUIRED!, unconfirmed: false })) },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: /join/i }));
     const dialog = within(document.body).getByRole("dialog");
@@ -77,7 +77,7 @@ export const EmailNotVerified: Story = {
 };
 
 export const SignedOut: Story = {
-  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "UNAUTHENTICATED", message: JOIN_ERROR_MESSAGES.UNAUTHENTICATED! })) },
+  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "UNAUTHENTICATED", message: JOIN_ERROR_MESSAGES.UNAUTHENTICATED!, unconfirmed: false })) },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: /join/i }));
     const dialog = within(document.body).getByRole("dialog");
@@ -94,7 +94,7 @@ export const RetryReusesTheSameRequest: Story = {
     joinSession: fn<JoinSession>(async () => {
       retryAttempts += 1;
       return retryAttempts === 1
-        ? { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE }
+        ? { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true }
         : { status: "committed", heldCents: 1250 };
     }),
   },
@@ -108,5 +108,55 @@ export const RetryReusesTheSameRequest: Story = {
     const calls = (args.joinSession as ReturnType<typeof fn<JoinSession>>).mock.calls;
     await expect(calls).toHaveLength(2);
     await expect(calls[1]![0].idempotencyKey).toBe(calls[0]![0].idempotencyKey);
+  },
+};
+
+/** Closing the dialog after an unconfirmed result and joining again still replays the same request. */
+let reopenAttempts = 0;
+export const ReopenAfterUnconfirmedKeepsTheRequest: Story = {
+  beforeEach: () => { reopenAttempts = 0; },
+  args: {
+    joinSession: fn<JoinSession>(async () => {
+      reopenAttempts += 1;
+      return reopenAttempts === 1
+        ? { status: "error", code: "INTERNAL_ERROR", message: UNCONFIRMED_JOIN_MESSAGE, unconfirmed: true }
+        : { status: "committed", heldCents: 1250 };
+    }),
+  },
+  play: async ({ args, canvasElement }) => {
+    const join = within(canvasElement).getByRole("button", { name: /join/i });
+    await userEvent.click(join);
+    let dialog = within(document.body).getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /confirm and hold/i }));
+    await waitFor(() => expect(within(dialog).getByText(/couldn't confirm whether you joined/i)).toBeVisible());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.click(join);
+    dialog = within(document.body).getByRole("dialog");
+    await waitFor(() => expect(within(dialog).getByText(/couldn't confirm whether you joined/i)).toBeVisible());
+    await userEvent.click(within(dialog).getByRole("button", { name: /confirm and hold/i }));
+    await waitFor(() => expect(within(dialog).getByRole("heading", { name: "You're in" })).toBeVisible());
+    const calls = (args.joinSession as ReturnType<typeof fn<JoinSession>>).mock.calls;
+    await expect(calls).toHaveLength(2);
+    await expect(calls[1]![0].idempotencyKey).toBe(calls[0]![0].idempotencyKey);
+  },
+};
+
+/** After an explicit rejection a fresh request is made, since nothing was held. */
+export const ReopenAfterRejectionStartsANewRequest: Story = {
+  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "INSUFFICIENT_FUNDS", message: JOIN_ERROR_MESSAGES.INSUFFICIENT_FUNDS!, unconfirmed: false })) },
+  play: async ({ args, canvasElement }) => {
+    const join = within(canvasElement).getByRole("button", { name: /join/i });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await userEvent.click(join);
+      const dialog = within(document.body).getByRole("dialog");
+      await userEvent.click(within(dialog).getByRole("button", { name: /confirm and hold/i }));
+      await waitFor(() => expect(within(dialog).getByText(/top up your wallet/i)).toBeVisible());
+      await userEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+      await waitFor(() => expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument());
+    }
+    const calls = (args.joinSession as ReturnType<typeof fn<JoinSession>>).mock.calls;
+    await expect(calls[1]![0].idempotencyKey).not.toBe(calls[0]![0].idempotencyKey);
   },
 };
