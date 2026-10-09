@@ -225,3 +225,28 @@ describe("identity without a bearer token", () => {
     expect(setup.withoutBearer).not.toHaveBeenCalled();
   });
 });
+
+describe("identity-only authentication without a bearer token", () => {
+  function identityFallbackScenario() {
+    const getUser = vi.fn<SupabaseClient["auth"]["getUser"]>()
+      .mockResolvedValue({ data: { user: null }, error: new AuthApiError("Rejected", 401, undefined) });
+    vi.mocked(createClient).mockReset().mockReturnValue({ auth: { getUser } } as never);
+    const withoutBearer = vi.fn<(request: Request) => Promise<{ token: string; userId: string; user: User } | null>>()
+      .mockResolvedValue({ token: "cookie-token", userId: identity.id, user: identity });
+    return { getUser, withoutBearer, authenticate: createSupabaseIdentityAuthenticator("https://supabase.example", "anon-key", { withoutBearer }) };
+  }
+
+  test("identifies a request with no Authorization header through the fallback", async () => {
+    const setup = identityFallbackScenario();
+    expect(await setup.authenticate(request())).toBe(identity.id);
+    setup.withoutBearer.mockResolvedValueOnce(null);
+    expect(await setup.authenticate(request())).toBeNull();
+    expect(setup.getUser).not.toHaveBeenCalled();
+  });
+
+  test("never falls back when a rejected bearer token is sent", async () => {
+    const setup = identityFallbackScenario();
+    expect(await setup.authenticate(request("Bearer rejected"))).toBeNull();
+    expect(setup.withoutBearer).not.toHaveBeenCalled();
+  });
+});

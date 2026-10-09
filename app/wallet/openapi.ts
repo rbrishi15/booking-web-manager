@@ -12,13 +12,6 @@ import { WALLET_API_UNAVAILABLE_MESSAGE } from "./wallet-api-unavailable";
 const readSecurity: Record<string, string[]>[] = [{ bearerAuth: [] }, { loginCookie: [] }];
 
 export function registerWalletApi(registry: OpenAPIRegistry): void {
-  registry.registerComponent("securitySchemes", "loginCookie", {
-    type: "apiKey",
-    in: "cookie",
-    name: "sb-<project-ref>-auth-token",
-    description:
-      "Supabase login cookies set by @supabase/ssr when signing in to this site (large values are split into `.0`, `.1` chunks). Sent automatically by same-origin pages. Accepted only by read (GET) operations; operations that change data require `bearerAuth`.",
-  });
   const summarySchema = registry.register(
     "WalletSummary",
     walletSummarySchema,

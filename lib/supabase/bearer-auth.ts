@@ -36,6 +36,17 @@ async function verifyBearerIdentity(
   return { token, userId: data.user.id, user: data.user };
 }
 
+/** The bearer token when an Authorization header is sent; otherwise the fallback, if any. A rejected bearer token never falls back. */
+function identify(
+  auth: Pick<SupabaseClient["auth"], "getUser">,
+  request: Request,
+  withoutBearer: FallbackIdentity | undefined,
+): Promise<VerifiedIdentity | null> {
+  return request.headers.has("authorization") || withoutBearer === undefined
+    ? verifyBearerIdentity(auth, request)
+    : withoutBearer(request);
+}
+
 export function createBearerAuthenticator(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   readStatus: (token: string, userId: UUID) => Promise<AccountStatus>,
@@ -46,9 +57,7 @@ export function createBearerAuthenticator(
   } = {},
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
-    const identity = request.headers.has("authorization") || options.withoutBearer === undefined
-      ? await verifyBearerIdentity(auth, request)
-      : await options.withoutBearer(request);
+    const identity = await identify(auth, request, options.withoutBearer);
     if (identity === null) return null;
     // Never cache account access: replay can reveal the private room token.
     const status = await readStatus(identity.token, identity.userId);
@@ -83,9 +92,10 @@ export function createBearerAuthenticator(
 export function createSupabaseIdentityAuthenticator(
   url: string,
   anonKey: string,
+  options: { readonly withoutBearer?: FallbackIdentity } = {},
 ): (request: Request) => Promise<UUID | null> {
   const verifier = createClient(url, anonKey, { auth: authOptions });
-  return async (request) => (await verifyBearerIdentity(verifier.auth, request))?.userId ?? null;
+  return async (request) => (await identify(verifier.auth, request, options.withoutBearer))?.userId ?? null;
 }
 
 /** Identity verification is shared; each profile read has its own bearer-scoped client. */

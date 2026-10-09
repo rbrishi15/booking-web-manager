@@ -3,7 +3,9 @@
 This module assembles the public API reference. [`index.ts`](./index.ts) passes an
 explicit list of feature registration functions to
 [`createOpenApiDocument`](./document.ts). Each call creates a fresh registry with
-shared API metadata and the `bearerAuth` security scheme.
+shared API metadata and the `bearerAuth` and `loginCookie` security schemes.
+`loginCookie` (the Supabase login cookies) may be listed only by read (`GET`)
+operations; operations that change data require `bearerAuth`.
 [`contracts.ts`](./contracts.ts) supplies OpenAPI-enabled `z` and the shared
 `errorResponse` helper. Features own their operation descriptions, schemas,
 examples, authentication requirements and response codes.
