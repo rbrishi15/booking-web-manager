@@ -397,9 +397,13 @@ and verifies the production route's 503 response.
 These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 `npm run test:integration` and `npm run test:e2e:integration` provision a separate
 disposable Supabase stack for database and authenticated HTTP coverage.
-`npm run test:sessions:integration` runs both. They require Docker, the Supabase CLI and the full ordered migration sequence,
-including migration 0005 for group tables. See the configuration guide for
-integration prerequisites and test isolation.
+`npm run test:sessions:integration` runs both. They require Docker, the
+Supabase CLI and the full ordered migration sequence, including migration 0005
+for group tables. When migration 0005 is unavailable, set
+`SESSION_TEST_PREREQUISITE_SQL` to an external copy of `0005_regular_groups.sql`
+for isolated preview testing only. See the
+[configuration guide](./use-case-config/README.md) for integration prerequisites,
+test isolation, and the required rerun against the merged migration sequence.
 
 ## Contributing
 
