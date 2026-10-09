@@ -80,8 +80,8 @@ function redirectKeepingCookies(url: URL, from: NextResponse): NextResponse {
 }
 
 export const config = {
-  // Skip Next.js internals, images, and the Stripe webhook (Stripe never logs in).
+  // Skip Next.js internals, images, the push service worker, and the Stripe webhook (Stripe never logs in).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
