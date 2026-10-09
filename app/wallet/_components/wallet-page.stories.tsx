@@ -1,8 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { WalletLoad, WalletTransactionsPage, WalletTransport } from "../wallet-transport";
-import { WalletController } from "./wallet-controller";
+import { useWalletScreen } from "../wallet-queries";
+import { WalletView } from "./wallet-view";
 import { firstTransactionsPage, secondTransactionsPage, walletSummary } from "./wallet-fixtures";
+
+/** Renders exactly what app/wallet/page.tsx renders, with a fake wallet API. */
+function WalletPageHarness({ transport }: { readonly transport: WalletTransport }) {
+  return <WalletView {...useWalletScreen(transport)} />;
+}
 
 function transport(overrides: Partial<WalletTransport> = {}): WalletTransport {
   return {
@@ -13,12 +21,17 @@ function transport(overrides: Partial<WalletTransport> = {}): WalletTransport {
 }
 
 const meta = {
-  title: "Wallet/Overview controller",
-  component: WalletController,
+  title: "Wallet/Page",
+  component: WalletPageHarness,
   parameters: { layout: "fullscreen" },
   globals: { viewport: { value: "phone", isRotated: false } },
+  // A fresh cache per story, as each browser tab gets in the app.
+  decorators: [(Story) => {
+    const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    return <QueryClientProvider client={client}><Story /></QueryClientProvider>;
+  }],
   args: { transport: transport() },
-} satisfies Meta<typeof WalletController>;
+} satisfies Meta<typeof WalletPageHarness>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -29,7 +42,7 @@ export const LoadMore: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: "Load more" }));
     await waitFor(() => expect(canvas.getByText("Top-up")).toBeVisible());
     await expect(within(canvas.getByRole("list", { name: "Transactions" })).getAllByRole("listitem")).toHaveLength(3);
-    await expect(args.transport!.loadTransactions).toHaveBeenLastCalledWith("2045-03-30T08:00:00Z");
+    await expect(args.transport.loadTransactions).toHaveBeenLastCalledWith("2045-03-30T08:00:00Z");
     await expect(canvas.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   },
 };
@@ -63,6 +76,26 @@ export const LoadMoreAfterLoginExpired: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: "Load more" }));
     const history = within(canvas.getByRole("region", { name: "Transactions" }));
     await waitFor(() => expect(history.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login?next=%2Fwallet"));
+  },
+};
+
+/** A Load more whose request throws shows an error and leaves Load more usable (no stuck button). */
+let throwingAttempts = 0;
+export const LoadMoreRequestThrows: Story = {
+  beforeEach: () => { throwingAttempts = 0; },
+  args: { transport: transport({
+    loadTransactions: fn<WalletTransport["loadTransactions"]>(async (before) => {
+      if (!before) return { status: "ready", data: firstTransactionsPage };
+      throwingAttempts += 1;
+      if (throwingAttempts === 1) throw new Error("offline");
+      return { status: "ready", data: secondTransactionsPage };
+    }),
+  }) },
+  play: async ({ canvas }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(canvas.getByText(/check your connection/i)).toBeVisible());
+    await userEvent.click(canvas.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(canvas.getByText("Top-up")).toBeVisible());
   },
 };
 
