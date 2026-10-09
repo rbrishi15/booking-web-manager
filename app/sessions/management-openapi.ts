@@ -2,9 +2,28 @@ import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z, errorResponse } from "@/app/openapi/contracts";
 import { sessionVisibilityParamsSchema, sessionVisibilityRequestSchema } from "./visibility-input";
 import { SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE } from "./session-management-unavailable";
+import { hostedSessionsResponseSchema } from "./hosted-sessions-response";
 
-/** Registers the visibility PATCH operation, request and result schemas, and documented error responses. */
+/** Registers the hosted-sessions GET and visibility PATCH operations, their schemas, and documented error responses. */
 export function registerSessionManagementApi(registry: OpenAPIRegistry): void {
+  const hosted = registry.register("HostedSessions", hostedSessionsResponseSchema);
+  registry.registerPath({
+    method: "get",
+    path: "/api/sessions/hosted",
+    operationId: "listHostedSessions",
+    tags: ["Sessions"],
+    summary: "UC2-03 / UC2-06 List the booker's hosted sessions",
+    description: "Requires an active authenticated booker. Returns their OPEN, upcoming hosted sessions in start order, each with the actions the booker may take now (`set-visibility`, `preview-cancellation`), and their ended OPEN sessions that still have unverified committed participants (`awaitingAttendance`). If only the attendance list cannot be read, the sessions are still returned with an empty `awaitingAttendance`. Read-only; no money moves. Identity always comes from the bearer token.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: { description: "The booker's hosted sessions and sessions awaiting attendance.", content: { "application/json": { schema: hosted } } },
+      401: errorResponse("Missing, invalid or expired bearer token.", "UNAUTHENTICATED", "Authentication is required"),
+      403: errorResponse("Inactive account.", "INACTIVE_ACCOUNT", "An inactive account cannot manage sessions"),
+      404: errorResponse("The authenticated user has no account.", "NOT_FOUND", "User was not found"),
+      500: errorResponse("Unexpected infrastructure failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
+      503: errorResponse("Required server settings are missing.", "SESSION_MANAGEMENT_UNAVAILABLE", SESSION_MANAGEMENT_UNAVAILABLE_MESSAGE),
+    },
+  });
   const request = registry.register("SessionVisibilityRequest", sessionVisibilityRequestSchema);
   const result = registry.register("SessionVisibilityResult", z.object({ sessionId: z.string().uuid(), visibility: z.enum(["PUBLIC", "PRIVATE"]) }));
   registry.registerPath({
