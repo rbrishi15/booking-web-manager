@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/client";
+import { fetchAsSignedInUser, SignInUnavailableError } from "@/lib/supabase/authorized-fetch";
 
 // Browser copies of the wallet API response contract (Harrison's PR #59, app/wallet/contracts.ts).
 // Only the fields this page shows are required; unknown fields are ignored.
@@ -58,23 +58,11 @@ export const WALLET_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   WALLET_API_UNAVAILABLE: "The wallet is temporarily unavailable. Please try again later.",
 };
 
+/** Requests one wallet API resource and validates the reply; signing in is handled by fetchAsSignedInUser. */
 async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<WalletLoad<T>> {
-  let token: string | undefined;
   try {
-    const { data, error } = await createClient().auth.getSession();
-    if (error) throw error;
-    token = data.session?.access_token;
-  } catch {
-    return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't check your sign-in. Please try again." };
-  }
-  if (!token) return { status: "error", code: "UNAUTHENTICATED", message: WALLET_ERROR_MESSAGES.UNAUTHENTICATED! };
-
-  try {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
+    const response = await fetchAsSignedInUser(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+    if (response === null) return { status: "error", code: "UNAUTHENTICATED", message: WALLET_ERROR_MESSAGES.UNAUTHENTICATED! };
     const body: unknown = await response.json();
     if (response.ok) {
       const parsed = schema.safeParse(body);
@@ -84,7 +72,8 @@ async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<WalletLoad
     const failure = errorSchema.safeParse(body);
     const code = failure.success ? failure.data.error.code : "UNEXPECTED_ERROR";
     return { status: "error", code, message: WALLET_ERROR_MESSAGES[code] ?? "We couldn't load your wallet. Please try again." };
-  } catch {
+  } catch (error) {
+    if (error instanceof SignInUnavailableError) return { status: "error", code: "AUTH_UNAVAILABLE", message: "We couldn't check your sign-in. Please try again." };
     return { status: "error", code: "NETWORK_ERROR", message: "We couldn't load your wallet. Check your connection and try again." };
   }
 }

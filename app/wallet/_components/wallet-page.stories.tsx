@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { WalletLoad, WalletTransactionsPage, WalletTransport } from "../wallet-transport";
@@ -76,6 +76,30 @@ export const LoadMoreAfterLoginExpired: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: "Load more" }));
     const history = within(canvas.getByRole("region", { name: "Transactions" }));
     await waitFor(() => expect(history.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login?next=%2Fwallet"));
+  },
+};
+
+/** A login that expires before a background refresh (returning to the tab) shows Log in, not the old list. */
+let refreshAttempts = 0;
+export const RefreshAfterLoginExpired: Story = {
+  beforeEach: () => { refreshAttempts = 0; },
+  args: { transport: transport({
+    loadTransactions: fn<WalletTransport["loadTransactions"]>(async () => {
+      refreshAttempts += 1;
+      return refreshAttempts === 1
+        ? { status: "ready", data: firstTransactionsPage }
+        : { status: "error", code: "UNAUTHENTICATED", message: "Log in again to see your wallet." };
+    }),
+  }) },
+  play: async ({ canvas }) => {
+    await canvas.findByRole("button", { name: "Load more" });
+    // Leaving and returning to the tab makes React Query refresh the wallet in the background.
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    focusManager.setFocused(undefined);
+    const history = within(canvas.getByRole("region", { name: "Transactions" }));
+    await waitFor(() => expect(history.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login?next=%2Fwallet"));
+    await expect(history.queryByRole("list", { name: "Transactions" })).not.toBeInTheDocument();
   },
 };
 

@@ -63,8 +63,9 @@ export function useWalletScreen(transport: WalletTransport): WalletViewProps {
   let moreError: string | null = null;
   if (transactions.isPending) history = { status: "loading" };
   else if (transactions.data === undefined) history = failure(transactions.error);
-  else if (transactions.isFetchNextPageError && failure(transactions.error).signIn) {
-    // An expired login during Load more needs the same Log in action as the first load.
+  else if (transactions.isError && failure(transactions.error).signIn) {
+    // An expired login during Load more or a background refresh needs the same Log in action as
+    // the first load, not the old transactions.
     history = failure(transactions.error);
   } else {
     // A timestamp cursor can repeat the boundary row; never show a transaction twice.

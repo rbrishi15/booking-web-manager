@@ -39,7 +39,8 @@ describe("UC1-05 wallet transport", () => {
 
     // Assert
     expect(result).toEqual({ status: "ready", data: expect.objectContaining({ availableBalanceCents: 2500, heldBalanceCents: 1250 }) });
-    expect(fetcher).toHaveBeenCalledWith("/api/wallet", expect.objectContaining({ headers: { Authorization: "Bearer player-token" }, cache: "no-store" }));
+    expect(fetcher).toHaveBeenCalledWith("/api/wallet", expect.objectContaining({ cache: "no-store" }));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer player-token");
   });
 
   test("asks for the first page of transactions, then the next page from the cursor", async () => {
@@ -63,6 +64,15 @@ describe("UC1-05 wallet transport", () => {
 
     // Act & Assert
     expect(await walletTransport.loadSummary()).toMatchObject({ status: "error", code: "UNAUTHENTICATED" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  test("reports a login that cannot be read as retryable, without calling the API", async () => {
+    // Arrange
+    getSession.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    // Act & Assert
+    expect(await walletTransport.loadSummary()).toMatchObject({ status: "error", code: "AUTH_UNAVAILABLE" });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
