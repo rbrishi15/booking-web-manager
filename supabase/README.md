@@ -88,7 +88,7 @@ separate and were pushed directly, not through this file:
 | Setting | Value |
 | --- | --- |
 | `site_url` | `https://booking-web-manager.vercel.app` |
-| `additional_redirect_urls` | `["https://booking-web-manager.vercel.app"]` |
+| `additional_redirect_urls` | `["https://booking-web-manager.vercel.app", "https://booking-web-manager.vercel.app/auth/callback"]` |
 | `auth.email.enable_confirmations` | `false` — sign-up creates the account and logs in immediately |
 | Custom SMTP | off — Supabase's built-in sender only |
 
