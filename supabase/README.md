@@ -78,7 +78,7 @@ https://supabase.com/dashboard/account/tokens the first time).
 Nobody should need to run `supabase db push --linked` against it by hand;
 if you find yourself doing that, something upstream of this file didn't work.
 
-### Auth config (site URL, redirects, SMTP)
+### Auth config (site URL, redirects, email confirmation)
 
 The committed `config.toml` in this directory is the **local dev** config —
 `site_url` and `additional_redirect_urls` there deliberately point at
@@ -89,33 +89,23 @@ separate and were pushed directly, not through this file:
 | --- | --- |
 | `site_url` | `https://booking-web-manager.vercel.app` |
 | `additional_redirect_urls` | `["https://booking-web-manager.vercel.app"]` |
-| SMTP provider | Resend — `smtp.resend.com:587`, user `resend`, sender `onboarding@resend.dev` |
+| `auth.email.enable_confirmations` | `false` — sign-up creates the account and logs in immediately |
+| Custom SMTP | off — Supabase's built-in sender only |
 
-Before this was set, `site_url` on the hosted project was still the
-`supabase init` default (`http://localhost:3000`) and SMTP wasn't configured
-at all, so sign-up confirmation emails either failed outright (Supabase's
-built-in sender has a very low, non-configurable rate limit) or would have
-redirected to localhost once sent.
-
-**Resend caveat:** no domain is verified yet, so Resend's sandbox mode only
-delivers to the email address its own account is registered under — not to
-arbitrary recipients. Fine for one person testing sign-up; not enough for the
-whole team to each test with their own email. Verifying a domain (Resend →
-Domains) would lift that, but needs a domain the team actually controls DNS
-for — nobody does right now.
-
-The Resend API key is **not committed anywhere** and isn't an app env var
-(the app never talks to Resend directly — only Supabase Auth's SMTP relay
-does). Ask Rishi for it, or generate a fresh one at
-[resend.com](https://resend.com) → API Keys and re-push.
+Sign-up sends no email: Supabase creates the account, returns a session, and
+the register action redirects to Home. Anyone can register with any address;
+there is no proof-of-ownership step. That's deliberate for a test-mode student
+project, and it's reversible — set `enable_confirmations = true` again (and
+configure custom SMTP, since the built-in sender's rate limit is very low and
+not configurable) if email verification is ever needed.
 
 To change any of this yourself: write a **minimal** `config.toml` declaring
 only the keys you want to change (anything undeclared is left alone), run
 `supabase config diff --project-ref rofrvxezteioulhlnfcj` against it first to
 confirm the blast radius is exactly what you expect, then
 `supabase config push --project-ref rofrvxezteioulhlnfcj`. Secret fields
-(like SMTP `pass`) use the `env(VAR_NAME)` syntax so the real value never sits
-in a file — export it in your shell first. Don't run `config push` with the
+use the `env(VAR_NAME)` syntax so the real value never sits in a file —
+export it in your shell first. Don't run `config push` with the
 full committed `config.toml` as-is; it declares the local-dev `site_url` and
 would overwrite the hosted project's correct one.
 
