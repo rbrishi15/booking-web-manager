@@ -51,6 +51,17 @@ export class PostgresSessionManagementRepository {
     return this.hydrate(rows);
   }
 
+  /** UC2-06: loads the booker's OPEN sessions that ended at or before now, most recently ended first. */
+  async listEndedOpen(bookerId: UUID, now: Date): Promise<readonly Session[]> {
+    const rows = await this.sql.query(
+      `select ${sessionColumns} from sessions
+       where booker_id = $1 and status = 'OPEN' and end_at <= $2
+       order by end_at desc, session_id`,
+      [bookerId, now],
+    );
+    return this.hydrate(rows);
+  }
+
   /** Persists only visibility and throws SessionPersistenceError unless exactly one session is updated. */
   async saveVisibility(session: Session): Promise<void> {
     const rows = await this.sql.query(

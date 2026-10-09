@@ -6,7 +6,7 @@ import { RemoveParticipant } from "@/use-cases/sessions/RemoveParticipant";
 import type { SessionParticipantRemovalResult, SessionRemovalReadTransaction, SessionRemovalRepositories, SessionRemovalTransaction } from "@/use-cases/sessions/session-removal-transaction";
 import { ParticipantRemovalVersioner } from "@/lib/sessions/removal-versioner";
 import { createTestUser } from "../domain/accounts/user-fixtures";
-import { createTestSession, hoursBeforeSessionStart, readyBooker, sessionDetails, sessionStartsAt } from "../domain/sessions/session/session-fixtures";
+import { createTestSession, hoursAfterSessionEnd, hoursBeforeSessionStart, readyBooker, sessionDetails, sessionStartsAt } from "../domain/sessions/session/session-fixtures";
 
 describe("UC2-03b Remove Participant", () => {
   test("previews the historical hold without saving changes or moving funds", async () => {
@@ -184,13 +184,39 @@ describe("Session participant list", () => {
     const scenario = removal(initial);
     expect(await scenario.list.forBooker("booker", "s")).toEqual({
       sessionId: "s", venueName: "Court", sport: "Badminton", startAt: initial.booking.startAt, endAt: initial.booking.endAt,
-      status: "OPEN", availableSlots: 1, participants: [
-        { participationId: "p-alice", displayName: "Alice", status: "COMMITTED", canRemove: true },
-        { participationId: "p-ben", displayName: "Deleted user", status: "REMOVED", canRemove: false },
-        { participationId: "p-waiting", displayName: "Unnamed player", status: "WAITLISTED", canRemove: false },
+      status: "OPEN", availableSlots: 1, canVerifyAttendance: false, participants: [
+        { participationId: "p-alice", displayName: "Alice", status: "COMMITTED", attendance: "UNVERIFIED", canRemove: true },
+        { participationId: "p-ben", displayName: "Deleted user", status: "REMOVED", attendance: "UNVERIFIED", canRemove: false },
+        { participationId: "p-waiting", displayName: "Unnamed player", status: "WAITLISTED", attendance: "UNVERIFIED", canRemove: false },
       ],
     });
   });
+  test("shows each attendance outcome and opens UC2-06 verification once an open session has ended", async () => {
+    // Arrange: the session has ended and Alice has already been marked attended.
+    const initial = createTestSession({ committedUserIds: ["alice", "ben"] });
+    readyBooker().verifyAttendance(initial, { marks: [{ participationId: "p-alice", attendance: "ATTENDED" }], now: hoursAfterSessionEnd(1) });
+    const scenario = removal(initial);
+    scenario.clock.now.mockReturnValue(hoursAfterSessionEnd(2));
+
+    // Act
+    const list = await scenario.list.forBooker("booker", "s");
+
+    // Assert
+    expect(list.canVerifyAttendance).toBe(true);
+    expect(list.participants.map(({ participationId, attendance }) => [participationId, attendance])).toEqual([
+      ["p-alice", "ATTENDED"], ["p-ben", "UNVERIFIED"],
+    ]);
+  });
+
+  test("keeps attendance verification closed before the session ends", async () => {
+    // Arrange: the session has started but not ended.
+    const scenario = removal();
+    scenario.clock.now.mockReturnValue(sessionStartsAt);
+
+    // Act & Assert
+    expect((await scenario.list.forBooker("booker", "s")).canVerifyAttendance).toBe(false);
+  });
+
   test("keeps history visible after start and cancellation while disabling removal", async () => {
     const scenario = removal();
     scenario.clock.now.mockReturnValue(sessionStartsAt);

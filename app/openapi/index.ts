@@ -6,6 +6,7 @@ import { registerSessionManagementApi } from "@/app/sessions/management-openapi"
 import { registerSessionCancellationApi } from "@/app/sessions/cancellation-openapi";
 import { registerParticipantRemovalApi } from "@/app/sessions/removal-openapi";
 import { registerVenueApi } from "@/app/venues/openapi";
+import { registerWalletApi } from "@/app/wallet/openapi";
 import { createOpenApiDocument } from "./document";
 
 /** Add feature documentation here; the public route and Swagger UI stay generic. */
@@ -18,4 +19,5 @@ export const openApiDocument = createOpenApiDocument([
   registerSessionCancellationApi,
   registerParticipantRemovalApi,
   registerVenueApi,
+  registerWalletApi,
 ]);

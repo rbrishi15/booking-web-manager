@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Money } from "@/components/ui/money";
+import { AttendanceVerificationForm } from "@/app/commit/_components/attendance-verification-form";
 import type { SessionParticipantsOutcome } from "../removal-actions";
 import { ParticipantRemovalDialog, type ParticipantRemovalTransport, type RemovalResult, type RemovalTarget } from "./participant-removal-dialog";
 
@@ -21,6 +22,7 @@ export interface SessionParticipantsViewProps {
 const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
   timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
 });
+const attendanceLabels = { ATTENDED: "Attended", ABSENT: "Absent" } as const;
 const statusLabels = {
   COMMITTED: "Committed", WAITLISTED: "Waitlisted", LEFT_WAITLIST: "Left waitlist",
   WITHDRAWN: "Withdrawn", REMOVED: "Removed", CANCELLED: "Cancelled",
@@ -94,6 +96,8 @@ export function SessionParticipantsView({ sessionId, outcome, refreshing, remova
         <p className="mt-3 text-sm">{availableSlots} {availableSlots === 1 ? "slot" : "slots"} available</p>
         {(session.status !== "OPEN" || started) && <p className="mt-2 text-sm text-muted-foreground">Participants can only be removed before an open session starts. Records remain available below.</p>}
       </section>
+      {session.canVerifyAttendance && <AttendanceVerificationForm sessionId={session.sessionId} onSaved={onRefresh}
+        players={session.participants.filter((participant) => participant.status === "COMMITTED" && participant.attendance === "UNVERIFIED")} />}
       <section aria-labelledby="participant-list-heading">
         <h2 id="participant-list-heading" className="mb-3 text-lg font-semibold">Participants ({session.participants.length})</h2>
         {session.participants.length === 0 ? <EmptyState title="No participants yet" description="Participants will appear here when they join this session." />
@@ -104,7 +108,8 @@ export function SessionParticipantsView({ sessionId, outcome, refreshing, remova
                 <article aria-label={participant.displayName} className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <h3 className="break-words font-medium">{participant.displayName}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{statusLabels[status]}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{statusLabels[status]}
+                      {status === "COMMITTED" && participant.attendance !== "UNVERIFIED" && <> · {attendanceLabels[participant.attendance]}</>}</p>
                   </div>
                   {status === "COMMITTED" && participant.canRemove && session.status === "OPEN" && !started && <Button
                     variant="outline" className="min-h-11" disabled={refreshing || recoveryLocked}

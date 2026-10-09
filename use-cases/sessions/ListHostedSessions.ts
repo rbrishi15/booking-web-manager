@@ -16,6 +16,17 @@ export interface HostedSession {
   readonly actions: readonly HostedSessionOperation[];
 }
 
+/** UC2-06: an ended session whose committed participants still need the booker's attendance check. */
+export interface AttendanceDueSession {
+  readonly sessionId: UUID;
+  readonly venueName: string;
+  readonly sport: Sport;
+  readonly startAt: Date;
+  readonly endAt: Date;
+  /** Committed participants not yet marked attended or absent. */
+  readonly unverifiedCount: number;
+}
+
 export type HostedSessionOperation =
   | { readonly name: "set-visibility"; readonly visibility: Visibility }
   | { readonly name: "preview-cancellation" };
@@ -60,6 +71,30 @@ export class ListHostedSessions {
           availableSlots: session.getAvailableSlots(now),
           actions,
         };
+      });
+    });
+  }
+
+  /**
+   * UC2-06: the booker's ended sessions that still have unverified committed participants.
+   * Verification itself is POST /api/sessions/attendance; unverified places auto-verify 72h after the end.
+   */
+  async attendanceDueForBooker(bookerId: UUID): Promise<readonly AttendanceDueSession[]> {
+    return this.dependencies.transaction.run(async ({ users, sessions }) => {
+      const user = await requireAggregate(users, bookerId, "User");
+      DomainError.require(user.accountStatus === "ACTIVE", "INACTIVE_ACCOUNT", "An inactive account cannot manage sessions");
+      const ended = await sessions.listEndedOpen(bookerId, this.dependencies.clock.now());
+      return ended.flatMap((session) => {
+        const unverifiedCount = session.participantList.participations.filter((participation) =>
+          participation.status === "COMMITTED" && participation.attendance === "UNVERIFIED").length;
+        return unverifiedCount === 0 ? [] : [{
+          sessionId: session.sessionId,
+          venueName: session.booking.venueName,
+          sport: session.booking.sport,
+          startAt: session.booking.startAt,
+          endAt: session.booking.endAt,
+          unverifiedCount,
+        }];
       });
     });
   }
