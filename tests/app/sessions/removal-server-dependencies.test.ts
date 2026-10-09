@@ -5,7 +5,7 @@ const config = vi.hoisted(() => ({ createSessionRemovalDependencies: vi.fn<() =>
 vi.mock("@/use-case-config/removal", () => config);
 const dependencies: SessionRemovalDependencies = {
   authenticate: async () => null,
-  listParticipants: { forBooker: async (_bookerId, sessionId) => ({ sessionId, venueName: "Venue", sport: "BADMINTON", startAt: new Date(), endAt: new Date(), status: "OPEN", availableSlots: 1, participants: [] }) },
+  listParticipants: { forBooker: async (_bookerId, sessionId) => ({ sessionId, venueName: "Venue", sport: "BADMINTON", startAt: new Date(), endAt: new Date(), status: "OPEN", availableSlots: 1, canVerifyAttendance: false, participants: [] }) },
   previewRemoval: { forBooker: async (_bookerId, sessionId, participationId) => ({ sessionId, participationId, refundCents: 501, previewVersion: "a".repeat(64) }) },
   createRemoval: () => ({ forBooker: async (_bookerId, sessionId, participationId) => ({ sessionId, participationId, status: "REMOVED", refundCents: 501 }) }),
 };

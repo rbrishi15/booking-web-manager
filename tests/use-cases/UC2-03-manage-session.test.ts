@@ -156,10 +156,11 @@ function management(session = createTestSession()) {
   const getUser = vi.fn<(id: string) => Promise<User | null>>().mockResolvedValue(createTestUser({ userId: "booker" }));
   const getSession = vi.fn<(id: string) => Promise<Session | null>>().mockResolvedValue(session);
   const listUpcoming = vi.fn<SessionManagementRepositories["sessions"]["listUpcoming"]>().mockResolvedValue([]);
+  const listEndedOpen = vi.fn<SessionManagementRepositories["sessions"]["listEndedOpen"]>().mockResolvedValue([]);
   const saveVisibility = vi.fn<SessionManagementRepositories["sessions"]["saveVisibility"]>().mockResolvedValue(undefined);
-  const repositories = { users: { get: getUser }, sessions: { get: getSession, listUpcoming, saveVisibility } };
+  const repositories = { users: { get: getUser }, sessions: { get: getSession, listUpcoming, listEndedOpen, saveVisibility } };
   const transaction: SessionManagementTransaction = { run: (work) => work(repositories) };
   const run = vi.spyOn(transaction, "run");
   const clock = { now: vi.fn(() => hoursBeforeSessionStart(48)) };
-  return { session, repositories, getUser, getSession, listUpcoming, saveVisibility, run, clock, toggle: new ToggleSessionVisibility({ transaction, clock }), list: new ListHostedSessions({ transaction, clock }) };
+  return { session, repositories, getUser, getSession, listUpcoming, listEndedOpen, saveVisibility, run, clock, toggle: new ToggleSessionVisibility({ transaction, clock }), list: new ListHostedSessions({ transaction, clock }) };
 }

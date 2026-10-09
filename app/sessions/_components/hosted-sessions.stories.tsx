@@ -176,3 +176,16 @@ export const CreationAndCancellation: Story = {
 };
 export const Desktop: Story = { globals: { viewport: { value: "desktop", isRotated: false } } };
 export const Dark: Story = { globals: { theme: "dark" } };
+
+/** UC2-06: ended sessions with players still to check are listed above the hosted sessions. */
+export const AttendanceDue: Story = {
+  args: { outcome: { status: "ready", sessions, awaitingAttendance: [
+    { sessionId: "ended", venueName: "Toa Payoh Sports Hall", sport: "Badminton", startAt: "2035-05-01T10:00:00Z", endAt: "2035-05-01T12:00:00Z", unverifiedCount: 3 },
+  ] } },
+  play: async ({ canvas }) => {
+    const section = within(canvas.getByRole("region", { name: "Check attendance" }));
+    await expect(section.getByText("3 players to check")).toBeVisible();
+    await expect(section.getByRole("link", { name: "Check attendance" })).toHaveAttribute("href", "/sessions/ended/participants");
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+  },
+};
