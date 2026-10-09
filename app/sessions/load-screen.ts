@@ -19,9 +19,16 @@ export async function loadHostedSessionsScreen(userId: string): Promise<HostedSe
   if (account.kind === "lookup-failed") return { status: "error", kind: "unexpected" };
   try {
     const { listHostedSessions } = await getSessionManagementDependencies();
-    const sessions = await listHostedSessions.forBooker(userId);
+    const [sessions, attendanceDue] = await Promise.all([
+      listHostedSessions.forBooker(userId),
+      listHostedSessions.attendanceDueForBooker(userId),
+    ]);
     return {
       status: "ready",
+      awaitingAttendance: attendanceDue.map((session) => ({
+        sessionId: session.sessionId, venueName: session.venueName, sport: session.sport,
+        startAt: session.startAt.toISOString(), endAt: session.endAt.toISOString(), unverifiedCount: session.unverifiedCount,
+      })),
       sessions: sessions.map((session) => ({
         sessionId: session.sessionId, venueName: session.venueName, sport: session.sport,
         region: session.region, startAt: session.startAt.toISOString(), endAt: session.endAt.toISOString(),

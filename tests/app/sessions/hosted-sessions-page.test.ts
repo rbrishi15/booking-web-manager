@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 
 const forBooker = vi.fn<ListHostedSessions["forBooker"]>();
+const attendanceDueForBooker = vi.fn<ListHostedSessions["attendanceDueForBooker"]>();
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -25,8 +26,9 @@ beforeEach(() => {
   });
   vi.mocked(getAccountStatus).mockResolvedValue({ kind: "active" });
   forBooker.mockResolvedValue([]);
+  attendanceDueForBooker.mockResolvedValue([]);
   vi.mocked(getSessionManagementDependencies).mockResolvedValue({
-    authenticate: vi.fn(), toggleVisibility: { forBooker: vi.fn() }, listHostedSessions: { forBooker },
+    authenticate: vi.fn(), toggleVisibility: { forBooker: vi.fn() }, listHostedSessions: { forBooker, attendanceDueForBooker },
   });
 });
 
@@ -60,11 +62,24 @@ describe("hosted Sessions page", () => {
     expect(page.props.actions).toEqual([{ name: "create-session", href: "/sessions/create", method: "GET", inputs: {} }]);
   });
 
+  test("UC2-06 serializes ended sessions that still need the booker's attendance check", async () => {
+    attendanceDueForBooker.mockResolvedValue([{
+      sessionId: "ended", venueName: "Bishan Sports Hall", sport: "Badminton",
+      startAt: new Date("2042-08-01T10:00:00Z"), endAt: new Date("2042-08-01T12:00:00Z"), unverifiedCount: 3,
+    }]);
+    const page = await SessionsPage();
+    expect(attendanceDueForBooker).toHaveBeenCalledExactlyOnceWith("booker");
+    expect(page.props.outcome.awaitingAttendance).toEqual([{
+      sessionId: "ended", venueName: "Bishan Sports Hall", sport: "Badminton",
+      startAt: "2042-08-01T10:00:00.000Z", endAt: "2042-08-01T12:00:00.000Z", unverifiedCount: 3,
+    }]);
+  });
+
   test("unverified users can view hosted sessions and receive the email recovery action", async () => {
     const user = await getCurrentUser();
     vi.mocked(getCurrentUser).mockResolvedValue({ ...user!, emailVerified: false });
     const page = await SessionsPage();
-    expect(page.props.outcome).toEqual({ status: "ready", sessions: [] });
+    expect(page.props.outcome).toEqual({ status: "ready", sessions: [], awaitingAttendance: [] });
     expect(page.props.actions).toEqual([{ name: "verify-email", href: "/profile/email", method: "GET", inputs: {} }]);
     expect(forBooker).toHaveBeenCalledExactlyOnceWith("booker");
   });

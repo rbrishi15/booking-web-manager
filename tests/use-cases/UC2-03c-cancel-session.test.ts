@@ -144,7 +144,7 @@ function cancellation(initial = createTestSession()) {
     return result;
   } };
   const previewTransaction: SessionManagementTransaction = { run: (work) => work({
-    users: { get: getUser }, sessions: { get: getSession, listUpcoming: async () => [], saveVisibility: async () => { throw new Error("Preview must not save"); } },
+    users: { get: getUser }, sessions: { get: getSession, listUpcoming: async () => [], listEndedOpen: async () => [], saveVisibility: async () => { throw new Error("Preview must not save"); } },
   }) };
   const preview = new PreviewSessionCancellation({ transaction: previewTransaction, clock, versioner });
   const cancel = new CancelSession({ transaction, clock, versioner });

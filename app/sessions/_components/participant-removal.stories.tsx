@@ -12,12 +12,12 @@ const userId = "removal-story";
 const session: SessionParticipants = {
   sessionId: "20000000-0000-4000-8000-000000000001", venueName: "Bishan Sports Hall",
   sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z",
-  status: "OPEN", availableSlots: 0,
+  status: "OPEN", availableSlots: 0, canVerifyAttendance: false,
   participants: [
-    { participationId: "30000000-0000-4000-8000-000000000001", displayName: "Alex Tan", status: "COMMITTED", canRemove: true },
-    { participationId: "30000000-0000-4000-8000-000000000002", displayName: "Priya Lim", status: "WAITLISTED", canRemove: false },
-    { participationId: "30000000-0000-4000-8000-000000000003", displayName: "Sam Lee", status: "WITHDRAWN", canRemove: false },
-    { participationId: "30000000-0000-4000-8000-000000000004", displayName: "Taylor Chan", status: "REMOVED", canRemove: false },
+    { participationId: "30000000-0000-4000-8000-000000000001", displayName: "Alex Tan", status: "COMMITTED", attendance: "UNVERIFIED", canRemove: true },
+    { participationId: "30000000-0000-4000-8000-000000000002", displayName: "Priya Lim", status: "WAITLISTED", attendance: "UNVERIFIED", canRemove: false },
+    { participationId: "30000000-0000-4000-8000-000000000003", displayName: "Sam Lee", status: "WITHDRAWN", attendance: "UNVERIFIED", canRemove: false },
+    { participationId: "30000000-0000-4000-8000-000000000004", displayName: "Taylor Chan", status: "REMOVED", attendance: "UNVERIFIED", canRemove: false },
   ],
 };
 const participationId = session.participants[0]!.participationId;
@@ -220,7 +220,7 @@ export const PreventDuplicateSubmission: Story = {
 
 export const SavedRequestAfterParticipantRemoved: Story = {
   beforeEach: () => { sessionStorage.setItem(storageKey, JSON.stringify(savedRequest)); },
-  args: { outcome: { status: "ready", session: { ...session, availableSlots: 1, participants: session.participants.map((participant) => participant.participationId === participationId ? { ...participant, status: "REMOVED", canRemove: false } : participant) } } },
+  args: { outcome: { status: "ready", session: { ...session, availableSlots: 1, participants: session.participants.map((participant) => participant.participationId === participationId ? { ...participant, status: "REMOVED", attendance: "UNVERIFIED", canRemove: false } : participant) } } },
   play: async ({ canvas, args }) => {
     const dialog = within(await within(document.body).findByRole("dialog"));
     await userEvent.click(dialog.getByRole("button", { name: "Retry removal" }));
@@ -301,3 +301,23 @@ export const StartedSession: Story = {
 export const EmptyRoster: Story = { args: { outcome: { status: "ready", session: { ...session, availableSlots: 8, participants: [] } } } };
 export const Unavailable: Story = { args: { outcome: { status: "error", code: "SESSION_REMOVAL_UNAVAILABLE", message: "Participant management is temporarily unavailable.", refresh: false, retrySameRequest: true } } };
 export const Desktop: Story = { globals: { viewport: { value: "desktop", isRotated: false } } };
+
+/** UC2-06: once an open session has ended, the booker sees the attendance check above the list. */
+export const AttendanceCheckOpen: Story = {
+  args: { outcome: { status: "ready", session: { ...session, canVerifyAttendance: true } } },
+  play: async ({ canvas }) => {
+    const form = within(canvas.getByRole("region", { name: "Check attendance" }));
+    await expect(form.getByRole("group", { name: "Alex Tan" })).toBeVisible();
+    await expect(form.queryByRole("group", { name: "Priya Lim" })).not.toBeInTheDocument();
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+  },
+};
+
+export const AttendanceAlreadyMarked: Story = {
+  args: { outcome: { status: "ready", session: { ...session, canVerifyAttendance: true, participants: session.participants.map((participant) =>
+    participant.status === "COMMITTED" ? { ...participant, attendance: "ABSENT" as const, canRemove: false } : participant) } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/Committed · Absent/)).toBeVisible();
+    await expect(within(canvas.getByRole("region", { name: "Check attendance" })).queryByRole("group")).not.toBeInTheDocument();
+  },
+};

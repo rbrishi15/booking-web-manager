@@ -75,6 +75,15 @@ test("lists only the owner's upcoming open sessions, including full sessions, wi
   expect(query.mock.calls[0]?.[1]).toEqual(["booker", now]);
 });
 
+test("UC2-06 lists only the owner's ended open sessions, most recently ended first, without update locks", async () => {
+  const { query, repository } = scenario();
+  await repository.listEndedOpen("booker", now);
+  expect(query.mock.calls[0]?.[0]).toContain("booker_id = $1 and status = 'OPEN' and end_at <= $2");
+  expect(query.mock.calls[0]?.[0]).toContain("order by end_at desc, session_id");
+  expect(query.mock.calls[0]?.[0]).not.toMatch(/for update/i);
+  expect(query.mock.calls[0]?.[1]).toEqual(["booker", now]);
+});
+
 test("preserves participant-list order for equal withdrawal times and subtracts direct invitations from capacity", async () => {
   const withdrawn = { status: "WITHDRAWN", withdrawn_at: now, hold_state: "AWAITING_REPLACEMENT", replacement_mode: "OPEN_SLOT" };
   const { repository } = scenario([sessionRow()], [

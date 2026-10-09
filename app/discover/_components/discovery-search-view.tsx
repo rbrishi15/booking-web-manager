@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useId } from "react";
 import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
+import { JoinSessionButton } from "@/app/commit/_components/join-session-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -215,7 +216,10 @@ function CompactSessionCard({ session }: { readonly session: DiscoveryPage["item
           <div className="flex items-start gap-1.5"><Clock3 className="mt-0.5 h-3 w-3 shrink-0 sm:h-4 sm:w-4" aria-hidden="true" /><dt className="sr-only">Session time in Singapore</dt><dd className="min-w-0"><time dateTime={session.startAt}>{singaporeTime.format(start)}</time> – <time dateTime={session.endAt}>{sameDay ? singaporeTime.format(end) : singaporeDateTime.format(end)}</time> SGT</dd></div>
           <div className="flex items-start gap-1.5"><Users className="mt-0.5 h-3 w-3 shrink-0 sm:h-4 sm:w-4" aria-hidden="true" /><dt>Total capacity</dt><dd>{session.totalSlots}</dd></div>
         </dl>
-        <dl className="mt-2"><dt className="sr-only">Booking share</dt><dd className="flex flex-wrap items-baseline gap-x-1.5"><Money cents={session.bookingShareCents} className="text-base font-semibold sm:text-xl" /><span className="text-[10px] text-muted-foreground sm:text-xs">per person</span></dd></dl>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+          <dl><dt className="sr-only">Booking share</dt><dd className="flex flex-wrap items-baseline gap-x-1.5"><Money cents={session.bookingShareCents} className="text-base font-semibold sm:text-xl" /><span className="text-[10px] text-muted-foreground sm:text-xs">per person</span></dd></dl>
+          <JoinSessionButton session={session} />
+        </div>
       </div>
     </li>
   );

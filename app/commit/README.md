@@ -33,7 +33,11 @@ concurrent commits serialize; the in-memory test double does this by running
 transactions one at a time.
 
 The route is mounted at `POST /api/sessions/commit`; see [HTTP routes](#http-routes).
-The UI is not yet implemented.
+Each Discover result has a **Join** button
+([`JoinSessionButton`](./_components/join-session-button.tsx)). Its dialog shows the
+share that will be held before the player confirms, then calls the route through
+[`joinSession`](./join-session-transport.ts). One idempotency key covers every attempt
+while the dialog is open, so retrying an unconfirmed result cannot hold the share twice.
 
 ## Waitlist promotion
 
@@ -102,6 +106,15 @@ Once every committed participant is verified the session becomes
 `RELEASE` lines and absent or forfeiture-due shares `FORFEIT` lines of the
 booker's payout, and the payout flow (`/app/payouts`) writes those ledger lines
 when the provider confirms.
+
+**UI.** My sessions lists ended sessions with players still to check
+(`ListHostedSessions.attendanceDueForBooker`). Their participant page shows
+[`AttendanceVerificationForm`](./_components/attendance-verification-form.tsx):
+the booker marks each unverified committed player attended or absent, confirms,
+and the marks go to `POST /api/sessions/attendance` through
+[`verifyAttendance`](./verify-attendance-transport.ts). After an unconfirmed
+result the same key and marks are kept and the choices locked, so a retry
+can only replay that request.
 
 ## HTTP routes
 
