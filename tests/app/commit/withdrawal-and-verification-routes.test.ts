@@ -1,9 +1,14 @@
-import { handleVerifyAttendance } from "@/app/commit/verify-attendance-handler";
-import {
-  handleAcceptReplacement,
-  handleLeaveWaitlist,
-  handleWithdrawFromSession,
-} from "@/app/commit/withdrawal-handlers";
+import { describe, expect, test, vi } from "vitest";
+
+const getDependencies = vi.hoisted(() => vi.fn());
+vi.mock("@/app/commit/commitment-server-dependencies", () => ({
+  getCommitmentDependencies: getDependencies,
+}));
+import { POST as verifyRoute } from "@/app/api/sessions/attendance/route";
+import { POST as acceptRoute } from "@/app/api/sessions/replacements/accept/route";
+import { POST as leaveRoute } from "@/app/api/sessions/waitlist/leave/route";
+import { POST as withdrawRoute } from "@/app/api/sessions/withdraw/route";
+import { commitmentDependencies } from "./commitment-test-dependencies";
 import { Session, type UUID } from "@/domain";
 import { AcceptReplacement } from "@/use-cases/sessions/AcceptReplacement";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
@@ -11,7 +16,6 @@ import { LeaveWaitlist } from "@/use-cases/sessions/LeaveWaitlist";
 import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
 import { VerifyAttendance } from "@/use-cases/sessions/VerifyAttendance";
 import { WithdrawFromSession } from "@/use-cases/sessions/WithdrawFromSession";
-import { describe, expect, test } from "vitest";
 import {
   createTestUserDetails,
   readyBookerUser,
@@ -31,8 +35,8 @@ const carolId = "33333333-3333-4333-8333-333333333333";
 const daveId = "44444444-4444-4444-8444-444444444444";
 const sessionId = "55555555-5555-4555-8555-555555555555";
 
-describe("handleWithdrawFromSession", () => {
-  test("handleWithdrawFromSession_WhenEarly_RefundsTheSignedInParticipant", async () => {
+describe("POST /api/sessions/withdraw", () => {
+  test("withdrawRoute_WhenEarly_RefundsTheSignedInParticipant", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursBeforeSessionStart(31));
@@ -54,7 +58,7 @@ describe("handleWithdrawFromSession", () => {
     expect(scenario.unitOfWork.availableCents(bobId)).toBe(9_500);
   });
 
-  test("handleWithdrawFromSession_WhenReplacementModeIsUnknown_Returns400", async () => {
+  test("withdrawRoute_WhenReplacementModeIsUnknown_Returns400", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -69,7 +73,7 @@ describe("handleWithdrawFromSession", () => {
     expect(scenario.participantStatus(aliceId)).toBe("COMMITTED");
   });
 
-  test("handleWithdrawFromSession_WhenDirectInviteHasNoInvitee_Returns400", async () => {
+  test("withdrawRoute_WhenDirectInviteHasNoInvitee_Returns400", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -83,7 +87,7 @@ describe("handleWithdrawFromSession", () => {
     expect(response.status).toBe(400);
   });
 
-  test("handleWithdrawFromSession_WhenUserIsNotParticipating_Returns404", async () => {
+  test("withdrawRoute_WhenUserIsNotParticipating_Returns404", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -95,8 +99,8 @@ describe("handleWithdrawFromSession", () => {
   });
 });
 
-describe("handleAcceptReplacement", () => {
-  test("handleAcceptReplacement_WhenInvited_Returns201AndRefundsTheWithdrawer", async () => {
+describe("POST /api/sessions/replacements/accept", () => {
+  test("acceptReplacementRoute_WhenInvited_Returns201AndRefundsTheWithdrawer", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursBeforeSessionStart(10));
@@ -115,7 +119,7 @@ describe("handleAcceptReplacement", () => {
     expect(scenario.unitOfWork.availableCents(daveId)).toBe(9_500);
   });
 
-  test("handleAcceptReplacement_WhenNotInvited_Returns403", async () => {
+  test("acceptReplacementRoute_WhenNotInvited_Returns403", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -130,8 +134,8 @@ describe("handleAcceptReplacement", () => {
   });
 });
 
-describe("handleLeaveWaitlist", () => {
-  test("handleLeaveWaitlist_WhenWaitlisted_Returns200", async () => {
+describe("POST /api/sessions/waitlist/leave", () => {
+  test("leaveWaitlistRoute_WhenWaitlisted_Returns200", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -143,7 +147,7 @@ describe("handleLeaveWaitlist", () => {
     expect(scenario.participantStatus(carolId)).toBe("LEFT_WAITLIST");
   });
 
-  test("handleLeaveWaitlist_WhenCommittedInstead_Returns409", async () => {
+  test("leaveWaitlistRoute_WhenCommittedInstead_Returns409", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -156,8 +160,8 @@ describe("handleLeaveWaitlist", () => {
   });
 });
 
-describe("handleVerifyAttendance", () => {
-  test("handleVerifyAttendance_WhenBookerMarksEveryone_Returns200AwaitingPayout", async () => {
+describe("POST /api/sessions/attendance", () => {
+  test("attendanceRoute_WhenBookerMarksEveryone_Returns200AwaitingPayout", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursAfterSessionEnd(1));
@@ -176,7 +180,7 @@ describe("handleVerifyAttendance", () => {
     });
   });
 
-  test("handleVerifyAttendance_WhenCallerIsNotBooker_Returns403", async () => {
+  test("attendanceRoute_WhenCallerIsNotBooker_Returns403", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursAfterSessionEnd(1));
@@ -193,7 +197,7 @@ describe("handleVerifyAttendance", () => {
     });
   });
 
-  test("handleVerifyAttendance_WhenSessionHasNotEnded_Returns409", async () => {
+  test("attendanceRoute_WhenSessionHasNotEnded_Returns409", async () => {
     // Arrange
     const scenario = await handlerScenario();
 
@@ -209,7 +213,7 @@ describe("handleVerifyAttendance", () => {
     });
   });
 
-  test("handleVerifyAttendance_WhenNoMarksAreSent_Returns400", async () => {
+  test("attendanceRoute_WhenNoMarksAreSent_Returns400", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursAfterSessionEnd(1));
@@ -221,7 +225,7 @@ describe("handleVerifyAttendance", () => {
     expect(response.status).toBe(400);
   });
 
-  test("handleVerifyAttendance_WhenAttendanceValueIsUnknown_Returns400", async () => {
+  test("attendanceRoute_WhenAttendanceValueIsUnknown_Returns400", async () => {
     // Arrange
     const scenario = await handlerScenario();
     scenario.setTime(hoursAfterSessionEnd(1));
@@ -278,7 +282,6 @@ async function handlerScenario() {
     leaveWaitlist: new LeaveWaitlist({ ...dependencies, promote }),
   };
   const verifyAttendance = new VerifyAttendance(dependencies);
-  const as = (userId: UUID) => async () => userId;
   const idOf = (userId: UUID) => participationIds.get(userId) ?? userId;
 
   return {
@@ -296,30 +299,33 @@ async function handlerScenario() {
         .participantList.findByUserId(userId)?.status;
     },
     withdraw(userId: UUID, body: unknown) {
-      return handleWithdrawFromSession(jsonRequest(body), {
-        authenticate: as(userId),
-        ...withdrawal,
-      });
+      return serve(withdrawRoute, userId, body);
     },
     accept(userId: UUID) {
-      return handleAcceptReplacement(
-        jsonRequest({ sessionId, idempotencyKey: "accept" }),
-        { authenticate: as(userId), ...withdrawal },
-      );
+      return serve(acceptRoute, userId, { sessionId, idempotencyKey: "accept" });
     },
     leave(userId: UUID) {
-      return handleLeaveWaitlist(
-        jsonRequest({ sessionId, idempotencyKey: "leave" }),
-        { authenticate: as(userId), ...withdrawal },
-      );
+      return serve(leaveRoute, userId, { sessionId, idempotencyKey: "leave" });
     },
     verify(userId: UUID, marks: unknown[]) {
-      return handleVerifyAttendance(
-        jsonRequest({ sessionId, idempotencyKey: "verify", marks }),
-        { authenticate: as(userId), verifyAttendance },
-      );
+      return serve(verifyRoute, userId, { sessionId, idempotencyKey: "verify", marks });
     },
   };
+
+  function serve(
+    route: (request: Request) => Promise<Response>,
+    userId: UUID,
+    body: unknown,
+  ) {
+    getDependencies.mockResolvedValue(
+      commitmentDependencies({
+        authenticate: async () => userId,
+        ...withdrawal,
+        verifyAttendance,
+      }),
+    );
+    return route(jsonRequest(body));
+  }
 }
 
 function withdrawBody(overrides: Record<string, unknown> = {}) {

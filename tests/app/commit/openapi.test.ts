@@ -1,12 +1,17 @@
-import { openApiDocument } from "@/app/openapi";
-import { handleCommitToSession } from "@/app/commit/commit-to-session-handler";
-import {
-  handleAcceptReplacement,
-  handleLeaveWaitlist,
-  handleWithdrawFromSession,
-} from "@/app/commit/withdrawal-handlers";
-import { handleVerifyAttendance } from "@/app/commit/verify-attendance-handler";
 import { describe, expect, test, vi } from "vitest";
+
+const getDependencies = vi.hoisted(() => vi.fn());
+vi.mock("@/app/commit/commitment-server-dependencies", () => ({
+  getCommitmentDependencies: getDependencies,
+}));
+import { openApiDocument } from "@/app/openapi";
+import { POST as commit } from "@/app/api/sessions/commit/route";
+import { POST as withdrawRoute } from "@/app/api/sessions/withdraw/route";
+import { POST as acceptRoute } from "@/app/api/sessions/replacements/accept/route";
+import { POST as leaveRoute } from "@/app/api/sessions/waitlist/leave/route";
+import { POST as verifyRoute } from "@/app/api/sessions/attendance/route";
+import { handleScheduledJobs } from "@/app/commit/scheduled-jobs-handler";
+import { commitmentDependencies } from "./commitment-test-dependencies";
 
 const userId = "44444444-4444-4444-8444-444444444444";
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -46,14 +51,15 @@ describe("commitment Swagger contracts", () => {
     ]);
   });
 
-  test("the commit example is accepted by the original handler and supplies no actor or price", async () => {
+  test("the commit example is accepted by the mounted route and supplies no actor or price", async () => {
     const path = paths[0];
     const forParticipant = vi.fn(async () => ({
       kind: "COMMITTED" as const, sessionId, participationId, heldCents: 500,
     }));
-    const response = await handleCommitToSession(requestFor(path), {
+    getDependencies.mockResolvedValue(commitmentDependencies({
       authenticate: async () => userId, commitToSession: { forParticipant },
-    });
+    }));
+    const response = await commit(requestFor(path));
     expect(response.status).toBe(201);
     expect(forParticipant).toHaveBeenCalledWith({
       ...exampleAt(path), userId,
@@ -62,7 +68,7 @@ describe("commitment Swagger contracts", () => {
     expect(exampleAt(path)).not.toHaveProperty("heldCents");
   });
 
-  test("withdrawal and invitation examples match the original handler schemas", async () => {
+  test("withdrawal and invitation examples are accepted by the mounted routes", async () => {
     const withdraw = vi.fn(async () => ({
       kind: "REFUNDED" as const, sessionId, participationId, refundedCents: 500,
       promotion: { status: "NOT_NEEDED" as const },
@@ -71,25 +77,26 @@ describe("commitment Swagger contracts", () => {
     const leave = vi.fn(async () => ({
       sessionId, participationId, promotion: { status: "DEFERRED" as const },
     }));
-    const dependencies = {
+    getDependencies.mockResolvedValue(commitmentDependencies({
       authenticate: async () => userId,
       withdrawFromSession: { forParticipant: withdraw },
       acceptReplacement: { forInvitee: accept },
       leaveWaitlist: { forParticipant: leave },
-    };
-    expect((await handleWithdrawFromSession(requestFor(paths[1]), dependencies)).status).toBe(200);
+    }));
+    expect((await withdrawRoute(requestFor(paths[1]))).status).toBe(200);
     expect(withdraw).toHaveBeenCalledWith({ ...exampleAt(paths[1]), userId });
-    expect((await handleAcceptReplacement(requestFor(paths[2]), dependencies)).status).toBe(201);
+    expect((await acceptRoute(requestFor(paths[2]))).status).toBe(201);
     expect(accept).toHaveBeenCalledWith({ ...exampleAt(paths[2]), userId });
-    expect((await handleLeaveWaitlist(requestFor(paths[3]), dependencies)).status).toBe(200);
+    expect((await leaveRoute(requestFor(paths[3]))).status).toBe(200);
     expect(leave).toHaveBeenCalledWith({ ...exampleAt(paths[3]), userId });
   });
 
-  test("attendance example invokes the original booker-verification handler", async () => {
+  test("attendance example invokes the mounted booker-verification route", async () => {
     const forBooker = vi.fn(async () => ({ sessionId, status: "AWAITING_PAYOUT" as const }));
-    const response = await handleVerifyAttendance(requestFor(paths[4]), {
+    getDependencies.mockResolvedValue(commitmentDependencies({
       authenticate: async () => userId, verifyAttendance: { forBooker },
-    });
+    }));
+    const response = await verifyRoute(requestFor(paths[4]));
     expect(response.status).toBe(200);
     expect(forBooker).toHaveBeenCalledWith({ ...exampleAt(paths[4]), userId });
   });

@@ -1,9 +1,11 @@
-import { serveCommitmentAction } from "@/app/commit/commitment-route";
-import { handleLeaveWaitlist } from "@/app/commit/withdrawal-handlers";
+import { commitmentAction } from "@/app/commit/commitment-action";
+import { parseSessionActionInput } from "@/app/commit/withdrawal-input";
 
 export const runtime = "nodejs";
 
 /** UC2-05: leave the joining waitlist. */
-export function POST(request: Request): Promise<Response> {
-  return serveCommitmentAction(request, handleLeaveWaitlist);
-}
+export const POST = commitmentAction({
+  parse: parseSessionActionInput,
+  run: (dependencies, input) => dependencies.leaveWaitlist.forParticipant(input),
+  invalidRequestMessage: "Invalid waitlist departure request",
+});
