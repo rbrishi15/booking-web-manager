@@ -64,10 +64,13 @@ cookie-authenticated writes could be triggered by another site (CSRF).
 Assembled in [`use-case-config/wallet.ts`](../../use-case-config/wallet.ts) and cached
 lazily via [`server-dependencies.ts`](./server-dependencies.ts):
 
-- **Authentication**: [`createSupabaseSessionAuthenticator`](../../lib/supabase/bearer-auth.ts)
-  with the [`createLoginCookieIdentity`](../../lib/supabase/cookie-auth.ts) fallback for
-  `GET` requests without a bearer token (an expired login is refreshed and the new cookies
-  are returned with the response). It verifies identity and checks that the profile `account_status` is `ACTIVE` (inactive
+- **Authentication**: [`bearerOrLoginCookie`](../../lib/supabase/request-authenticator.ts)
+  picks one policy per request: [`createSupabaseSessionAuthenticator`](../../lib/supabase/bearer-auth.ts)
+  when an `Authorization` header is sent, otherwise
+  [`createSupabaseCookieSessionAuthenticator`](../../lib/supabase/cookie-auth.ts), which accepts
+  only `GET` requests (an expired login is refreshed and the new cookies are returned with the
+  response). Both apply the same [account checks](../../lib/supabase/account-access.ts): the
+  profile `account_status` must be `ACTIVE` (inactive
   accounts return `403 INACTIVE_ACCOUNT`; missing profiles return `404 NOT_FOUND`).
 - **Ledger reader**: [`PostgresLedgerReader`](../../lib/money/ledger-read-adapter.ts)
   reads trigger-maintained `wallet_balances` and lists append-only `ledger_entries`.

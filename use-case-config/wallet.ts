@@ -16,7 +16,8 @@ import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
 import { PostgresLedgerReader } from "@/lib/money/ledger-read-adapter";
 import type { SqlExecutor, SqlRow } from "@/lib/money/sql";
 import { createSupabaseSessionAuthenticator } from "@/lib/supabase/bearer-auth";
-import { createLoginCookieIdentity } from "@/lib/supabase/cookie-auth";
+import { createSupabaseCookieSessionAuthenticator } from "@/lib/supabase/cookie-auth";
+import { bearerOrLoginCookie } from "@/lib/supabase/request-authenticator";
 
 interface HoldRow extends SqlRow {
   readonly hold_id: unknown;
@@ -54,10 +55,9 @@ export function createWalletDependencies(): WalletApiDependencies {
 
   const reader = new PostgresLedgerReader(sql);
   // The wallet page reads with its login cookies; top-up (POST) still needs a bearer token.
-  const authenticate = createSupabaseSessionAuthenticator(
-    settings.supabaseUrl,
-    settings.supabaseAnonKey,
-    { withoutBearer: createLoginCookieIdentity(settings.supabaseUrl, settings.supabaseAnonKey) },
+  const authenticate = bearerOrLoginCookie(
+    createSupabaseSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+    createSupabaseCookieSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
   );
 
   async function requireWalletId(userId: UUID): Promise<UUID> {
