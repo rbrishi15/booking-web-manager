@@ -78,6 +78,47 @@ https://supabase.com/dashboard/account/tokens the first time).
 Nobody should need to run `supabase db push --linked` against it by hand;
 if you find yourself doing that, something upstream of this file didn't work.
 
+### Auth config (site URL, redirects, SMTP)
+
+The committed `config.toml` in this directory is the **local dev** config —
+`site_url` and `additional_redirect_urls` there deliberately point at
+`127.0.0.1` for `supabase start`. The hosted project's own auth settings are
+separate and were pushed directly, not through this file:
+
+| Setting | Value |
+| --- | --- |
+| `site_url` | `https://booking-web-manager.vercel.app` |
+| `additional_redirect_urls` | `["https://booking-web-manager.vercel.app"]` |
+| SMTP provider | Resend — `smtp.resend.com:587`, user `resend`, sender `onboarding@resend.dev` |
+
+Before this was set, `site_url` on the hosted project was still the
+`supabase init` default (`http://localhost:3000`) and SMTP wasn't configured
+at all, so sign-up confirmation emails either failed outright (Supabase's
+built-in sender has a very low, non-configurable rate limit) or would have
+redirected to localhost once sent.
+
+**Resend caveat:** no domain is verified yet, so Resend's sandbox mode only
+delivers to the email address its own account is registered under — not to
+arbitrary recipients. Fine for one person testing sign-up; not enough for the
+whole team to each test with their own email. Verifying a domain (Resend →
+Domains) would lift that, but needs a domain the team actually controls DNS
+for — nobody does right now.
+
+The Resend API key is **not committed anywhere** and isn't an app env var
+(the app never talks to Resend directly — only Supabase Auth's SMTP relay
+does). Ask Rishi for it, or generate a fresh one at
+[resend.com](https://resend.com) → API Keys and re-push.
+
+To change any of this yourself: write a **minimal** `config.toml` declaring
+only the keys you want to change (anything undeclared is left alone), run
+`supabase config diff --project-ref rofrvxezteioulhlnfcj` against it first to
+confirm the blast radius is exactly what you expect, then
+`supabase config push --project-ref rofrvxezteioulhlnfcj`. Secret fields
+(like SMTP `pass`) use the `env(VAR_NAME)` syntax so the real value never sits
+in a file — export it in your shell first. Don't run `config push` with the
+full committed `config.toml` as-is; it declares the local-dev `site_url` and
+would overwrite the hosted project's correct one.
+
 ## Local development
 
 Use local Postgres when integration work needs a disposable database. The
