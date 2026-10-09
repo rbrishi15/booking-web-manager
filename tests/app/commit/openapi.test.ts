@@ -10,7 +10,6 @@ import { POST as withdrawRoute } from "@/app/api/sessions/withdraw/route";
 import { POST as acceptRoute } from "@/app/api/sessions/replacements/accept/route";
 import { POST as leaveRoute } from "@/app/api/sessions/waitlist/leave/route";
 import { POST as verifyRoute } from "@/app/api/sessions/attendance/route";
-import { handleScheduledJobs } from "@/app/commit/scheduled-jobs-handler";
 import { commitmentDependencies } from "./commitment-test-dependencies";
 
 const userId = "44444444-4444-4444-8444-444444444444";
