@@ -21,7 +21,13 @@ export async function loadHostedSessionsScreen(userId: string): Promise<HostedSe
     const { listHostedSessions } = await getSessionManagementDependencies();
     const [sessions, attendanceDue] = await Promise.all([
       listHostedSessions.forBooker(userId),
-      listHostedSessions.attendanceDueForBooker(userId),
+      // The attendance reminder is secondary: if it fails, still show the hosted sessions.
+      // Account problems keep their redirect below.
+      listHostedSessions.attendanceDueForBooker(userId).catch((error: unknown) => {
+        if (error instanceof DomainError && (error.code === "INACTIVE_ACCOUNT" || error.code === "NOT_FOUND")) throw error;
+        console.error("UC2-06 attendance-due list failed:", error instanceof Error ? error.name : "unknown");
+        return [];
+      }),
     ]);
     return {
       status: "ready",

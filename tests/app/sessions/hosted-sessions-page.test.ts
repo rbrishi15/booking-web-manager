@@ -75,6 +75,18 @@ describe("hosted Sessions page", () => {
     }]);
   });
 
+  test("UC2-06 still shows hosted sessions when the attendance-due list fails", async () => {
+    forBooker.mockResolvedValue([]);
+    attendanceDueForBooker.mockRejectedValue(new Error("Temporary database outage"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect((await SessionsPage()).props.outcome).toEqual({ status: "ready", sessions: [], awaitingAttendance: [] });
+  });
+
+  test("UC2-06 still redirects an account rejected while reading the attendance-due list", async () => {
+    attendanceDueForBooker.mockRejectedValue(new DomainError("INACTIVE_ACCOUNT", "inactive"));
+    await expect(SessionsPage()).rejects.toThrow("redirect:/login");
+  });
+
   test("unverified users can view hosted sessions and receive the email recovery action", async () => {
     const user = await getCurrentUser();
     vi.mocked(getCurrentUser).mockResolvedValue({ ...user!, emailVerified: false });
