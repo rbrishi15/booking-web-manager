@@ -1,7 +1,13 @@
-import { handleCommitToSession } from "@/app/commit/commit-to-session-handler";
+import { describe, expect, test, vi } from "vitest";
+
+const getDependencies = vi.hoisted(() => vi.fn());
+vi.mock("@/app/commit/commitment-server-dependencies", () => ({
+  getCommitmentDependencies: getDependencies,
+}));
+import { POST as commit } from "@/app/api/sessions/commit/route";
 import { Session, type UUID } from "@/domain";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
-import { describe, expect, test } from "vitest";
+import { commitmentDependencies } from "./commitment-test-dependencies";
 import { createTestUserDetails } from "../../domain/accounts/user-fixtures";
 import {
   hoursBeforeSessionStart,
@@ -15,8 +21,8 @@ const publicSessionId = "33333333-3333-4333-8333-333333333333";
 const privateSessionId = "44444444-4444-4444-8444-444444444444";
 const missingSessionId = "55555555-5555-4555-8555-555555555555";
 
-describe("handleCommitToSession", () => {
-  test("handleCommitToSession_WhenAuthenticated_CommitsForTheSignedInUserOnly", async () => {
+describe("POST /api/sessions/commit", () => {
+  test("commitRoute_WhenAuthenticated_CommitsForTheSignedInUserOnly", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario();
     const body = {
@@ -42,7 +48,7 @@ describe("handleCommitToSession", () => {
     expect(unitOfWork.availableCents(bobId)).toBe(10_000);
   });
 
-  test("handleCommitToSession_WhenRetriedWithSameKey_ReturnsOriginalResponseWithoutLockingAgain", async () => {
+  test("commitRoute_WhenRetriedWithSameKey_ReturnsOriginalResponseWithoutLockingAgain", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario();
     const first = await handle(jsonRequest(commitBody()));
@@ -56,7 +62,7 @@ describe("handleCommitToSession", () => {
     expect(unitOfWork.ledgerInstructions).toHaveLength(1);
   });
 
-  test("handleCommitToSession_WhenSignedOut_Returns401WithoutWriting", async () => {
+  test("commitRoute_WhenSignedOut_Returns401WithoutWriting", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario({ actor: null });
 
@@ -74,7 +80,7 @@ describe("handleCommitToSession", () => {
     expect(unitOfWork.ledgerInstructions).toHaveLength(0);
   });
 
-  test("handleCommitToSession_WhenAuthenticationFails_Returns500WithoutDetails", async () => {
+  test("commitRoute_WhenAuthenticationFails_Returns500WithoutDetails", async () => {
     // Arrange
     const { handle } = handlerScenario({
       authenticate: async () => {
@@ -92,7 +98,7 @@ describe("handleCommitToSession", () => {
     });
   });
 
-  test("handleCommitToSession_WhenBodyIsNotJson_Returns400", async () => {
+  test("commitRoute_WhenBodyIsNotJson_Returns400", async () => {
     // Arrange
     const { handle } = handlerScenario();
 
@@ -108,7 +114,7 @@ describe("handleCommitToSession", () => {
     });
   });
 
-  test("handleCommitToSession_WhenIdempotencyKeyIsMissing_Returns400WithoutWriting", async () => {
+  test("commitRoute_WhenIdempotencyKeyIsMissing_Returns400WithoutWriting", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario();
 
@@ -122,7 +128,7 @@ describe("handleCommitToSession", () => {
     expect(unitOfWork.ledgerInstructions).toHaveLength(0);
   });
 
-  test("handleCommitToSession_WhenSessionIdIsNotUuid_Returns400", async () => {
+  test("commitRoute_WhenSessionIdIsNotUuid_Returns400", async () => {
     // Arrange
     const { handle } = handlerScenario();
 
@@ -135,7 +141,7 @@ describe("handleCommitToSession", () => {
     expect(response.status).toBe(400);
   });
 
-  test("handleCommitToSession_WhenFundsAreInsufficient_Returns409", async () => {
+  test("commitRoute_WhenFundsAreInsufficient_Returns409", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario({ aliceFundsCents: 499 });
 
@@ -150,7 +156,7 @@ describe("handleCommitToSession", () => {
     expect(unitOfWork.ledgerInstructions).toHaveLength(0);
   });
 
-  test("handleCommitToSession_WhenPrivateSessionHasNoToken_Returns403", async () => {
+  test("commitRoute_WhenPrivateSessionHasNoToken_Returns403", async () => {
     // Arrange
     const { handle } = handlerScenario();
 
@@ -166,7 +172,7 @@ describe("handleCommitToSession", () => {
     });
   });
 
-  test("handleCommitToSession_WhenPrivateSessionHasToken_Returns201", async () => {
+  test("commitRoute_WhenPrivateSessionHasToken_Returns201", async () => {
     // Arrange
     const { handle } = handlerScenario();
 
@@ -183,7 +189,7 @@ describe("handleCommitToSession", () => {
     expect(response.status).toBe(201);
   });
 
-  test("handleCommitToSession_WhenSessionDoesNotExist_Returns404", async () => {
+  test("commitRoute_WhenSessionDoesNotExist_Returns404", async () => {
     // Arrange
     const { handle } = handlerScenario();
 
@@ -196,7 +202,7 @@ describe("handleCommitToSession", () => {
     expect(response.status).toBe(404);
   });
 
-  test("handleCommitToSession_WhenUseCaseFailsUnexpectedly_Returns500WithoutDetails", async () => {
+  test("commitRoute_WhenUseCaseFailsUnexpectedly_Returns500WithoutDetails", async () => {
     // Arrange
     const { handle, unitOfWork } = handlerScenario();
     unitOfWork.failNextLedgerAppend = true;
@@ -244,8 +250,12 @@ function handlerScenario(
   });
   const actor = options.actor === undefined ? aliceId : options.actor;
   const authenticate = options.authenticate ?? (async () => actor);
-  const handle = (request: Request) =>
-    handleCommitToSession(request, { authenticate, commitToSession });
+  const handle = (request: Request) => {
+    getDependencies.mockResolvedValue(
+      commitmentDependencies({ authenticate, commitToSession }),
+    );
+    return commit(request);
+  };
   return { handle, unitOfWork };
 }
 
