@@ -114,7 +114,8 @@ function failureResponse(error: unknown): Response {
   return internalErrorResponse();
 }
 
-function errorResponse(status: number, code: string, message: string): Response {
+/** JSON error body `{ error: { code, message } }`, never cached. */
+export function errorResponse(status: number, code: string, message: string): Response {
   return Response.json(
     { error: { code, message } },
     { status, headers: { "Cache-Control": "no-store" } },

@@ -24,10 +24,8 @@ const verifyAttendanceRequestSchema = sessionRequestSchema.extend({
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const participationId = "22222222-2222-4222-8222-222222222222";
 const inviteeId = "33333333-3333-4333-8333-333333333333";
-const schedulerDescription =
-  "Planned API contract for an existing HTTP handler. This URL is proposed; no Next.js route is mounted here yet.";
 
-/** Describe the commitment action routes and the planned scheduler endpoint. */
+/** Describe the commitment action routes and the scheduler endpoint. */
 export function registerCommitmentApi(registry: OpenAPIRegistry): void {
   const uuid = z.string().uuid();
   const cents = z.number().int().safe().nonnegative();
@@ -186,14 +184,13 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
     tags: ["Scheduler"],
     summary: "UC2-05/06 Run Scheduled Session Jobs",
     description: [
-      schedulerDescription,
-      "Scheduler-only operation. The handler requires Authorization: Bearer <CRON_SECRET>; a user JWT does not grant access.",
+      "Scheduler-only operation. It requires Authorization: Bearer <CRON_SECRET>, which Vercel Cron sends; a user JWT does not grant access.",
       "Every accepted call generates a fresh run ID. No body or client-supplied run ID is consumed.",
       "Runs replacement expiry, waitlist promotion and automatic attendance verification in that order.",
       "Auto-verification is due 72 hours after the session ends. Verification reminders are claimed separately.",
       "A successful report can contain per-job failures; those jobs are retried on a later run.",
-      "The HTTP method and deployment schedule remain for the feature owner to confirm; GET is proposed for cron integration.",
-      "An unset or blank configured secret returns 401 from the handler. No deployed cron schedule is installed by this documentation.",
+      "Verification reminders are not claimed until Web Push delivery is configured, so none are lost.",
+      "An unset or blank configured secret returns 401. The deployment schedule is configured separately.",
     ].join(" "),
     security: [{ cronAuth: [] }],
     responses: {

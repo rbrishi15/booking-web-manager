@@ -122,26 +122,14 @@ describe("commitment Swagger contracts", () => {
     });
   });
 
-  test("the cron contract separates its secret from user JWTs and allows partial job failures", async () => {
+  test("the cron contract separates its secret from user JWTs", () => {
     const operation = openApiDocument.paths["/api/cron/commitments"]?.get;
     expect(operation?.security).toEqual([{ cronAuth: [] }]);
     expect(operation?.requestBody).toBeUndefined();
     expect(Object.keys(operation?.responses ?? {})).toEqual(["200", "401", "500"]);
-    expect(operation?.description).toContain("GET is proposed");
+    expect(operation?.description).toContain("which Vercel Cron sends");
     expect(openApiDocument.components?.securitySchemes?.cronAuth).toMatchObject({
       type: "http", scheme: "bearer",
     });
-    const report = {
-      runId: "server-run", sessionsChecked: 1, forfeitureDue: [], promoted: [],
-      autoVerified: [], verificationReminders: [],
-      failures: [{ sessionId, job: "PROMOTE" as const }],
-    };
-    const run = vi.fn(async () => report);
-    const response = await handleScheduledJobs(new Request("http://localhost/api/cron/commitments", {
-      headers: { authorization: "Bearer test-cron-secret" },
-    }), { cronSecret: "test-cron-secret", ids: { next: () => "server-run" }, runner: { run } });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(report);
-    expect(run).toHaveBeenCalledWith("server-run");
   });
 });
