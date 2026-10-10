@@ -28,8 +28,8 @@ instructions, or to `/profile/email` when an existing session is still usable. S
 without a session stays signed out; the confirmation notice and unconfirmed
 login both offer a new email link.
 
-Signed-in accounts with a missing or unconfirmed email receive a nonblocking
-prompt. `/profile/email` can add a missing email, resend confirmation and recheck
+Signed-in accounts without an email receive a nonblocking setup prompt.
+Unconfirmed addresses do not block session creation or joining. `/profile/email` can add a missing email, resend confirmation and recheck
 the current Auth user after a link is opened in another tab or browser. Signed-in
 resend targets come from the Auth user, never submitted form fields. Adding an
 email uses `updateUser` on that same account; its `new_email` remains pending
@@ -37,9 +37,9 @@ until confirmed. With an empty current email, repeat that update to resend the
 pending addition. The public resend endpoint looks accounts up by current email,
 so passing a pending address to it can silently send nothing.
 
-Session actions use the trusted current email and `email_confirmed_at`, not
-`confirmed_at` or editable user metadata. Existing Supabase-confirmed accounts
-remain accepted; this change does not require all legacy accounts to reconfirm.
+Booking eligibility uses the trusted current email address, not
+`email_confirmed_at`, `confirmed_at` or editable metadata. Email-confirmation
+state remains available for the optional email-management flow.
 
 ### Required hosted Supabase settings
 

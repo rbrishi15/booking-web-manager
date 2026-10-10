@@ -86,7 +86,7 @@ use cases coordinate domain behavior, and infrastructure adapters live in `/lib`
 
 | Capability | Responsibility |
 | --- | --- |
-| `authenticate(request)` | Verify a Supabase bearer token, current active status and present confirmed email for every request, including replay. |
+| `authenticate(request)` | Verify a Supabase bearer token, current active status and a present email address for every request, including replay. |
 | `createForSubmission(submission)` | Construct a fresh `CreateSessions` and PostgreSQL transaction capturing this submission's retry key. |
 
 The route authenticates, parses JSON, invokes `forBooker(bookerId, booking, config)`
@@ -131,9 +131,9 @@ read session room tokens, payout setup or participation facts directly.
 Missing, malformed, rejected or expired bearer credentials return 401. Current
 inactive accounts return `INACTIVE_ACCOUNT` (403); missing profiles return
 `NOT_FOUND` (404). Provider or lookup failures return opaque 500s. Current account
-status and Supabase `email_confirmed_at` are read before every creation or replay.
-A missing or unconfirmed address returns `403 EMAIL_VERIFICATION_REQUIRED`, even
-when the same key previously succeeded. Existing confirmed accounts stay eligible.
+status and the presence of the email address in Supabase Auth are checked before
+every creation or replay. A missing address returns `403 EMAIL_REQUIRED`, even
+when the same key previously succeeded. Email confirmation is not required.
 
 The PostgreSQL reader hydrates a complete User through domain constructors:
 profile, nullable auth email and its confirmation timestamp, optional payout setup, wallet identity and **all** committed
@@ -146,7 +146,7 @@ The creation adapter uses the existing ledger unit of work and idempotency store
 Its key is `JSON.stringify(["UC2-02", bookerId, submission.idempotencyKey])`.
 The fingerprint includes only this stable identity, so changed valid booking
 input still replays the first result. The transaction locks and reads current
-account status, email and confirmation before every idempotency claim, including
+account status and email presence before every idempotency claim, including
 whole-transaction retries; a stored response cannot bypass these checks. Session and response are committed together,
 rolled back together, and competing claims serialize. Serialization failures and
 deadlocks retry the whole transaction up to three attempts. A replay does not

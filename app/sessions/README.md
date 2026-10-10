@@ -134,7 +134,7 @@ persisted as `minimum_headcount`; it must be an integer between two and
 | 201 | Created session or replayed a successful submission |
 | 400 | Malformed JSON or invalid request structure |
 | 401 | No authenticated user |
-| 403 | Inactive account, missing/unconfirmed email (`EMAIL_VERIFICATION_REQUIRED`), or unauthorized action |
+| 403 | Inactive account, missing email (`EMAIL_REQUIRED`), or unauthorized action |
 | 404 | Authenticated User is missing from storage |
 | 409 | Payout setup or session-state conflict |
 | 422 | Invalid business values |
@@ -144,7 +144,7 @@ persisted as `minimum_headcount`; it must be an integer between two and
 Errors use `{ error: { code, message } }`. Unexpected failures return the fixed
 `INTERNAL_ERROR` response. Retrying the same booker's submission key must return
 the original result; an intended new session needs a new key. The authentication
-integration must verify current active-account access and present confirmed email
+integration must verify current active-account access and a present email address
 before parsing or replay. The transaction repeats these checks before claiming
 an idempotency key, including each database retry.
 The persistence integration must commit the Session and replay result atomically.

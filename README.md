@@ -244,9 +244,9 @@ prices retain equal splitting; accepted prices are fixed Session state under
 [ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
 survive reload in user-scoped session storage and replay with their original key.
 
-Email verification gates session creation and admission at the API boundary.
-Signed-out and unverified visitors can browse `/discover`; signed-in users with
-an unverified email see a nonblocking recovery prompt. The hosted Supabase
+Booking creation and admission require an active account with an email address,
+but no confirmation link is required. Signed-out visitors can browse `/discover`;
+accounts without an email receive a nonblocking setup prompt. The hosted Supabase
 project currently has email confirmation disabled for registration; see the
 [authentication guide](./app/(auth)/README.md#email-confirmation-uc1-01--uc1-02).
 
