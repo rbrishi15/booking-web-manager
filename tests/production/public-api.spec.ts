@@ -4,16 +4,16 @@ import { z } from "zod";
 const discoveryPageSchema = z.object({
   items: z.array(
     z.object({
-      sessionId: z.string(),
+      sessionId: z.string().uuid(),
       venueName: z.string(),
       region: z.string(),
       sport: z.string(),
-      startAt: z.string(),
-      endAt: z.string(),
-      totalSlots: z.number().int(),
-      bookingShareCents: z.number().int(),
+      startAt: z.string().datetime(),
+      endAt: z.string().datetime(),
+      totalSlots: z.number().int().min(1).max(8),
+      bookingShareCents: z.number().int().positive().safe(),
     }),
-  ),
+  ).max(20),
   nextCursor: z.string().nullable(),
 });
 
