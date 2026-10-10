@@ -9,7 +9,7 @@ import {
 import { readyBookerUser } from "../user-fixtures";
 
 describe("Booker", () => {
-  test("createSession_WhenEmailIsUnverified_RejectsBeforeCreatingSession", () => {
+  test("createSession_WhenEmailIsUnverified_AllowsCreation", () => {
     // Arrange
     const booker = createTestUser({
       userId: "booker",
@@ -18,12 +18,10 @@ describe("Booker", () => {
     }).asBooker();
 
     // Act & Assert
-    expect(() => booker.createSession(creationDetails())).toThrow(
-      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
-    );
+    expect(booker.createSession(creationDetails()).bookerId).toBe("booker");
   });
 
-  test("createSession_WhenEmailIsMissing_RejectsWithVerificationRequired", () => {
+  test("createSession_WhenEmailIsMissing_RejectsWithEmailRequired", () => {
     // Arrange
     const booker = createTestUser({
       userId: "booker",
@@ -34,11 +32,11 @@ describe("Booker", () => {
 
     // Act & Assert
     expect(() => booker.createSession(creationDetails())).toThrow(
-      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
+      expect.objectContaining({ code: "EMAIL_REQUIRED" }),
     );
   });
 
-  test("assertCanCreateSession_WhenEmailIsUnverified_ReportsTheCommandFailure", () => {
+  test("assertCanCreateSession_WhenEmailIsUnverified_AllowsCreation", () => {
     // Arrange
     const booker = createTestUser({
       userId: "booker",
@@ -47,9 +45,7 @@ describe("Booker", () => {
     }).asBooker();
 
     // Act & Assert
-    expect(() => booker.assertCanCreateSession()).toThrow(
-      expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }),
-    );
+    expect(() => booker.assertCanCreateSession()).not.toThrow();
   });
 
   test("createSession_WhenRoleWasCreatedBeforeDeactivation_ThrowsInactiveAccount", () => {

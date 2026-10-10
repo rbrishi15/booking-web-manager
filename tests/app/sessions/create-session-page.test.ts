@@ -15,12 +15,13 @@ test("requires sign-in before opening the creation form", async () => {
   await expect(CreateSessionPage()).rejects.toThrow("redirect:/login?next=%2Fsessions%2Fcreate");
 });
 
-test("direct links cannot open the wizard without a verified email", async () => {
-  vi.mocked(getCurrentUser).mockResolvedValue({ ...user, emailVerified: false });
+test("direct links cannot open the wizard without an email address", async () => {
+  vi.mocked(getCurrentUser).mockResolvedValue({ ...user, email: null });
   await expect(CreateSessionPage()).rejects.toThrow("redirect:/profile/email");
 });
 
-test("a verified account receives the actual creation submission action", async () => {
+test("an unconfirmed account receives the actual creation submission action", async () => {
+  vi.mocked(getCurrentUser).mockResolvedValue({ ...user, emailVerified: false });
   const page = await CreateSessionPage();
   expect(page.props).toMatchObject({ userId: "booker", action: { name: "submit-session", href: "/api/sessions", method: "POST", inputs: {} } });
 });
