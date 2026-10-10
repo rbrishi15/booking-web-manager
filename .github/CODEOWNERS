@@ -163,6 +163,10 @@
 /app/api/sessions/replacements/ @Wyjessie
 /app/api/sessions/waitlist/ @Wyjessie
 /app/api/sessions/attendance/ @Wyjessie
+/app/api/sessions/joined/ @Wyjessie
+/use-cases/sessions/ListJoinedSessions.ts @Wyjessie
+/lib/sessions/*joined*.ts @Wyjessie
+/tests/lib/sessions/*joined*.test.ts @Wyjessie
 /use-case-config/commitments.ts @Wyjessie
 /app/api/cron/commitments/ @Wyjessie
 /use-case-config/scheduled-jobs.ts @Wyjessie

@@ -14,6 +14,7 @@ export function commitmentDependencies(
     acceptReplacement: { forInvitee: unused },
     leaveWaitlist: { forParticipant: unused },
     verifyAttendance: { forBooker: unused },
+    listJoinedSessions: { forParticipant: unused },
     ...overrides,
   };
 }

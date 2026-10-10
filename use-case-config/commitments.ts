@@ -6,11 +6,14 @@ import { readSessionServerSettings } from "@/app/sessions/server-environment";
 import { NoDeliveryNotifier } from "@/lib/commit/no-delivery-notifier";
 import { createWebPush } from "@/lib/commit/web-push";
 import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
+import type { SqlExecutor } from "@/lib/money/sql";
 import { PostgresCommitmentUnitOfWork } from "@/lib/sessions/postgres-commitment-unit-of-work";
+import { PostgresJoinedSessionsReader } from "@/lib/sessions/postgres-joined-sessions-reader";
 import { createSupabaseIdentityAuthenticator } from "@/lib/supabase/bearer-auth";
 import { AcceptReplacement } from "@/use-cases/sessions/AcceptReplacement";
 import { CommitToSession } from "@/use-cases/sessions/CommitToSession";
 import { LeaveWaitlist } from "@/use-cases/sessions/LeaveWaitlist";
+import { ListJoinedSessions } from "@/use-cases/sessions/ListJoinedSessions";
 import { PromoteFromWaitlist } from "@/use-cases/sessions/PromoteFromWaitlist";
 import { VerifyAttendance } from "@/use-cases/sessions/VerifyAttendance";
 import { WithdrawFromSession } from "@/use-cases/sessions/WithdrawFromSession";
@@ -38,6 +41,7 @@ export function createCommitmentDependencies(): CommitmentDependencies {
       acceptReplacement: { forInvitee: unavailable },
       leaveWaitlist: { forParticipant: unavailable },
       verifyAttendance: { forBooker: unavailable },
+      listJoinedSessions: { forParticipant: unavailable },
     };
   }
   const getPool = createPostgresPoolProvider(settings.databaseUrl);
@@ -47,6 +51,10 @@ export function createCommitmentDependencies(): CommitmentDependencies {
   const push = readPushSettings();
   const notifier = push ? createWebPush(getPool, push).notifier : new NoDeliveryNotifier();
   const promote = new PromoteFromWaitlist({ unitOfWork, clock, ids, notifier });
+  // The joined-sessions list is a plain read of the caller's own places; no unit of work.
+  const sql: SqlExecutor = {
+    query: async (statement, values) => (await getPool().query(statement, values ? [...values] : undefined)).rows,
+  };
   return {
     authenticate: createSupabaseIdentityAuthenticator(
       settings.supabaseUrl,
@@ -57,5 +65,6 @@ export function createCommitmentDependencies(): CommitmentDependencies {
     acceptReplacement: new AcceptReplacement({ unitOfWork, clock, ids }),
     leaveWaitlist: new LeaveWaitlist({ unitOfWork, clock, promote }),
     verifyAttendance: new VerifyAttendance({ unitOfWork, clock }),
+    listJoinedSessions: new ListJoinedSessions({ reader: new PostgresJoinedSessionsReader(sql), clock }),
   };
 }

@@ -1,11 +1,12 @@
 import type { AcceptReplacement } from "@/use-cases/sessions/AcceptReplacement";
 import type { CommitToSession } from "@/use-cases/sessions/CommitToSession";
 import type { LeaveWaitlist } from "@/use-cases/sessions/LeaveWaitlist";
+import type { ListJoinedSessions } from "@/use-cases/sessions/ListJoinedSessions";
 import type { VerifyAttendance } from "@/use-cases/sessions/VerifyAttendance";
 import type { WithdrawFromSession } from "@/use-cases/sessions/WithdrawFromSession";
 import type { Authenticate } from "./http";
 
-/** App-owned capabilities for the UC2-04/05/06 commitment action routes. */
+/** App-owned capabilities for the UC2-04/05/06 commitment routes. */
 export interface CommitmentDependencies {
   readonly authenticate: Authenticate;
   readonly commitToSession: Pick<CommitToSession, "forParticipant">;
@@ -13,4 +14,5 @@ export interface CommitmentDependencies {
   readonly acceptReplacement: Pick<AcceptReplacement, "forInvitee">;
   readonly leaveWaitlist: Pick<LeaveWaitlist, "forParticipant">;
   readonly verifyAttendance: Pick<VerifyAttendance, "forBooker">;
+  readonly listJoinedSessions: Pick<ListJoinedSessions, "forParticipant">;
 }

@@ -2,7 +2,7 @@ import type { UUID } from "@/domain";
 import { loadDependencies } from "@/app/http/load-dependencies";
 import type { CommitmentDependencies } from "./commitment-dependencies";
 import { getCommitmentDependencies } from "./commitment-server-dependencies";
-import { handleAuthenticatedJson, internalErrorResponse } from "./http";
+import { handleAuthenticatedJson, handleAuthenticatedRead, internalErrorResponse } from "./http";
 
 export interface CommitmentAction<Input, Output> {
   /** Validates the body and combines it with the authenticated user ID. */
@@ -38,6 +38,33 @@ export function commitmentAction<Input, Output>(
       run: (input) => action.run(dependencies, input),
       successStatus: action.successStatus ?? 200,
       invalidRequestMessage: action.invalidRequestMessage,
+    });
+  };
+}
+
+export interface CommitmentQuery<Output> {
+  /** Calls the read's use case with the authenticated user ID. */
+  readonly run: (dependencies: CommitmentDependencies, userId: UUID) => Promise<Output>;
+}
+
+/**
+ * Builds the GET handler for one commitment read, with the same shared HTTP policy as
+ * `commitmentAction`: cached dependencies, authentication, domain error mapping and
+ * `no-store` responses (see `handleAuthenticatedRead`).
+ */
+export function commitmentQuery<Output>(
+  query: CommitmentQuery<Output>,
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    let dependencies: CommitmentDependencies;
+    try {
+      dependencies = await loadDependencies(getCommitmentDependencies);
+    } catch {
+      return internalErrorResponse();
+    }
+    return handleAuthenticatedRead(request, {
+      authenticate: dependencies.authenticate,
+      run: (userId) => query.run(dependencies, userId),
     });
   };
 }

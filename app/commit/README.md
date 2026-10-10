@@ -145,6 +145,22 @@ cached.
 | [`POST /api/sessions/waitlist/leave`](../api/sessions/waitlist/leave/route.ts) | [`parseSessionActionInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey }` | 200 |
 | [`POST /api/sessions/attendance`](../api/sessions/attendance/route.ts) | [`parseVerifyAttendanceInput`](./verify-attendance-input.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |
 
+Reads use `commitmentQuery`, the GET counterpart with the same authentication,
+error mapping and `no-store` policy:
+
+```ts
+export const GET = commitmentQuery({
+  run: async (dependencies, userId) =>
+    toJoinedSessionsResponse(await dependencies.listJoinedSessions.forParticipant(userId)),
+});
+```
+
+[`GET /api/sessions/joined`](../api/sessions/joined/route.ts) lists the caller's
+COMMITTED and WAITLISTED places in OPEN, upcoming sessions (UC2-05), so a page can
+offer withdraw or leave-waitlist. Its response contract,
+[`joined-sessions-contract.ts`](./joined-sessions-contract.ts), has no server code,
+so the browser can import it to validate replies.
+
 The routes share one set of dependencies from
 [`getCommitmentDependencies`](./commitment-server-dependencies.ts), assembled in
 [`use-case-config/commitments.ts`](../../use-case-config/commitments.ts): a

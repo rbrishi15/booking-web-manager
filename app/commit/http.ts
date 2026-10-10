@@ -96,6 +96,31 @@ export async function handleAuthenticatedJson<Input, Output>(
   }
 }
 
+export interface AuthenticatedReadAction<Output> {
+  readonly authenticate: Authenticate;
+  readonly run: (userId: UUID) => Promise<Output>;
+}
+
+/**
+ * Shared HTTP boundary for commitment reads: authenticate, run the use case for the
+ * authenticated user, and map the outcome exactly as `handleAuthenticatedJson` does.
+ */
+export async function handleAuthenticatedRead<Output>(
+  request: Request,
+  action: AuthenticatedReadAction<Output>,
+): Promise<Response> {
+  try {
+    const userId = await action.authenticate(request);
+    if (userId === null) {
+      return errorResponse(401, "UNAUTHENTICATED", "Authentication is required");
+    }
+    const result = await action.run(userId);
+    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
 /** Maps an authentication or use-case failure without exposing internals. */
 function failureResponse(error: unknown): Response {
   if (error instanceof SessionManagementUnavailableError) {

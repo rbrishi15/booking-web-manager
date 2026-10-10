@@ -1,5 +1,6 @@
 import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { errorResponse, z } from "@/app/openapi/contracts";
+import { joinedSessionsResponseSchema } from "./joined-sessions-contract";
 
 // Documentation schemas mirror the existing handler contracts without changing them.
 const uuid = z.string().uuid();
@@ -160,6 +161,30 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
       },
     });
   }
+
+  const joined = registry.register("JoinedSessions", joinedSessionsResponseSchema);
+  registry.registerPath({
+    method: "get",
+    path: "/api/sessions/joined",
+    operationId: "listJoinedSessions",
+    tags: ["Commitment"],
+    summary: "UC2-05 List the sessions you have joined",
+    description: "Requires an active authenticated account. Returns the caller's COMMITTED and WAITLISTED places in OPEN sessions that have not started, in start order. " +
+      "A COMMITTED place can be withdrawn (preview the refund with GET /api/sessions/{sessionId}/withdrawal-preview, then POST /api/sessions/withdraw); a WAITLISTED place can be left with POST /api/sessions/waitlist/leave. " +
+      "Read-only; no money moves. The caller comes from the verified Supabase bearer token.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: { description: "The caller's joined and waitlisted sessions.", content: { "application/json": { schema: joined, example: {
+        sessions: [{ sessionId, venueName: "Bishan Sports Hall", sport: "Badminton", region: "Central",
+          startAt: "2045-04-02T10:00:00.000Z", endAt: "2045-04-02T12:00:00.000Z", status: "COMMITTED", bookingShareCents: 1250 }],
+      } } } },
+      401: errorResponse("Missing, invalid or expired Supabase bearer token.", "UNAUTHENTICATED", "Authentication is required"),
+      403: errorResponse("The account is inactive.", "INACTIVE_ACCOUNT", "An inactive account cannot manage its sessions"),
+      404: errorResponse("The authenticated user has no account.", "NOT_FOUND", "User was not found"),
+      500: errorResponse("Unexpected authentication, setup or persistence failure; internal details are redacted.", "INTERNAL_ERROR", "Internal server error"),
+      503: errorResponse("Session management server settings are not configured.", "SESSION_MANAGEMENT_UNAVAILABLE", "Session management is not available yet"),
+    },
+  });
 
   registry.registerComponent("securitySchemes", "cronAuth", {
     type: "http", scheme: "bearer",
