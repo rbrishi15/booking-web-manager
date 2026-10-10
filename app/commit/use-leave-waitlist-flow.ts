@@ -1,15 +1,25 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SessionActionError } from "./withdrawal-errors";
 import type { JoinedSessionItem, LeaveWaitlist, LeaveWaitlistRequest } from "./withdrawal-ports";
 import { joinedSessionsQueryKey } from "./withdrawal-query-keys";
+import {
+  browserUnresolvedStore, reconcile, settleAttempt, unresolvedDepartureSchema, type AttemptOutcome, type UnresolvedStore,
+} from "./withdrawal-recovery";
 
 /** Everything the leave-waitlist dialog shows. `closed` means no dialog. */
 export type LeaveWaitlistState =
   | { readonly step: "closed" }
-  | { readonly step: "confirming"; readonly session: JoinedSessionItem; readonly submitting: boolean; readonly error: string | null };
+  | {
+      readonly step: "confirming";
+      readonly session: JoinedSessionItem;
+      readonly submitting: boolean;
+      readonly error: string | null;
+      /** A departure for this session may already have happened; only its retry can be sent. */
+      readonly unresolved: boolean;
+    };
 
 export interface LeaveWaitlistFlow {
   readonly state: LeaveWaitlistState;
@@ -23,13 +33,28 @@ const UNCONFIRMED_MESSAGE = "We couldn't confirm whether you left the waitlist. 
 /**
  * UC2-05 leave the waitlist, for one dialog shared by every session. React Query runs the
  * departure (`useMutation`) and refreshes the joined sessions; this hook keeps the selected
- * session and, after an unconfirmed result, that session's idempotency key so a retry replays it.
+ * session and unresolved departures' idempotency keys, following `withdrawal-recovery.ts`
+ * (per user, saved across reloads, cleared only once the outcome is established).
  */
-export function useLeaveWaitlistFlow({ leaveWaitlist }: { readonly leaveWaitlist: LeaveWaitlist }): LeaveWaitlistFlow {
+export function useLeaveWaitlistFlow({ userId, sessions, leaveWaitlist, store: givenStore }: {
+  readonly userId: string;
+  /** The server's current joined-sessions list, used to establish unresolved outcomes. */
+  readonly sessions: readonly JoinedSessionItem[] | undefined;
+  readonly leaveWaitlist: LeaveWaitlist;
+  /** Injected in stories and tests; defaults to this browser's storage for the user. */
+  readonly store?: UnresolvedStore<string>;
+}): LeaveWaitlistFlow {
   const queryClient = useQueryClient();
+  const [store] = useState(() => givenStore ?? browserUnresolvedStore("waitlist-departures", userId, unresolvedDepartureSchema));
   const [selected, setSelected] = useState<JoinedSessionItem | null>(null);
-  /** Idempotency keys of unconfirmed departures, by session. */
-  const [keys, setKeys] = useState<ReadonlyMap<string, string>>(new Map());
+  const [saved, setSaved] = useState(() => store.load());
+  const retrying = useRef(false);
+
+  const keys = reconcile(saved, sessions, "WAITLISTED");
+  useEffect(() => { store.save(keys); }, [store, keys]);
+
+  const settle = (request: LeaveWaitlistRequest, outcome: AttemptOutcome) =>
+    setSaved((current) => settleAttempt(reconcile(current, sessions, "WAITLISTED"), request.sessionId, request.idempotencyKey, outcome, retrying.current));
 
   const mutation = useMutation<void, SessionActionError, LeaveWaitlistRequest>({
     mutationFn: async (request) => {
@@ -43,19 +68,17 @@ export function useLeaveWaitlistFlow({ leaveWaitlist }: { readonly leaveWaitlist
     },
     retry: false,
     onSuccess: (_result, request) => {
-      setKeys((current) => without(current, request.sessionId));
+      settle(request, "succeeded");
       setSelected(null);
-      void queryClient.invalidateQueries({ queryKey: joinedSessionsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: joinedSessionsQueryKey(userId) });
     },
-    onError: (error, request) => {
-      setKeys((current) => error.unconfirmed ? new Map(current).set(request.sessionId, request.idempotencyKey) : without(current, request.sessionId));
-    },
+    onError: (error, request) => settle(request, error.unconfirmed ? "unconfirmed" : "rejected"),
   });
 
   const state: LeaveWaitlistState = selected === null
     ? { step: "closed" }
     : {
-        step: "confirming", session: selected, submitting: mutation.isPending,
+        step: "confirming", session: selected, submitting: mutation.isPending, unresolved: keys.has(selected.sessionId),
         error: mutation.isError && mutation.variables?.sessionId === selected.sessionId ? mutation.error.message : null,
       };
 
@@ -68,15 +91,10 @@ export function useLeaveWaitlistFlow({ leaveWaitlist }: { readonly leaveWaitlist
     },
     confirm: () => {
       if (selected === null || mutation.isPending) return;
-      mutation.mutate({ sessionId: selected.sessionId, idempotencyKey: keys.get(selected.sessionId) ?? crypto.randomUUID() });
+      const savedKey = keys.get(selected.sessionId);
+      retrying.current = savedKey !== undefined;
+      mutation.mutate({ sessionId: selected.sessionId, idempotencyKey: savedKey ?? crypto.randomUUID() });
     },
     close: () => { if (!mutation.isPending) setSelected(null); },
   };
-}
-
-function without(map: ReadonlyMap<string, string>, key: string): ReadonlyMap<string, string> {
-  if (!map.has(key)) return map;
-  const next = new Map(map);
-  next.delete(key);
-  return next;
 }

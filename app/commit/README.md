@@ -106,10 +106,25 @@ enforces the financial rules.
   [`SessionActionError`](./withdrawal-errors.ts)) and refreshing the joined sessions and
   wallet ([query keys](./withdrawal-query-keys.ts)). They keep only the interaction state: the
   selected session, the replacement choice, unresolved requests and whether the terms changed.
-- The refund is shown before anything happens and checked again just before withdrawing,
-  because it changes at the 30-hour cutoff; if it changed, the player confirms the new terms.
-  An unconfirmed request is kept per session and replayed exactly (React Query does not keep
-  idempotency keys), without needing another preview.
+- The refund shown is a snapshot of what the player saw. React Query never replaces it in the
+  background (focus and reconnect refetches are off); it is checked against the server just
+  before withdrawing, and if it changed the player confirms the new terms. The final 30-hour
+  decision is still the server's, at the moment of the withdrawal.
+- Query keys for joined sessions and previews include the user ID, so a cache that outlives
+  an account change never shows one user's data to another.
+
+**Recovery strategy for unresolved requests** (a withdrawal or departure whose outcome is
+unknown), in [`withdrawal-recovery.ts`](./withdrawal-recovery.ts):
+
+1. Kept per user and session, and saved in this browser's `localStorage` under a key that
+   includes the user ID, so it survives a reload.
+2. Only ever retried exactly, with the same idempotency key, so the server replays the
+   original result instead of acting twice. The dialogs offer "Retry" and "Retry later", never
+   "Keep my place", because the action may already have happened.
+3. Cleared only when its outcome is established: a retry succeeds, or the server's
+   joined-sessions list shows the place has gone. A retry that fails, including for an
+   expired login, never clears it.
+
 - [`withdrawal-transport.ts`](./withdrawal-transport.ts) calls the existing preview,
   withdraw and leave-waitlist routes, validates each reply with Zod and maps it explicitly to
   [`withdrawal-ports.ts`](./withdrawal-ports.ts).

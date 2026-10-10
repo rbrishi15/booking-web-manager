@@ -13,7 +13,7 @@ export function LeaveWaitlistDialog({ state, onConfirm, onClose }: {
   readonly onClose: () => void;
 }) {
   if (state.step === "closed") return <Dialog open={false} />;
-  const { session, submitting } = state;
+  const { session, submitting, unresolved } = state;
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogContent className="sm:max-w-md">
@@ -25,10 +25,16 @@ export function LeaveWaitlistDialog({ state, onConfirm, onClose }: {
           </DialogDescription>
         </DialogHeader>
         {state.error !== null && <ErrorMessage>{state.error}</ErrorMessage>}
+        {unresolved && state.error === null && (
+          <ErrorMessage>Your last request to leave wasn&apos;t confirmed. Retry it to finish; the same request is reused.</ErrorMessage>
+        )}
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={onClose}>Stay on the waitlist</Button>
+          {/* After an unresolved request the player may already have left, so don't promise they stay. */}
+          <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={onClose}>
+            {unresolved ? "Retry later" : "Stay on the waitlist"}
+          </Button>
           <Button type="button" variant="destructive" className="min-h-11" disabled={submitting} onClick={onConfirm}>
-            {submitting ? "Leaving…" : "Leave waitlist"}
+            {submitting ? "Leaving…" : unresolved ? "Retry leaving" : "Leave waitlist"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { AppShell } from "@/components/ui/app-shell";
@@ -7,6 +7,7 @@ import { useLeaveWaitlistFlow } from "../use-leave-waitlist-flow";
 import { useWithdrawalFlow } from "../use-withdrawal-flow";
 import type { LeaveWaitlist, LoadJoinedSessions, PreviewWithdrawal, WithdrawFromSession } from "../withdrawal-ports";
 import { joinedSessionsQueryKey } from "../withdrawal-query-keys";
+import { memoryUnresolvedStore, type UnresolvedStore, type UnresolvedWithdrawal } from "../withdrawal-recovery";
 import { JoinedSessionsView, type JoinedSessionsState } from "./joined-sessions-view";
 import { LeaveWaitlistDialog } from "./leave-waitlist-dialog";
 import { WithdrawalDialog } from "./withdrawal-dialog";
@@ -14,18 +15,22 @@ import {
   candidates, earlySession, fakeLeaveWaitlist, fakeLoadJoinedSessions, fakePreviewWithdrawal, fakeWithdraw, lateSession, waitlistedSession,
 } from "./withdrawal-fakes";
 
+const userId = "99999999-9999-4999-8999-999999999999";
+
 /**
  * What the page will render, as its composition root: React Query loads the list (and refreshes
  * it after a withdrawal or departure), the flow hooks hold the interaction state, and the
- * presentational list and dialogs display it. Here the transport is fake; a session the fake
- * withdraws or removes from the waitlist drops out of the next list load.
+ * presentational list and dialogs display it. Here the transport is fake and unresolved requests
+ * are kept in memory; a session the fake withdraws or removes drops out of the next list load.
  */
-function JoinedSessionsPageHarness({ loadJoinedSessions, previewWithdrawal, withdraw, leaveWaitlist, inviteCandidates = candidates }: {
+function JoinedSessionsPageHarness({ loadJoinedSessions, previewWithdrawal, withdraw, leaveWaitlist, inviteCandidates = candidates, withdrawalStore, departureStore }: {
   readonly loadJoinedSessions: LoadJoinedSessions;
   readonly previewWithdrawal: PreviewWithdrawal;
   readonly withdraw: WithdrawFromSession;
   readonly leaveWaitlist: LeaveWaitlist;
   readonly inviteCandidates?: typeof candidates;
+  readonly withdrawalStore?: UnresolvedStore<UnresolvedWithdrawal>;
+  readonly departureStore?: UnresolvedStore<string>;
 }) {
   const gone = useRef(new Set<string>());
   function track<T extends { readonly status: string }>(sessionId: string, result: T): T {
@@ -33,19 +38,18 @@ function JoinedSessionsPageHarness({ loadJoinedSessions, previewWithdrawal, with
     return result;
   }
   const list = useQuery({
-    queryKey: joinedSessionsQueryKey,
+    queryKey: joinedSessionsQueryKey(userId),
     queryFn: async () => (await loadJoinedSessions()).filter((session) => !gone.current.has(session.sessionId)),
     retry: false,
   });
-  const [withdrawTransport] = useState(() => ({
+  const [stores] = useState(() => ({ withdrawals: withdrawalStore ?? memoryUnresolvedStore(), departures: departureStore ?? memoryUnresolvedStore<string>() }));
+  const [transports] = useState(() => ({
     previewWithdrawal,
     withdraw: (async (request) => track(request.sessionId, await withdraw(request))) satisfies WithdrawFromSession,
-  }));
-  const [leaveTransport] = useState(() => ({
     leaveWaitlist: (async (request) => track(request.sessionId, await leaveWaitlist(request))) satisfies LeaveWaitlist,
   }));
-  const withdrawal = useWithdrawalFlow(withdrawTransport);
-  const leaving = useLeaveWaitlistFlow(leaveTransport);
+  const withdrawal = useWithdrawalFlow({ userId, sessions: list.data, store: stores.withdrawals, previewWithdrawal: transports.previewWithdrawal, withdraw: transports.withdraw });
+  const leaving = useLeaveWaitlistFlow({ userId, sessions: list.data, store: stores.departures, leaveWaitlist: transports.leaveWaitlist });
   const state: JoinedSessionsState = list.isPending ? { status: "loading" }
     : list.isError ? { status: "error", message: "We couldn't load your sessions. Check your connection and try again." }
     : { status: "ready", sessions: list.data };
@@ -310,7 +314,9 @@ export const UnconfirmedRetryNeedsNoNewPreview: Story = {
     await userEvent.click(await within(dialog()).findByRole("radio", { name: /open it to the waitlist/i }));
     await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(within(dialog()).getByRole("button", { name: "Retry withdrawal" })).toBeEnabled());
-    await userEvent.click(within(dialog()).getByRole("button", { name: "Keep my place" }));
+    // The place may already be withdrawn, so the dialog no longer offers to keep it.
+    await expect(within(dialog()).queryByRole("button", { name: "Keep my place" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Retry later" }));
     await dialogClosed();
     await openWithdraw(canvas, "Bishan Sports Hall");
     await waitFor(() => expect(within(dialog()).getByRole("button", { name: "Retry withdrawal" })).toBeEnabled());
@@ -319,6 +325,97 @@ export const UnconfirmedRetryNeedsNoNewPreview: Story = {
     await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("is back in your wallet"));
     const [first, second] = calls(args.withdraw);
     await expect(second![0]).toEqual(first![0]);
+  },
+};
+
+/** A retry that fails (here, an expired login) never discards the earlier uncertain withdrawal. */
+let keptAttempts = 0;
+export const FailedRetryKeepsTheRequest: Story = {
+  beforeEach: () => { keptAttempts = 0; },
+  args: {
+    withdraw: fn<WithdrawFromSession>(async (request) => {
+      keptAttempts += 1;
+      if (keptAttempts === 1) return { status: "error", code: "UNKNOWN_RESULT", message: "We couldn't confirm whether you withdrew. Try again: the same request is reused, so nothing happens twice.", unconfirmed: true };
+      if (keptAttempts === 2) return { status: "error", code: "UNAUTHENTICATED", message: "Log in again to manage your sessions.", unconfirmed: false };
+      return fakeWithdraw(request);
+    }),
+  },
+  play: async ({ args, canvas }) => {
+    await openWithdraw(canvas, "Bishan Sports Hall");
+    await userEvent.click(await within(dialog()).findByRole("radio", { name: /open it to the waitlist/i }));
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw" }));
+    await userEvent.click(await within(dialog()).findByRole("button", { name: "Retry withdrawal" }));
+    await waitFor(() => expect(within(dialog()).getByText("Log in again to manage your sessions.")).toBeVisible());
+    // Still the same unresolved request: no new choice, no new preview.
+    await expect(within(dialog()).getByRole("button", { name: "Retry withdrawal" })).toBeEnabled();
+    await expect(within(dialog()).queryByRole("radio")).not.toBeInTheDocument();
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Retry withdrawal" }));
+    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("is back in your wallet"));
+    const sent = calls(args.withdraw).map(([request]) => request);
+    await expect(sent).toHaveLength(3);
+    await expect(sent[1]).toEqual(sent[0]);
+    await expect(sent[2]).toEqual(sent[0]);
+  },
+};
+
+/** An unresolved withdrawal saved before a reload is offered as a retry straight away, without a preview. */
+const savedWithdrawal: UnresolvedWithdrawal = {
+  request: { sessionId: earlySession.sessionId, idempotencyKey: "saved-before-reload", replacement: { mode: "OPEN_SLOT" } },
+  preview: { kind: "REFUNDED", refundCents: 1250, heldCents: 1250 },
+};
+let reloadStore = memoryUnresolvedStore<UnresolvedWithdrawal>();
+export const UnresolvedAfterReload: Story = {
+  beforeEach: () => { reloadStore = memoryUnresolvedStore(new Map([[earlySession.sessionId, savedWithdrawal]])); },
+  render: (args) => <JoinedSessionsPageHarness {...args} withdrawalStore={reloadStore} />,
+  play: async ({ args, canvas }) => {
+    await openWithdraw(canvas, "Bishan Sports Hall");
+    await waitFor(() => expect(within(dialog()).getByRole("button", { name: "Retry withdrawal" })).toBeEnabled());
+    await expect(args.previewWithdrawal).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Retry withdrawal" }));
+    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("is back in your wallet"));
+    await expect(args.withdraw).toHaveBeenCalledOnce();
+    await expect(args.withdraw).toHaveBeenCalledWith(savedWithdrawal.request);
+    await waitFor(() => expect(reloadStore.saved().size).toBe(0));
+  },
+};
+
+/** The server's list shows the place has already gone, which establishes the saved request's outcome. */
+let goneStore = memoryUnresolvedStore<UnresolvedWithdrawal>();
+export const UnresolvedAlreadySettled: Story = {
+  beforeEach: () => {
+    goneStore = memoryUnresolvedStore(new Map([["77777777-7777-4777-8777-777777777777", { ...savedWithdrawal, request: { ...savedWithdrawal.request, sessionId: "77777777-7777-4777-8777-777777777777" } }]]));
+  },
+  render: (args) => <JoinedSessionsPageHarness {...args} withdrawalStore={goneStore} />,
+  play: async ({ canvas }) => {
+    await listed(canvas);
+    await waitFor(() => expect(goneStore.saved().size).toBe(0));
+  },
+};
+
+/** Coming back to the tab never replaces the refund the player is looking at. */
+let shownCalls = 0;
+export const ShownRefundStaysUntilConfirmed: Story = {
+  beforeEach: () => { shownCalls = 0; },
+  args: {
+    previewWithdrawal: fn<PreviewWithdrawal>(async (sessionId) => {
+      shownCalls += 1;
+      return shownCalls === 1 ? fakePreviewWithdrawal(sessionId) : { status: "ready", preview: { kind: "AWAITING_REPLACEMENT", refundCents: 0, heldCents: 1250 } };
+    }),
+  },
+  play: async ({ args, canvas }) => {
+    await openWithdraw(canvas, "Bishan Sports Hall");
+    await waitFor(() => expect(within(dialog()).getByText("S$12.50")).toBeVisible());
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    focusManager.setFocused(undefined);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await expect(within(dialog()).getByText("S$12.50")).toBeVisible();
+    await expect(args.previewWithdrawal).toHaveBeenCalledOnce();
+    // Confirming checks the server and shows the change instead of withdrawing.
+    await userEvent.click(within(dialog()).getByRole("radio", { name: /open it to the waitlist/i }));
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(within(dialog()).getByText(/your refund changed while this was open/i)).toBeVisible());
+    await expect(args.withdraw).not.toHaveBeenCalled();
   },
 };
 
@@ -347,16 +444,16 @@ export const LeaveTheWaitlist: Story = {
   },
 };
 
-/** An unconfirmed departure keeps its idempotency key for the retry. */
+/** An unconfirmed departure keeps its idempotency key, even when a retry fails. */
 let leaveAttempts = 0;
 export const UnconfirmedLeaveRetried: Story = {
   beforeEach: () => { leaveAttempts = 0; },
   args: {
     leaveWaitlist: fn<LeaveWaitlist>(async () => {
       leaveAttempts += 1;
-      return leaveAttempts === 1
-        ? { status: "error", code: "UNKNOWN_RESULT", message: "We couldn't confirm whether you left the waitlist. Please try again.", unconfirmed: true }
-        : { status: "left" };
+      if (leaveAttempts === 1) return { status: "error", code: "UNKNOWN_RESULT", message: "We couldn't confirm whether you left the waitlist. Please try again.", unconfirmed: true };
+      if (leaveAttempts === 2) return { status: "error", code: "UNAUTHENTICATED", message: "Log in again to manage your sessions.", unconfirmed: false };
+      return { status: "left" };
     }),
   },
   play: async ({ args, canvas }) => {
@@ -364,10 +461,15 @@ export const UnconfirmedLeaveRetried: Story = {
     await userEvent.click(row(canvas, "Jurong East Sports Hall").getByRole("button", { name: /leave the waitlist/i }));
     await userEvent.click(await within(dialog()).findByRole("button", { name: "Leave waitlist" }));
     await waitFor(() => expect(within(dialog()).getByText(/couldn't confirm whether you left/i)).toBeVisible());
-    await userEvent.click(within(dialog()).getByRole("button", { name: "Leave waitlist" }));
+    // The player may already have left, so the dialog doesn't offer to keep their place.
+    await expect(within(dialog()).getByRole("button", { name: "Retry later" })).toBeVisible();
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Retry leaving" }));
+    await waitFor(() => expect(within(dialog()).getByText("Log in again to manage your sessions.")).toBeVisible());
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Retry leaving" }));
     await waitFor(() => expect(canvas.queryByText("Jurong East Sports Hall")).not.toBeInTheDocument());
-    const [first, second] = calls(args.leaveWaitlist);
-    await expect(second![0].idempotencyKey).toBe(first![0].idempotencyKey);
+    const keys = calls(args.leaveWaitlist).map(([request]) => request.idempotencyKey);
+    await expect(new Set(keys).size).toBe(1);
+    await expect(keys).toHaveLength(3);
   },
 };
 

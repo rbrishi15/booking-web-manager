@@ -88,7 +88,7 @@ export function WithdrawalDialog({ state, candidates, onChooseMode, onChooseInvi
           <div className="space-y-3">
             <ErrorMessage>{state.message}</ErrorMessage>
             <p className="text-sm text-muted-foreground">
-              Retrying sends the same request:{" "}
+              This request is kept, even if you close this or reload the page, until we know what happened. Retrying sends the same request:{" "}
               {state.request.replacement.mode === "OPEN_SLOT" ? "your place opens to the waitlist" : `${name(state.request.replacement.inviteeId)} is invited to take your place`}.
             </p>
           </div>
@@ -112,7 +112,10 @@ export function WithdrawalDialog({ state, candidates, onChooseMode, onChooseInvi
             <Button type="button" className="min-h-11" onClick={onClose}>Done</Button>
           ) : (
             <>
-              <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={onClose}>Keep my place</Button>
+              {/* After an unresolved request the place may already be withdrawn, so don't promise to keep it. */}
+              <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={onClose}>
+                {state.step === "unconfirmed" ? "Retry later" : "Keep my place"}
+              </Button>
               {state.step === "unconfirmed" ? (
                 <Button type="button" variant="destructive" className="min-h-11" disabled={submitting} onClick={onConfirm}>
                   {submitting ? "Withdrawing…" : "Retry withdrawal"}
