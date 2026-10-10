@@ -398,12 +398,14 @@ These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 `npm run test:integration` and `npm run test:e2e:integration` provision a separate
 disposable Supabase stack for database and authenticated HTTP coverage.
 `npm run test:sessions:integration` runs both. They require Docker, the
-Supabase CLI and the full ordered migration sequence, including migration 0005
-for group tables. When migration 0005 is unavailable, set
-`SESSION_TEST_PREREQUISITE_SQL` to an external copy of `0005_regular_groups.sql`
-for isolated preview testing only. See the
+Supabase CLI and the full checked-in ordered migration sequence (currently 0001
+through 0011), including `0005_regular_groups.sql`, which is present. Normal
+integration runs must leave `SESSION_TEST_PREREQUISITE_SQL` unset. Only for an
+isolated preview checkout missing migration 0005, set it to an external copy of
+`0005_regular_groups.sql`. See the
 [configuration guide](./use-case-config/README.md) for integration prerequisites,
-test isolation, and the required rerun against the merged migration sequence.
+test isolation, and the required rerun without this variable against the checked-in
+migration sequence.
 
 ## Contributing
 

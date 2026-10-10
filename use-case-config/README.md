@@ -37,28 +37,16 @@ discovery.
 Authenticated `GET /api/venues?q=…&page=…` uses the app-owned contract in
 `app/venues`, dependency assembly in `venues.ts`, and the `OneMapVenueSearch`
 adapter in `lib/venues`. It requires the public Supabase URL/anonymous key for
-<<<<<<< HEAD
-bearer verification. Optional server-only `ONEMAP_API_EMAIL` and
-`ONEMAP_API_PASSWORD` are registered OneMap account credentials, not an API key.
-Restart after changing settings because successful assembly is cached per runtime.
-=======
 bearer verification. Server-only `ONEMAP_API_EMAIL` and `ONEMAP_API_PASSWORD`
 are registered OneMap account credentials and enable automatic token renewal.
 Alternatively, configure `ONEMAP_API_TOKEN` with an existing access token. A
 complete email/password pair takes precedence when both options are configured.
 Redeploy after changing production settings because successful assembly is cached
 per runtime and Vercel applies new environment values to new deployments.
->>>>>>> origin/main
 
 The adapter POSTs email/password to OneMap's
 [`/api/auth/post/getToken`](https://www.onemap.gov.sg/apidocs/authentication),
 caches the access token until shortly before `expiry_timestamp`, shares concurrent
-<<<<<<< HEAD
-token requests, and refreshes once after a 401. Searches have a five-second timeout.
-Provider tokens, raw responses and credentials are never sent to the browser.
-Lookup occurs outside creation/database transactions and reserves no venue.
-
-=======
 token requests, and refreshes once after an authentication rejection. OneMap can
 report authentication errors in an HTTP 200 response; those responses are rejected
 as failures even when they include results. Searches have a five-second timeout.
@@ -73,20 +61,15 @@ Keep all three settings in the hosting provider's server environment, never in
 Git, public environment variables, or browser code. Configure the production
 environment explicitly; a preview or local value does not configure production.
 
->>>>>>> origin/main
 The bundled [URA region boundaries](../lib/venues/data/README.md) are resolved
 with `@turf/boolean-point-in-polygon`. The server returns application-owned names,
 addresses, coordinates, regions and pagination only. Unknown/shared-boundary
 coordinates return a null region for manual selection. Missing settings return
 503; provider failures return opaque 502 responses. Manual entry is always usable.
 Deterministic tests cover translation, expiry/refresh and all five regions.
-<<<<<<< HEAD
-Live OneMap verification requires credentials, which are absent locally.
-=======
 Live OneMap verification requires one of these authentication options. The
 disposable integration runner clears all three settings and uses fixtures/manual
 entry so it never sends inherited live credentials to the provider.
->>>>>>> origin/main
 
 ## Session creation configuration
 
@@ -129,11 +112,12 @@ The service-role key is used by test provisioning and other account workflows,
 not by session bearer verification.
 
 Joseph's authentication and profile provisioning from PR #20 are on `main`.
-Migration `0006_session_creation.sql` depends on **[PR #34](https://github.com/rbrishi15/booking-web-manager/pull/34)'s
-`0005_regular_groups.sql`**. Rishi coordinates their numbering and merge order;
-Neoh owns the session schema and wiring. Until PR #34 merges, final migration
-acceptance and merge of this integration remain pending. Do not import its group
-UI or another feature branch into this branch.
+Migration `0005_regular_groups.sql` from [PR #34](https://github.com/rbrishi15/booking-web-manager/pull/34)
+is checked in and must be applied before its dependent `0006_session_creation.sql`.
+Normal integration runs must apply the full checked-in ordered migration sequence,
+currently 0001 through 0011, without `SESSION_TEST_PREREQUISITE_SQL`. See the
+[migration inventory](../supabase/README.md#current-sequence). Rishi coordinates
+numbering and merge order; Neoh owns the session schema and wiring.
 
 Migration 0006 creates payout accounts, sessions, participations and fund holds.
 It consumes the existing group tables and attaches PR #34's
@@ -175,17 +159,12 @@ Apply migrations through `0008_session_pricing.sql` before deploying the wizard'
 custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
 bounds without updating existing sessions or fund holds.
 
-<<<<<<< HEAD
-Apply `0009_session_capacity.sql` before deploying the current session
-contract. It drops the obsolete participant-count configuration column; capacity,
-quoted shares, participation and financial records are retained. The database
-continues to enforce 2–8 slots. Previously
-applied migrations remain in the history so existing installations can upgrade.
-=======
 The session contract retains the UC2-02 minimum headcount in `minimum_headcount`.
 Migration 0006 continues to enforce 2–8 slots and a minimum headcount between
-two and the session capacity. No column-removal migration is required.
->>>>>>> origin/main
+two and the session capacity. The superseded `0009_session_capacity.sql` was
+removed before deployment and must not be applied. The current migration
+`0009_commitment_scheduling.sql` adds scheduled commitment jobs and push
+subscriptions; the full checked-in sequence continues through 0011.
 
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
@@ -203,16 +182,16 @@ or migrate the developer stack on 54321/54322. The old draft
 `0005_session_creation` installed in a local stack is not the approved migration
 sequence and must not be used to establish acceptance for this branch.
 
-Before PR #34 lands, an external copy of its SQL may be supplied **only to the
-isolated test stack**:
+Only for an isolated preview checkout that lacks `0005_regular_groups.sql`, an
+external copy may be supplied **only to the isolated test stack**:
 
 ```bash
 SESSION_TEST_PREREQUISITE_SQL=/absolute/path/0005_regular_groups.sql npm run test:sessions:integration
 ```
 
 The runner prints the preview SQL's SHA256 and labels acceptance as pending. It
-copies no source into this repository. After PR #34 merges, update from `main`
-and rerun without this variable against the merged sequence before integration.
+copies no source into this repository. Before accepting integration, rerun without
+this variable against the full checked-in ordered migration sequence.
 Tests provision eligible payout fixtures; production payout setup remains the
 responsibility of its own workflow. Session UI and later lifecycle adapters are
 separate work. See the [HTTP contract](../app/sessions/README.md).
@@ -224,7 +203,8 @@ tests, four authenticated HTTP tests, and three public documentation/unavailable
 HTTP tests passed. The service-backed runs used PR #34 at
 `f9481b61211a9e96b24cf808cb6062e18f651787`, with prerequisite SQL SHA256
 `cd1be0e3eeb1a82648a25ff2c9585407ab7f794798599d818ba743d30bd22a0e`.
-This is preview validation; rerun against the merged prerequisite before integration.
+This is historical preview validation; rerun without `SESSION_TEST_PREREQUISITE_SQL`
+against the full checked-in ordered migration sequence before accepting integration.
 
 ## Session management configuration
 
