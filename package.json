@@ -17,6 +17,7 @@
     "test:watch": "vitest --project unit",
     "test:concurrency": "vitest run --project unit -t concurrency",
     "test:e2e": "npm run build && playwright test",
+    "test:e2e:production": "playwright test --config playwright.production.config.ts",
     "test:integration": "node scripts/test-session-integration.mjs db",
     "test:e2e:integration": "node scripts/test-session-integration.mjs http",
     "test:e2e:authenticated": "npm run build && playwright test --config playwright.integration.config.ts",
