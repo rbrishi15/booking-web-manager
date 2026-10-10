@@ -10,7 +10,7 @@ async function login(page: Page, identity: Awaited<ReturnType<SessionTestContext
   await expect(page).toHaveURL(/\/sessions$/);
 }
 
-test("unfinished Wallet links retain account navigation and working recovery on mobile and desktop", async ({ page }, testInfo) => {
+test("Wallet links open the wallet inside account navigation on mobile and desktop", async ({ page }, testInfo) => {
   const context = sessionTestContext();
   try {
     const identity = await context.identity(false);
@@ -19,22 +19,18 @@ test("unfinished Wallet links retain account navigation and working recovery on 
       await page.setViewportSize({ width, height: 844 });
       await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Wallet", exact: true }).click();
       await expect(page).toHaveURL(/\/wallet$/);
-      await expect(page.getByRole("heading", { name: "Wallet is under development" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Wallet", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Transactions", exact: true })).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Wallet", exact: true })).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("main")).toHaveCount(1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`wallet-${width}.png`), fullPage: true });
-      await page.getByRole("link", { name: "View my sessions", exact: true }).focus();
-      await page.keyboard.press("Enter");
-      await expect(page).toHaveURL(/\/sessions$/);
-      await expect(page.getByRole("heading", { name: "Sessions you host", exact: true })).toBeVisible();
     }
-    // Transaction history has the same unfinished destination.
+    // Transaction history in Settings opens the same wallet page.
     await page.goto("/profile");
     await page.getByRole("link", { name: /Transaction history/ }).click();
-    await expect(page.getByRole("heading", { name: "Wallet is under development" })).toBeVisible();
-    await page.getByRole("link", { name: "Back to Home", exact: true }).click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/wallet$/);
+    await expect(page.getByRole("heading", { name: "Transactions", exact: true })).toBeVisible();
   } finally { await context.pool.end(); }
 });
 

@@ -24,7 +24,7 @@ describe("Wallet OpenAPI contracts", () => {
     expect(operation).toBeDefined();
     expect(operation?.operationId).toBe("getWallet");
     expect(operation?.tags).toEqual(["Wallet"]);
-    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation?.security).toEqual([{ bearerAuth: [] }, { loginCookie: [] }]);
     expect(Object.keys(operation?.responses ?? {})).toEqual([
       "200",
       "401",
@@ -52,7 +52,7 @@ describe("Wallet OpenAPI contracts", () => {
     expect(operation).toBeDefined();
     expect(operation?.operationId).toBe("listWalletTransactions");
     expect(operation?.tags).toEqual(["Wallet"]);
-    expect(operation?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation?.security).toEqual([{ bearerAuth: [] }, { loginCookie: [] }]);
     expect(Object.keys(operation?.responses ?? {})).toEqual([
       "200",
       "400",

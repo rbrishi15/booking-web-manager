@@ -8,6 +8,9 @@ import {
 } from "./contracts";
 import { WALLET_API_UNAVAILABLE_MESSAGE } from "./wallet-api-unavailable";
 
+/** Read operations accept the bearer token or, from this site's pages, the Supabase login cookies. */
+const readSecurity: Record<string, string[]>[] = [{ bearerAuth: [] }, { loginCookie: [] }];
+
 export function registerWalletApi(registry: OpenAPIRegistry): void {
   const summarySchema = registry.register(
     "WalletSummary",
@@ -34,7 +37,7 @@ export function registerWalletApi(registry: OpenAPIRegistry): void {
     summary: "UC1-05 Get wallet balance and active holds",
     description:
       "Returns the authenticated user's wallet details, including available balance, total held funds, and active session fund holds. Available funds reflect spendable SGD cents derived from the append-only double-entry ledger. All balances are non-negative safe integer cents.",
-    security: [{ bearerAuth: [] }],
+    security: readSecurity,
     responses: {
       200: {
         description:
@@ -100,7 +103,7 @@ export function registerWalletApi(registry: OpenAPIRegistry): void {
     summary: "UC1-05 List wallet transaction history",
     description:
       "Returns a paged list of the authenticated user's ledger transactions in reverse chronological order (newest first). Each entry records an append-only money movement (TOP_UP, LOCK, RELEASE, REFUND, FORFEIT, or PAYOUT) with safe integer cents and timestamps. Satisfies REQ-7 and REQ-8.",
-    security: [{ bearerAuth: [] }],
+    security: readSecurity,
     request: {
       query: z.object({
         limit: z.coerce.number().int().min(1).max(200).optional(),
