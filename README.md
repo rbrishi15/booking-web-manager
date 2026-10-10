@@ -409,11 +409,11 @@ migration sequence.
 
 ### Production API smoke tests
 
-\`npm run test:e2e:production\` makes read-only requests to
-\`https://booking-web-manager.vercel.app\` by default; set \`PRODUCTION_URL\` to
-use a different HTTPS deployment. It checks that \`/api/openapi\` responds
-successfully and database-backed \`GET /api/sessions\` returns HTTP 200 with the
-expected public JSON contract. An empty \`items\` array is valid; 500/503 errors,
+`npm run test:e2e:production` makes read-only requests to
+`https://booking-web-manager.vercel.app` by default; set `PRODUCTION_URL` to
+use a different HTTPS deployment. It checks that `/api/openapi` responds
+successfully and database-backed `GET /api/sessions` returns HTTP 200 with the
+expected public JSON contract. An empty `items` array is valid; 500/503 errors,
 malformed responses and connection failures fail the suite. The tests do not
 start a local server, require credentials, or install a browser.
 
