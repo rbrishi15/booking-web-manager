@@ -90,6 +90,22 @@ The 30-hour boundary follows CLAUDE.md and the domain: exactly 30 hours is a
 late withdrawal. The product-owner diagram includes exactly 30 hours in the
 refund window; that discrepancy is tracked in the waitlist discussion document.
 
+### Withdraw / Leave-waitlist screens (presentation only)
+
+[`JoinedSessionsView`](./_components/joined-sessions-view.tsx) lists the player's
+places, each marked "You have a place" or "On the waitlist".
+[`WithdrawButton`](./_components/withdraw-button.tsx) shows the server's refund
+preview before anything happens, then asks how the place is passed on (open it
+to the waitlist, or invite one named person; ADR-0006, unchangeable afterwards).
+[`LeaveWaitlistButton`](./_components/leave-waitlist-button.tsx) confirms a
+departure; no money moves. After an unconfirmed result both keep the same
+request, so a retry can only replay it.
+
+They call the functions in [`withdrawal-ports.ts`](./withdrawal-ports.ts) and
+fetch nothing themselves. Stories use the fakes in
+[`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). Real transports and
+the page follow once a joined-sessions list API exists.
+
 ## UC2-06 Verify Attendance
 
 - [`VerifyAttendance`](../../use-cases/sessions/VerifyAttendance.ts) records the
