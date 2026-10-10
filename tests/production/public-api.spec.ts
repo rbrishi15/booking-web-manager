@@ -13,10 +13,10 @@ const discoveryPageSchema = z.object({
       endAt: z.string().datetime(),
       totalSlots: z.number().int().min(1).max(8),
       bookingShareCents: z.number().int().positive().safe(),
-    }),
+    }).strict(),
   ).max(20),
   nextCursor: z.string().nullable(),
-});
+}).strict();
 
 test("production serves its OpenAPI contract", async ({ request }) => {
   const response = await request.get("/api/openapi");
