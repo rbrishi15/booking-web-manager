@@ -4,9 +4,10 @@ import { SessionManagementUnavailableError } from "@/app/sessions/session-manage
 import { ToggleSessionVisibility } from "@/use-cases/sessions/ToggleSessionVisibility";
 import { ListHostedSessions } from "@/use-cases/sessions/ListHostedSessions";
 
-const driver = vi.hoisted(() => ({ query: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }>>(), connect: vi.fn(), release: vi.fn(), getPool: vi.fn(), createPoolProvider: vi.fn(), authenticate: vi.fn(), createAuthenticator: vi.fn() }));
+const driver = vi.hoisted(() => ({ query: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }>>(), connect: vi.fn(), release: vi.fn(), getPool: vi.fn(), createPoolProvider: vi.fn(), authenticate: vi.fn(), createAuthenticator: vi.fn(), cookieIdentity: vi.fn(), createCookieIdentity: vi.fn() }));
 vi.mock("@/lib/database/postgres-pool", () => ({ createPostgresPoolProvider: driver.createPoolProvider }));
 vi.mock("@/lib/supabase/bearer-auth", () => ({ createSupabaseIdentityAuthenticator: driver.createAuthenticator }));
+vi.mock("@/lib/supabase/cookie-auth", () => ({ createSupabaseCookieIdentityAuthenticator: driver.createCookieIdentity }));
 const bookerId = "10000000-0000-4000-8000-000000000001";
 const walletId = "20000000-0000-4000-8000-000000000001";
 
@@ -21,6 +22,7 @@ beforeEach(() => {
   driver.getPool.mockReturnValue({ connect: driver.connect });
   driver.createPoolProvider.mockReturnValue(driver.getPool);
   driver.createAuthenticator.mockReturnValue(driver.authenticate);
+  driver.createCookieIdentity.mockReturnValue(driver.cookieIdentity);
   vi.stubEnv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:55322/postgres");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:55321");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
@@ -32,9 +34,15 @@ test("assembles direct use cases and lazy infrastructure, loading complete accou
   expect(dependencies.toggleVisibility).toBeInstanceOf(ToggleSessionVisibility);
   expect(dependencies.listHostedSessions).toBeInstanceOf(ListHostedSessions);
   expect(driver.getPool).not.toHaveBeenCalled();
-  await dependencies.authenticate(new Request("http://localhost/api/sessions"));
+  await dependencies.authenticate(new Request("http://localhost/api/sessions", { headers: { authorization: "Bearer token" } }));
   expect(driver.getPool).not.toHaveBeenCalled();
   expect(driver.createAuthenticator).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:55321", "test-anon-key");
+  // Requests without a bearer token (the Sessions page's reads) use the login-cookie policy.
+  expect(driver.createCookieIdentity).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:55321", "test-anon-key");
+  expect(driver.authenticate).toHaveBeenCalledOnce();
+  expect(driver.cookieIdentity).not.toHaveBeenCalled();
+  await dependencies.authenticate(new Request("http://localhost/api/sessions/hosted"));
+  expect(driver.cookieIdentity).toHaveBeenCalledOnce();
   expect(await dependencies.listHostedSessions.forBooker(bookerId)).toEqual([]);
   expect(driver.query).toHaveBeenNthCalledWith(1, "begin isolation level serializable");
   expect(driver.query).toHaveBeenCalledWith(expect.stringContaining("from ledger_entries"), [walletId]);

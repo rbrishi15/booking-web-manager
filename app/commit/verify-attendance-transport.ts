@@ -68,9 +68,17 @@ export const verifyAttendance: VerifyAttendance = async (request) => {
       body: JSON.stringify({ sessionId: request.sessionId, idempotencyKey: request.idempotencyKey, marks: request.marks }),
       signal: AbortSignal.timeout(20_000),
     });
-    body = await response.json();
   } catch {
     return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_ATTENDANCE_MESSAGE, unconfirmed: true };
+  }
+  try {
+    body = await response.json();
+  } catch {
+    // An unreadable body is uncertain only for a success or a server failure; a 4xx is a definite rejection.
+    if (response.ok || response.status >= 500) {
+      return { status: "error", code: "UNKNOWN_RESULT", message: UNCONFIRMED_ATTENDANCE_MESSAGE, unconfirmed: true };
+    }
+    body = undefined;
   }
 
   if (response.ok) {

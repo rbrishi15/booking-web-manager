@@ -4,6 +4,8 @@ import { readSessionServerSettings } from "@/app/sessions/server-environment";
 import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
 import { PostgresSessionManagementTransaction } from "@/lib/sessions/postgres-session-management-transaction";
 import { createSupabaseIdentityAuthenticator } from "@/lib/supabase/bearer-auth";
+import { createSupabaseCookieIdentityAuthenticator } from "@/lib/supabase/cookie-auth";
+import { bearerOrLoginCookie } from "@/lib/supabase/request-authenticator";
 import { ListHostedSessions } from "@/use-cases/sessions/ListHostedSessions";
 import { ToggleSessionVisibility } from "@/use-cases/sessions/ToggleSessionVisibility";
 
@@ -18,7 +20,11 @@ export function createSessionManagementDependencies(): SessionManagementDependen
   const clock = { now: () => new Date() };
   const transaction = new PostgresSessionManagementTransaction(createPostgresPoolProvider(settings.databaseUrl), clock);
   return {
-    authenticate: createSupabaseIdentityAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+    // The Sessions page reads with its login cookies; changes (PATCH) still need a bearer token.
+    authenticate: bearerOrLoginCookie(
+      createSupabaseIdentityAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+      createSupabaseCookieIdentityAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+    ),
     toggleVisibility: new ToggleSessionVisibility({ transaction, clock }),
     listHostedSessions: new ListHostedSessions({ transaction, clock }),
   };
