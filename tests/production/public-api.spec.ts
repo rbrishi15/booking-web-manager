@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+import { z } from "zod";
+
+const discoveryPageSchema = z.object({
+  items: z.array(
+    z.object({
+      sessionId: z.string(),
+      venueName: z.string(),
+      region: z.string(),
+      sport: z.string(),
+      startAt: z.string(),
+      endAt: z.string(),
+      totalSlots: z.number().int(),
+      bookingShareCents: z.number().int(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
+test("production serves its OpenAPI contract", async ({ request }) => {
+  const response = await request.get("/api/openapi");
+  expect(response.status()).toBe(200);
+
+  const document = await response.json();
+  expect(document.openapi).toMatch(/^3\./);
+  expect(document.paths?.["/api/sessions"]?.get).toBeDefined();
+});
+
+test("production session discovery reads from a working database", async ({ request }) => {
+  const response = await request.get("/api/sessions");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/json");
+
+  const parsed = discoveryPageSchema.safeParse(await response.json());
+  expect(parsed.success, parsed.success ? undefined : parsed.error.message).toBe(true);
+});

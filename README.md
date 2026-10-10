@@ -393,7 +393,7 @@ pending `test.todo(...)` coverage. See that folder's README for conventions.
 Session contract tests run with `npm test` and injected dependencies.
 `npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
 Swagger documentation, landing links, hosted Storybook deep links and assets,
-and verifies the production route's 503 response.
+and verifies that unconfigured local session routes return 503.
 These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 `npm run test:integration` and `npm run test:e2e:integration` provision a separate
 disposable Supabase stack for database and authenticated HTTP coverage.
@@ -406,6 +406,22 @@ isolated preview checkout missing migration 0005, set it to an external copy of
 [configuration guide](./use-case-config/README.md) for integration prerequisites,
 test isolation, and the required rerun without this variable against the checked-in
 migration sequence.
+
+### Production API smoke tests
+
+\`npm run test:e2e:production\` makes read-only requests to
+\`https://booking-web-manager.vercel.app\` by default; set \`PRODUCTION_URL\` to
+use a different HTTPS deployment. It checks that \`/api/openapi\` responds
+successfully and database-backed \`GET /api/sessions\` returns HTTP 200 with the
+expected public JSON contract. An empty \`items\` array is valid; 500/503 errors,
+malformed responses and connection failures fail the suite. The tests do not
+start a local server, require credentials, or install a browser.
+
+The [production smoke workflow](./.github/workflows/production-smoke.yml)
+runs approximately hourly on the default branch and can be dispatched manually.
+It observes the already-deployed site; it does not gate a deployment or test
+signed-in routes, OneMap credentials, or money-moving operations. Keep mutating
+end-to-end scenarios on isolated test or staging infrastructure.
 
 ## Contributing
 

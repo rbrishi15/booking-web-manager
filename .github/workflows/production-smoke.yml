@@ -1,0 +1,35 @@
+name: Production API smoke tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-api-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Check public production APIs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check deployed APIs
+        run: npm run test:e2e:production
+        env:
+          PRODUCTION_URL: https://booking-web-manager.vercel.app
