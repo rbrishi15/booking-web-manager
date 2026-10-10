@@ -6,8 +6,13 @@ the held funds are released to the booker after attendance is verified.
 
 NTU SC2006 group project, Group 3.
 
-See [CLAUDE.md](./CLAUDE.md) for the full architecture, non-negotiable rules,
-directory ownership and conventions. See [docs/](./docs) for the SRS.
+See [CLAUDE.md](./CLAUDE.md) for architectural constraints, directory ownership
+and conventions, and [docs/](./docs) for the SRS and accepted decisions.
+
+**Start here:** [Getting started](#getting-started) ·
+[Architecture](#architecture-direction-clean-architecture) ·
+[Session workflows](#how-session-creation-fits-together) ·
+[Testing](#testing) · [Contributing](#contributing).
 
 ## Architecture direction: Clean Architecture
 
@@ -15,9 +20,10 @@ We propose [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13
 as the implementation structure: domain rules and use-case workflows stay
 independent of React, Next.js, external APIs and database implementations. These
 rules and workflows can be tested through plain TypeScript interfaces while
-adapters handle HTTP and persistence. This framing is proposed and has not yet been
-vetted against the course's expectations; the supplementary section below maps
-it to the required use-case-driven design and BCE responsibilities.
+adapters handle HTTP and persistence. This is the team's implementation approach: the course's use-case-driven design
+and BCE responsibilities remain explicit, as explained in the supplement below.
+The accepted [ADR-0001](./docs/adr/0001-use-case-driven-development.md) records
+the use-case-driven development decision.
 
 Build from the inside out: **domain → use cases → interface adapters → React**.
 The intended request and external integration flow is:
@@ -86,8 +92,8 @@ Stripe SDK calls remain in `/app/wallet`, `/app/payouts` and
 `/app/api/webhooks`. The webhook handler currently returns `501 Not Implemented`.
 Signature verification, event deduplication and inbound-wallet crediting are
 planned behavior. Once implemented, webhook handling is intended to be the only
-path that credits inbound wallet funds. Once `CommitToSession` is implemented,
-commitment and fund holds are intended to share one SQL transaction through the
+path that credits inbound wallet funds. `CommitToSession` is implemented:
+commitment and fund holds share one SQL transaction through the
 persistence adapters, so both writes succeed or neither does.
 
 - **Domain (`/domain`)** owns business rules and valid state transitions.
@@ -111,9 +117,12 @@ above describes browser interactions; Server Components can call read-only
 use cases directly without an HTTP round trip to the application's own API,
 following the [Next.js data-fetching guidance](https://nextjs.org/docs/app/guides/backend-for-frontend#server-components).
 
-This is the proposed target architecture. The domain and shared use-case ports
-already exist, as do ledger adapters in `/lib/money`; feature coordinators,
-provider API integration and their HTTP/UI wiring are still to be implemented. See
+This diagram describes the dependency boundaries, not a claim that every external
+integration is complete. The repository already contains use-case coordinators,
+HTTP routes and PostgreSQL adapters for session creation, discovery, management
+and commitment. Some payment integration remains unfinished: the Stripe webhook
+route currently responds with `501 Not Implemented`, so live inbound wallet
+crediting is not available yet. See the feature-specific guides and
 [ADR-0001](./docs/adr/0001-use-case-driven-development.md).
 
 ### Example: commit to a session (UC2-04)
@@ -140,9 +149,12 @@ would work as follows:
    confirmation. If funds are insufficient, the request returns an error and
    leaves participation and held funds unchanged.
 
-This commitment workflow uses existing wallet funds; Stripe is used separately
-for top-ups and payouts. `CommitToSession` is an example of a future coordinator,
-not an existing class.
+This simplified example reflects the implemented
+[`CommitToSession`](./use-cases/sessions/CommitToSession.ts) workflow, exposed at
+`POST /api/sessions/commit`. It holds funds already in the wallet; Stripe top-ups
+and payouts are separate integrations. See the
+[commitment guide](./app/commit/README.md#uc2-04-commit-to-session) for the actual
+request, waitlist and transaction behavior.
 
 ### Supplement: use-case-driven design and BCE
 
@@ -190,11 +202,9 @@ at different levels of detail.
 
 UC2-02 provides request validation, Swagger documentation, Supabase bearer
 authentication and atomic PostgreSQL persistence. With server settings and
-<<<<<<< HEAD
-migrations through 0009 applied, `POST /api/sessions` creates or replays a session.
-=======
 migrations through 0008 applied, `POST /api/sessions` creates or replays a session.
->>>>>>> origin/main
+Migration 0009 adds commitment scheduling; the current full schema sequence
+continues through 0011 (see [migration inventory](./supabase/README.md#current-sequence)).
 Missing settings return `503 SESSION_API_UNAVAILABLE` with
 `Session creation is not available yet`.
 
@@ -210,7 +220,7 @@ The app-owned [`SessionApiDependencies`](./app/sessions/dependencies.ts) separat
 authentication from the submission-scoped use-case factory. `/use-cases`
 coordinates persistence, and `/domain` owns eligibility and booking-share rules.
 The [configuration guide](./use-case-config/README.md) records server settings,
-the dependency on PR #34's group migration, and integration validation. The
+the prerequisite group tables from migration 0005, and integration validation. The
 [centralized API route tests](./tests/app/sessions/create-session-route.test.ts)
 exercise the configured flow through injected dependencies and the real use
 case. The domain remains framework-independent.
@@ -221,7 +231,8 @@ Run `npm run dev`, then open
 credentials or local Supabase stack; an unconfigured server returns 503 for
 session creation. UC2-01 adds the public [discovery page](./app/discover/README.md)
 and `GET /api/sessions`, with stored-region, sport and Singapore date/time filters.
-Swagger documents discovery, creation and UC2-03a visibility management.
+Swagger documents discovery, creation, session management, commitment and wallet
+API contracts.
 The signed-in [Sessions page](./app/sessions/README.md#uc2-03a-visibility-management)
 lists hosted upcoming sessions with public/private controls. Management requires
 migration 0007 and uses serializable transactions; visible discovery pages poll
@@ -232,16 +243,17 @@ Singapore date/time editing and adjustable cent-valued pricing. Omitted API
 prices retain equal splitting; accepted prices are fixed Session state under
 [ADR-0012](./docs/adr/0012-booker-selected-session-pricing.md). Pending submissions
 survive reload in user-scoped session storage and replay with their original key.
-<<<<<<< HEAD
 
-Email verification gates session creation and admission. Signed-out and unverified
-visitors can browse `/discover`; signed-in users see a nonblocking recovery prompt.
-Current session screens receive lightweight `{ name, href, method, inputs }`
-actions from the server, and commands recheck authorization on every request.
-See the [session action contract](./app/sessions/README.md#lightweight-contextual-actions).
-Join production wiring remains separate.
-=======
->>>>>>> origin/main
+Email verification gates session creation and admission at the API boundary.
+Signed-out and unverified visitors can browse `/discover`; signed-in users with
+an unverified email see a nonblocking recovery prompt. The hosted Supabase
+project currently has email confirmation disabled for registration; see the
+[authentication guide](./app/(auth)/README.md#email-confirmation-uc1-01--uc1-02).
+
+Session screens receive lightweight `{ name, href, method, inputs }` actions
+from the server, and commands recheck authorization on every request. See the
+[session action contracts](./app/sessions/session-actions.ts) and
+[commitment workflow](./app/commit/README.md#uc2-04-commit-to-session).
 
 ## Team
 
@@ -255,13 +267,16 @@ Join production wiring remains separate.
 
 ## Getting started
 
-Use Node.js 22.x, declared in `package.json` under `engines.node`. Both CI jobs
-read that setting, and [Vercel uses it for builds and functions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
+Use Node.js 22.x, as declared in `package.json` under `engines.node`.
+[Vercel uses that setting for builds and functions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
+
+The development command builds a static Storybook preview first, then starts
+Next.js (normally at `http://localhost:3000`).
 
 The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
 `/storybook`; these resources work without Supabase or database configuration.
@@ -329,8 +344,10 @@ in flight can subsequently update the inspected snapshot.
 The public landing, Storybook, Swagger/OpenAPI, and the unconfigured session
 route need no credentials. Live
 session creation needs `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus migrations through 0009. Remote database
-connections require TLS. See `.env.example` and the configuration guide.
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, with migrations through 0008 at minimum.
+Apply the complete current migration sequence for other features. Remote database
+connections require TLS. For optional Stripe, OneMap and push settings, see
+[.env.example](./.env.example) and the [configuration guide](./use-case-config/README.md).
 
 Real values live in the project's Vercel settings, not in git. If you've been
 added as a collaborator on the `rishi-331c/booking-web-manager` Vercel
@@ -346,14 +363,12 @@ VAPID, etc.) instead of copying values by hand — it overwrites `.env.local`
 with whatever's currently in Vercel, so there's one source of truth instead of
 five drifting local copies.
 
-One thing `vercel env pull` can't do: variables stored as a **Secret**
-(currently `SUPABASE_SERVICE_ROLE_KEY`) are write-only by design — once set,
-Vercel will never hand the value back to anyone, including its own CLI. A pull
-writes `[SENSITIVE]` as a placeholder for those instead of the real value.
-That's expected, not a bug — those keys should only ever live inside Vercel's
-serverless functions, never on a laptop or in a browser, so you shouldn't need
-the actual value locally. If a local script genuinely needs it, ask Rishi to
-paste it directly rather than trying to pull it.
+Sensitive server-side credentials may not be retrievable through
+`vercel env pull`; treat placeholders such as `[SENSITIVE]` as missing values,
+not usable credentials. Never commit or expose service-role and payment secrets
+in browser code. For local integration tests that require privileged access, use
+an isolated development environment and obtain test credentials through the
+team's approved secure channel.
 
 Not on the Vercel project yet, or need to run entirely offline? Fall back to
 `cp .env.example .env.local` and fill in your own test-mode/dev keys — see
@@ -371,10 +386,9 @@ Domain unit tests live in [tests/domain](./tests/domain). Follow the
 [domain testing standard](./tests/domain/README.md) for test structure, naming,
 fixtures, and assertions.
 
-Use-case acceptance tests are organised in
-[tests/use-cases](./tests/use-cases) — one file per UC ID, starting as
-`test.todo(...)` stubs. Fill in your UC's test as you build the feature; see
-that folder's README for the convention.
+Use-case acceptance tests are organised by UC ID in
+[tests/use-cases](./tests/use-cases), including implemented scenarios and
+pending `test.todo(...)` coverage. See that folder's README for conventions.
 
 Session contract tests run with `npm test` and injected dependencies.
 `npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
@@ -383,9 +397,15 @@ and verifies the production route's 503 response.
 These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 `npm run test:integration` and `npm run test:e2e:integration` provision a separate
 disposable Supabase stack for database and authenticated HTTP coverage.
-`npm run test:sessions:integration` runs both. They require Docker, the Supabase
-CLI, and PR #34's group migration; see the configuration guide for preview
-validation while that dependency is pending.
+`npm run test:sessions:integration` runs both. They require Docker, the
+Supabase CLI and the full checked-in ordered migration sequence (currently 0001
+through 0011), including `0005_regular_groups.sql`, which is present. Normal
+integration runs must leave `SESSION_TEST_PREREQUISITE_SQL` unset. Only for an
+isolated preview checkout missing migration 0005, set it to an external copy of
+`0005_regular_groups.sql`. See the
+[configuration guide](./use-case-config/README.md) for integration prerequisites,
+test isolation, and the required rerun without this variable against the checked-in
+migration sequence.
 
 ## Contributing
 
