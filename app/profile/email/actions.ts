@@ -46,7 +46,7 @@ export async function resendOwnEmailConfirmation(
     if (targetEmail === null) return { status: "error", message: "Add an email address first." };
     if (email !== null && user.email_confirmed_at) {
       revalidatePath("/", "layout");
-      return { status: "verified", message: "Your email is verified. You can create and join sessions." };
+      return { status: "verified", message: "Your email address is verified." };
     }
     const emailRedirectTo = await emailConfirmationRedirectTo();
     if (emailRedirectTo === null) return { status: "error", message: "We couldn't verify this page's address. Reload the page and try again." };
@@ -90,7 +90,7 @@ export async function refreshEmailVerification(
     if (account === null) return { status: "error", message: "Please log in to an active account again." };
     revalidatePath("/", "layout");
     if (account.user.email?.trim() && account.user.email_confirmed_at) {
-      return { status: "verified", message: "Your email is verified. You can create and join sessions." };
+      return { status: "verified", message: "Your email address is verified." };
     }
     return { status: "error", message: "Your email is still awaiting confirmation. Open the link in your inbox, then check again." };
   } catch {

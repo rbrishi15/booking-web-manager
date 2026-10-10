@@ -10,8 +10,8 @@ interface Action<Name extends string, Method extends string, Inputs> {
 }
 
 export type CreateSessionAction = Action<"create-session", "GET", Record<string, never>>;
-export type VerifyEmailAction = Action<"verify-email", "GET", Record<string, never>>;
-export type SessionAccountAction = CreateSessionAction | VerifyEmailAction;
+export type AddEmailAction = Action<"add-email", "GET", Record<string, never>>;
+export type SessionAccountAction = CreateSessionAction | AddEmailAction;
 export type SubmitSessionAction = Action<"submit-session", "POST", Record<string, never>>;
 export type SetSessionVisibilityAction = Action<"set-visibility", "PATCH", { readonly visibility: Visibility }>;
 export type PreviewSessionCancellationAction = Action<"preview-cancellation", "GET", Record<string, never>>;
@@ -25,7 +25,7 @@ export interface SessionAccountContext {
 }
 
 function accountIneligibility(account: SessionAccountContext) {
-  return bookingAccountIneligibility({ accountStatus: account.accountStatus, emailVerified: account.emailVerified,
+  return bookingAccountIneligibility({ accountStatus: account.accountStatus,
     hasEmail: account.email !== null && account.email.trim() !== "" });
 }
 
@@ -35,13 +35,13 @@ export function getCreateSessionAction(account: SessionAccountContext): CreateSe
   return { name: "create-session", href: "/sessions/create", method: "GET", inputs: {} };
 }
 
-export function getVerifyEmailAction(account: SessionAccountContext): VerifyEmailAction | undefined {
-  if (accountIneligibility(account) !== "EMAIL_VERIFICATION_REQUIRED") return undefined;
-  return { name: "verify-email", href: "/profile/email", method: "GET", inputs: {} };
+export function getAddEmailAction(account: SessionAccountContext): AddEmailAction | undefined {
+  if (accountIneligibility(account) !== "EMAIL_REQUIRED") return undefined;
+  return { name: "add-email", href: "/profile/email", method: "GET", inputs: {} };
 }
 
 export function getSessionAccountActions(account: SessionAccountContext): readonly SessionAccountAction[] {
-  const action = getCreateSessionAction(account) ?? getVerifyEmailAction(account);
+  const action = getCreateSessionAction(account) ?? getAddEmailAction(account);
   return action === undefined ? [] : [action];
 }
 
