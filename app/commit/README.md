@@ -90,6 +90,48 @@ The 30-hour boundary follows CLAUDE.md and the domain: exactly 30 hours is a
 late withdrawal. The product-owner diagram includes exactly 30 hours in the
 refund window; that discrepancy is tracked in the waitlist discussion document.
 
+### Withdraw / Leave-waitlist screens
+
+React Query handles server state, the flow hooks handle interaction state, and the backend
+enforces the financial rules.
+
+- [`JoinedSessionsView`](./_components/joined-sessions-view.tsx) is presentational:
+  it shows the player's places and reports which one they want to withdraw from or leave.
+- [`WithdrawalDialog`](./_components/withdrawal-dialog.tsx) and
+  [`LeaveWaitlistDialog`](./_components/leave-waitlist-dialog.tsx) are single controlled
+  dialogs for the whole list, display only.
+- [`useWithdrawalFlow`](./use-withdrawal-flow.ts) and
+  [`useLeaveWaitlistFlow`](./use-leave-waitlist-flow.ts) use React Query for the refund
+  preview (`useQuery`), the actions (`useMutation`, with failures thrown as a typed
+  [`SessionActionError`](./withdrawal-errors.ts)) and refreshing the joined sessions and
+  wallet ([query keys](./withdrawal-query-keys.ts)). They keep only the interaction state: the
+  selected session, the replacement choice, unresolved requests and whether the terms changed.
+- The refund shown is a snapshot of what the player saw. React Query never replaces it in the
+  background (focus and reconnect refetches are off); it is checked against the server just
+  before withdrawing, and if it changed the player confirms the new terms. The final 30-hour
+  decision is still the server's, at the moment of the withdrawal.
+- Query keys for joined sessions and previews include the user ID, so a cache that outlives
+  an account change never shows one user's data to another.
+
+**Recovery strategy for unresolved requests** (a withdrawal or departure whose outcome is
+unknown), in [`withdrawal-recovery.ts`](./withdrawal-recovery.ts):
+
+1. Kept per user and session, and saved in this browser's `localStorage` under a key that
+   includes the user ID, so it survives a reload.
+2. Only ever retried exactly, with the same idempotency key, so the server replays the
+   original result instead of acting twice. The dialogs offer "Retry" and "Retry later", never
+   "Keep my place", because the action may already have happened.
+3. Cleared only when its outcome is established: a retry succeeds, or the server's
+   joined-sessions list shows the place has gone. A retry that fails, including for an
+   expired login, never clears it.
+
+- [`withdrawal-transport.ts`](./withdrawal-transport.ts) calls the existing preview,
+  withdraw and leave-waitlist routes, validates each reply with Zod and maps it explicitly to
+  [`withdrawal-ports.ts`](./withdrawal-ports.ts).
+- The joined-sessions list has no API yet; stories use
+  [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). The page, the composition root
+  that loads the list with React Query and provides the `QueryClient`, follows once it exists.
+
 ## UC2-06 Verify Attendance
 
 - [`VerifyAttendance`](../../use-cases/sessions/VerifyAttendance.ts) records the
