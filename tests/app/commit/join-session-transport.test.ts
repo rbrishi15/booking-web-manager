@@ -68,7 +68,7 @@ describe("UC2-04 join session transport", () => {
 
   test.each([
     [409, "INSUFFICIENT_FUNDS", "Top up your wallet"],
-    [403, "EMAIL_VERIFICATION_REQUIRED", "Confirm your email"],
+    [403, "EMAIL_REQUIRED", "Add an email"],
     [409, "ALREADY_PARTICIPATING", "already joined"],
     [403, "INVALID_ACCESS", "private"],
   ])("shows a player-facing message for %s %s", async (status, code, text) => {

@@ -35,7 +35,7 @@ const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.st
 /** What the player is told for each error code the commit route can return. */
 export const JOIN_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   UNAUTHENTICATED: "Log in to join this session.",
-  EMAIL_VERIFICATION_REQUIRED: "Confirm your email address before joining sessions.",
+  EMAIL_REQUIRED: "Add an email address before joining sessions.",
   INACTIVE_ACCOUNT: "This account can't join sessions.",
   INSUFFICIENT_FUNDS: "Your wallet doesn't have enough available balance for this share. Top up your wallet, then try again.",
   ALREADY_PARTICIPATING: "You've already joined this session or its waitlist.",

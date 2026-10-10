@@ -21,7 +21,7 @@ function submission(venueName: string) {
   };
 }
 
-test("an existing unconfirmed session browses, refuses new and replayed creation, and recovers after confirmation", async ({ page, request }, testInfo) => {
+test("an existing unconfirmed account can browse, create and replay after optional confirmation", async ({ page, request }, testInfo) => {
   test.setTimeout(60_000);
   const context = sessionTestContext();
   try {
@@ -41,15 +41,16 @@ test("an existing unconfirmed session browses, refuses new and replayed creation
     await page.goto(`/discover?q=${venue}`);
     await expect(page.getByRole("heading", { name: "Find Your Next Game", exact: true })).toBeVisible();
     await expect(page.getByRole("listitem").filter({ hasText: venue })).toBeVisible();
-    await expect(page.getByText("Verify your email to create or join sessions.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Verify email", exact: true })).toBeVisible();
+    await expect(page.getByText("Add an email address to create or join sessions.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Add email", exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("unconfirmed-discovery-mobile.png"), fullPage: true });
 
     await page.goto("/sessions");
-    await expect(page.getByRole("link", { name: "Create a session", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Create a session", exact: true })).toBeVisible();
     await page.goto("/sessions/create");
-    await expect(page).toHaveURL(/\/profile\/email$/);
+    await expect(page).toHaveURL(/\/sessions\/create$/);
+    await page.goto("/profile/email");
     await expect(page.getByRole("button", { name: "Resend confirmation email", exact: true })).toBeVisible();
 
     const browserOrigin = new URL(page.url()).origin;
@@ -57,18 +58,17 @@ test("an existing unconfirmed session browses, refuses new and replayed creation
     await expect(page).toHaveURL(`${browserOrigin}/profile/email?verification=failed`);
     await expect(page.getByText("We couldn't finish that confirmation link. Check your verification status below or request a new link.", { exact: true })).toBeVisible();
     for (const data of [body, { ...body, idempotencyKey: randomUUID() }]) {
-      const denied = await request.post("/api/sessions", { headers, data });
-      expect(denied.status()).toBe(403);
-      expect(await denied.json()).toMatchObject({ error: { code: "EMAIL_VERIFICATION_REQUIRED" } });
+      const allowed = await request.post("/api/sessions", { headers, data });
+      expect(allowed.status()).toBe(201);
     }
-    expect((await context.pool.query("select count(*)::int as count from sessions where booker_id=$1", [identity.userId])).rows).toEqual([{ count: 1 }]);
+    expect((await context.pool.query("select count(*)::int as count from sessions where booker_id=$1", [identity.userId])).rows).toEqual([{ count: 2 }]);
 
     await context.pool.query("update auth.users set email_confirmed_at=now() where id=$1", [identity.userId]);
     await page.getByRole("button", { name: "I've confirmed my email — check again", exact: true }).click();
-    await expect(page.getByText("Your email is verified. You can create and join sessions.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Your email address is verified.", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Create a session", exact: true })).toBeVisible();
     await expect(page.getByText("We couldn't finish that confirmation link.", { exact: false })).toHaveCount(0);
-    await expect(page.getByText("Verify your email to create or join sessions.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Add an email address to create or join sessions.", { exact: true })).toHaveCount(0);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: testInfo.outputPath("confirmed-email-desktop.png"), fullPage: true });
     const replay = await request.post("/api/sessions", { headers, data: body });

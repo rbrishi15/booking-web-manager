@@ -16,19 +16,19 @@ beforeEach(() => {
   vi.mocked(getCurrentUser).mockResolvedValue(user);
 });
 
-test("recovery keeps public browsing available without advertising creation for an unverified user", async () => {
+test("unconfirmed accounts can create sessions without using email recovery", async () => {
   const html = renderToStaticMarkup(await EmailVerificationPage({ searchParams: Promise.resolve({ verification: "failed" }) }));
   expect(html).toContain("Resend confirmation email");
   expect(html).toContain('href="/discover"');
   expect(html).toContain("finish that confirmation link");
-  expect(html).not.toContain('href="/sessions/create"');
+  expect(html).toContain('href="/sessions/create"');
 });
 
 test("freshly verified page state offers creation and removes email-recovery forms", async () => {
   vi.mocked(getCurrentUser).mockResolvedValue({ ...user, emailVerified: true });
   const html = renderToStaticMarkup(await EmailVerificationPage({ searchParams: Promise.resolve({ verification: "failed" }) }));
   expect(html).toContain('href="/sessions/create"');
-  expect(html).toContain("Your email is verified");
+  expect(html).toContain("Your email address is verified");
   expect(html).not.toContain("Resend confirmation email");
   expect(html).not.toContain("finish that confirmation link");
 });

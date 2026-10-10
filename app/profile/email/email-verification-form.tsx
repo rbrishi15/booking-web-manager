@@ -20,13 +20,13 @@ export function EmailVerificationForm({ email, pendingEmail, emailVerified }: {
   const [checked, check, checking] = useActionState(refreshEmailVerification, initial);
   const busy = adding || sending || checking;
   if (emailVerified || checked.status === "verified" || sent.status === "verified") {
-    return <InfoNote icon>Your email is verified. You can create and join sessions.</InfoNote>;
+    return <InfoNote icon>Your email address is verified.</InfoNote>;
   }
 
   return (
     <div className="space-y-5">
       <InfoNote icon>
-        <p>You can browse sessions now. Confirm an email address before creating or joining one.</p>
+        <p>{email === null ? "Add an email address to create or join sessions. Supabase may require a confirmation link when adding or changing an address." : "Your email address is linked. You can create and join sessions without confirming it."}</p>
         {(email ?? pendingEmail) !== null && <p className="mt-2">Check the confirmation link sent to <strong>{email ?? pendingEmail}</strong>.</p>}
         <p className="mt-2">Open the link in this browser. If it opened in another browser, return here and check your verification status.</p>
       </InfoNote>

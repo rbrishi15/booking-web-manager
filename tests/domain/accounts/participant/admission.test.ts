@@ -28,23 +28,23 @@ describe("Participant", () => {
       expect(() => applicant.asParticipant().join(bookingSession, {
         participationId: "p-cara",
         now: hoursBeforeSessionStart(48),
-      })).toThrow(expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }));
+      })).toThrow(expect.objectContaining({ code: "EMAIL_REQUIRED" }));
       expect(sessionState(bookingSession)).toEqual(previousState);
     });
 
-    test("join_WhenEmailIsUnverified_RejectsWithoutChangingSessionOrFunds", () => {
+    test("join_WhenEmailIsUnverified_AllowsAdmission", () => {
       // Arrange
       const bookingSession = createTestSession();
       const applicant = createTestUser({ userId: "alice", emailVerified: false });
       const previousState = sessionState(bookingSession);
 
       // Act & Assert
-      expect(() => applicant.asParticipant().join(bookingSession, {
+      expect(applicant.asParticipant().join(bookingSession, {
         participationId: "p-alice",
         holdId: "h-alice",
         now: hoursBeforeSessionStart(48),
-      })).toThrow(expect.objectContaining({ code: "EMAIL_VERIFICATION_REQUIRED" }));
-      expect(sessionState(bookingSession)).toEqual(previousState);
+      })).toMatchObject({ kind: "COMMITTED" });
+      expect(sessionState(bookingSession)).not.toEqual(previousState);
       expect(applicant.wallet.getAvailableBalance().toCents()).toBe(10_000);
     });
 

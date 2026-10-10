@@ -8,11 +8,10 @@ const now = new Date("2026-10-03T00:00:00Z");
 const original = { sessionId: "session", roomToken: "private-token", bookingShareCents: 500 };
 
 describe("PostgresSessionCreationTransaction", () => {
-  test("denies replay after trusted email confirmation is removed", async () => {
+  test("allows replay after email confirmation is removed", async () => {
     const { transaction, work } = scenario({ email_confirmed_at: null });
 
-    await expect(transaction.runForBooker("booker", work))
-      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+    expect(await transaction.runForBooker("booker", work)).toEqual(original);
     expect(work).not.toHaveBeenCalled();
   });
 
@@ -20,7 +19,7 @@ describe("PostgresSessionCreationTransaction", () => {
     const { transaction, work } = scenario({ email: "", email_confirmed_at: now });
 
     await expect(transaction.runForBooker("booker", work))
-      .rejects.toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED" });
+      .rejects.toMatchObject({ code: "EMAIL_REQUIRED" });
     expect(work).not.toHaveBeenCalled();
   });
 
@@ -32,7 +31,7 @@ describe("PostgresSessionCreationTransaction", () => {
     expect(work).not.toHaveBeenCalled();
   });
 
-  test("replays for a verified active booker without rerunning creation work", async () => {
+  test("replays for an active booker without rerunning creation work", async () => {
     const { transaction, work } = scenario();
 
     expect(await transaction.runForBooker("booker", work)).toEqual(original);

@@ -17,7 +17,7 @@ export default async function EmailVerificationPage({ searchParams }: { readonly
   const create = getCreateSessionAction(user);
   return (
     <>
-      <PageHeader breadcrumb="Settings" title="Verify email" />
+      <PageHeader breadcrumb="Settings" title="Email address" />
       <div className="space-y-4 p-4 md:p-8">
         <Link href="/profile" className="text-sm font-medium text-muted-foreground hover:text-foreground">← Back to settings</Link>
         <div className="max-w-2xl space-y-5 rounded-lg border bg-card p-6">

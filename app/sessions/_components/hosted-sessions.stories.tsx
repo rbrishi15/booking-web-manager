@@ -120,9 +120,16 @@ export const Empty: Story = {
 export const Unverified: Story = {
   args: { actions: getSessionAccountActions({ ...account, emailVerified: false }) },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByRole("link", { name: "Create a session" })).not.toBeInTheDocument();
-    await expect(canvas.getByRole("link", { name: "Verify email" })).toHaveAttribute("href", "/profile/email");
+    await expect(canvas.getByRole("link", { name: "Create a session" })).toHaveAttribute("href", "/sessions/create");
+    await expect(canvas.queryByRole("link", { name: "Add email" })).not.toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: "Make public" })).toBeEnabled();
+  },
+};
+export const MissingEmail: Story = {
+  args: { actions: getSessionAccountActions({ ...account, email: null, emailVerified: false }) },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("link", { name: "Create a session" })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("link", { name: "Add email" })).toHaveAttribute("href", "/profile/email");
   },
 };
 export const ServerSelectedActions: Story = {

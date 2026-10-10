@@ -66,13 +66,13 @@ export const InsufficientFunds: Story = {
   },
 };
 
-export const EmailNotVerified: Story = {
-  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "EMAIL_VERIFICATION_REQUIRED", message: JOIN_ERROR_MESSAGES.EMAIL_VERIFICATION_REQUIRED!, unconfirmed: false })) },
+export const EmailMissing: Story = {
+  args: { joinSession: fn<JoinSession>(async () => ({ status: "error", code: "EMAIL_REQUIRED", message: JOIN_ERROR_MESSAGES.EMAIL_REQUIRED!, unconfirmed: false })) },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: /join/i }));
     const dialog = within(document.body).getByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: /confirm and hold/i }));
-    await expect(await within(dialog).findByRole("link", { name: "Verify your email" })).toHaveAttribute("href", "/profile/email");
+    await expect(await within(dialog).findByRole("link", { name: "Add email" })).toHaveAttribute("href", "/profile/email");
   },
 };
 

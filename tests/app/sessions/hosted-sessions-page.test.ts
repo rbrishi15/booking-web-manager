@@ -42,8 +42,13 @@ describe("hosted Sessions page", () => {
     expect(getSessionManagementDependencies).not.toHaveBeenCalled();
   });
 
-  test("unverified users receive the email recovery action", async () => {
+  test("unverified users with an email may create sessions", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ ...user, emailVerified: false });
-    expect((await renderController()).props.actions).toEqual([{ name: "verify-email", href: "/profile/email", method: "GET", inputs: {} }]);
+    expect((await renderController()).props.actions).toEqual([{ name: "create-session", href: "/sessions/create", method: "GET", inputs: {} }]);
+  });
+
+  test("users without an email receive the add-email action", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ ...user, email: null, emailVerified: false });
+    expect((await renderController()).props.actions).toEqual([{ name: "add-email", href: "/profile/email", method: "GET", inputs: {} }]);
   });
 });

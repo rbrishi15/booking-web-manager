@@ -27,7 +27,7 @@ export function createSessionDependencies(): SessionApiDependencies {
     authenticate: createSupabaseSessionAuthenticator(
       settings.supabaseUrl,
       settings.supabaseAnonKey,
-      { requireVerifiedEmail: true },
+      { requireEmail: true },
     ),
     createForSubmission: (submission) =>
       new CreateSessions({

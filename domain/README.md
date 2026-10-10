@@ -86,9 +86,10 @@ idempotency keys cannot be reused after a failed attempt, following ADR-0002's
 complete-state construction contract.
 
 `UserDetails` requires a `Wallet`, `ReliabilityScore`, membership IDs, and trusted
-`emailVerified` state from the identity provider. Active accounts may have no
-email or an unverified email. Creation and admission require a present, verified
-email through the shared `bookingAccountIneligibility` policy; discovery and
+`emailVerified` state from the identity provider, retained for optional email
+management. Active accounts may have no email or an unverified email. Creation
+and admission require an email address, without confirmation, through the shared
+`bookingAccountIneligibility` policy; discovery and
 existing-participation exits do not impose that requirement.
 `WalletDetails` requires wallet/user IDs and a complete array of committed
 `LedgerTransaction` objects. It validates entry types, matching wallet IDs,

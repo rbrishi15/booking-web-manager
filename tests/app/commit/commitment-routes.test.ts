@@ -172,9 +172,9 @@ describe("commitment route failures", () => {
     expect(await response.json()).toMatchObject({ error: { code: "INACTIVE_ACCOUNT" } });
   });
 
-  test("an unverified email reported by the domain is a 403", async () => {
+  test("a missing email reported by the domain is a 403", async () => {
     mocks.commit.mockRejectedValue(
-      new DomainError("EMAIL_VERIFICATION_REQUIRED", "Verify your email"),
+      new DomainError("EMAIL_REQUIRED", "Add an email"),
     );
 
     const response = await commit(request("commit", routes[0].body));

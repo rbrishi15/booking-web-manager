@@ -9,7 +9,7 @@ import {
 } from "../../sessions/session/session-fixtures";
 
 describe("Participant", () => {
-  test("promoteFromWaitlist_WhenEmailIsUnverified_SkipsWithoutHoldingFunds", () => {
+  test("promoteFromWaitlist_WhenEmailIsUnverified_PromotesAndHoldsFunds", () => {
     // Arrange
     const bookingSession = createTestSession({ waitlistedUserIds: ["alice", "ben"] });
     const participant = createTestUser({ userId: "alice", emailVerified: false }).asParticipant();
@@ -20,13 +20,11 @@ describe("Participant", () => {
     });
 
     // Assert
-    expect(result).toEqual({
-      kind: "SKIPPED", participationId: "p-alice",
-      reason: "EMAIL_VERIFICATION_REQUIRED", instructions: [],
-    });
-    expect(bookingSession.participantList.requireParticipation("p-alice").status).toBe("LEFT_WAITLIST");
+    expect(result.kind).toBe("PROMOTED");
+    expect(result.instructions).toHaveLength(1);
+    expect(bookingSession.participantList.requireParticipation("p-alice").status).toBe("COMMITTED");
     expect(bookingSession.participantList.nextWaitlisted()?.userId).toBe("ben");
-    expect(bookingSession.participantList.committedCount).toBe(0);
+    expect(bookingSession.participantList.committedCount).toBe(1);
   });
 
   test("promoteFromWaitlist_WhenFirstWaiterHasPendingInvitation_RejectsWithoutAcceptingOrMovingQueue", () => {

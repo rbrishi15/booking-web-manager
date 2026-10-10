@@ -1,21 +1,21 @@
 import { describe, expect, test } from "vitest";
-import { getCreateSessionAction, getSessionAccountActions, getVerifyEmailAction, toHostedSessionActions } from "@/app/sessions/session-actions";
+import { getCreateSessionAction, getSessionAccountActions, getAddEmailAction, toHostedSessionActions } from "@/app/sessions/session-actions";
 
 const account = { accountStatus: "ACTIVE" as const, email: "player@example.com", emailVerified: true };
 
 describe("session action descriptors", () => {
-  test("offers creation only to an active account with a verified email", () => {
+  test("offers creation to active accounts with an email, regardless of confirmation", () => {
     expect(getCreateSessionAction(account)).toEqual({ name: "create-session", href: "/sessions/create", method: "GET", inputs: {} });
-    expect(getCreateSessionAction({ ...account, emailVerified: false })).toBeUndefined();
+    expect(getCreateSessionAction({ ...account, emailVerified: false })).toBeDefined();
     expect(getCreateSessionAction({ ...account, email: null })).toBeUndefined();
     expect(getCreateSessionAction({ ...account, accountStatus: "INACTIVE" })).toBeUndefined();
   });
 
-  test("advertises email recovery for a signed-in unverified or missing-email account", () => {
-    const verify = { name: "verify-email", href: "/profile/email", method: "GET", inputs: {} };
-    expect(getVerifyEmailAction({ ...account, emailVerified: false })).toEqual(verify);
-    expect(getVerifyEmailAction({ ...account, email: null })).toEqual(verify);
-    expect(getVerifyEmailAction(account)).toBeUndefined();
+  test("offers email setup only when the signed-in account lacks an email", () => {
+    const add = { name: "add-email", href: "/profile/email", method: "GET", inputs: {} };
+    expect(getAddEmailAction({ ...account, emailVerified: false })).toBeUndefined();
+    expect(getAddEmailAction({ ...account, email: null })).toEqual(add);
+    expect(getAddEmailAction(account)).toBeUndefined();
     expect(getSessionAccountActions({ ...account, accountStatus: "INACTIVE" })).toEqual([]);
   });
 

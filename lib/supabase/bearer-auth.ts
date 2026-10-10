@@ -30,7 +30,7 @@ async function verifyBearerIdentity(
 export function createBearerAuthenticator(
   auth: Pick<SupabaseClient["auth"], "getUser">,
   readStatus: (token: string, userId: UUID) => Promise<AccountStatus>,
-  options: { readonly requireVerifiedEmail?: boolean } = {},
+  options: { readonly requireEmail?: boolean } = {},
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
     const identity = await verifyBearerIdentity(auth, request);
@@ -54,7 +54,7 @@ export function createSupabaseIdentityAuthenticator(
 export function createSupabaseSessionAuthenticator(
   url: string,
   anonKey: string,
-  options: { readonly requireVerifiedEmail?: boolean } = {},
+  options: { readonly requireEmail?: boolean } = {},
 ) {
   const verifier = createClient(url, anonKey, { auth: authOptions });
   return createBearerAuthenticator(verifier.auth, async (token, userId) => {

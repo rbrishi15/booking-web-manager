@@ -423,10 +423,10 @@ export class Participant {
         "INACTIVE_ACCOUNT",
         "An inactive account cannot participate",
       );
-    if (reason === "EMAIL_VERIFICATION_REQUIRED")
+    if (reason === "EMAIL_REQUIRED")
       throw new DomainError(
-        "EMAIL_VERIFICATION_REQUIRED",
-        "Confirm your email before joining a session",
+        "EMAIL_REQUIRED",
+        "Add an email address before joining a session",
       );
     if (reason === "LOW_RELIABILITY")
       throw new DomainError(
@@ -448,7 +448,6 @@ export class Participant {
     const accountReason = bookingAccountIneligibility({
       accountStatus: this.#user.accountStatus,
       hasEmail: this.#user.email !== null,
-      emailVerified: this.#user.emailVerified,
     });
     if (accountReason !== undefined) return accountReason;
     if (

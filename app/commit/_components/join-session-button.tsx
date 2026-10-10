@@ -106,7 +106,7 @@ export function JoinSessionButton({ session, joinSession = defaultJoinSession, l
             <div className="space-y-2">
               <ErrorMessage>{outcome.message}</ErrorMessage>
               {outcome.code === "UNAUTHENTICATED" && <Button asChild variant="link" className="h-auto p-0"><Link href={loginHref}>Log in</Link></Button>}
-              {outcome.code === "EMAIL_VERIFICATION_REQUIRED" && <Button asChild variant="link" className="h-auto p-0"><Link href="/profile/email">Verify your email</Link></Button>}
+              {outcome.code === "EMAIL_REQUIRED" && <Button asChild variant="link" className="h-auto p-0"><Link href="/profile/email">Add email</Link></Button>}
               {outcome.code === "INSUFFICIENT_FUNDS" && <Button asChild variant="link" className="h-auto p-0"><Link href="/wallet">Go to wallet</Link></Button>}
             </div>
           )}

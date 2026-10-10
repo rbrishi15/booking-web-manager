@@ -41,7 +41,7 @@ export function createSupabaseCookieIdentityAuthenticator(
 export function createSupabaseCookieSessionAuthenticator(
   url: string,
   anonKey: string,
-  options: { readonly requireVerifiedEmail?: boolean } = {},
+  options: { readonly requireEmail?: boolean } = {},
 ): (request: Request) => Promise<UUID | null> {
   return async (request) => {
     const verified = await verifyLoginCookie(request, url, anonKey);

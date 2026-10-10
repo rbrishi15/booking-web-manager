@@ -9,7 +9,7 @@ import { ZodError } from "zod";
 const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
   INVALID_INPUT: 422,
   INACTIVE_ACCOUNT: 403,
-  EMAIL_VERIFICATION_REQUIRED: 403,
+  EMAIL_REQUIRED: 403,
   UNAUTHORIZED: 403,
   NOT_FOUND: 404,
   DUPLICATE_ID: 409,

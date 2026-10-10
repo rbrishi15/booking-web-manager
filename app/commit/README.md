@@ -193,7 +193,7 @@ The routes share one set of dependencies from
 Supabase bearer-token identity check and the
 [`PostgresCommitmentUnitOfWork`](../../lib/sessions/postgres-commitment-unit-of-work.ts).
 Authentication only verifies identity; the unit of work loads the complete
-User, whose roles enforce account status, email verification and reliability.
+User, whose roles enforce account status, email presence and reliability.
 Until Web Push is configured, notifications go to a
 [`NoDeliveryNotifier`](../../lib/commit/no-delivery-notifier.ts) that accepts
 and discards them.
