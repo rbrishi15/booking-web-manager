@@ -44,8 +44,12 @@ export const POST = walletAction({
 });
 ```
 
-The action wrapper owns the shared HTTP policy: dependency resolution, Supabase bearer
+The action wrapper owns the shared HTTP policy: dependency resolution, Supabase
 authentication, JSON parsing, domain error status code mapping, and `no-store` headers.
+The `GET` routes accept a bearer token or, when no `Authorization` header is sent, the
+browser's Supabase login cookies, so the wallet page reads with a plain same-origin
+`fetch`. `POST` routes require a bearer token: browsers attach cookies automatically, so
+cookie-authenticated writes could be triggered by another site (CSRF).
 
 | Route | Method | Action Helper | Parser | Success Status |
 | --- | --- | --- | --- | --- |
@@ -60,8 +64,13 @@ authentication, JSON parsing, domain error status code mapping, and `no-store` h
 Assembled in [`use-case-config/wallet.ts`](../../use-case-config/wallet.ts) and cached
 lazily via [`server-dependencies.ts`](./server-dependencies.ts):
 
-- **Authentication**: [`createSupabaseSessionAuthenticator`](../../lib/supabase/bearer-auth.ts)
-  verifies identity and checks that the profile `account_status` is `ACTIVE` (inactive
+- **Authentication**: [`bearerOrLoginCookie`](../../lib/supabase/request-authenticator.ts)
+  picks one policy per request: [`createSupabaseSessionAuthenticator`](../../lib/supabase/bearer-auth.ts)
+  when an `Authorization` header is sent, otherwise
+  [`createSupabaseCookieSessionAuthenticator`](../../lib/supabase/cookie-auth.ts), which accepts
+  only `GET` requests (an expired login is refreshed and the new cookies are returned with the
+  response). Both apply the same [account checks](../../lib/supabase/account-access.ts): the
+  profile `account_status` must be `ACTIVE` (inactive
   accounts return `403 INACTIVE_ACCOUNT`; missing profiles return `404 NOT_FOUND`).
 - **Ledger reader**: [`PostgresLedgerReader`](../../lib/money/ledger-read-adapter.ts)
   reads trigger-maintained `wallet_balances` and lists append-only `ledger_entries`.
@@ -78,4 +87,5 @@ lazily via [`server-dependencies.ts`](./server-dependencies.ts):
 
 Mounted in [`openapi.ts`](./openapi.ts) and registered in [`app/openapi/index.ts`](../openapi/index.ts).
 Rendered on Swagger UI at `/api-docs` and validated by `@apidevtools/swagger-parser` against
-the OpenAPI 3.0.3 specification. All endpoints require `bearerAuth`.
+the OpenAPI 3.0.3 specification. The `GET` endpoints accept `bearerAuth` or `loginCookie`;
+top-up requires `bearerAuth`.
