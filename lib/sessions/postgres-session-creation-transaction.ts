@@ -11,7 +11,7 @@ import type {
 import type { SessionCreationSubmission } from "./request-session-creation-transaction";
 import { PostgresSessionWriter } from "./postgres-session-writer";
 import { PostgresUserReader } from "./postgres-user-reader";
-import { choice, optionalDate } from "./postgres-row-values";
+import { choice } from "./postgres-row-values";
 
 export class PostgresSessionCreationTransaction
   implements SessionCreationTransaction
@@ -59,7 +59,7 @@ export class PostgresSessionCreationTransaction
 /** Only trusted account facts are read before replay; complete hydration remains creation-owned. */
 async function assertCurrentBookerAccess(sql: SqlExecutor, bookerId: UUID): Promise<void> {
   const rows = await sql.query(
-    `select p.account_status, u.email, u.email_confirmed_at
+    `select p.account_status, u.email
      from profiles p join auth.users u on u.id = p.user_id
      where p.user_id = $1 for share of p, u`,
     [bookerId],
@@ -71,10 +71,9 @@ async function assertCurrentBookerAccess(sql: SqlExecutor, bookerId: UUID): Prom
   const reason = bookingAccountIneligibility({
     accountStatus,
     hasEmail,
-    emailVerified: accountStatus === "ACTIVE" && hasEmail && optionalDate(account.email_confirmed_at) !== undefined,
   });
   if (reason !== undefined)
     throw new DomainError(reason, reason === "INACTIVE_ACCOUNT"
       ? "An inactive booker cannot create a session"
-      : "Confirm your email before creating a session");
+      : "Add an email address before creating a session");
 }

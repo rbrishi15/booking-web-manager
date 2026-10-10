@@ -95,14 +95,13 @@ export class Booker {
     const reason = bookingAccountIneligibility({
       accountStatus: this.#user.accountStatus,
       hasEmail: this.#user.email !== null,
-      emailVerified: this.#user.emailVerified,
     });
     if (reason !== undefined)
       throw new DomainError(
         reason,
         reason === "INACTIVE_ACCOUNT"
           ? "An inactive booker cannot create a session"
-          : "Confirm your email before creating a session",
+          : "Add an email address before creating a session",
       );
     DomainError.require(
       this.#user.payoutAccount?.setupStatus === "COMPLETE",
