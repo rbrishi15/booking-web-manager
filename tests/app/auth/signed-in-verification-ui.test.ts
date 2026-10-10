@@ -4,16 +4,16 @@ import { expect, test } from "vitest";
 import { SignedInVerificationPrompt } from "@/app/(auth)/_components/signed-in-verification-prompt";
 import { EmailVerificationForm } from "@/app/profile/email/email-verification-form";
 
-test("a signed-in account can keep browsing while being prompted to verify its email", () => {
-  const html = renderToStaticMarkup(createElement(SignedInVerificationPrompt, { user: { accountStatus: "ACTIVE", email: "viewer@example.com", pendingEmail: null, emailVerified: false } }));
+test("a signed-in account without an email sees an email setup prompt", () => {
+  const html = renderToStaticMarkup(createElement(SignedInVerificationPrompt, { user: { accountStatus: "ACTIVE", email: null, pendingEmail: null, emailVerified: false } }));
   expect(html).toContain("You can keep browsing");
   expect(html).toContain('href="/profile/email"');
-  expect(html).toContain("Verify email");
+  expect(html).toContain("Add email");
   expect(html).not.toContain("not logged in");
 });
 
-test("a verified current email removes the prompt", () => {
-  const html = renderToStaticMarkup(createElement(SignedInVerificationPrompt, { user: { accountStatus: "ACTIVE", email: "viewer@example.com", pendingEmail: null, emailVerified: true } }));
+test("an unconfirmed current email does not trigger a booking gate", () => {
+  const html = renderToStaticMarkup(createElement(SignedInVerificationPrompt, { user: { accountStatus: "ACTIVE", email: "viewer@example.com", pendingEmail: null, emailVerified: false } }));
   expect(html).toBe("");
 });
 
