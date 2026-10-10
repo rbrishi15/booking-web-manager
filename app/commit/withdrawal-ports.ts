@@ -1,10 +1,10 @@
 /**
- * UC2-05 presentation contracts for the Withdraw / Leave-waitlist screens. The screens call
- * these functions and never fetch directly; stories and tests pass fakes
- * (`_components/withdrawal-fakes.ts`). Real transports will call:
- * - the joined-sessions list (API pending from the UC2-05 owner),
- * - GET /api/sessions/{sessionId}/withdrawal-preview,
- * - POST /api/sessions/withdraw and POST /api/sessions/waitlist/leave.
+ * UC2-05 presentation contracts for the Withdraw / Leave-waitlist screens. They are shaped for
+ * the screens, not copied from the HTTP replies: `withdrawal-transport.ts` validates each API
+ * reply with Zod and maps it to these types explicitly (see the table there), and
+ * `tests/app/commit/withdrawal-contract.test.ts` checks that mapping against the real routes.
+ * The joined-sessions list has no API yet, so stories use the fakes in
+ * `_components/withdrawal-fakes.ts`.
  */
 
 /** A session the player holds a place in (COMMITTED) or is waiting for (WAITLISTED). */

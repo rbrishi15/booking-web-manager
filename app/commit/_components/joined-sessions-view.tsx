@@ -5,10 +5,8 @@ import { ErrorMessage } from "@/components/ui/error-message";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { JoinedSessionItem, LeaveWaitlist, PreviewWithdrawal, ReplacementCandidate, WithdrawFromSession } from "../withdrawal-ports";
+import type { JoinedSessionItem } from "../withdrawal-ports";
 import { singaporeStart } from "./joined-session-format";
-import { LeaveWaitlistButton } from "./leave-waitlist-button";
-import { WithdrawButton } from "./withdraw-button";
 
 /** The list, still loading, loaded, or failed. */
 export type JoinedSessionsState =
@@ -16,27 +14,20 @@ export type JoinedSessionsState =
   | { readonly status: "ready"; readonly sessions: readonly JoinedSessionItem[] }
   | { readonly status: "error"; readonly message: string };
 
-/** What the Withdraw and Leave-waitlist buttons call; supplied by the page (fakes in stories). */
-export interface JoinedSessionActions {
-  readonly previewWithdrawal: PreviewWithdrawal;
-  readonly withdraw: WithdrawFromSession;
-  readonly leaveWaitlist: LeaveWaitlist;
-  readonly candidates: readonly ReplacementCandidate[];
-  /** Called after a withdrawal or waitlist departure, to reload the list. */
-  readonly onChanged: () => void;
-}
-
 export interface JoinedSessionsViewProps {
   readonly state: JoinedSessionsState;
   readonly onRetry: () => void;
-  readonly actions: JoinedSessionActions;
+  /** Opens the (single) withdrawal dialog for this session. */
+  readonly onWithdraw: (session: JoinedSessionItem) => void;
+  /** Opens the (single) leave-waitlist dialog for this session. */
+  readonly onLeaveWaitlist: (session: JoinedSessionItem) => void;
 }
 
 /**
- * UC2-05: the sessions the player holds a place in or is waiting for, each with its way out.
- * Display only: it receives the list and the actions as props and fetches nothing itself.
+ * UC2-05: the sessions the player holds a place in or is waiting for. Presentational: it shows
+ * the list it is given and reports which session the player wants to withdraw from or leave.
  */
-export function JoinedSessionsView({ state, onRetry, actions }: JoinedSessionsViewProps) {
+export function JoinedSessionsView({ state, onRetry, onWithdraw, onLeaveWaitlist }: JoinedSessionsViewProps) {
   return (
     <section aria-labelledby="joined-heading" className="mx-auto w-full max-w-3xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
       <header className="mb-6">
@@ -79,9 +70,10 @@ export function JoinedSessionsView({ state, onRetry, actions }: JoinedSessionsVi
                     : "Nothing held until a place opens"}
                 </p>
                 {session.status === "COMMITTED"
-                  ? <WithdrawButton session={session} previewWithdrawal={actions.previewWithdrawal} withdraw={actions.withdraw}
-                      candidates={actions.candidates} onWithdrawn={actions.onChanged} />
-                  : <LeaveWaitlistButton session={session} leaveWaitlist={actions.leaveWaitlist} onLeft={actions.onChanged} />}
+                  ? <Button type="button" variant="outline" className="min-h-11" onClick={() => onWithdraw(session)}
+                      aria-label={`Withdraw from ${session.sport} at ${session.venueName}`}>Withdraw</Button>
+                  : <Button type="button" variant="outline" className="min-h-11" onClick={() => onLeaveWaitlist(session)}
+                      aria-label={`Leave the waitlist for ${session.sport} at ${session.venueName}`}>Leave waitlist</Button>}
               </div>
             </li>
           ))}

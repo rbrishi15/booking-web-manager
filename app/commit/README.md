@@ -90,21 +90,24 @@ The 30-hour boundary follows CLAUDE.md and the domain: exactly 30 hours is a
 late withdrawal. The product-owner diagram includes exactly 30 hours in the
 refund window; that discrepancy is tracked in the waitlist discussion document.
 
-### Withdraw / Leave-waitlist screens (presentation only)
+### Withdraw / Leave-waitlist screens
 
-[`JoinedSessionsView`](./_components/joined-sessions-view.tsx) lists the player's
-places, each marked "You have a place" or "On the waitlist".
-[`WithdrawButton`](./_components/withdraw-button.tsx) shows the server's refund
-preview before anything happens, then asks how the place is passed on (open it
-to the waitlist, or invite one named person; ADR-0006, unchangeable afterwards).
-[`LeaveWaitlistButton`](./_components/leave-waitlist-button.tsx) confirms a
-departure; no money moves. After an unconfirmed result both keep the same
-request, so a retry can only replay it.
-
-They call the functions in [`withdrawal-ports.ts`](./withdrawal-ports.ts) and
-fetch nothing themselves. Stories use the fakes in
-[`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). Real transports and
-the page follow once a joined-sessions list API exists.
+- [`JoinedSessionsView`](./_components/joined-sessions-view.tsx) is presentational:
+  it shows the player's places and reports which one they want to withdraw from or leave.
+- [`WithdrawalDialog`](./_components/withdrawal-dialog.tsx) and
+  [`LeaveWaitlistDialog`](./_components/leave-waitlist-dialog.tsx) are single controlled
+  dialogs for the whole list, display only.
+- [`useWithdrawalFlow`](./use-withdrawal-flow.ts) and
+  [`useLeaveWaitlistFlow`](./use-leave-waitlist-flow.ts) hold the interaction state and
+  coordinate the calls. The refund is shown before anything happens and checked again just
+  before withdrawing, because it changes at the 30-hour cutoff; if it changed, the player
+  confirms the new terms. An unconfirmed request is kept per session and replayed exactly,
+  without needing another preview (which fails once the withdrawal has happened).
+- [`withdrawal-transport.ts`](./withdrawal-transport.ts) calls the existing preview,
+  withdraw and leave-waitlist routes, validates each reply with Zod and maps it explicitly to
+  [`withdrawal-ports.ts`](./withdrawal-ports.ts).
+- The joined-sessions list has no API yet; stories use
+  [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). The page follows once it exists.
 
 ## UC2-06 Verify Attendance
 
