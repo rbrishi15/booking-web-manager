@@ -13,6 +13,12 @@ export function createOpenApiDocument(
     bearerFormat: "JWT",
     description: "Supabase bearer token. Authentication and account requirements are documented per operation.",
   });
+  registry.registerComponent("securitySchemes", "loginCookie", {
+    type: "apiKey",
+    in: "cookie",
+    name: "sb-<project-ref>-auth-token",
+    description: "Supabase login cookies set by @supabase/ssr when signing in to this site (large values are split into `.0`, `.1` chunks). Sent automatically by same-origin pages. Accepted only by read (GET) operations that list it; operations that change data require `bearerAuth`.",
+  });
 
   for (const register of registrations) register(registry);
   assertUniqueOperations(registry);

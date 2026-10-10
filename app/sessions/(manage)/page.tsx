@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
+import { QueryProvider } from "@/app/_components/query-provider";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { HostedSessionsController } from "../_components/hosted-sessions-controller";
-import { loadHostedSessionsScreen } from "../load-screen";
 import { getSessionAccountActions } from "../session-actions";
 
 export const dynamic = "force-dynamic";
 
-/** Loads the current user's hosted sessions, redirecting anonymous visitors to login with a return path. */
+/** The signed-in booker's sessions. Session data loads in the browser through GET /api/sessions/hosted. */
 export default async function SessionsPage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login?next=%2Fsessions");
-  return <HostedSessionsController userId={user.id} actions={getSessionAccountActions(user)} outcome={await loadHostedSessionsScreen(user.id)} />;
+  return <QueryProvider><HostedSessionsController userId={user.id} actions={getSessionAccountActions(user)} /></QueryProvider>;
 }

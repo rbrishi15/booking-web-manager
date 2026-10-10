@@ -76,7 +76,16 @@ describe("UC2-06 verify attendance transport", () => {
     expect(outcome.status === "error" && outcome.message).toContain(text);
   });
 
+  test("treats a 4xx with an unreadable body as a definite rejection, not an unconfirmed save", async () => {
+    // Arrange: a proxy's HTML error page instead of the API's JSON.
+    fetcher.mockResolvedValueOnce(new Response("<html>Forbidden</html>", { status: 403 }));
+
+    // Act & Assert
+    expect(await verifyAttendance(request)).toMatchObject({ status: "error", code: "UNEXPECTED_ERROR", unconfirmed: false });
+  });
+
   test.each([
+    ["a 502 without a JSON body", () => fetcher.mockResolvedValueOnce(new Response("Bad gateway", { status: 502 }))],
     ["a server error", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "INTERNAL_ERROR", message: "x" } }, { status: 500 }))],
     ["a 503", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "SESSION_MANAGEMENT_UNAVAILABLE", message: "x" } }, { status: 503 }))],
     ["a network failure", () => fetcher.mockRejectedValueOnce(new Error("offline"))],

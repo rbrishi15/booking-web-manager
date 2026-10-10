@@ -70,6 +70,7 @@ describe("application OpenAPI document", () => {
     expect(path?.post?.operationId).toBe("createSession");
     expect(document.components?.securitySchemes).toEqual({
       bearerAuth: expect.objectContaining({ type: "http", scheme: "bearer", bearerFormat: "JWT" }),
+      loginCookie: expect.objectContaining({ type: "apiKey", in: "cookie" }),
     });
     expect(document.components?.schemas?.ApiError).toMatchObject({
       type: "object",
