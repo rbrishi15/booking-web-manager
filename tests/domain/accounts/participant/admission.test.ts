@@ -39,7 +39,7 @@ describe("Participant", () => {
       const previousState = sessionState(bookingSession);
 
       // Act & Assert
-      expect(() => applicant.asParticipant().join(bookingSession, {
+      expect(applicant.asParticipant().join(bookingSession, {
         participationId: "p-alice",
         holdId: "h-alice",
         now: hoursBeforeSessionStart(48),

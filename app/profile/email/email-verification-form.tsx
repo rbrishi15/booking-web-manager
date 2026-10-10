@@ -26,7 +26,7 @@ export function EmailVerificationForm({ email, pendingEmail, emailVerified }: {
   return (
     <div className="space-y-5">
       <InfoNote icon>
-        <p>{email === null ? "Add an email address to create or join sessions. Email confirmation is not required." : "Your email address is linked. You can create and join sessions without confirming it."}</p>
+        <p>{email === null ? "Add an email address to create or join sessions. Supabase may require a confirmation link when adding or changing an address." : "Your email address is linked. You can create and join sessions without confirming it."}</p>
         {(email ?? pendingEmail) !== null && <p className="mt-2">Check the confirmation link sent to <strong>{email ?? pendingEmail}</strong>.</p>}
         <p className="mt-2">Open the link in this browser. If it opened in another browser, return here and check your verification status.</p>
       </InfoNote>
