@@ -1,50 +1,57 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { AppShell } from "@/components/ui/app-shell";
 import { useLeaveWaitlistFlow } from "../use-leave-waitlist-flow";
 import { useWithdrawalFlow } from "../use-withdrawal-flow";
-import type { LeaveWaitlist, PreviewWithdrawal, WithdrawFromSession } from "../withdrawal-ports";
+import type { LeaveWaitlist, LoadJoinedSessions, PreviewWithdrawal, WithdrawFromSession } from "../withdrawal-ports";
+import { joinedSessionsQueryKey } from "../withdrawal-query-keys";
 import { JoinedSessionsView, type JoinedSessionsState } from "./joined-sessions-view";
 import { LeaveWaitlistDialog } from "./leave-waitlist-dialog";
 import { WithdrawalDialog } from "./withdrawal-dialog";
 import {
-  candidates, earlySession, fakeLeaveWaitlist, fakePreviewWithdrawal, fakeWithdraw, joinedSessions, lateSession, waitlistedSession,
+  candidates, earlySession, fakeLeaveWaitlist, fakeLoadJoinedSessions, fakePreviewWithdrawal, fakeWithdraw, lateSession, waitlistedSession,
 } from "./withdrawal-fakes";
 
 /**
- * What the page will render: the presentational list, one shared dialog per action, and the
- * flow hooks that own interaction state, here with the fake transport. A real page reloads the
- * list after a change; this harness removes the changed row.
+ * What the page will render, as its composition root: React Query loads the list (and refreshes
+ * it after a withdrawal or departure), the flow hooks hold the interaction state, and the
+ * presentational list and dialogs display it. Here the transport is fake; a session the fake
+ * withdraws or removes from the waitlist drops out of the next list load.
  */
-function JoinedSessionsPageHarness({ state, previewWithdrawal, withdraw, leaveWaitlist, onRetry, inviteCandidates = candidates }: {
-  readonly state: JoinedSessionsState;
+function JoinedSessionsPageHarness({ loadJoinedSessions, previewWithdrawal, withdraw, leaveWaitlist, inviteCandidates = candidates }: {
+  readonly loadJoinedSessions: LoadJoinedSessions;
   readonly previewWithdrawal: PreviewWithdrawal;
   readonly withdraw: WithdrawFromSession;
   readonly leaveWaitlist: LeaveWaitlist;
-  readonly onRetry: () => void;
   readonly inviteCandidates?: typeof candidates;
 }) {
-  const [current, setCurrent] = useState(state);
-  const changed = useRef<string | null>(null);
+  const gone = useRef(new Set<string>());
   function track<T extends { readonly status: string }>(sessionId: string, result: T): T {
-    if (result.status !== "error") changed.current = sessionId;
+    if (result.status !== "error") gone.current.add(sessionId);
     return result;
   }
-  const reload = () => setCurrent((previous) => previous.status === "ready"
-    ? { status: "ready", sessions: previous.sessions.filter((item) => item.sessionId !== changed.current) }
-    : previous);
-  const withdrawal = useWithdrawalFlow({
-    previewWithdrawal, onWithdrawn: reload,
-    withdraw: async (request) => track(request.sessionId, await withdraw(request)),
+  const list = useQuery({
+    queryKey: joinedSessionsQueryKey,
+    queryFn: async () => (await loadJoinedSessions()).filter((session) => !gone.current.has(session.sessionId)),
+    retry: false,
   });
-  const leaving = useLeaveWaitlistFlow({
-    onLeft: reload,
-    leaveWaitlist: async (request) => track(request.sessionId, await leaveWaitlist(request)),
-  });
+  const [withdrawTransport] = useState(() => ({
+    previewWithdrawal,
+    withdraw: (async (request) => track(request.sessionId, await withdraw(request))) satisfies WithdrawFromSession,
+  }));
+  const [leaveTransport] = useState(() => ({
+    leaveWaitlist: (async (request) => track(request.sessionId, await leaveWaitlist(request))) satisfies LeaveWaitlist,
+  }));
+  const withdrawal = useWithdrawalFlow(withdrawTransport);
+  const leaving = useLeaveWaitlistFlow(leaveTransport);
+  const state: JoinedSessionsState = list.isPending ? { status: "loading" }
+    : list.isError ? { status: "error", message: "We couldn't load your sessions. Check your connection and try again." }
+    : { status: "ready", sessions: list.data };
   return (
     <>
-      <JoinedSessionsView state={current} onRetry={onRetry} onWithdraw={withdrawal.start} onLeaveWaitlist={leaving.start} />
+      <JoinedSessionsView state={state} onRetry={() => { void list.refetch(); }} onWithdraw={withdrawal.start} onLeaveWaitlist={leaving.start} />
       <WithdrawalDialog state={withdrawal.state} candidates={inviteCandidates} onChooseMode={withdrawal.chooseMode}
         onChooseInvitee={withdrawal.chooseInvitee} onConfirm={withdrawal.confirm} onRetryPreview={withdrawal.retryPreview} onClose={withdrawal.close} />
       <LeaveWaitlistDialog state={leaving.state} onConfirm={leaving.confirm} onClose={leaving.close} />
@@ -57,13 +64,20 @@ const meta = {
   component: JoinedSessionsPageHarness,
   parameters: { layout: "fullscreen", nextjs: { navigation: { pathname: "/sessions/joined" } } },
   globals: { viewport: { value: "phone", isRotated: false } },
-  decorators: [(Story) => <AppShell user={{ name: "Joseph", reliabilityScore: 100 }} logoutAction={fn()}><Story /></AppShell>],
+  decorators: [(Story) => {
+    // A fresh cache per story, as each browser tab gets in the app.
+    const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    return (
+      <QueryClientProvider client={client}>
+        <AppShell user={{ name: "Joseph", reliabilityScore: 100 }} logoutAction={fn()}><Story /></AppShell>
+      </QueryClientProvider>
+    );
+  }],
   args: {
-    state: { status: "ready", sessions: joinedSessions },
+    loadJoinedSessions: fn(fakeLoadJoinedSessions),
     previewWithdrawal: fn(fakePreviewWithdrawal),
     withdraw: fn(fakeWithdraw),
     leaveWaitlist: fn(fakeLeaveWaitlist),
-    onRetry: fn(),
   },
 } satisfies Meta<typeof JoinedSessionsPageHarness>;
 
@@ -74,14 +88,17 @@ const dialog = () => within(document.body).getByRole("dialog");
 const dialogClosed = () => waitFor(() => expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument());
 const row = (canvas: { getAllByRole: (role: "listitem") => HTMLElement[] }, venue: string) =>
   within(canvas.getAllByRole("listitem").find((item) => item.textContent?.includes(venue))!);
-const openWithdraw = (canvas: Parameters<typeof row>[0], venue: string) =>
-  userEvent.click(row(canvas, venue).getByRole("button", { name: /withdraw from/i }));
+const listed = (canvas: { findAllByRole: (role: "listitem") => Promise<HTMLElement[]> }) => canvas.findAllByRole("listitem");
+const openWithdraw = async (canvas: Parameters<typeof row>[0] & Parameters<typeof listed>[0], venue: string) => {
+  await listed(canvas);
+  await userEvent.click(row(canvas, venue).getByRole("button", { name: /withdraw from/i }));
+};
 const calls = <T extends (...args: never[]) => unknown>(mock: T) => (mock as unknown as ReturnType<typeof fn<T>>).mock.calls;
 
 /** Places held and waitlist places, each with its way out; fits a 390px phone. */
 export const Joined: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByRole("listitem")).toHaveLength(3);
+    await waitFor(() => expect(canvas.getAllByRole("listitem")).toHaveLength(3));
     await expect(row(canvas, "Bishan Sports Hall").getByText("You have a place")).toBeVisible();
     await expect(row(canvas, "Bishan Sports Hall").getByText("S$12.50")).toBeVisible();
     await expect(row(canvas, "Jurong East Sports Hall").getByText("On the waitlist")).toBeVisible();
@@ -91,23 +108,31 @@ export const Joined: Story = {
 };
 
 export const Loading: Story = {
-  args: { state: { status: "loading" } },
+  args: { loadJoinedSessions: fn<LoadJoinedSessions>(() => new Promise(() => undefined)) },
   play: async ({ canvas }) => { await expect(canvas.getByText("Loading your sessions…")).toBeVisible(); },
 };
 
 export const NothingJoined: Story = {
-  args: { state: { status: "ready", sessions: [] } },
+  args: { loadJoinedSessions: fn<LoadJoinedSessions>(async () => []) },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("You haven't joined any sessions")).toBeVisible();
+    await expect(await canvas.findByText("You haven't joined any sessions")).toBeVisible();
     await expect(canvas.getByRole("link", { name: "Find a session" })).toHaveAttribute("href", "/discover");
   },
 };
 
-export const LoadFailed: Story = {
-  args: { state: { status: "error", message: "We couldn't load your sessions. Check your connection and try again." } },
-  play: async ({ args, canvas }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-    await expect(args.onRetry).toHaveBeenCalledOnce();
+let listAttempts = 0;
+export const LoadFailedThenRetried: Story = {
+  beforeEach: () => { listAttempts = 0; },
+  args: {
+    loadJoinedSessions: fn<LoadJoinedSessions>(async () => {
+      listAttempts += 1;
+      if (listAttempts === 1) throw new Error("offline");
+      return fakeLoadJoinedSessions();
+    }),
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(canvas.getAllByRole("listitem")).toHaveLength(3));
   },
 };
 
@@ -313,6 +338,7 @@ export const WithdrawalRejected: Story = {
 
 export const LeaveTheWaitlist: Story = {
   play: async ({ args, canvas }) => {
+    await listed(canvas);
     await userEvent.click(row(canvas, "Jurong East Sports Hall").getByRole("button", { name: /leave the waitlist/i }));
     await waitFor(() => expect(within(dialog()).getByText(/no money moves/i)).toBeVisible());
     await userEvent.click(within(dialog()).getByRole("button", { name: "Leave waitlist" }));
@@ -334,6 +360,7 @@ export const UnconfirmedLeaveRetried: Story = {
     }),
   },
   play: async ({ args, canvas }) => {
+    await listed(canvas);
     await userEvent.click(row(canvas, "Jurong East Sports Hall").getByRole("button", { name: /leave the waitlist/i }));
     await userEvent.click(await within(dialog()).findByRole("button", { name: "Leave waitlist" }));
     await waitFor(() => expect(within(dialog()).getByText(/couldn't confirm whether you left/i)).toBeVisible());
@@ -346,5 +373,5 @@ export const UnconfirmedLeaveRetried: Story = {
 
 export const Desktop: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
-  play: async ({ canvas }) => { await expect(canvas.getAllByRole("listitem")).toHaveLength(3); },
+  play: async ({ canvas }) => { await waitFor(() => expect(canvas.getAllByRole("listitem")).toHaveLength(3)); },
 };

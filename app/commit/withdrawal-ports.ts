@@ -4,7 +4,8 @@
  * reply with Zod and maps it to these types explicitly (see the table there), and
  * `tests/app/commit/withdrawal-contract.test.ts` checks that mapping against the real routes.
  * The joined-sessions list has no API yet, so stories use the fakes in
- * `_components/withdrawal-fakes.ts`.
+ * `_components/withdrawal-fakes.ts`. React Query calls these through the flow hooks, which
+ * turn error results into thrown `SessionActionError`s.
  */
 
 /** A session the player holds a place in (COMMITTED) or is waiting for (WAITLISTED). */
@@ -19,6 +20,9 @@ export interface JoinedSessionItem {
   /** The per-place share in integer cents, held only while COMMITTED. */
   readonly bookingShareCents: number;
 }
+
+/** Loads the player's joined sessions; throws when they cannot be loaded (React Query style). */
+export type LoadJoinedSessions = () => Promise<readonly JoinedSessionItem[]>;
 
 /** What withdrawing now would do, calculated by the server (integer cents). */
 export interface WithdrawalPreview {

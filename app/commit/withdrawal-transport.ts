@@ -76,11 +76,14 @@ async function send(url: string, init: RequestInit, unconfirmedMessage: string):
   }
 }
 
-/** Maps a failure reply: a 5xx or unreadable reply never proves nothing happened; a 4xx is a definite rejection. */
+/** Maps a failure reply: a 5xx, 408, 429 or unreadable reply never proves nothing happened; other 4xx are definite rejections. */
 function failure(sent: Extract<Sent, { status: "sent" }>, unconfirmedMessage: string, fallback: string): ActionError {
   const parsed = errorSchema.safeParse(sent.body);
   const code = parsed.success ? parsed.data.error.code : "UNEXPECTED_ERROR";
-  if (sent.response.ok || sent.response.status >= 500) return { status: "error", code, message: unconfirmedMessage, unconfirmed: true };
+  // 408 and 429 can come from a proxy after the request already reached the server.
+  if (sent.response.ok || sent.response.status >= 500 || sent.response.status === 408 || sent.response.status === 429) {
+    return { status: "error", code, message: unconfirmedMessage, unconfirmed: true };
+  }
   return { status: "error", code, message: WITHDRAWAL_ERROR_MESSAGES[code] ?? fallback, unconfirmed: false };
 }
 

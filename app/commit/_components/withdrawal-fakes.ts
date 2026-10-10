@@ -1,5 +1,5 @@
 import type {
-  JoinedSessionItem, LeaveWaitlist, PreviewWithdrawal, ReplacementCandidate, WithdrawFromSession, WithdrawalPreview,
+  JoinedSessionItem, LeaveWaitlist, LoadJoinedSessions, PreviewWithdrawal, ReplacementCandidate, WithdrawFromSession, WithdrawalPreview,
 } from "../withdrawal-ports";
 
 /**
@@ -32,6 +32,8 @@ export function previewFor(session: JoinedSessionItem): WithdrawalPreview {
     ? { kind: "AWAITING_REPLACEMENT", refundCents: 0, heldCents: session.bookingShareCents }
     : { kind: "REFUNDED", refundCents: session.bookingShareCents, heldCents: session.bookingShareCents };
 }
+
+export const fakeLoadJoinedSessions: LoadJoinedSessions = async () => joinedSessions;
 
 export const fakePreviewWithdrawal: PreviewWithdrawal = async (sessionId) => {
   const session = joinedSessions.find((candidate) => candidate.sessionId === sessionId);

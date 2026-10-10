@@ -73,6 +73,8 @@ describe("UC2-05 withdrawal transport", () => {
     ["a server failure", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, { status: 500 }))],
     ["an unreadable success", () => fetcher.mockResolvedValueOnce(new Response("<html>", { status: 200 }))],
     ["a success in an unexpected shape", () => fetcher.mockResolvedValueOnce(Response.json({ kind: "REFUNDED" }))],
+    ["a gateway timeout (408)", () => fetcher.mockResolvedValueOnce(new Response("Request Timeout", { status: 408 }))],
+    ["a rate limit (429)", () => fetcher.mockResolvedValueOnce(Response.json({ error: { code: "RATE_LIMITED", message: "Slow down" } }, { status: 429 }))],
   ])("treats %s as an unconfirmed withdrawal, to be retried with the same request", async (_name, arrange) => {
     // Arrange
     arrange();

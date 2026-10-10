@@ -92,22 +92,30 @@ refund window; that discrepancy is tracked in the waitlist discussion document.
 
 ### Withdraw / Leave-waitlist screens
 
+React Query handles server state, the flow hooks handle interaction state, and the backend
+enforces the financial rules.
+
 - [`JoinedSessionsView`](./_components/joined-sessions-view.tsx) is presentational:
   it shows the player's places and reports which one they want to withdraw from or leave.
 - [`WithdrawalDialog`](./_components/withdrawal-dialog.tsx) and
   [`LeaveWaitlistDialog`](./_components/leave-waitlist-dialog.tsx) are single controlled
   dialogs for the whole list, display only.
 - [`useWithdrawalFlow`](./use-withdrawal-flow.ts) and
-  [`useLeaveWaitlistFlow`](./use-leave-waitlist-flow.ts) hold the interaction state and
-  coordinate the calls. The refund is shown before anything happens and checked again just
-  before withdrawing, because it changes at the 30-hour cutoff; if it changed, the player
-  confirms the new terms. An unconfirmed request is kept per session and replayed exactly,
-  without needing another preview (which fails once the withdrawal has happened).
+  [`useLeaveWaitlistFlow`](./use-leave-waitlist-flow.ts) use React Query for the refund
+  preview (`useQuery`), the actions (`useMutation`, with failures thrown as a typed
+  [`SessionActionError`](./withdrawal-errors.ts)) and refreshing the joined sessions and
+  wallet ([query keys](./withdrawal-query-keys.ts)). They keep only the interaction state: the
+  selected session, the replacement choice, unresolved requests and whether the terms changed.
+- The refund is shown before anything happens and checked again just before withdrawing,
+  because it changes at the 30-hour cutoff; if it changed, the player confirms the new terms.
+  An unconfirmed request is kept per session and replayed exactly (React Query does not keep
+  idempotency keys), without needing another preview.
 - [`withdrawal-transport.ts`](./withdrawal-transport.ts) calls the existing preview,
   withdraw and leave-waitlist routes, validates each reply with Zod and maps it explicitly to
   [`withdrawal-ports.ts`](./withdrawal-ports.ts).
 - The joined-sessions list has no API yet; stories use
-  [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). The page follows once it exists.
+  [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts). The page, the composition root
+  that loads the list with React Query and provides the `QueryClient`, follows once it exists.
 
 ## UC2-06 Verify Attendance
 
