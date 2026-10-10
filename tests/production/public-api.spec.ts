@@ -1,3 +1,4 @@
+import SwaggerParser from "@apidevtools/swagger-parser";
 import { expect, test } from "@playwright/test";
 import { z } from "zod";
 
@@ -22,6 +23,7 @@ test("production serves its OpenAPI contract", async ({ request }) => {
   expect(response.status()).toBe(200);
 
   const document = await response.json();
+  await expect(SwaggerParser.validate(structuredClone(document))).resolves.toBeDefined();
   expect(document.openapi).toMatch(/^3\./);
   expect(document.paths?.["/api/sessions"]?.get).toBeDefined();
 });
