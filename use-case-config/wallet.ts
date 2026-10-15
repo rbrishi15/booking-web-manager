@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
 import type { UUID } from "@/domain";
 import { DomainError } from "@/domain";
+import { createStripeClient, readStripeSettings } from "@/app/payouts/stripe-client";
 import { readSessionServerSettings } from "@/app/sessions/server-environment";
-import { WalletApiUnavailableError } from "@/app/wallet/wallet-api-unavailable";
+import { createStripeTopUpIntent } from "@/app/wallet/stripe-top-up-intents";
+import { TopUpUnavailableError, WalletApiUnavailableError } from "@/app/wallet/wallet-api-unavailable";
 import type {
   ActiveHoldItem,
   WalletApiDependencies,
@@ -140,52 +141,22 @@ export function createWalletDependencies(): WalletApiDependencies {
     return { items, nextCursor };
   }
 
+  // Stripe calls stay in /app/wallet (CLAUDE.md rule #3); this only assembles them.
+  const stripeSettings = readStripeSettings();
+  const stripe = stripeSettings ? createStripeClient(stripeSettings.secretKey) : undefined;
+
   async function createTopUpIntent(
     userId: UUID,
     input: WalletTopUpRequest,
   ): Promise<WalletTopUpResult> {
+    if (stripe === undefined) throw new TopUpUnavailableError();
     const walletId = await requireWalletId(userId);
-
-    const stripeKey = process.env.STRIPE_SECRET_KEY?.trim();
-    if (stripeKey && !stripeKey.startsWith("mock")) {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(stripeKey);
-      const intent = await stripe.paymentIntents.create(
-        {
-          amount: input.amountCents,
-          currency: "sgd",
-          payment_method_types: ["paynow"],
-          metadata: {
-            wallet_id: walletId,
-            user_id: userId,
-          },
-        },
-        { idempotencyKey: input.idempotencyKey },
-      );
-
-      return {
-        paymentIntentId: intent.id,
-        clientSecret: intent.client_secret ?? `${intent.id}_secret_test`,
-        amountCents: input.amountCents,
-        currency: "SGD",
-        status: intent.status,
-      };
-    }
-
-    // Deterministic test/simulation intent when running without live Stripe keys
-    const hash = createHash("sha256")
-      .update(`${walletId}:${input.idempotencyKey}`)
-      .digest("hex")
-      .slice(0, 24);
-    const paymentIntentId = `pi_test_${hash}`;
-
-    return {
-      paymentIntentId,
-      clientSecret: `${paymentIntentId}_secret_test`,
+    return createStripeTopUpIntent(stripe, {
+      userId,
+      walletId,
       amountCents: input.amountCents,
-      currency: "SGD",
-      status: "requires_action",
-    };
+      idempotencyKey: input.idempotencyKey,
+    });
   }
 
   return {

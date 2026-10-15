@@ -1,6 +1,8 @@
 import { DomainError } from "@/domain";
 import { isRequestFailure } from "@/app/http/request-failure";
 import {
+  TOP_UP_UNAVAILABLE_MESSAGE,
+  TopUpUnavailableError,
   WALLET_API_UNAVAILABLE_MESSAGE,
   WalletApiUnavailableError,
 } from "./wallet-api-unavailable";
@@ -22,6 +24,9 @@ export function walletErrorResponse(error: unknown): Response {
   if (error instanceof ZodError) {
     const message = error.issues[0]?.message ?? "Invalid request input";
     return errorResponse(400, "INVALID_REQUEST", message);
+  }
+  if (error instanceof TopUpUnavailableError) {
+    return errorResponse(503, "TOP_UP_UNAVAILABLE", TOP_UP_UNAVAILABLE_MESSAGE);
   }
   if (error instanceof WalletApiUnavailableError) {
     return errorResponse(

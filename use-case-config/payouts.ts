@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Pool } from "pg";
 import type Stripe from "stripe";
 import {
   PayoutsUnavailableError,
@@ -15,6 +16,7 @@ import { bearerOrLoginCookie } from "@/lib/supabase/request-authenticator";
 import { SetUpPayoutAccount } from "@/use-cases/payouts/SetUpPayoutAccount";
 
 export interface PayoutServices {
+  readonly getPool: () => Pool;
   readonly stripe: Stripe;
   readonly stripeSettings: StripeSettings;
   readonly supabaseUrl: string;
@@ -37,6 +39,7 @@ export function createPayoutServices(
   const stripe = createStripeClient(stripeSettings.secretKey);
   const accounts = new StripePayoutAccountProvider(stripe);
   return {
+    getPool,
     stripe,
     stripeSettings,
     supabaseUrl: database.supabaseUrl,

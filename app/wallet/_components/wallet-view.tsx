@@ -20,6 +20,8 @@ export interface WalletViewProps {
   readonly moreError: string | null;
   readonly onRetry: () => void;
   readonly onLoadMore: () => void;
+  /** The top-up form, when Stripe is configured; otherwise a "coming soon" note is shown. */
+  readonly topUp?: React.ReactNode;
 }
 
 const kindLabels: Readonly<Record<WalletTransactionKind, string>> = {
@@ -39,7 +41,7 @@ const singaporeDateTime = new Intl.DateTimeFormat("en-SG", {
  * UC1-05 wallet overview: available and held balances, money held per session and the
  * transaction history. Display only: WalletController loads the data and handles actions.
  */
-export function WalletView({ summary, history, loadingMore, moreError, onRetry, onLoadMore }: WalletViewProps) {
+export function WalletView({ summary, history, loadingMore, moreError, onRetry, onLoadMore, topUp }: WalletViewProps) {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-10 pt-6 md:px-8 md:pt-10">
       <header className="mb-6">
@@ -64,7 +66,7 @@ export function WalletView({ summary, history, loadingMore, moreError, onRetry, 
               <p className="mt-2 text-xs text-muted-foreground">Reserved until attendance is verified, then released to the booker.</p>
             </div>
           </div>
-          <InfoNote icon className="mt-3">Topping up with PayNow is coming soon.</InfoNote>
+          {topUp ?? <InfoNote icon className="mt-3">Topping up with PayNow is coming soon.</InfoNote>}
         </>}
       </section>
 

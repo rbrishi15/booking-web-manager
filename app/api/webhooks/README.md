@@ -18,6 +18,7 @@ callback.
 | Event | Effect |
 | --- | --- |
 | `account.updated` | UC1-07: completes or fails a pending payout setup ([handler](./payout-account-events.ts)); the account is re-read from Stripe rather than trusted from the event body |
+| `payment_intent.succeeded` | UC1-05: credits a wallet top-up ([handler](./top-up-events.ts)) — only intents marked `purpose: "wallet_top_up"`, for `amount_received` in SGD cents, at most once per PaymentIntent |
 
 ## Configuration
 

@@ -24,7 +24,27 @@ This module adheres strictly to the non-negotiable rules defined in `CLAUDE.md`:
    Domain and persistence layers move money through the ledger interface without
    importing the Stripe SDK.
 4. **Idempotency keys on mutating requests.** Every top-up request requires an
-   `idempotencyKey` to prevent duplicate intent creation.
+   `idempotencyKey` to prevent duplicate intent creation. Stripe scopes idempotency
+   keys to the platform account, not the user, so the server sends Stripe
+   `["UC1-05:top-up-intent", userId, idempotencyKey]`; otherwise two users choosing
+   the same key would share one PaymentIntent and one wallet would be credited for
+   the other's payment.
+
+## Top-up flow (UC1-05)
+
+1. The wallet page's top-up panel (shown only with a `pk_test_` publishable key)
+   turns the typed amount into integer cents by pattern, not `parseFloat`, and
+   calls `POST /api/wallet/top-up`.
+2. [`createStripeTopUpIntent`](./stripe-top-up-intents.ts) creates a PayNow
+   PaymentIntent with metadata `purpose: "wallet_top_up"`, `wallet_id`, `user_id`.
+3. Stripe.js `confirmPayNowPayment` shows the PayNow QR code until the payment ends.
+   The browser credits nothing.
+4. Stripe's `payment_intent.succeeded` webhook
+   ([handler](../api/webhooks/top-up-events.ts)) credits `amount_received` to the
+   metadata's wallet through [`PostgresTopUpCredits`](../../lib/payments/postgres-top-up-credits.ts):
+   one transaction claims a per-PaymentIntent idempotency key, appends the `TOP_UP`
+   entry, and records the event in `processed_events`, so a payment credits at most
+   once. The page refreshes the balance a few times afterwards.
 
 ---
 
@@ -76,8 +96,11 @@ lazily via [`server-dependencies.ts`](./server-dependencies.ts):
   reads trigger-maintained `wallet_balances` and lists append-only `ledger_entries`.
 - **Active holds**: Queries `hold_balances` joined with `sessions` to present held
   amounts with venue, sport, and start times.
-- **Top-up intents**: Creates a Stripe PaymentIntent for PayNow (`payment_method_types: ['paynow']`,
-  `currency: 'sgd'`) or returns a deterministic simulation intent in offline/test environments.
+- **Top-up intents**: [`createStripeTopUpIntent`](./stripe-top-up-intents.ts) creates a
+  Stripe PaymentIntent for PayNow (`payment_method_types: ['paynow']`, `currency: 'sgd'`).
+  Without a test-mode `STRIPE_SECRET_KEY`, top-up answers `503 TOP_UP_UNAVAILABLE`
+  while wallet reads keep working; it no longer returns a simulated intent, whose
+  client secret could never be paid.
 - **Unavailability**: When server configuration is missing, calls throw
   `WalletApiUnavailableError`, returning `503 WALLET_API_UNAVAILABLE`.
 
