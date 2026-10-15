@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: ["**/session-api-unavailable.spec.ts", "**/api-documentation.spec.ts", "**/public-resources.spec.ts"],
+  testMatch: ["**/session-api-unavailable.spec.ts", "**/api-documentation.spec.ts", "**/public-resources.spec.ts", "**/landing-page.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -22,6 +22,11 @@ export default defineConfig({
     {
       name: "public-resources",
       testMatch: "**/public-resources.spec.ts",
+      use: { trace: "retain-on-failure" },
+    },
+    {
+      name: "landing-page",
+      testMatch: "**/landing-page.spec.ts",
       use: { trace: "retain-on-failure" },
     },
   ],
