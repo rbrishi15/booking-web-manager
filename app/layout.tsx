@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ThemeProvider } from "./_components/theme-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,12 +12,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preload" href="/fonts/inter-v20-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="bg-background font-sans text-foreground antialiased">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

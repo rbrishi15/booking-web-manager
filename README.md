@@ -290,6 +290,13 @@ The public landing page at `/` links to `/api-docs`, `/api/openapi`, and
 Signed-in users see their upcoming bookings at `/`, or Singapore weather when
 there are none. Home has no filters; the Search button opens `/discover`.
 
+### Device theme
+
+The app follows the device's light or dark appearance automatically, including
+changes while a page is open. The root `next-themes` provider applies the
+matching Tailwind class before hydration and sets the browser color scheme for
+native controls. There is no in-app theme selector.
+
 ### Unavailable pages
 
 Unimplemented Wallet links open an explicit development page in the signed-in
@@ -400,7 +407,8 @@ pending `test.todo(...)` coverage. See that folder's README for conventions.
 Session contract tests run with `npm test` and injected dependencies.
 `npm run test:e2e` builds and starts Next.js, checks the public OpenAPI and
 Swagger documentation, landing links, hosted Storybook deep links and assets,
-and verifies that unconfigured local session routes return 503.
+verifies that unconfigured local session routes return 503, and checks device
+theme initialization, navigation, reloads, and live light/dark changes.
 These [HTTP/browser tests](./tests/e2e) need no Supabase stack or credentials.
 They test missing-configuration error handling, not service health.
 
