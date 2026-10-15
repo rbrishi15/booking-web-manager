@@ -1,184 +1,220 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { AuthHeading } from "../_components/auth-frame";
+import styles from "../_components/auth.module.css";
 import { EmailConfirmationNotice } from "../_components/email-confirmation-notice";
+import { EmailInput } from "../_components/email-input";
 import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
-import { REGIONS, SPORTS } from "../schemas";
+import { REGIONS, SPORTS, registerSchema } from "../schemas";
 import { registerUser, type RegisterState } from "./actions";
 import { passwordStrength } from "./password-strength";
 
 const initialState: RegisterState = { status: "idle" };
+const accountSchema = registerSchema.pick({ region: true, email: true, password: true });
 
-const selectClassName =
-  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm";
-
-/** UC1-01 Register User form (mockup 02). */
+/** UC1-01: account details first, then the required profile before account creation. */
 export function RegisterForm() {
   const [state, formAction, pending] = useActionState(registerUser, initialState);
   const [, startTransition] = useTransition();
+  const [step, setStep] = useState<"account" | "profile">("account");
+  const [accountErrors, setAccountErrors] = useState<RegisterState["fieldErrors"]>();
   const [password, setPassword] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  const regionRef = useRef<HTMLSelectElement>(null);
   const strength = passwordStrength(password);
-  const errors = state.fieldErrors ?? {};
+  const errors = accountErrors ?? state.fieldErrors ?? {};
 
-  // Submit without React's automatic form reset, so fields keep what the user typed after an error.
+  useEffect(() => {
+    if (step === "profile") nameRef.current?.focus();
+  }, [step]);
+
+  // Both steps remain mounted so Back and failed submissions preserve every draft field.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return; // already sending: ignore a second Enter/click
+    if (pending) return;
     const formData = new FormData(event.currentTarget);
+    if (step === "account") {
+      const parsed = accountSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) {
+        setAccountErrors(parsed.error.flatten().fieldErrors);
+        return;
+      }
+      setAccountErrors(undefined);
+      setStep("profile");
+      return;
+    }
     startTransition(() => formAction(formData));
   }
 
   if (state.status === "check-email") {
     return (
-      <div className="space-y-4">
-        <EmailConfirmationNotice email={state.email} />
-        <Button asChild className="w-full">
-          <Link href="/login">Go to log in</Link>
-        </Button>
-      </div>
+      <>
+        <AuthHeading title="Check your email" description="You're one step away from your next game." />
+        <div className="space-y-4">
+          <EmailConfirmationNotice email={state.email} />
+          <Button asChild className={styles.submit}>
+            <Link href="/login">Go to log in</Link>
+          </Button>
+        </div>
+      </>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
-      {state.status === "error" && state.message !== undefined && (
-        <ErrorMessage>
-          {state.message}{" "}
-          {state.emailTaken === true && (
-            <Link href="/login" className="font-semibold underline underline-offset-4">
-              Log in instead
-            </Link>
-          )}
-        </ErrorMessage>
-      )}
-
-      <div className="space-y-2">
-        <Label htmlFor="displayName">Name</Label>
-        <Input
-          id="displayName"
-          name="displayName"
-          autoComplete="name"
-          placeholder="Marcus Lim"
-          aria-invalid={errors.displayName !== undefined}
-          aria-describedby={describedBy(errors.displayName !== undefined && "displayName-error")}
-        />
-        <FieldError id="displayName-error" messages={errors.displayName} />
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="region">Singapore region</Label>
-          <select
-            id="region"
-            name="region"
-            defaultValue=""
-            aria-invalid={errors.region !== undefined}
-            aria-describedby={describedBy(errors.region !== undefined && "region-error")}
-            className={selectClassName}
-          >
-            <option value="" disabled>
-              Choose a region
-            </option>
-            {REGIONS.map((region) => (
-              <option key={region} value={region}>
-                {region}
-              </option>
-            ))}
-          </select>
-          <FieldError id="region-error" messages={errors.region} />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="sport">Preferred sport</Label>
-          <select
-            id="sport"
-            name="sport"
-            defaultValue=""
-            aria-invalid={errors.sport !== undefined}
-            aria-describedby={describedBy(errors.sport !== undefined && "sport-error")}
-            className={selectClassName}
-          >
-            <option value="" disabled>
-              Choose a sport
-            </option>
-            {SPORTS.map((sport) => (
-              <option key={sport} value={sport}>
-                {sport}
-              </option>
-            ))}
-          </select>
-          <FieldError id="sport-error" messages={errors.sport} />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="name@example.com"
-          aria-invalid={errors.email !== undefined}
-          aria-describedby={describedBy(errors.email !== undefined && "email-error")}
-        />
-        <FieldError id="email-error" messages={errors.email} />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <PasswordInput
-          id="password"
-          name="password"
-          autoComplete="new-password"
-          placeholder="Enter at least 8 characters"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          aria-invalid={errors.password !== undefined}
-          aria-describedby={describedBy(
-            password.length > 0 && "password-strength",
-            errors.password !== undefined && "password-error",
-          )}
-        />
-        <div className="flex gap-1.5" aria-hidden>
-          {[1, 2, 3, 4].map((bar) => (
-            <span
-              key={bar}
-              className={cn("h-1 flex-1 rounded-full", bar <= strength.score ? "bg-info" : "bg-border")}
-            />
-          ))}
-        </div>
-        {password.length > 0 && (
-          <p id="password-strength" className="text-xs text-muted-foreground">
-            Password strength: {strength.label}
-          </p>
+    <>
+      <AuthHeading
+        title={step === "account" ? "Register" : "Your profile"}
+        description={step === "account" ? "Create your account to get started." : "A few details to help you find your next game."}
+      />
+      <form onSubmit={handleSubmit} noValidate className={styles.form}>
+        {accountErrors !== undefined && <ErrorMessage>Please fix the highlighted fields.</ErrorMessage>}
+        {state.status === "error" && state.message !== undefined && (step === "profile" || state.fieldErrors === undefined) && (
+          <ErrorMessage>
+            {state.message}{" "}
+            {state.emailTaken === true && (
+              <Link href="/login" className="font-semibold underline underline-offset-4">
+                Log in instead
+              </Link>
+            )}
+          </ErrorMessage>
         )}
-        <FieldError id="password-error" messages={errors.password} />
-      </div>
 
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Creating account…" : "Create account"}
-      </Button>
+        <fieldset hidden={step !== "account"} className={styles.step}>
+          <legend className="sr-only">Account details</legend>
+          <div className={styles.field}>
+            <Label htmlFor="region">Region</Label>
+            <div className={styles.selectWrap}>
+              <select
+                ref={regionRef}
+                id="region"
+                name="region"
+                defaultValue="West"
+                aria-invalid={errors.region !== undefined}
+                aria-describedby={describedBy(errors.region !== undefined && "region-error")}
+                className={styles.select}
+              >
+                {REGIONS.map((region) => (
+                  <option key={region} value={region}>Singapore / {region}</option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </div>
+            <FieldError id="region-error" messages={errors.region} />
+          </div>
 
-      <p className="text-center text-sm text-muted-foreground">
-        By continuing, you agree to the{" "}
-        <Link href="/terms" className="font-medium text-foreground underline-offset-4 hover:underline">Terms</Link> and{" "}
-        <Link href="/privacy" className="font-medium text-foreground underline-offset-4 hover:underline">Privacy Policy</Link>.
-        <br />
-        <span className="font-medium text-foreground">
-          Already have an account?{" "}
-          <Link href="/login" className="font-semibold underline-offset-4 hover:underline">
-            Log in
-          </Link>
-        </span>
-      </p>
-    </form>
+          <div className={styles.field}>
+            <Label htmlFor="email">Email</Label>
+            <EmailInput
+              id="email"
+              aria-invalid={errors.email !== undefined}
+              aria-describedby={describedBy(errors.email !== undefined && "email-error")}
+            />
+            <FieldError id="email-error" messages={errors.email} />
+          </div>
+
+          <div className={styles.field}>
+            <Label htmlFor="password">Password</Label>
+            <PasswordInput
+              className={`${styles.input} ${styles.passwordInput}`}
+              id="password"
+              name="password"
+              autoComplete="new-password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={errors.password !== undefined}
+              aria-describedby={describedBy(
+                "password-strength",
+                errors.password !== undefined && "password-error",
+              )}
+            />
+            <div className={styles.strength}>
+              <div className={styles.strengthBars} aria-hidden="true">
+                {[1, 2, 3].map((bar) => (
+                  <span key={bar} className={cn(bar <= Math.max(1, Math.ceil(strength.score * 3 / 4)) && styles.filled)} />
+                ))}
+              </div>
+              <p id="password-strength" className={styles.strengthLabel}>
+                <span className="sr-only">Password strength: </span>{strength.label}
+              </p>
+            </div>
+            <FieldError id="password-error" messages={errors.password} />
+          </div>
+        </fieldset>
+
+        <fieldset hidden={step !== "profile"} className={styles.step}>
+          <legend className="sr-only">Profile details</legend>
+          <div className={styles.field}>
+            <Label htmlFor="displayName">Name</Label>
+            <Input
+              ref={nameRef}
+              className={styles.input}
+              id="displayName"
+              name="displayName"
+              autoComplete="name"
+              placeholder="Your name"
+              aria-invalid={errors.displayName !== undefined}
+              aria-describedby={describedBy(errors.displayName !== undefined && "displayName-error")}
+            />
+            <FieldError id="displayName-error" messages={errors.displayName} />
+          </div>
+          <div className={styles.field}>
+            <Label htmlFor="sport">Preferred sport</Label>
+            <div className={styles.selectWrap}>
+              <select
+                id="sport"
+                name="sport"
+                defaultValue=""
+                aria-invalid={errors.sport !== undefined}
+                aria-describedby={describedBy(errors.sport !== undefined && "sport-error")}
+                className={styles.select}
+              >
+                <option value="" disabled>Choose a sport</option>
+                {SPORTS.map((sport) => (
+                  <option key={sport} value={sport}>{sport}</option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </div>
+            <FieldError id="sport-error" messages={errors.sport} />
+          </div>
+        </fieldset>
+
+        <Button type="submit" className={styles.submit} disabled={pending}>
+          {pending ? "Creating account…" : step === "account" ? "Sign Up" : "Create account"}
+        </Button>
+
+        <p hidden={step !== "profile"} className={styles.terms}>
+          By continuing, you agree to the{" "}
+          <Link href="/terms">Terms</Link> and{" "}
+          <Link href="/privacy">Privacy Policy</Link>.
+        </p>
+        {step === "profile" && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => {
+              setStep("account");
+              requestAnimationFrame(() => regionRef.current?.focus());
+            }}
+          >
+            Back to account details
+          </Button>
+        )}
+        <p className={styles.footer}>
+          I have an account? <Link href="/login">Login</Link>
+        </p>
+      </form>
+    </>
   );
 }

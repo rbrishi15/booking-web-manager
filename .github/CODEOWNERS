@@ -138,6 +138,9 @@
 /lib/supabase/ @Jolingoes
 /middleware.ts @Jolingoes
 /tests/app/auth/ @Jolingoes
+/tests/e2e/auth-pages.spec.ts @Jolingoes
+/public/images/auth-court* @Jolingoes
+/playwright.auth.config.ts @Jolingoes
 /tests/app/profile/ @Jolingoes
 /tests/app/groups/ @Jolingoes
 /tests/lib/supabase/ @Jolingoes

@@ -6,6 +6,30 @@ UC1-01 Register User, UC1-02 Authenticate User. Approval for this directory
 may be given by Joseph alone (delegated review — see CLAUDE.md "Directory
 ownership"), so routine interface changes don't queue behind payment work.
 
+## Login and registration presentation
+
+The auth pages share a monochrome court backdrop and a form card. Desktop and
+mobile use separate decorative images reconstructed from the supplied design
+references; the [asset notes](../../public/images/auth-court.md) record their
+provenance. Styles are scoped to these pages and reuse the existing controls.
+
+Registration starts with region, email and password. **Sign Up** validates those
+details using the existing registration schema and opens the required name and
+preferred-sport step. **Create account** submits all five fields to the unchanged
+server action. Both steps remain mounted so Back and validation errors preserve
+the draft. Terms and privacy links appear before the final submission.
+
+The email control accepts a complete address or an address with a selected
+ending. Complete addresses with other or multi-label domains remain editable in
+full. The form submits one complete `email` value; the server remains responsible
+for validation. Password strength is a visual hint, not an additional policy.
+
+Run `npm run test:e2e:auth` for responsive layout, navigation, field controls,
+step transitions and failed-validation checks. This suite uses an isolated Next
+development server with dummy Supabase settings and creates no accounts. Run it
+separately from production builds because both write to `.next`. Successful
+sign-in, registration and confirmation still need a configured Supabase service.
+
 ## Terms and privacy
 
 `/terms` and `/privacy` are public (`PUBLIC_PATHS` in `redirect-path.ts`) so the

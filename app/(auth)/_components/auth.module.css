@@ -1,0 +1,482 @@
+.frame {
+  --court-haze: 0 0% 78%;
+  --secondary: 0 0% 96%;
+  --card: 0 0% 98.5%;
+  --foreground: 0 0% 4%;
+  --primary: 0 0% 9%;
+  --muted-foreground: 240 3% 46%;
+  --input: 240 5% 87%;
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  background:
+    radial-gradient(ellipse 320px 72% at 46.875% 100%, hsl(var(--court-haze) / 65%), transparent 100%),
+    hsl(var(--secondary));
+}
+
+.scene {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 46.875%;
+  overflow: hidden;
+}
+
+.court {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  object-position: center;
+  /* Feather the photo itself so the overlaid court captions remain crisp. */
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - 200px),
+    rgb(0 0 0 / 96%) calc(100% - 160px),
+    rgb(0 0 0 / 82%) calc(100% - 120px),
+    rgb(0 0 0 / 55%) calc(100% - 80px),
+    rgb(0 0 0 / 23%) calc(100% - 40px),
+    transparent 100%
+  );
+}
+
+.sceneFade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, hsl(var(--secondary) / 20%), transparent 25%);
+}
+
+.sceneCaption,
+.mobileCaption {
+  position: absolute;
+  top: 27%;
+  left: clamp(40px, 5.2vw, 100px);
+  color: #262626;
+  font-size: 12px;
+  line-height: 2;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+.sceneCaption span,
+.mobileCaption span {
+  display: block;
+  width: 26px;
+  height: 1px;
+  margin-top: 22px;
+  background: currentColor;
+}
+
+.mobileCaption {
+  display: none;
+}
+
+.sceneFooter {
+  position: absolute;
+  bottom: 7%;
+  left: clamp(40px, 5.2vw, 100px);
+  color: white;
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  line-height: 2.5;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 50%);
+}
+
+.sceneFooter p:first-child {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 108px;
+  padding: 24px clamp(40px, 5.2vw, 100px);
+}
+
+.homeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 4px;
+}
+
+.homeLink:focus-visible,
+.footer a:focus-visible,
+.terms a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 5px;
+}
+
+.logo {
+  font-size: 34px;
+  letter-spacing: -0.045em;
+}
+
+.headerSwitch {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  font-size: 16px;
+}
+
+.switchButton {
+  height: 52px;
+  min-width: 128px;
+  padding-inline: 24px;
+  background: transparent;
+  border-color: currentColor;
+  font-size: 16px;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  min-height: calc(100svh - 108px);
+  padding: 26px clamp(48px, 11.5vw, 220px) 80px 46.875%;
+}
+
+.card {
+  width: 100%;
+  max-width: 640px;
+  min-height: 806px;
+  padding: clamp(48px, 4.7vw, 72px) clamp(36px, 5.9vw, 90px);
+  border-radius: 16px;
+  background: hsl(var(--card) / 96%);
+  box-shadow: 0 24px 64px -32px rgb(0 0 0 / 15%);
+}
+
+.heading {
+  margin-bottom: 40px;
+}
+
+.heading h1 {
+  font-size: clamp(42px, 3.65vw, 56px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.heading p {
+  margin-top: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.step {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.step[hidden] {
+  display: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field label {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.field .input,
+.select {
+  width: 100%;
+  height: 52px;
+  min-width: 0;
+  border: 1px solid hsl(var(--input));
+  border-radius: 7px;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.field .input[aria-invalid="true"],
+.select[aria-invalid="true"] {
+  border-color: hsl(var(--destructive));
+}
+
+.field .passwordInput {
+  padding-right: 56px;
+}
+
+.selectWrap {
+  position: relative;
+}
+
+.select {
+  appearance: none;
+  padding-right: 40px;
+  color: inherit;
+}
+
+.select:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.selectWrap svg {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.strength {
+  display: flex;
+  align-items: center;
+  gap: 78px;
+  color: hsl(var(--muted-foreground));
+  font-size: 16px;
+}
+
+.strengthBars {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+}
+
+.strengthBars span {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: hsl(var(--border));
+}
+
+.strengthBars .filled {
+  background: hsl(var(--foreground));
+}
+
+.strengthLabel {
+  min-width: 48px;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+.submit {
+  width: 100%;
+  height: 58px;
+  margin-top: 22px;
+  border-radius: 7px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.terms {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.terms a,
+.footer a {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.footer {
+  padding-top: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 18px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.footer a {
+  display: inline-block;
+  margin-left: 6px;
+  padding-block: 8px;
+}
+
+:global(.dark) .court {
+  opacity: 0.5;
+}
+
+:global(.dark) .frame {
+  --court-haze: 215 27.9% 12%;
+  --secondary: 215 27.9% 16.9%;
+  --card: 224 71.4% 4.1%;
+  --foreground: 210 20% 98%;
+  --primary: 210 20% 98%;
+  --muted-foreground: 217.9 10.6% 64.9%;
+  --input: 215 27.9% 16.9%;
+}
+
+:global(.dark) .sceneCaption {
+  color: hsl(var(--foreground));
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  .main {
+    padding-right: 40px;
+    padding-left: 42%;
+  }
+
+  .card {
+    padding: 44px 36px;
+  }
+}
+
+@media (max-width: 899px) {
+  .frame {
+    background: hsl(var(--card));
+  }
+
+  .scene {
+    width: 100%;
+    height: 330px;
+  }
+
+  .court {
+    top: 56px;
+    height: calc(100% - 56px);
+    object-position: center;
+    mask-image: none;
+  }
+
+  .sceneFade {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--card)) 56px,
+      hsl(var(--card) / 65%) 80px,
+      transparent 135px
+    );
+  }
+
+  .sceneCaption,
+  .sceneFooter,
+  .headerSwitch {
+    display: none;
+  }
+
+  .mobileCaption {
+    display: block;
+    top: 128px;
+    left: auto;
+    right: 24px;
+    font-size: 7px;
+    line-height: 1.9;
+    letter-spacing: 0.35em;
+  }
+
+  .mobileCaption span {
+    width: 14px;
+    margin-top: 13px;
+  }
+
+  :global(.dark) .mobileCaption {
+    color: hsl(var(--foreground));
+  }
+
+  .header {
+    min-height: 104px;
+    padding: 52px 32px 4px;
+  }
+
+  .logo {
+    font-size: 22px;
+  }
+
+  .main {
+    display: block;
+    min-height: 0;
+    padding: 202px 0 0;
+  }
+
+  .card {
+    max-width: 600px;
+    min-height: 0;
+    margin-inline: auto;
+    padding: 34px 32px max(36px, env(safe-area-inset-bottom));
+    border-radius: 26px 26px 0 0;
+    background: hsl(var(--card));
+    box-shadow: none;
+  }
+
+  .heading {
+    margin-bottom: 28px;
+  }
+
+  .heading h1 {
+    font-size: 36px;
+  }
+
+  .heading p {
+    margin-top: 9px;
+    font-size: 14px;
+  }
+
+  .form {
+    gap: 18px;
+  }
+
+  .step {
+    gap: 24px;
+  }
+
+  .field label {
+    font-size: 14px;
+  }
+
+  .field {
+    gap: 5px;
+  }
+
+  .field .input,
+  .select {
+    height: 38px;
+    padding-block: 6px;
+    font-size: 14px;
+  }
+
+  .strength {
+    gap: 34px;
+    font-size: 12px;
+  }
+
+  .submit {
+    height: 48px;
+    margin-top: 14px;
+    font-size: 16px;
+  }
+
+  .footer {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 359px) {
+  .header {
+    padding-inline: 24px;
+  }
+
+  .card {
+    padding-inline: 24px;
+  }
+}

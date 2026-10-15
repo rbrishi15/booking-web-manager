@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import styles from "../_components/auth.module.css";
 import { EmailConfirmationNotice } from "../_components/email-confirmation-notice";
 import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
@@ -35,16 +36,17 @@ export function LoginForm({ next }: LoginFormProps) {
   return (
     <div className="space-y-5">
       {state.status === "check-email" && <EmailConfirmationNotice key={state.email} email={state.email} />}
-      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+      <form onSubmit={handleSubmit} noValidate className={styles.form}>
         {state.status === "error" && state.message !== undefined && (
           <ErrorMessage>{state.message}</ErrorMessage>
         )}
 
         {next !== undefined && <input type="hidden" name="next" value={next} />}
 
-        <div className="space-y-2">
+        <div className={styles.field}>
           <Label htmlFor="email">Email</Label>
           <Input
+            className={styles.input}
             id="email"
             name="email"
             type="email"
@@ -56,9 +58,10 @@ export function LoginForm({ next }: LoginFormProps) {
           <FieldError id="email-error" messages={errors.email} />
         </div>
 
-        <div className="space-y-2">
+        <div className={styles.field}>
           <Label htmlFor="password">Password</Label>
           <PasswordInput
+            className={`${styles.input} ${styles.passwordInput}`}
             id="password"
             name="password"
             autoComplete="current-password"
@@ -69,14 +72,14 @@ export function LoginForm({ next }: LoginFormProps) {
           <FieldError id="password-error" messages={errors.password} />
         </div>
 
-        <Button type="submit" className="w-full" disabled={pending}>
+        <Button type="submit" className={styles.submit} disabled={pending}>
           {pending ? "Logging in…" : "Log in"}
         </Button>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Do not have an account?{" "}
-          <Link href="/register" className="font-semibold text-foreground underline-offset-4 hover:underline">
-            Create one
+        <p className={styles.footer}>
+          New to Booking?{" "}
+          <Link href="/register">
+            Create account
           </Link>
         </p>
       </form>

@@ -44,6 +44,8 @@ jobs:
       # These deliberately unconfigured tests verify error handling, not API health.
       - name: Check missing-configuration behavior and public resources
         run: npm run test:e2e
+      - name: Check anonymous authentication pages and form validation
+        run: npm run test:e2e:auth
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
