@@ -1,4 +1,7 @@
 import type { UUID } from "@/domain";
+import type { GetWalletSummary } from "@/use-cases/wallet/GetWalletSummary";
+import type { ListWalletTransactions } from "@/use-cases/wallet/ListWalletTransactions";
+import type { CreateWalletTopUp } from "@/use-cases/wallet/CreateWalletTopUp";
 import type {
   activeHoldSchema,
   walletSummarySchema,
@@ -20,13 +23,7 @@ export type WalletTopUpResult = z.infer<typeof walletTopUpResultSchema>;
 
 export interface WalletApiDependencies {
   readonly authenticate: (request: Request) => Promise<UUID | null>;
-  readonly getWalletSummary: (userId: UUID) => Promise<WalletSummary>;
-  readonly listTransactions: (
-    userId: UUID,
-    query: { limit?: number; before?: Date },
-  ) => Promise<WalletTransactionsResult>;
-  readonly createTopUpIntent: (
-    userId: UUID,
-    input: WalletTopUpRequest,
-  ) => Promise<WalletTopUpResult>;
+  readonly walletSummary: Pick<GetWalletSummary, "forUser">;
+  readonly walletTransactions: Pick<ListWalletTransactions, "forUser">;
+  readonly walletTopUp: Pick<CreateWalletTopUp, "forUser">;
 }

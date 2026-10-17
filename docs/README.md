@@ -15,6 +15,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0002: Constructor-based domain hydration](./adr/0002-constructor-based-domain-hydration.md).
 - [ADR-0003: Aggregate roots and boundaries](./adr/0003-aggregate-roots-and-boundaries.md) — current role routing is defined by ADR-0009.
 - [ADR-0004: Participant join and session admission](./adr/0004-participant-join-and-session-admission.md) — admission routing updated by ADR-0007 and ADR-0009.
+- [ADR-0004: Append-only double-entry ledger](./adr/0004-append-only-double-entry-ledger.md) — independently recorded with the same historical number; the filename distinguishes this storage decision from participant admission.
 - [ADR-0005: Domain unit-test structure](./adr/0005-domain-unit-test-structure.md).
 - [ADR-0006: Named personal replacements and the session waitlist](./adr/0006-personal-replacement-reservations.md) — confirmed on 27 September 2026: directly invite one user who must explicitly accept, or open the place to the groups/public waitlist, with no switching after withdrawal.
 - [ADR-0007: Participant behavior and the Session roster](./adr/0007-participant-behavior-and-session-roster.md) — callback routing superseded by ADR-0009.
@@ -26,6 +27,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0013: Cancellation preserves terminal participations](./adr/0013-cancellation-preserves-terminal-participations.md).
 - [ADR-0014: Account policies and transaction guards](./adr/0014-account-policies-and-transaction-guards.md) — profile policy exception to ADR-0003, account deactivation, group transaction guards, and dependency enforcement.
 - [ADR-0015: Declarative session HTTP actions](./adr/0015-declarative-session-http-actions.md).
+- [ADR-0016: Deep workflows and dependency assembly](./adr/0016-deep-workflows-and-dependency-assembly.md) — complete application results, construction-only configuration, app serialization, and technical endpoint boundaries.
 
 Product decisions and remaining discussion:
 

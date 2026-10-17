@@ -4,7 +4,7 @@ import { openApiDocument } from "@/app/openapi";
 import { hostedSessionsResponseSchema } from "@/app/sessions/hosted-sessions-contract";
 import { SessionManagementUnavailableError } from "@/app/sessions/session-management-unavailable";
 
-const mocks = vi.hoisted(() => ({ getDependencies: vi.fn(), authenticate: vi.fn(), forBooker: vi.fn(), attendanceDueForBooker: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getDependencies: vi.fn(), authenticate: vi.fn(), forBooker: vi.fn() }));
 vi.mock("@/app/sessions/management-server-dependencies", () => ({ getSessionManagementDependencies: mocks.getDependencies }));
 import { GET } from "@/app/api/sessions/hosted/route";
 
@@ -24,12 +24,11 @@ const attendanceDue = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.authenticate.mockResolvedValue(bookerId);
-  mocks.forBooker.mockResolvedValue([]);
-  mocks.attendanceDueForBooker.mockResolvedValue([]);
+  mocks.forBooker.mockResolvedValue({ sessions: [], awaitingAttendance: [] });
   mocks.getDependencies.mockResolvedValue({
     authenticate: mocks.authenticate,
     toggleVisibility: { forBooker: vi.fn() },
-    listHostedSessions: { forBooker: mocks.forBooker, attendanceDueForBooker: mocks.attendanceDueForBooker },
+    listHostedSessions: { forBooker: mocks.forBooker },
   });
 });
 
@@ -45,14 +44,15 @@ describe("UC2-03 / UC2-06 GET hosted sessions", () => {
   });
 
   test("serializes only display fields and actions, without limiting the booker's list", async () => {
-    mocks.forBooker.mockResolvedValue(Array.from({ length: 21 }, (_, index) => hosted(index)));
-    mocks.attendanceDueForBooker.mockResolvedValue([attendanceDue]);
+    mocks.forBooker.mockResolvedValue({
+      sessions: Array.from({ length: 21 }, (_, index) => hosted(index)),
+      awaitingAttendance: [attendanceDue],
+    });
     const response = await invoke();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json();
     expect(mocks.forBooker).toHaveBeenCalledExactlyOnceWith(bookerId);
-    expect(mocks.attendanceDueForBooker).toHaveBeenCalledExactlyOnceWith(bookerId);
     expect(body.sessions).toHaveLength(21);
     expect(body.sessions[0]).toEqual({
       sessionId: "session-0", venueName: "West sports hall", sport: "Tennis", region: "West",
@@ -68,22 +68,7 @@ describe("UC2-03 / UC2-06 GET hosted sessions", () => {
     expect(hostedSessionsResponseSchema.safeParse(body).success).toBe(true);
   });
 
-  test("reports an attendance-due list failure instead of returning an empty list", async () => {
-    mocks.forBooker.mockResolvedValue([hosted(1)]);
-    mocks.attendanceDueForBooker.mockRejectedValue(new Error("Temporary database outage"));
-    const response = await invoke();
-    expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
-  });
-
-  test.each([["INACTIVE_ACCOUNT", 403], ["NOT_FOUND", 404]] as const)("reports %s from the attendance-due list instead of hiding it", async (code, status) => {
-    mocks.attendanceDueForBooker.mockRejectedValue(new DomainError(code, "Account denied"));
-    const response = await invoke();
-    expect(response.status).toBe(status);
-    expect(await response.json()).toEqual({ error: { code, message: "Account denied" } });
-  });
-
-  test.each([["INACTIVE_ACCOUNT", 403], ["NOT_FOUND", 404]] as const)("maps %s from the hosted list to %s", async (code, status) => {
+  test.each([["INACTIVE_ACCOUNT", 403], ["NOT_FOUND", 404]] as const)("maps %s from the hosted-session use case to %s", async (code, status) => {
     mocks.forBooker.mockRejectedValue(new DomainError(code, "Account denied"));
     expect((await invoke()).status).toBe(status);
   });

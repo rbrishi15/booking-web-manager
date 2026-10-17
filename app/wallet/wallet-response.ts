@@ -6,7 +6,6 @@ import {
   WALLET_API_UNAVAILABLE_MESSAGE,
   WalletApiUnavailableError,
 } from "./wallet-api-unavailable";
-import { ZodError } from "zod";
 
 const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
   INVALID_INPUT: 422,
@@ -20,10 +19,6 @@ const domainErrorStatuses: Partial<Record<DomainError["code"], number>> = {
 export function walletErrorResponse(error: unknown): Response {
   if (isRequestFailure(error)) {
     return errorResponse(error.status, error.code, error.message);
-  }
-  if (error instanceof ZodError) {
-    const message = error.issues[0]?.message ?? "Invalid request input";
-    return errorResponse(400, "INVALID_REQUEST", message);
   }
   if (error instanceof TopUpUnavailableError) {
     return errorResponse(503, "TOP_UP_UNAVAILABLE", TOP_UP_UNAVAILABLE_MESSAGE);

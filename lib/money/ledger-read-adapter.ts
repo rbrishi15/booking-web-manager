@@ -10,29 +10,9 @@ import {
 import { fromDatabaseCents } from "./cents";
 import { LedgerError, rethrowDatabaseError } from "./errors";
 import type { SqlExecutor, SqlRow } from "./sql";
+import type { WalletHistoryQuery, WalletHistoryReadPort } from "@/use-cases/wallet/contracts";
 
-/** A page of a wallet's history, newest first (REQ-7). */
-export interface WalletHistoryQuery {
-  readonly walletId: UUID;
-  /** Defaults to 50, capped at 200. */
-  readonly limit?: number;
-  /** Returns only entries strictly older than this, for paging. */
-  readonly occurredBefore?: Date;
-}
-
-/**
- * The read half of the ledger, which `LedgerReadPort` does not cover.
- *
- * Transaction history is a requirement (REQ-7) but is not on the port, because
- * the port exists for the domain layer and the domain never reads a list of
- * transactions. It belongs in `/domain` if a use case ever needs it; until
- * then it lives here and the wallet page depends on this interface.
- */
-export interface WalletHistoryReadPort {
-  listWalletTransactions(
-    query: WalletHistoryQuery,
-  ): Promise<readonly LedgerTransaction[]>;
-}
+export type { WalletHistoryQuery, WalletHistoryReadPort } from "@/use-cases/wallet/contracts";
 
 const DEFAULT_HISTORY_LIMIT = 50;
 const MAX_HISTORY_LIMIT = 200;
@@ -55,7 +35,7 @@ export class PostgresLedgerReader
   }
 
   async getWalletBalance(walletId: UUID): Promise<WalletBalance | null> {
-    const rows = await this.#query<WalletBalanceRow>(
+    const rows = await this.query<WalletBalanceRow>(
       `select b.wallet_id, b.available_cents
          from wallet_balances b
         where b.wallet_id = $1`,
@@ -74,7 +54,7 @@ export class PostgresLedgerReader
   async getHoldingAccountBalance(
     accountId: UUID,
   ): Promise<HoldingAccountBalance | null> {
-    const rows = await this.#query<HoldingBalanceRow>(
+    const rows = await this.query<HoldingBalanceRow>(
       `select a.account_id, a.held_cents
          from holding_account_balances a
         where a.account_id = $1`,
@@ -92,7 +72,7 @@ export class PostgresLedgerReader
 
   /** The wallet belonging to a user, or null if they have none yet. */
   async findWalletIdByUserId(userId: UUID): Promise<UUID | null> {
-    const rows = await this.#query<{ wallet_id: unknown }>(
+    const rows = await this.query<{ wallet_id: unknown }>(
       "select wallet_id from wallets where user_id = $1",
       [userId],
     );
@@ -109,7 +89,7 @@ export class PostgresLedgerReader
       MAX_HISTORY_LIMIT,
     );
 
-    const rows = await this.#query<LedgerEntryRow>(
+    const rows = await this.query<LedgerEntryRow>(
       `select entry_id, kind, amount_cents, occurred_at, idempotency_key,
               external_reference, wallet_id, hold_id, payout_id
          from ledger_entries
@@ -131,7 +111,7 @@ export class PostgresLedgerReader
    * comparison; the roster side is owned by the session and commitment roles.
    */
   async getSessionHeldTotal(sessionId: UUID): Promise<SessionHeldTotal> {
-    const rows = await this.#query<SessionHeldRow>(
+    const rows = await this.query<SessionHeldRow>(
       `select session_id, open_holds, held_cents
          from session_held_totals
         where session_id = $1`,
@@ -150,7 +130,7 @@ export class PostgresLedgerReader
     };
   }
 
-  async #query<TRow extends SqlRow>(
+  protected async query<TRow extends SqlRow>(
     text: string,
     values: readonly unknown[],
   ): Promise<readonly TRow[]> {

@@ -123,8 +123,12 @@ and dependency lifetimes in that guide.
 - **`use-case-config` assembles dependencies only.** Select implementations
   through constructors and infrastructure factories using already-validated
   settings. Return app-owned dependencies and submission-scoped construction
-  callbacks; API routes authenticate, parse, invoke the use case directly, and
-  map responses. See [ADR-0011](./docs/adr/0011-api-routes-invoke-use-cases.md).
+  callbacks where needed. Keep SQL, row mapping and workflow execution in their
+  owning modules. API routes declare parsing, visible application calls and
+  response mapping through app-owned HTTP actions. Read
+  [ADR-0016](./docs/adr/0016-deep-workflows-and-dependency-assembly.md) when changing
+  workflow interfaces, API orchestration or assembly; it also defines technical
+  endpoints that invoke adapters directly.
 - **`/lib` contains concrete infrastructure adapters.** Core-facing adapters
   implement interfaces (ports) owned by `/use-cases` or `/domain`.
   Provider-specific dependencies stay outside the core.
@@ -141,7 +145,7 @@ introduce interfaces at actual seams, not for every helper.
 | Owner | Responsibilities |
 |---|---|
 | `/app` | Environment/request validation, server dependency initialization/caching, HTTP authentication flow, parsing, response/status mapping, and OpenAPI documentation. |
-| Route handler | Await the app-owned dependency getter, orchestrate HTTP, invoke the use case directly, and map request/initialization errors to responses. |
+| Route handler / app HTTP action | Load app-owned dependencies, orchestrate HTTP, visibly invoke the application capability, and map values and errors to responses. |
 | `/lib` | External integrations, persistence, transaction/replay behavior, client options, resource caching, cleanup, and connection logging. |
 | `/use-cases` and `/domain` | Application workflows and business rules, respectively. |
 

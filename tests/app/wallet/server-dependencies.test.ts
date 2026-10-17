@@ -10,15 +10,15 @@ vi.mock("@/use-case-config/wallet", () => configuration);
 function assembledDependencies(): WalletApiDependencies {
   return {
     authenticate: async () => null,
-    getWalletSummary: async () => {
+    walletSummary: { forUser: async () => {
       throw new Error("unimplemented");
-    },
-    listTransactions: async () => {
+    } },
+    walletTransactions: { forUser: async () => {
       throw new Error("unimplemented");
-    },
-    createTopUpIntent: async () => {
+    } },
+    walletTopUp: { forUser: async () => {
       throw new Error("unimplemented");
-    },
+    } },
   };
 }
 

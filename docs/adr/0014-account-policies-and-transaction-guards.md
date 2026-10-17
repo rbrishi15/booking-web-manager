@@ -41,6 +41,7 @@ dependency paths that cannot be checked. Outer adapters and composition keep the
 existing import freedom. No additional runtime framework or dependency container
 is introduced.
 
-Discovery retains its complete User reads and application pagination. This school
-project deliberately prioritizes straightforward software engineering over read
-optimization; this decision adds no new commitment workflow.
+Public discovery now reads safe session summaries without loading a User or
+requiring authentication; application-owned pagination remains. Complete User
+hydration still applies when an actor workflow needs that aggregate. See the
+[discovery contract](../../use-cases/sessions/README.md#uc2-01-discover-sessions).

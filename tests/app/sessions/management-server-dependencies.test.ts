@@ -6,7 +6,7 @@ vi.mock("@/use-case-config/session-management", () => config);
 const dependencies: SessionManagementDependencies = {
   authenticate: async () => null,
   toggleVisibility: { forBooker: async (_bookerId, sessionId, visibility) => ({ sessionId, visibility }) },
-  listHostedSessions: { forBooker: async () => [], attendanceDueForBooker: async () => [] },
+  listHostedSessions: { forBooker: async () => ({ sessions: [], awaitingAttendance: [] }) },
 };
 
 beforeEach(() => {
@@ -34,10 +34,10 @@ test("shares an initialization failure and permits subsequent setup retry", asyn
 });
 
 test("does not discard valid dependencies following an individual use-case failure", async () => {
-  const forBooker = vi.fn().mockRejectedValueOnce(new Error("Temporary database outage")).mockResolvedValue([]);
-  config.createSessionManagementDependencies.mockReturnValue({ ...dependencies, listHostedSessions: { forBooker, attendanceDueForBooker: async () => [] } });
+  const forBooker = vi.fn().mockRejectedValueOnce(new Error("Temporary database outage")).mockResolvedValue({ sessions: [], awaitingAttendance: [] });
+  config.createSessionManagementDependencies.mockReturnValue({ ...dependencies, listHostedSessions: { forBooker } });
   const { getSessionManagementDependencies } = await import("@/app/sessions/management-server-dependencies");
   await expect((await getSessionManagementDependencies()).listHostedSessions.forBooker("booker")).rejects.toThrow("Temporary database outage");
-  expect(await (await getSessionManagementDependencies()).listHostedSessions.forBooker("booker")).toEqual([]);
+  expect(await (await getSessionManagementDependencies()).listHostedSessions.forBooker("booker")).toEqual({ sessions: [], awaitingAttendance: [] });
   expect(config.createSessionManagementDependencies).toHaveBeenCalledOnce();
 });

@@ -27,6 +27,12 @@ export interface AttendanceDueSession {
   readonly unverifiedCount: number;
 }
 
+/** The booker's management overview, read with one account check and time snapshot. */
+export interface HostedSessions {
+  readonly sessions: readonly HostedSession[];
+  readonly awaitingAttendance: readonly AttendanceDueSession[];
+}
+
 export type HostedSessionOperation =
   | { readonly name: "set-visibility"; readonly visibility: Visibility }
   | { readonly name: "preview-cancellation" };
@@ -41,21 +47,22 @@ function permits(check: () => void): boolean {
 }
 
 export class ListHostedSessions {
-  /** Supplies the transaction boundary and clock for account validation and upcoming-session reads. */
+  /** Supplies the transaction and clock for the complete hosted-session overview. */
   constructor(private readonly dependencies: {
     readonly transaction: SessionManagementTransaction;
     readonly clock: Clock;
   }) {}
 
-  /** Requires an active account and returns display facts and available capacity for its upcoming hosted sessions. */
-  async forBooker(bookerId: UUID): Promise<readonly HostedSession[]> {
+  /** Returns upcoming management actions and ended sessions awaiting attendance for an active booker. */
+  async forBooker(bookerId: UUID): Promise<HostedSessions> {
     return this.dependencies.transaction.run(async ({ users, sessions }) => {
       const user = await requireAggregate(users, bookerId, "User");
       DomainError.require(user.accountStatus === "ACTIVE", "INACTIVE_ACCOUNT", "An inactive account cannot manage sessions");
       const now = this.dependencies.clock.now();
       const hosted = await sessions.listUpcoming(bookerId, now);
+      const ended = await sessions.listEndedOpen(bookerId, now);
       const booker = user.asBooker();
-      return hosted.map((session) => {
+      const upcoming = hosted.map((session) => {
         const actions: HostedSessionOperation[] = [];
         const visibility = session.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
         if (permits(() => booker.assertCanChangeVisibility(session, visibility, now))) actions.push({ name: "set-visibility", visibility });
@@ -72,19 +79,7 @@ export class ListHostedSessions {
           actions,
         };
       });
-    });
-  }
-
-  /**
-   * UC2-06: the booker's ended sessions that still have unverified committed participants.
-   * Verification itself is POST /api/sessions/attendance; unverified places auto-verify 72h after the end.
-   */
-  async attendanceDueForBooker(bookerId: UUID): Promise<readonly AttendanceDueSession[]> {
-    return this.dependencies.transaction.run(async ({ users, sessions }) => {
-      const user = await requireAggregate(users, bookerId, "User");
-      DomainError.require(user.accountStatus === "ACTIVE", "INACTIVE_ACCOUNT", "An inactive account cannot manage sessions");
-      const ended = await sessions.listEndedOpen(bookerId, this.dependencies.clock.now());
-      return ended.flatMap((session) => {
+      const awaitingAttendance = ended.flatMap((session) => {
         const unverifiedCount = session.participantList.participations.filter((participation) =>
           participation.status === "COMMITTED" && participation.attendance === "UNVERIFIED").length;
         return unverifiedCount === 0 ? [] : [{
@@ -96,6 +91,7 @@ export class ListHostedSessions {
           unverifiedCount,
         }];
       });
+      return { sessions: upcoming, awaitingAttendance };
     });
   }
 }

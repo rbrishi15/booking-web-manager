@@ -70,6 +70,19 @@ describe("UC1-08 payout routes", () => {
     expect(response.status).toBe(502);
   });
 
+  test("reports a body-read failure as an opaque server error before invoking the use case", async () => {
+    const forBooker = vi.fn();
+    mocks.dependencies.mockResolvedValue(dependencies({ withdrawals: { forBooker } }));
+    const request = post({ sessionId, idempotencyKey: "k-1" });
+    vi.spyOn(request, "json").mockRejectedValue(new Error("private stream failure"));
+
+    const response = await withdraw(request);
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+    expect(forBooker).not.toHaveBeenCalled();
+  });
+
   test("GET /api/payouts/sessions lists the booker's payable sessions with ISO dates", async () => {
     // Arrange
     const forBooker = vi.fn(async () => [

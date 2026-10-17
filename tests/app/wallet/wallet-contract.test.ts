@@ -21,24 +21,24 @@ describe("UC1-05 wallet page against the wallet API routes", () => {
     mocks.dependencies.mockResolvedValue({
       // The page sends a plain GET with its cookies, which the API may identify without a bearer token.
       authenticate: async (request: Request) => request.method === "GET" && !request.headers.has("authorization") ? userId : null,
-      getWalletSummary: async () => ({
+      walletSummary: { forUser: async () => ({
         walletId: "22222222-2222-4222-8222-222222222222", userId,
         availableBalanceCents: 10000, heldBalanceCents: 1500, currency: "SGD",
         activeHolds: [{
           holdId: "33333333-3333-4333-8333-333333333333", sessionId: "44444444-4444-4444-8444-444444444444",
-          heldCents: 1500, originalCents: 1500, createdAt: "2026-10-09T10:00:00.000Z",
-          venueName: "Kallang Tennis Centre", sport: "Tennis", startAt: "2026-10-12T18:00:00.000Z",
+          heldCents: 1500, originalCents: 1500, createdAt: new Date("2026-10-09T10:00:00.000Z"),
+          venueName: "Kallang Tennis Centre", sport: "Tennis", startAt: new Date("2026-10-12T18:00:00.000Z"),
         }],
-      }),
-      listTransactions: async () => ({
+      }) },
+      walletTransactions: { forUser: async () => ({
         items: [{
           transactionId: "55555555-5555-4555-8555-555555555555", kind: "TOP_UP", amountCents: 5000,
-          occurredAt: "2026-10-09T12:00:00.000Z", idempotencyKey: "topup-key-1",
+          occurredAt: new Date("2026-10-09T12:00:00.000Z"), idempotencyKey: "topup-key-1",
           externalReference: "pi_12345", holdId: null, payoutId: null,
         }],
-        nextCursor: "2026-10-09T12:00:00.000Z",
-      }),
-      createTopUpIntent: async () => { throw new Error("not used"); },
+        nextCursor: new Date("2026-10-09T12:00:00.000Z"),
+      }) },
+      walletTopUp: { forUser: async () => { throw new Error("not used"); } },
     });
   });
 

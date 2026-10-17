@@ -33,7 +33,7 @@ beforeEach(() => {
     );
 });
 
-test("runs the work in one serializable transaction and stores its result under the key", async () => {
+test("runs the work in one READ COMMITTED transaction and stores its result under the key", async () => {
   const pool = new Pool();
   const unitOfWork = new PostgresCommitmentUnitOfWork(() => pool, clock);
 

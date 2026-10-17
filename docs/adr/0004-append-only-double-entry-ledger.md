@@ -144,9 +144,9 @@ a total into parts that add back up is a different question and lives here.
 - Correcting an error requires a compensating entry and cannot be done by
   editing a row, which is slower to do and impossible to do unnoticed.
 - The session invariant is only half-enforceable today. The ledger side is
-  available as `session_held_totals`; the roster side arrives when the
-  participations table is created, and the cross-check should be added to
-  `reconcile_ledger()` at that point.
+  available as `session_held_totals`; migration 0006 now supplies the
+  participations table, but the roster cross-check has not been added to
+  `reconcile_ledger()`.
 - The `holding_account_id` on a hold is recorded but the system runs a single
   platform account, so the per-account balance view is currently a total over
   one row.

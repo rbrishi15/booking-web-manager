@@ -43,7 +43,7 @@ test("assembles direct use cases and lazy infrastructure, loading complete accou
   expect(driver.cookieIdentity).not.toHaveBeenCalled();
   await dependencies.authenticate(new Request("http://localhost/api/sessions/hosted"));
   expect(driver.cookieIdentity).toHaveBeenCalledOnce();
-  expect(await dependencies.listHostedSessions.forBooker(bookerId)).toEqual([]);
+  expect(await dependencies.listHostedSessions.forBooker(bookerId)).toEqual({ sessions: [], awaitingAttendance: [] });
   expect(driver.query).toHaveBeenNthCalledWith(1, "begin isolation level serializable");
   expect(driver.query).toHaveBeenCalledWith(expect.stringContaining("from ledger_entries"), [walletId]);
   expect(driver.query).toHaveBeenCalledWith(expect.stringContaining("from sessions"), [bookerId, expect.any(Date)]);

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const POST = walletAction({
   parse: parseTopUpInput,
   run: (dependencies, input) =>
-    dependencies.createTopUpIntent(input.userId, input.body),
+    dependencies.walletTopUp.forUser(input.userId, input.body),
   invalidRequestMessage: "Invalid top-up request",
   successStatus: 201,
 });

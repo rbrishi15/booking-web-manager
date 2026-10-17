@@ -20,6 +20,13 @@
 /tests/support/ @rbrishi15
 /scripts/local-supabase-env.mjs @rbrishi15
 /app/wallet/ @rbrishi15
+/app/api/wallet/ @rbrishi15
+/use-cases/wallet/ @rbrishi15
+/use-case-config/wallet.ts @rbrishi15
+/lib/wallet/ @rbrishi15 @harr008
+/tests/app/wallet/ @rbrishi15
+/tests/use-cases/UC1-05-*.test.ts @rbrishi15
+/tests/lib/wallet/ @rbrishi15 @harr008
 /app/payouts/ @rbrishi15
 /app/api/webhooks/ @rbrishi15
 /app/api/payouts/ @rbrishi15
@@ -106,6 +113,7 @@
 /tests/lib/venues/ @liang799
 /tests/integration/sessions-persistence.test.ts @liang799
 /tests/integration/session-management-persistence.test.ts @liang799
+/tests/integration/session-mixed-isolation.test.ts @liang799 @Wyjessie @harr008 @rbrishi15
 /tests/integration/discovery*.test.ts @liang799
 /tests/e2e/session-api.spec.ts @liang799
 /tests/e2e/session-creation.spec.ts @liang799

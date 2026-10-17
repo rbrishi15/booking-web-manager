@@ -6,7 +6,7 @@ import type { SessionManagementRepositories, SessionManagementTransaction } from
 import { PostgresSessionManagementRepository } from "./postgres-session-management-repository";
 import { PostgresUserReader } from "./postgres-user-reader";
 
-/** Conflicting future lifecycle writers must also use serializable transactions. */
+/** Management uses serializable snapshots; other session writers share its parent-row lock (ADR-0016). */
 export class PostgresSessionManagementTransaction implements SessionManagementTransaction {
   /** Accepts a lazy pool provider and the clock used when reconstructing users. */
   constructor(private readonly getPool: () => Pool, private readonly clock: Clock) {}

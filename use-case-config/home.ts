@@ -1,7 +1,7 @@
 import { HomeUnavailableError, type HomeDependencies } from "@/app/home/dependencies";
 import { readSessionServerSettings } from "@/app/sessions/server-environment";
 import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
-import type { SqlExecutor } from "@/lib/money/sql";
+import { createPostgresExecutor } from "@/lib/database/postgres-executor";
 import { PostgresUpcomingBookingsReader } from "@/lib/sessions/postgres-upcoming-bookings-reader";
 import { getSingaporeWeather } from "@/lib/weather/singapore-weather";
 import { ListUpcomingBookings } from "@/use-cases/sessions/ListUpcomingBookings";
@@ -14,9 +14,7 @@ export function createHomeDependencies(): HomeDependencies {
     weather: getSingaporeWeather,
   };
   const getPool = createPostgresPoolProvider(settings.databaseUrl);
-  const sql: SqlExecutor = {
-    query: async (statement, values) => (await getPool().query(statement, values ? [...values] : undefined)).rows,
-  };
+  const sql = createPostgresExecutor(getPool);
   return {
     upcomingBookings: new ListUpcomingBookings({ reader: new PostgresUpcomingBookingsReader(sql), clock: { now: () => new Date() } }),
     weather: getSingaporeWeather,

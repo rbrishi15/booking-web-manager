@@ -106,8 +106,8 @@ const registeredUser = User.create({
 Registration starts with unverified email and establishes the wallet with empty
 transactions and zero funds, empty
 memberships, and the existing empty-history default from `ReliabilityScore.fromHistory`.
-It creates domain state only; durable wallet provisioning belongs to the future
-registration adapter and transaction.
+It creates domain state only; durable wallet provisioning is handled by the
+registration trigger in migration `0004_profiles.sql`.
 
 Hydration calls constructors without repeating creation workflows, resetting
 lifecycle fields, generating replacement identities or timestamps, or producing
@@ -124,8 +124,10 @@ objects, preserving null for users without an address as well as inactive users.
 The email-verification follow-up adds a required trusted `emailVerified` fact:
 Supabase's `email_confirmed_at` supplies it, never editable profile metadata.
 A verified email must be present, but an active user may lack one so public
-browsing and email recovery remain available. Admission and creation apply the
-verification rule. On writes,
+browsing and email recovery remain available. Current admission and creation
+policy requires an active account with a present email address, without requiring
+confirmation; `bookingAccountIneligibility` is shared by roles and authentication.
+Hydration still records the trusted confirmation fact. On writes,
 `user.email?.toString() ?? null` supplies the storage value. They assemble children
 and required related values before calling parent constructors.
 User reads load wallet identity, its complete

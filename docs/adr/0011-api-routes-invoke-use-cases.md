@@ -7,15 +7,15 @@
 - Partially superseded: [ADR-0015](./0015-declarative-session-http-actions.md)
   moves repeated session HTTP orchestration into app-owned action factories.
   Routes retain visible use-case calls in `run` callbacks, and configuration
-  continues to assemble dependencies only. The description below records the
-  original implementation and availability state.
+  continues to assemble dependencies only. ADR-0016 clarifies workflow depth,
+  dependency lifetimes, and technical endpoints.
 
 The session API previously forwarded requests through a configured HTTP
 handler and an app HTTP function before reaching the use case. The API route
-now visibly authenticates, parses, obtains a submission-scoped `CreateSessions`
-instance, calls `forBooker`, and maps the response. Keeping that short sequence
-in one place makes the endpoint easier to follow without moving business rules
-out of the core.
+now declares its parser and a visible call to the submission-scoped
+`CreateSessions.forBooker`. Under ADR-0015 the app-owned HTTP action handles
+authentication and response policy around that call. This makes the endpoint
+easy to follow without moving business rules out of the core.
 
 `use-case-config` assembles the app-owned `SessionApiDependencies` containing
 `authenticate` and `createForSubmission`. With integrations supplied, it
@@ -35,21 +35,19 @@ Assembly stays near the entry point, following
 [Pure DI](https://blog.ploeh.dk/2014/06/10/pure-di/), without a container library.
 
 The app-owned `getSessionDependencies()` provides the server assembly boundary.
-The route awaits it and owns HTTP error mapping; configuration remains
+The HTTP action awaits it and owns HTTP error mapping; configuration remains
 dependency assembly. The getter shares pending and successful initialization
 within each runtime instance and clears its cache only when initialization
 rejects. This lazy setup is an error policy; Vercel and Clean Architecture do
 not require it. Each configured submission gets its own use case and
-transaction. Resource policies and database readiness belong to the eventual
-infrastructure implementations, not to a required number of application layers.
+transaction. Resource policies and database readiness belong to infrastructure
+implementations, not to a required number of application layers.
 
-The current PR delivers this contract with injected-dependency tests while
-authentication and persistence integrations remain pending. Its production
-default returns `503 SESSION_API_UNAVAILABLE` with
-`Session creation is not available yet`; unexpected initialization errors still
-return an opaque JSON 500. This availability state leaves the accepted direct
-route invocation and inward dependency rules unchanged. Swagger/OpenAPI remain
-public, and the configured contract, replay semantics, and domain rules remain
-testable without live services. See the
+Supabase authentication and PostgreSQL persistence now implement this contract.
+Missing server settings return `503 SESSION_API_UNAVAILABLE` with
+`Session creation is not available yet`; unexpected initialization errors return
+an opaque JSON 500. This fallback does not describe configured production
+availability. Swagger/OpenAPI remain public, and the configured contract, replay
+semantics, and domain rules remain testable without live services. See the
 [configuration guide](../../use-case-config/README.md) for integration
 requirements, owners, and merge prerequisites.

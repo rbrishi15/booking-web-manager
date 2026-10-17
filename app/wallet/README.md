@@ -35,7 +35,7 @@ This module adheres strictly to the non-negotiable rules defined in `CLAUDE.md`:
 1. The wallet page's top-up panel (shown only with a `pk_test_` publishable key)
    turns the typed amount into integer cents by pattern, not `parseFloat`, and
    calls `POST /api/wallet/top-up`.
-2. [`createStripeTopUpIntent`](./stripe-top-up-intents.ts) creates a PayNow
+2. [`StripeWalletTopUps.createIntent`](./stripe-top-up-intents.ts) creates a PayNow
    PaymentIntent with metadata `purpose: "wallet_top_up"`, `wallet_id`, `user_id`.
 3. Stripe.js `confirmPayNowPayment` shows the PayNow QR code until the payment ends.
    The browser credits nothing.
@@ -58,7 +58,7 @@ mirroring [`commitmentAction`](../commit/commitment-action.ts):
 export const POST = walletAction({
   parse: parseTopUpInput,
   run: (dependencies, input) =>
-    dependencies.createTopUpIntent(input.userId, input.body),
+    dependencies.walletTopUp.forUser(input.userId, input.body),
   invalidRequestMessage: "Invalid top-up request",
   successStatus: 201,
 });
@@ -92,11 +92,16 @@ lazily via [`server-dependencies.ts`](./server-dependencies.ts):
   response). Both apply the same [account checks](../../lib/supabase/account-access.ts): the
   profile `account_status` must be `ACTIVE` (inactive
   accounts return `403 INACTIVE_ACCOUNT`; missing profiles return `404 NOT_FOUND`).
-- **Ledger reader**: [`PostgresLedgerReader`](../../lib/money/ledger-read-adapter.ts)
-  reads trigger-maintained `wallet_balances` and lists append-only `ledger_entries`.
-- **Active holds**: Queries `hold_balances` joined with `sessions` to present held
-  amounts with venue, sport, and start times.
-- **Top-up intents**: [`createStripeTopUpIntent`](./stripe-top-up-intents.ts) creates a
+- **Application capabilities**: `walletSummary.forUser`,
+  `walletTransactions.forUser`, and `walletTopUp.forUser` invoke the wallet use
+  cases. Configuration constructs these capabilities; wallet lookup, pagination
+  bounds and top-up sequencing stay in `/use-cases/wallet`.
+- **Persistence**: `/lib/wallet` owns the read adapter, using
+  [`PostgresLedgerReader`](../../lib/money/ledger-read-adapter.ts) for balances and
+  ledger history and joining `hold_balances` with `sessions` for active holds.
+  [`serialize-wallet.ts`](./serialize-wallet.ts) converts application result
+  dates to HTTP strings.
+- **Top-up intents**: [`StripeWalletTopUps.createIntent`](./stripe-top-up-intents.ts) creates a
   Stripe PaymentIntent for PayNow (`payment_method_types: ['paynow']`, `currency: 'sgd'`).
   Without a test-mode `STRIPE_SECRET_KEY`, top-up answers `503 TOP_UP_UNAVAILABLE`
   while wallet reads keep working; it no longer returns a simulated intent, whose

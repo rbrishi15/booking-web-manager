@@ -2,6 +2,7 @@ import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import inwardDependencies from "./scripts/eslint/core-dependencies.mjs";
+import configPersistence from "./scripts/eslint/config-persistence.mjs";
 
 export default tseslint.config(
   {
@@ -39,6 +40,11 @@ export default tseslint.config(
     files: ["domain/**/*.{ts,tsx,mts,cts}", "use-cases/**/*.{ts,tsx,mts,cts}"],
     plugins: { architecture: { rules: { "inward-dependencies": inwardDependencies } } },
     rules: { "architecture/inward-dependencies": "error" },
+  },
+  {
+    files: ["use-case-config/**/*.{ts,tsx,mts,cts}"],
+    plugins: { architecture: { rules: { "no-config-persistence": configPersistence } } },
+    rules: { "architecture/no-config-persistence": "error" },
   },
   {
     files: ["**/*.test.ts"],

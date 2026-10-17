@@ -35,7 +35,7 @@ financial, rejoining, completion-balance, and cutoff questions remain separate.
 ## Domain representation and consequences
 
 `DIRECT_INVITE` replaces `INVITE_LINK` and stores one `replacementInviteeId`;
-there is no `replacementToken`. A future application loads the authenticated
+there is no `replacementToken`. `AcceptReplacement` loads the authenticated
 invitee's `User` and calls its participant role's
 `acceptReplacement(session, { participationId, holdId, now })` action. The user's
 identity authorizes their unique active pending reservation, including access
@@ -78,11 +78,14 @@ session cancellation, start timing, and existing financial rules remain separate
 Aggregate ownership remains as described in
 [ADR-0003](./0003-aggregate-roots-and-boundaries.md), with current role workflows
 and recording boundaries in [ADR-0009](./0009-role-workflows-and-session-recording.md).
-Participant and Session supply the domain behavior. This repository has no
-departure-choice UI, invitation delivery, application coordinator, or persistence
-adapter for the flow. Future adapters must persist the invitation's recipient
-and commit acceptance, reservation consumption, and ledger instructions in one
-transaction. Domain checks alone do not establish database concurrency safety.
+Participant and Session supply the domain behavior. `WithdrawFromSession` and
+`AcceptReplacement` coordinate the implemented PostgreSQL workflow, including
+the invitation recipient, reservation consumption and ledger instructions in one
+transaction. Withdrawal and acceptance screens are implemented; invitation
+delivery uses Web Push when configured. The joined-session and pending-invitation
+list APIs remain outstanding, as recorded in the
+[commitment guide](../../app/commit/README.md). Domain checks alone do not
+establish database concurrency safety.
 
 The existing exactly-30-hour refund discrepancy and the proposal to rejoin
 after a late withdrawal are unchanged by this decision.

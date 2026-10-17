@@ -15,7 +15,7 @@ export function createSessionManagementDependencies(): SessionManagementDependen
   if (settings === undefined) {
     /** Rejects operations with the public unavailable error when required server settings are absent. */
     const unavailable = async (): Promise<never> => { throw new SessionManagementUnavailableError(); };
-    return { authenticate: unavailable, toggleVisibility: { forBooker: unavailable }, listHostedSessions: { forBooker: unavailable, attendanceDueForBooker: unavailable } };
+    return { authenticate: unavailable, toggleVisibility: { forBooker: unavailable }, listHostedSessions: { forBooker: unavailable } };
   }
   const clock = { now: () => new Date() };
   const transaction = new PostgresSessionManagementTransaction(createPostgresPoolProvider(settings.databaseUrl), clock);

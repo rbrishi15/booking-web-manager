@@ -1,5 +1,22 @@
 # Use-case configuration
 
+This directory selects and constructs dependencies. App-owned settings readers
+validate configuration; adapters own SQL and provider translation; use cases own
+application workflows. Factories return dependencies rather than HTTP handlers
+or closures implementing those workflows. Stateless use cases may share a runtime
+instance; objects capturing submission metadata are created per submission. See
+[ADR-0016](../docs/adr/0016-deep-workflows-and-dependency-assembly.md).
+
+## Wallet configuration
+
+`wallet.ts` assembles `GetWalletSummary`, `ListWalletTransactions`, and
+`CreateWalletTopUp` using core-owned wallet contracts. `/lib/wallet` owns the
+PostgreSQL read adapter, while `/app/wallet` retains the Stripe adapter under the
+existing payment integration placement rule. Wallet reads accept bearer or login
+cookie authentication; top-up requires a bearer token. `/app` converts result
+dates to HTTP strings. Wallet lookup, pagination bounds and top-up sequencing
+belong to use cases, not configuration callbacks.
+
 ## Profile configuration
 
 `profiles.ts` assembles `UpdateProfile` with `SupabaseProfileStore` using the
@@ -120,7 +137,7 @@ Joseph's authentication and profile provisioning from PR #20 are on `main`.
 Migration `0005_regular_groups.sql` from [PR #34](https://github.com/rbrishi15/booking-web-manager/pull/34)
 is checked in and must be applied before its dependent `0006_session_creation.sql`.
 Normal integration runs must apply the full checked-in ordered migration sequence,
-currently 0001 through 0011, without `SESSION_TEST_PREREQUISITE_SQL`. See the
+without `SESSION_TEST_PREREQUISITE_SQL`. See the
 [migration inventory](../supabase/README.md#current-sequence). Rishi coordinates
 numbering and merge order; Neoh owns the session schema and wiring.
 
@@ -165,11 +182,13 @@ custom pricing. It replaces the equal-split constraint with ADR-0012's agreed
 bounds without updating existing sessions or fund holds.
 
 The session contract retains the UC2-02 minimum headcount in `minimum_headcount`.
-Migration 0006 continues to enforce 2–8 slots and a minimum headcount between
-two and the session capacity. The superseded `0009_session_capacity.sql` was
+Migration 0013 raises the stored capacity ceiling to 30 slots; the minimum
+headcount constraint remains between two and the session capacity. Apply the
+full checked-in sequence before enabling that capacity. The superseded
+`0009_session_capacity.sql` was
 removed before deployment and must not be applied. The current migration
 `0009_commitment_scheduling.sql` adds scheduled commitment jobs and push
-subscriptions; the full checked-in sequence continues through 0011.
+subscriptions. Use the migration inventory for the current sequence.
 
 - `npm test`: domain, use-case, route, auth, configuration and wiring unit tests.
 - `npm run test:e2e`: public Swagger/OpenAPI and unconfigured 503 HTTP coverage;
@@ -197,9 +216,9 @@ SESSION_TEST_PREREQUISITE_SQL=/absolute/path/0005_regular_groups.sql npm run tes
 The runner prints the preview SQL's SHA256 and labels acceptance as pending. It
 copies no source into this repository. Before accepting integration, rerun without
 this variable against the full checked-in ordered migration sequence.
-Tests provision eligible payout fixtures; production payout setup remains the
-responsibility of its own workflow. Session UI and later lifecycle adapters are
-separate work. See the [HTTP contract](../app/sessions/README.md).
+Tests provision eligible payout fixtures; production payout setup uses its own
+workflow. Session creation UI and the commitment, withdrawal and attendance
+adapters are implemented. See the [HTTP contract](../app/sessions/README.md).
 
 ### Local validation, 2026-10-01
 
@@ -216,6 +235,9 @@ against the full checked-in ordered migration sequence before accepting integrat
 `session-management.ts` assembles `ToggleSessionVisibility` and
 `ListHostedSessions` using the existing Supabase/PostgreSQL settings, lazy pool,
 complete User reader and a dedicated `PostgresSessionManagementTransaction`.
+`ListHostedSessions.forBooker` returns both upcoming sessions and those awaiting
+attendance from one transaction, account check and clock value. App-owned
+serializers convert dates for the API response.
 The management getter has the same retryable initialization boundary as creation.
 Bearer verification establishes current active-account access; the coordinator
 rechecks that access within its transaction. The page uses verified cookie
@@ -243,12 +265,14 @@ list and holds, obtains the current time, applies the Booker command and updates
 only visibility. Mapping failures are infrastructure errors; SQL errors retain
 their retry classifications. Rejected operations and failed commits roll back.
 
-**Concurrent-writer contract:** future commitment, withdrawal and other lifecycle
-adapters that read/write these invariants must also use SERIALIZABLE transactions
-and whole-transaction retries. The visibility tests model those writers and
-accept either valid serial ordering. This does not guarantee consistency for
-arbitrary direct SQL or lower-isolation lifecycle writers. Agree that integration
-boundary with Yajie and Rishi before those adapters are merged.
+**Concurrent-writer contract:** management, cancellation and removal retain
+SERIALIZABLE transactions and whole-transaction retries. Commitment workflows
+use READ COMMITTED, as accepted in PR #45. Every lifecycle writer acquires the
+parent Session row lock before hydrating children and updates that parent when
+persisting changes, so a waiting reader reloads committed state or retries its
+stale snapshot. This contract excludes arbitrary direct SQL and child-only
+writes. See [ADR-0016](../docs/adr/0016-deep-workflows-and-dependency-assembly.md)
+for the rationale and required combined-adapter concurrency coverage.
 
 Neoh owns migration 0007 and the feature adapters. Rishi coordinates migration
 numbering/merge order and reviews the shared transaction helper; follow the
@@ -293,14 +317,15 @@ All loaded session holds, including preserved terminal holds, are reconciled
 against the ledger projection's identities, original/outstanding cents and
 settlement kind before applying cancellation. Contradictions fail atomically.
 
-Conflicting future lifecycle writers must follow the same serializable contract.
-Concurrency tests model that contract and do not guarantee safety for arbitrary
-lower-isolation direct SQL. Neoh owns cancellation adapters; request Harrison's
+Conflicting lifecycle writers must follow the parent-row lock/update contract
+described above. Cancellation retains SERIALIZABLE with whole-transaction
+retries; this does not guarantee safety for arbitrary lower-isolation or
+child-only writers.
+Neoh owns cancellation adapters; request Harrison's
 ledger integration review and Rishi's domain/transaction review and independent
-session-area review assignment. Visibility (PR #38) and cancellation (PR #41)
-are now on `main`; creation (PR #39) integrates both by updating from `main` and
-rerunning creation, visibility and cancellation coverage with migrations through
-0008 before its independent review and merge.
+session-area review assignment. Creation, visibility and cancellation are merged;
+changes affecting their shared persistence must rerun the combined coverage
+against the full checked-in migration sequence.
 
 ### UC2-03c validation, 2026-10-02
 
@@ -339,20 +364,17 @@ session ID, participation ID and preview version. Reusing a key for another
 target conflicts. Replays recheck current active-account access and return the
 original committed response, even if the session later starts or is cancelled.
 
-The same lifecycle-writer concurrency contract as management/cancellation
-applies. Tests model SERIALIZABLE admission and withdrawal under a session row
-lock until Yajie's production adapters reach main. PR #45 proposes READ COMMITTED;
-this feature does not adopt that change or claim compatibility without the
-combined race tests and an agreed contract with Yajie and Rishi.
+The same parent-row lock/update contract as management/cancellation applies.
+Production commitment adapters are merged and use READ COMMITTED; removal
+retains SERIALIZABLE with bounded retries. Concurrency coverage must exercise
+these real adapters together, as well as synthetic SERIALIZABLE writers.
 
-### Pending integration and review
+### Integration and review
 
-This feature is based on main and imports no source from other open branches.
-The intended merge order is #39, #44, then this UC2-03b feature. After #44 lands,
-Neoh updates from main and adapts the participant navigation/removal eligibility
-to its contextual action descriptors, retaining the financial preview and retry
-contract. Rerun typecheck, lint, unit, Storybook and disposable database/browser
-checks on the combined tree before marking the PR ready. Rishi coordinates an
-independent session reviewer; Harrison reviews the financial integration.
-Waitlist promotion remains Yajie's separate responsibility, not a prerequisite
-for this removal/refund slice or part of its success response.
+Removal and contextual session actions are merged. Participant navigation and
+removal eligibility use application action descriptors while preserving the
+financial preview and retry contract. Rerun the applicable unit and disposable
+database/browser checks when these shared flows change. Rishi coordinates an
+independent session reviewer; Harrison reviews financial integration. Removal
+frees capacity without invoking waitlist promotion; the existing promotion
+workflow is separate and is not part of the removal response.

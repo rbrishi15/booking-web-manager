@@ -42,9 +42,10 @@ adapter in `/lib/sessions` captures submission retry metadata and delegates to t
 unit of work; the business input contains no idempotency key.
 
 The outer [`/use-case-config`](../../use-case-config/README.md) folder assembles
-app HTTP handlers, lib adapters, and use-case modules with plain functions and
-constructors. Its session factory returns a configured Request-to-Response
-handler. This folder can import those pieces; `/use-cases` and `/domain` keep
+app-owned dependency contracts, lib adapters, and use-case modules with plain
+functions and constructors. Under ADR-0011 its session factory returns dependency
+capabilities; the earlier Request-to-Response factory is superseded. This folder
+can import those pieces; `/use-cases` and `/domain` keep
 their dependencies inward and do not import configuration, app handlers, or lib
 adapters. Request parsing and response mapping remain in `/app`.
 
@@ -61,8 +62,8 @@ participant removal:
 
 ![Session use-case context diagram](./assets/session-use-case-context.png)
 
-The corresponding production boundary would be organized by use case rather
-than by one large session service:
+The production boundary is organized by use case rather than by one large
+session service. A representative subset is:
 
 ```text
 use-cases/
@@ -74,7 +75,7 @@ use-cases/
 └── sessions/
     ├── DiscoverSessions.ts
     ├── CreateSessions.ts
-    ├── ManageSession.ts
+    ├── ListHostedSessions.ts
     ├── ToggleSessionVisibility.ts
     ├── RemoveParticipant.ts
     ├── CancelSession.ts
@@ -83,12 +84,14 @@ use-cases/
     └── CommitToSession.ts
 ```
 
-For example, `use-cases/sessions/DiscoverSessions.ts` would coordinate the
+For example, `use-cases/sessions/DiscoverSessions.ts` coordinates the
 inputs and query ports needed to discover sessions, while `domain/sessions`
-would continue to own session invariants and state transitions. Supabase and
+continues to own session invariants and state transitions. Supabase and
 Stripe remain external adapters; they are not imported directly by the use-case
-coordinator. CreateSessions is implemented; the remaining coordinators in this
-illustrative structure are future work.
+coordinator. These session workflows are implemented; the
+[session guide](../../use-cases/sessions/README.md) describes their contracts.
+See [ADR-0016](./0016-deep-workflows-and-dependency-assembly.md) for interface
+depth, technical endpoint boundaries, and dependency-only assembly.
 
 ## What belongs in `/use-cases`
 

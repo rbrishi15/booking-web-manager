@@ -1,3 +1,4 @@
+import { serializeWalletTransactions } from "@/app/wallet/serialize-wallet";
 import { walletQueryAction } from "@/app/wallet/wallet-action";
 import { parseTransactionQueryInput } from "@/app/wallet/transaction-query-input";
 
@@ -7,6 +8,7 @@ export const runtime = "nodejs";
 export const GET = walletQueryAction({
   parse: parseTransactionQueryInput,
   run: (dependencies, input) =>
-    dependencies.listTransactions(input.userId, input.query),
+    dependencies.walletTransactions.forUser(input.userId, input.query),
+  serialize: serializeWalletTransactions,
   invalidRequestMessage: "Invalid transaction query",
 });

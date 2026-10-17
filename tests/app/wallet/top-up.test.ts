@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { describe, expect, test, vi } from "vitest";
 import { parseTopUpAmount } from "@/app/wallet/top-up-amount";
 import { readPublishableKey } from "@/app/wallet/top-up-transport";
-import { createStripeTopUpIntent } from "@/app/wallet/stripe-top-up-intents";
+import { StripeWalletTopUps } from "@/app/wallet/stripe-top-up-intents";
 import { TopUpUnavailableError } from "@/app/wallet/wallet-api-unavailable";
 import { walletErrorResponse } from "@/app/wallet/wallet-response";
 
@@ -34,13 +34,13 @@ describe("parseTopUpAmount", () => {
   });
 });
 
-describe("createStripeTopUpIntent", () => {
+describe("StripeWalletTopUps", () => {
   test("creates a PayNow intent marked as a top-up for this user's wallet", async () => {
     // Arrange
     const { stripe, create } = fakeStripe();
 
     // Act
-    const result = await createStripeTopUpIntent(stripe, request("user-a", "key-1"));
+    const result = await new StripeWalletTopUps(stripe).createIntent(request("user-a", "key-1"));
 
     // Assert
     expect(create).toHaveBeenCalledWith(
@@ -66,8 +66,8 @@ describe("createStripeTopUpIntent", () => {
     const { stripe, create } = fakeStripe();
 
     // Act
-    await createStripeTopUpIntent(stripe, request("user-a", "same-key"));
-    await createStripeTopUpIntent(stripe, request("user-b", "same-key"));
+    await new StripeWalletTopUps(stripe).createIntent(request("user-a", "same-key"));
+    await new StripeWalletTopUps(stripe).createIntent(request("user-b", "same-key"));
 
     // Assert
     const keys = create.mock.calls.map(([, options]) => options.idempotencyKey);
@@ -79,7 +79,7 @@ describe("createStripeTopUpIntent", () => {
     const { stripe } = fakeStripe(null);
 
     // Act & Assert
-    await expect(createStripeTopUpIntent(stripe, request("user-a", "key-1"))).rejects.toThrow("client secret");
+    await expect(new StripeWalletTopUps(stripe).createIntent(request("user-a", "key-1"))).rejects.toThrow("client secret");
   });
 });
 

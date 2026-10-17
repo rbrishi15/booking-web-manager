@@ -36,8 +36,9 @@ export async function DELETE(request: Request): Promise<Response> {
 async function jsonBody(request: Request): Promise<unknown> {
   try {
     return await request.json();
-  } catch {
-    throw invalidRequest("Request body must be valid JSON");
+  } catch (cause) {
+    if (cause instanceof SyntaxError) throw invalidRequest("Request body must be valid JSON");
+    throw new Error("Request body could not be read", { cause });
   }
 }
 

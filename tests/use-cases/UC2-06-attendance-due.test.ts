@@ -12,7 +12,7 @@ describe("UC2-06 sessions awaiting the booker's attendance check", () => {
     scenario.listEndedOpen.mockResolvedValue([createTestSession({ committedUserIds: ["alice", "ben"] })]);
 
     // Act
-    const due = await scenario.list.attendanceDueForBooker("booker");
+    const { awaitingAttendance: due } = await scenario.list.forBooker("booker");
 
     // Assert
     expect(scenario.listEndedOpen).toHaveBeenCalledExactlyOnceWith("booker", hoursAfterSessionEnd(1));
@@ -30,7 +30,7 @@ describe("UC2-06 sessions awaiting the booker's attendance check", () => {
     scenario.listEndedOpen.mockResolvedValue([session]);
 
     // Act & Assert
-    expect((await scenario.list.attendanceDueForBooker("booker"))[0]?.unverifiedCount).toBe(1);
+    expect((await scenario.list.forBooker("booker")).awaitingAttendance[0]?.unverifiedCount).toBe(1);
   });
 
   test("leaves out an ended session with nobody left to verify", async () => {
@@ -39,7 +39,7 @@ describe("UC2-06 sessions awaiting the booker's attendance check", () => {
     scenario.listEndedOpen.mockResolvedValue([createTestSession({ committedUserIds: [], waitlistedUserIds: [] })]);
 
     // Act & Assert
-    expect(await scenario.list.attendanceDueForBooker("booker")).toEqual([]);
+    expect((await scenario.list.forBooker("booker")).awaitingAttendance).toEqual([]);
   });
 
   test("rejects an inactive account before reading sessions", async () => {
@@ -48,7 +48,7 @@ describe("UC2-06 sessions awaiting the booker's attendance check", () => {
     scenario.getUser.mockResolvedValue(createTestUser({ userId: "booker", accountStatus: "INACTIVE" }));
 
     // Act & Assert
-    await expect(scenario.list.attendanceDueForBooker("booker")).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
+    await expect(scenario.list.forBooker("booker")).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
     expect(scenario.listEndedOpen).not.toHaveBeenCalled();
   });
 });

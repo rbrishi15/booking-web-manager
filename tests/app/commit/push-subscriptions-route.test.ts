@@ -89,6 +89,18 @@ describe("POST /api/push/subscriptions", () => {
     });
   });
 
+  test.each(["POST", "DELETE"] as const)("reports a %s body-read failure as an opaque server error", async (method) => {
+    const input = request(method, subscription);
+    vi.spyOn(input, "json").mockRejectedValue(new Error("private stream failure"));
+
+    const response = await (method === "POST" ? POST(input) : DELETE(input));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+    expect(mocks.register).not.toHaveBeenCalled();
+    expect(mocks.unregister).not.toHaveBeenCalled();
+  });
+
   test("keeps a dependency setup failure opaque", async () => {
     mocks.dependencies.mockRejectedValue(new Error("pool for postgres://secret"));
 

@@ -1,168 +1,44 @@
-import type { UUID } from "@/domain";
-import { DomainError } from "@/domain";
 import { createStripeClient, readStripeSettings } from "@/app/payouts/stripe-client";
 import { readSessionServerSettings } from "@/app/sessions/server-environment";
-import { createStripeTopUpIntent } from "@/app/wallet/stripe-top-up-intents";
+import { StripeWalletTopUps } from "@/app/wallet/stripe-top-up-intents";
 import { TopUpUnavailableError, WalletApiUnavailableError } from "@/app/wallet/wallet-api-unavailable";
-import type {
-  ActiveHoldItem,
-  WalletApiDependencies,
-  WalletSummary,
-  WalletTransactionItem,
-  WalletTransactionsResult,
-  WalletTopUpRequest,
-  WalletTopUpResult,
-} from "@/app/wallet/dependencies";
+import type { WalletApiDependencies } from "@/app/wallet/dependencies";
 import { createPostgresPoolProvider } from "@/lib/database/postgres-pool";
-import { PostgresLedgerReader } from "@/lib/money/ledger-read-adapter";
-import type { SqlExecutor, SqlRow } from "@/lib/money/sql";
+import { createPostgresExecutor } from "@/lib/database/postgres-executor";
+import { PostgresWalletReader } from "@/lib/wallet/postgres-wallet-reader";
 import { createSupabaseSessionAuthenticator } from "@/lib/supabase/bearer-auth";
 import { createSupabaseCookieSessionAuthenticator } from "@/lib/supabase/cookie-auth";
 import { bearerOrLoginCookie } from "@/lib/supabase/request-authenticator";
+import { GetWalletSummary } from "@/use-cases/wallet/GetWalletSummary";
+import { ListWalletTransactions } from "@/use-cases/wallet/ListWalletTransactions";
+import { CreateWalletTopUp } from "@/use-cases/wallet/CreateWalletTopUp";
 
-interface HoldRow extends SqlRow {
-  readonly hold_id: unknown;
-  readonly session_id: unknown;
-  readonly held_cents: unknown;
-  readonly original_cents: unknown;
-  readonly created_at: unknown;
-  readonly venue_name: unknown;
-  readonly sport: unknown;
-  readonly start_at: unknown;
-}
-
+/** Assemble stateless wallet workflows; adapters own SQL and provider calls. */
 export function createWalletDependencies(): WalletApiDependencies {
   const settings = readSessionServerSettings();
   if (settings === undefined) {
-    const unavailable = async (): Promise<never> => {
-      throw new WalletApiUnavailableError();
-    };
+    const unavailable = async (): Promise<never> => { throw new WalletApiUnavailableError(); };
     return {
       authenticate: unavailable,
-      getWalletSummary: unavailable,
-      listTransactions: unavailable,
-      createTopUpIntent: unavailable,
+      walletSummary: { forUser: unavailable },
+      walletTransactions: { forUser: unavailable },
+      walletTopUp: { forUser: unavailable },
     };
   }
 
-  const getPool = createPostgresPoolProvider(settings.databaseUrl);
-  const sql: SqlExecutor = {
-    query: async (text, values) => {
-      const pool = getPool();
-      const result = await pool.query(text, values ? [...values] : undefined);
-      return result.rows;
-    },
-  };
-
-  const reader = new PostgresLedgerReader(sql);
-  // The wallet page reads with its login cookies; top-up (POST) still needs a bearer token.
-  const authenticate = bearerOrLoginCookie(
-    createSupabaseSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
-    createSupabaseCookieSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+  const reader = new PostgresWalletReader(
+    createPostgresExecutor(createPostgresPoolProvider(settings.databaseUrl)),
   );
-
-  async function requireWalletId(userId: UUID): Promise<UUID> {
-    const walletId = await reader.findWalletIdByUserId(userId);
-    if (walletId === null) {
-      throw new DomainError("NOT_FOUND", "Wallet was not found");
-    }
-    return walletId;
-  }
-
-  async function getWalletSummary(userId: UUID): Promise<WalletSummary> {
-    const walletId = await requireWalletId(userId);
-    const balance = await reader.getWalletBalance(walletId);
-
-    const holdRows = await sql.query<HoldRow>(
-      `select h.hold_id, h.session_id, h.held_cents, h.original_cents, h.created_at,
-              s.venue_name, s.sport, s.start_at
-         from hold_balances h
-         left join sessions s on s.session_id = h.session_id
-        where h.wallet_id = $1 and h.held_cents > 0
-        order by h.created_at desc`,
-      [walletId],
-    );
-
-    let totalHeldCents = 0;
-    const activeHolds: ActiveHoldItem[] = holdRows.map((row) => {
-      const heldCents = Number(row.held_cents);
-      totalHeldCents += heldCents;
-      return {
-        holdId: String(row.hold_id),
-        sessionId: String(row.session_id),
-        heldCents,
-        originalCents: Number(row.original_cents),
-        createdAt: new Date(row.created_at as string | number | Date).toISOString(),
-        venueName: row.venue_name ? String(row.venue_name) : undefined,
-        sport: row.sport ? String(row.sport) : undefined,
-        startAt: row.start_at
-          ? new Date(row.start_at as string | number | Date).toISOString()
-          : undefined,
-      };
-    });
-
-    return {
-      walletId,
-      userId,
-      availableBalanceCents: balance ? balance.availableBalance.toCents() : 0,
-      heldBalanceCents: totalHeldCents,
-      currency: "SGD",
-      activeHolds,
-    };
-  }
-
-  async function listTransactions(
-    userId: UUID,
-    query: { limit?: number; before?: Date },
-  ): Promise<WalletTransactionsResult> {
-    const walletId = await requireWalletId(userId);
-    const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
-
-    const txs = await reader.listWalletTransactions({
-      walletId,
-      limit,
-      occurredBefore: query.before,
-    });
-
-    const items: WalletTransactionItem[] = txs.map((tx) => ({
-      transactionId: tx.transactionId,
-      kind: tx.kind,
-      amountCents: tx.amount.toCents(),
-      occurredAt: tx.occurredAt.toISOString(),
-      idempotencyKey: tx.idempotencyKey,
-      externalReference: tx.externalReference ?? null,
-      holdId: tx.holdId ?? null,
-      payoutId: tx.payoutId ?? null,
-    }));
-
-    const nextCursor =
-      items.length === limit ? (items[items.length - 1]?.occurredAt ?? null) : null;
-
-    return { items, nextCursor };
-  }
-
-  // Stripe calls stay in /app/wallet (CLAUDE.md rule #3); this only assembles them.
   const stripeSettings = readStripeSettings();
-  const stripe = stripeSettings ? createStripeClient(stripeSettings.secretKey) : undefined;
-
-  async function createTopUpIntent(
-    userId: UUID,
-    input: WalletTopUpRequest,
-  ): Promise<WalletTopUpResult> {
-    if (stripe === undefined) throw new TopUpUnavailableError();
-    const walletId = await requireWalletId(userId);
-    return createStripeTopUpIntent(stripe, {
-      userId,
-      walletId,
-      amountCents: input.amountCents,
-      idempotencyKey: input.idempotencyKey,
-    });
-  }
-
   return {
-    authenticate,
-    getWalletSummary,
-    listTransactions,
-    createTopUpIntent,
+    authenticate: bearerOrLoginCookie(
+      createSupabaseSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+      createSupabaseCookieSessionAuthenticator(settings.supabaseUrl, settings.supabaseAnonKey),
+    ),
+    walletSummary: new GetWalletSummary(reader),
+    walletTransactions: new ListWalletTransactions(reader),
+    walletTopUp: stripeSettings
+      ? new CreateWalletTopUp(reader, new StripeWalletTopUps(createStripeClient(stripeSettings.secretKey)))
+      : { forUser: async () => { throw new TopUpUnavailableError(); } },
   };
 }

@@ -6,7 +6,7 @@
 actor or complete User hydration. The PostgreSQL reader selects public, open
 sessions starting after the current clock, applies text, sport, stored-region and
 start-time filters, and orders by start time and ID. It returns every matching
-summary, including full sessions. Verification gates entering a session, not
+summary, including full sessions. Account access gates entering a session, not
 browsing listings.
 
 Criteria group `text`, `sport`, `region` and `startsWithin: { from?, before? }`.
@@ -27,8 +27,9 @@ OneMap resolution remains separate; this milestone filters stored regions.
 [`CreateSessions.forBooker(bookerId, booking, config)`](./CreateSessions.ts)
 loads the complete User inside the transaction, constructs the Booking, calls
 `user.asBooker().createSession(...)`, and saves the new Session. Business rules
-and booking-share calculation remain in the domain. Creation requires a present,
-confirmed email; the HTTP authenticator also checks it before idempotent replay. Creation moves no funds and
+and booking-share calculation remain in the domain. Creation requires a present
+email address; confirmation is not required. The HTTP authenticator and
+transaction adapter recheck current access before idempotent replay. Creation moves no funds and
 returns `{ sessionId, roomToken, bookingShareCents }`.
 
 `bookerId` comes from authentication. `SessionBooking` contains venue name,
@@ -101,7 +102,7 @@ run on a separate disposable stack. The [configuration guide](../../use-case-con
 records commands and the prerequisite group migration. The
 [E2E tests](../../tests/e2e) check public documentation and the default 503
 response against a running Next.js server without credentials or Supabase.
-Session-creation UI remains separate work; UC2-01 supplies the discovery page.
+The session-creation wizard and discovery page are implemented under `/app`.
 
 ## UC2-03a: manage visibility
 
@@ -113,15 +114,19 @@ application access, captures the current time, calls
 target still applies all current access, time, lifecycle and capacity guards.
 The application's active-account gate does not alter the Booker's domain policy.
 
-`ListHostedSessions.forBooker(bookerId)` provides ordered summaries of all owned,
-open, upcoming sessions, including full sessions. It derives available slots from
-hydrated Session objects and exposes no room token, participant or payment details.
+`ListHostedSessions.forBooker(bookerId)` returns `{ sessions, awaitingAttendance }`
+from one transaction, active-account check and clock value. `sessions` contains
+ordered summaries of owned, open, upcoming sessions, including full sessions;
+`awaitingAttendance` contains ended open sessions with unverified participants.
+It derives available slots and offered operations from hydrated domain objects
+and exposes no room token, participant identities or payment details. The app
+serializes result dates for HTTP.
 
 The capability supplies User loading, Session loading/listing and visibility-only
 persistence. It does not expose ledger or payout operations. Production uses
 serializable transactions with bounded retries; every retry reloads state and
 obtains a fresh operation time. See the configuration guide for schema rollout
-and the contract required of future concurrent lifecycle writers.
+and the parent-row lock/update contract required of concurrent lifecycle writers.
 
 ## UC2-03c: cancel sessions
 

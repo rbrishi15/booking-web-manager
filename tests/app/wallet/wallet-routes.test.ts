@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DomainError } from "@/domain";
+import { z } from "zod";
 import { WalletApiUnavailableError } from "@/app/wallet/wallet-api-unavailable";
 
 const mocks = vi.hoisted(() => ({
@@ -33,10 +34,10 @@ const mockSummary = {
       sessionId: "44444444-4444-4444-8444-444444444444",
       heldCents: 1500,
       originalCents: 1500,
-      createdAt: "2026-10-09T10:00:00.000Z",
+      createdAt: new Date("2026-10-09T10:00:00.000Z"),
       venueName: "Kallang Tennis Centre",
       sport: "Tennis",
-      startAt: "2026-10-12T18:00:00.000Z",
+      startAt: new Date("2026-10-12T18:00:00.000Z"),
     },
   ],
 };
@@ -47,7 +48,7 @@ const mockTransactionsResult = {
       transactionId: "55555555-5555-4555-8555-555555555555",
       kind: "TOP_UP" as const,
       amountCents: 5000,
-      occurredAt: "2026-10-09T12:00:00.000Z",
+      occurredAt: new Date("2026-10-09T12:00:00.000Z"),
       idempotencyKey: "topup-key-1",
       externalReference: "pi_12345",
       holdId: null,
@@ -74,9 +75,9 @@ beforeEach(() => {
 
   mocks.dependencies.mockResolvedValue({
     authenticate: mocks.authenticate,
-    getWalletSummary: mocks.getWalletSummary,
-    listTransactions: mocks.listTransactions,
-    createTopUpIntent: mocks.createTopUpIntent,
+    walletSummary: { forUser: mocks.getWalletSummary },
+    walletTransactions: { forUser: mocks.listTransactions },
+    walletTopUp: { forUser: mocks.createTopUpIntent },
   });
 });
 
@@ -89,7 +90,7 @@ describe("GET /api/wallet", () => {
     const response = await getWallet(request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual(mockSummary);
+    expect(await response.json()).toEqual(JSON.parse(JSON.stringify(mockSummary)));
     expect(mocks.getWalletSummary).toHaveBeenCalledWith(userId);
   });
 
@@ -138,6 +139,17 @@ describe("GET /api/wallet", () => {
     });
   });
 
+  test("keeps schema failures from the use case opaque instead of reporting invalid input", async () => {
+    mocks.getWalletSummary.mockRejectedValue(new z.ZodError([{
+      code: "custom", path: ["private_database_column"], message: "malformed stored wallet",
+    }]));
+
+    const response = await getWallet(new Request("http://localhost/api/wallet"));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+  });
+
   test("returns 503 WALLET_API_UNAVAILABLE when dependencies fail setup", async () => {
     mocks.getWalletSummary.mockRejectedValue(new WalletApiUnavailableError());
 
@@ -162,7 +174,7 @@ describe("GET /api/wallet/transactions", () => {
     const response = await listTransactionsRoute(request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual(mockTransactionsResult);
+    expect(await response.json()).toEqual(JSON.parse(JSON.stringify(mockTransactionsResult)));
     expect(mocks.listTransactions).toHaveBeenCalledWith(userId, {
       limit: undefined,
       before: undefined,
@@ -249,6 +261,17 @@ describe("POST /api/wallet/top-up", () => {
     expect(await response.json()).toMatchObject({
       error: { code: "INVALID_REQUEST" },
     });
+  });
+
+  test("keeps operational body-read failures opaque and does not invoke the use case", async () => {
+    const request = new Request("http://localhost/api/wallet/top-up", { method: "POST", body: "{}" });
+    vi.spyOn(request, "json").mockRejectedValue(new Error("private stream failure"));
+
+    const response = await topUpRoute(request);
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+    expect(mocks.createTopUpIntent).not.toHaveBeenCalled();
   });
 
   test("returns 400 INVALID_REQUEST when idempotencyKey is missing", async () => {

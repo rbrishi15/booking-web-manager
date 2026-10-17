@@ -111,10 +111,11 @@ describe("Hosted session listing", () => {
     scenario.listUpcoming.mockResolvedValue([full, new Session(sessionDetails({ sessionId: "second" }))]);
     const result = await scenario.list.forBooker("booker");
     expect(scenario.listUpcoming).toHaveBeenCalledExactlyOnceWith("booker", hoursBeforeSessionStart(48));
-    expect(result).toEqual([
+    expect(result.sessions).toEqual([
       { sessionId: "s", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 0, actions: [{ name: "preview-cancellation" }] },
       { sessionId: "second", venueName: "Court", sport: "Badminton", region: "North", startAt: full.booking.startAt, endAt: full.booking.endAt, visibility: "PUBLIC", availableSlots: 2, actions: [{ name: "set-visibility", visibility: "PRIVATE" }, { name: "preview-cancellation" }] },
     ]);
+    expect(result.awaitingAttendance).toEqual([]);
     expect(scenario.saveVisibility).not.toHaveBeenCalled();
   });
 
@@ -123,7 +124,7 @@ describe("Hosted session listing", () => {
     scenario.getUser.mockResolvedValue(createTestUser({ userId: "booker", emailVerified: false }));
     scenario.listUpcoming.mockResolvedValue([scenario.session]);
     const before = sessionState(scenario.session);
-    expect((await scenario.list.forBooker("booker"))[0]!.actions).toEqual([{ name: "set-visibility", visibility: "PRIVATE" }, { name: "preview-cancellation" }]);
+    expect((await scenario.list.forBooker("booker")).sessions[0]!.actions).toEqual([{ name: "set-visibility", visibility: "PRIVATE" }, { name: "preview-cancellation" }]);
     expect(sessionState(scenario.session)).toEqual(before);
     expect(scenario.saveVisibility).not.toHaveBeenCalled();
   });
@@ -132,7 +133,7 @@ describe("Hosted session listing", () => {
     const scenario = management();
     scenario.listUpcoming.mockResolvedValue([scenario.session]);
     scenario.clock.now.mockReturnValue(sessionStartsAt);
-    expect((await scenario.list.forBooker("booker"))[0]!.actions).toEqual([]);
+    expect((await scenario.list.forBooker("booker")).sessions[0]!.actions).toEqual([]);
   });
 
   test("rejects inactive and missing users before querying owned sessions", async () => {
@@ -141,13 +142,43 @@ describe("Hosted session listing", () => {
     await expect(scenario.list.forBooker("booker")).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(scenario.list.forBooker("booker")).rejects.toMatchObject({ code: "INACTIVE_ACCOUNT" });
     expect(scenario.listUpcoming).not.toHaveBeenCalled();
+    expect(scenario.listEndedOpen).not.toHaveBeenCalled();
   });
 
   test("returns an empty list and propagates a failed list query", async () => {
     const scenario = management();
-    expect(await scenario.list.forBooker("booker")).toEqual([]);
+    expect(await scenario.list.forBooker("booker")).toEqual({ sessions: [], awaitingAttendance: [] });
     const failure = new Error("List read failed");
     scenario.listUpcoming.mockRejectedValue(failure);
+    await expect(scenario.list.forBooker("booker")).rejects.toBe(failure);
+  });
+
+  test("loads the complete overview in one transaction with one account and time snapshot", async () => {
+    const scenario = management();
+    const now = hoursBeforeSessionStart(48);
+    scenario.listUpcoming.mockImplementationOnce(async () => {
+      scenario.clock.now.mockReturnValue(sessionStartsAt);
+      return [scenario.session];
+    });
+    scenario.listEndedOpen.mockResolvedValue([createTestSession({ committedUserIds: ["alice"] })]);
+
+    const overview = await scenario.list.forBooker("booker");
+
+    expect(overview.sessions).toHaveLength(1);
+    expect(overview.awaitingAttendance).toMatchObject([{ sessionId: "s", unverifiedCount: 1 }]);
+    expect(scenario.run).toHaveBeenCalledOnce();
+    expect(scenario.getUser).toHaveBeenCalledExactlyOnceWith("booker");
+    expect(scenario.clock.now).toHaveBeenCalledOnce();
+    expect(scenario.listUpcoming).toHaveBeenCalledExactlyOnceWith("booker", now);
+    expect(scenario.listEndedOpen).toHaveBeenCalledExactlyOnceWith("booker", now);
+  });
+
+  test("does not return a partial overview when the attendance query fails", async () => {
+    const scenario = management();
+    scenario.listUpcoming.mockResolvedValue([scenario.session]);
+    const failure = new Error("Attendance read failed");
+    scenario.listEndedOpen.mockRejectedValue(failure);
+
     await expect(scenario.list.forBooker("booker")).rejects.toBe(failure);
   });
 });

@@ -8,6 +8,7 @@ import { walletErrorResponse } from "./wallet-response";
 import { z } from "zod";
 
 export interface WalletPostAction<Input, Output> {
+  readonly serialize?: (output: Output) => unknown;
   /** Validates the body and combines it with the authenticated user ID. */
   readonly parse: (userId: UUID, body: unknown) => Input;
   /** Calls the action's use case with the parsed input. */
@@ -22,6 +23,7 @@ export interface WalletPostAction<Input, Output> {
 }
 
 export interface WalletGetAction<Output> {
+  readonly serialize?: (output: Output) => unknown;
   /** Calls the action's use case with the authenticated user ID. */
   readonly run: (
     dependencies: WalletApiDependencies,
@@ -30,6 +32,7 @@ export interface WalletGetAction<Output> {
 }
 
 export interface WalletQueryAction<Input, Output> {
+  readonly serialize?: (output: Output) => unknown;
   /** Validates the request query and combines it with the authenticated user ID. */
   readonly parse: (userId: UUID, request: Request) => Input;
   /** Calls the action's use case with the parsed query input. */
@@ -57,8 +60,9 @@ export function walletAction<Input, Output>(
       let body: unknown;
       try {
         body = await request.json();
-      } catch {
-        throw invalidRequest("Request body must be valid JSON");
+      } catch (cause) {
+        if (cause instanceof SyntaxError) throw invalidRequest("Request body must be valid JSON");
+        throw new Error("Request body could not be read", { cause });
       }
 
       let input: Input;
@@ -72,7 +76,7 @@ export function walletAction<Input, Output>(
       }
 
       const result = await action.run(dependencies, input);
-      return Response.json(result, {
+      return Response.json(action.serialize ? action.serialize(result) : result, {
         status: action.successStatus ?? 200,
         headers: { "Cache-Control": "no-store" },
       });
@@ -95,7 +99,7 @@ export function walletGetAction<Output>(
       const dependencies = await loadDependencies(getWalletDependencies);
       const userId = await requireUserId(request, dependencies.authenticate);
       const result = await action.run(dependencies, userId);
-      return Response.json(result, {
+      return Response.json(action.serialize ? action.serialize(result) : result, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
       });
@@ -131,7 +135,7 @@ export function walletQueryAction<Input, Output>(
       }
 
       const result = await action.run(dependencies, input);
-      return Response.json(result, {
+      return Response.json(action.serialize ? action.serialize(result) : result, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
       });
