@@ -2,15 +2,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createClient } from "@/lib/supabase/client";
 import { commitmentDependencies } from "./commitment-test-dependencies";
 
-const mocks = vi.hoisted(() => ({ commitment: vi.fn(), preview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ commitment: vi.fn(), preview: vi.fn(), playerSessions: vi.fn() }));
 vi.mock("@/app/commit/commitment-server-dependencies", () => ({ getCommitmentDependencies: mocks.commitment }));
 vi.mock("@/app/commit/withdrawal-preview-server-dependencies", () => ({ getWithdrawalPreviewDependencies: mocks.preview }));
+vi.mock("@/app/commit/player-sessions-server-dependencies", () => ({ getPlayerSessionsDependencies: mocks.playerSessions }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
 
 import { GET as previewRoute } from "@/app/api/sessions/[sessionId]/withdrawal-preview/route";
+import { GET as joinedRoute } from "@/app/api/sessions/joined/route";
 import { POST as withdrawRoute } from "@/app/api/sessions/withdraw/route";
 import { POST as leaveRoute } from "@/app/api/sessions/waitlist/leave/route";
-import { leaveWaitlist, previewWithdrawal, withdrawFromSession } from "@/app/commit/withdrawal-transport";
+import { leaveWaitlist, loadJoinedSessions, previewWithdrawal, withdrawFromSession } from "@/app/commit/withdrawal-transport";
 
 const userId = "10000000-0000-4000-8000-000000000001";
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -21,6 +23,7 @@ const inviteeId = "33333333-3333-4333-8333-333333333333";
 function routeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const request = new Request(new URL(String(input), "http://localhost"), init);
   const path = new URL(request.url).pathname;
+  if (path === "/api/sessions/joined") return joinedRoute(request);
   if (path === "/api/sessions/withdraw") return withdrawRoute(request);
   if (path === "/api/sessions/waitlist/leave") return leaveRoute(request);
   const match = /^\/api\/sessions\/([^/]+)\/withdrawal-preview$/.exec(path);
@@ -29,7 +32,7 @@ function routeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respo
 }
 
 describe("UC2-05 withdrawal transport against the real routes", () => {
-  const forParticipant = { preview: vi.fn(), withdraw: vi.fn(), leave: vi.fn() };
+  const forParticipant = { joined: vi.fn(), preview: vi.fn(), withdraw: vi.fn(), leave: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,11 +42,27 @@ describe("UC2-05 withdrawal transport against the real routes", () => {
     vi.stubGlobal("fetch", vi.fn(routeFetch));
     const authenticate = async (request: Request) => request.headers.get("authorization") === "Bearer player-token" ? userId : null;
     mocks.preview.mockResolvedValue({ authenticate, previewWithdrawal: { forParticipant: forParticipant.preview } });
+    mocks.playerSessions.mockResolvedValue({
+      authenticate, listJoinedSessions: { forParticipant: forParticipant.joined }, listReplacementInvitations: { forInvitee: vi.fn() },
+    });
     mocks.commitment.mockResolvedValue(commitmentDependencies({
       authenticate, withdrawFromSession: { forParticipant: forParticipant.withdraw }, leaveWaitlist: { forParticipant: forParticipant.leave },
     }));
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  test("reads the joined sessions the route returns as the screen's list", async () => {
+    forParticipant.joined.mockResolvedValue([
+      { sessionId, venueName: "Court 3", sport: "Badminton", region: "East", startAt: new Date("2026-11-01T10:00:00Z"),
+        endAt: new Date("2026-11-01T12:00:00Z"), status: "COMMITTED", bookingShareCents: 1250 },
+    ]);
+
+    expect(await loadJoinedSessions()).toEqual([
+      { sessionId, venueName: "Court 3", sport: "Badminton", region: "East", startAt: "2026-11-01T10:00:00.000Z",
+        endAt: "2026-11-01T12:00:00.000Z", status: "COMMITTED", bookingShareCents: 1250 },
+    ]);
+    expect(forParticipant.joined).toHaveBeenCalledExactlyOnceWith(userId);
+  });
 
   test("reads the preview the route returns", async () => {
     forParticipant.preview.mockResolvedValue({ sessionId, participationId, kind: "REFUNDED", refundCents: 1250, heldCents: 1250 });

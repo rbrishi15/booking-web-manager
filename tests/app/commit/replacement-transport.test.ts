@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  ACCEPT_REPLACEMENT_ERROR_MESSAGES, ACCEPT_REPLACEMENT_URL, acceptReplacement, UNCONFIRMED_ACCEPT_MESSAGE,
+  ACCEPT_REPLACEMENT_ERROR_MESSAGES, ACCEPT_REPLACEMENT_URL, acceptReplacement, INVITATIONS_LOAD_MESSAGE, loadReplacementInvitations,
+  REPLACEMENT_INVITATIONS_URL, UNCONFIRMED_ACCEPT_MESSAGE,
 } from "@/app/commit/replacement-transport";
 import { createClient } from "@/lib/supabase/client";
 
@@ -79,5 +80,55 @@ describe("UC2-05 accept-replacement transport", () => {
     // Act & Assert
     expect(await acceptReplacement(request)).toMatchObject({ code: "UNAUTHENTICATED", unconfirmed: false });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  describe("invitations", () => {
+    const invitation = {
+      sessionId, venueName: "Court 3", sport: "Futsal", region: "West",
+      startAt: "2026-11-01T10:00:00.000Z", endAt: "2026-11-01T12:00:00.000Z", bookingShareCents: 900,
+    };
+
+    test("loads the list as the signed-in player and maps each invitation", async () => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json({ invitations: [{ ...invitation, extra: "dropped" }] }));
+
+      // Act
+      const invitations = await loadReplacementInvitations();
+
+      // Assert
+      expect(invitations).toEqual([invitation]);
+      const [url, init] = fetcher.mock.calls[0]!;
+      expect(url).toBe(REPLACEMENT_INVITATIONS_URL);
+      expect(init).toMatchObject({ method: "GET", cache: "no-store", headers: { Authorization: "Bearer player-token" } });
+    });
+
+    test.each([
+      ["a fractional share", { invitations: [{ ...invitation, bookingShareCents: 9.5 }] }],
+      ["an unreadable start time", { invitations: [{ ...invitation, startAt: "soon" }] }],
+      ["no list", {}],
+    ])("throws on a reply with %s instead of showing a wrong list", async (_name, body) => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json(body));
+
+      // Act & Assert
+      await expect(loadReplacementInvitations()).rejects.toThrow(INVITATIONS_LOAD_MESSAGE);
+    });
+
+    test("throws a player-facing message when signed out, without calling the API", async () => {
+      // Arrange
+      getSession.mockResolvedValue({ data: { session: null }, error: null });
+
+      // Act & Assert
+      await expect(loadReplacementInvitations()).rejects.toThrow(ACCEPT_REPLACEMENT_ERROR_MESSAGES.UNAUTHENTICATED);
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    test("throws when the server fails, so an invitation is never treated as resolved", async () => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, { status: 500 }));
+
+      // Act & Assert
+      await expect(loadReplacementInvitations()).rejects.toThrow(INVITATIONS_LOAD_MESSAGE);
+    });
   });
 });

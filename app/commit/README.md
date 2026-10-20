@@ -130,10 +130,10 @@ unknown), in [`withdrawal-recovery.ts`](./withdrawal-recovery.ts):
 - [`withdrawal-transport.ts`](./withdrawal-transport.ts) calls the existing preview,
   withdraw and leave-waitlist routes, validates each reply with Zod and maps it explicitly to
   [`withdrawal-ports.ts`](./withdrawal-ports.ts).
-- The joined-sessions list is served by `GET /api/sessions/joined` (see [Player lists](#player-lists)).
-  Stories still use [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts) until its transport
-  and the page, the composition root that loads the list with React Query and provides the
-  `QueryClient`, are added.
+- [`loadJoinedSessions`](./withdrawal-transport.ts) reads `GET /api/sessions/joined` (see
+  [Player lists](#player-lists)) and throws on any failure or malformed reply, so a place is never
+  treated as gone because the list could not be read. Stories keep using
+  [`withdrawal-fakes.ts`](./_components/withdrawal-fakes.ts).
 
 ### Accept-replacement screen
 
@@ -157,9 +157,23 @@ accepting it. The screen follows the same split as the withdrawal screens.
   maps the reply to [`replacement-ports.ts`](./replacement-ports.ts). It shares request handling
   and failure classification with the withdrawal transport through
   [`session-action-request.ts`](./session-action-request.ts).
-- Pending invitations are served by `GET /api/sessions/replacements` (see
-  [Player lists](#player-lists)). Stories still use
-  [`replacement-fakes.ts`](./_components/replacement-fakes.ts) until its transport is added.
+- [`loadReplacementInvitations`](./replacement-transport.ts) reads `GET /api/sessions/replacements`
+  (see [Player lists](#player-lists)) and throws the same way. Stories keep using
+  [`replacement-fakes.ts`](./_components/replacement-fakes.ts).
+
+### The /sessions/joined page
+
+[`/sessions/joined`](../sessions/(manage)/joined/page.tsx) requires a login and renders
+[`JoinedSessionsPage`](./_components/joined-sessions-page.tsx), the composition root for both
+screens: React Query loads the invitations and joined sessions through the real transports, the
+flow hooks drive the dialogs, and unresolved requests are kept in this browser's storage.
+"Places reserved for you" appears above the joined sessions only when there is an invitation or
+the list failed to load. No API lists who a player may invite as their replacement yet, so the
+withdrawal dialog gets no candidates: "Invite one person" stays disabled with its explanation and
+the place can be opened to the waitlist. The contract tests
+([withdrawal](../../tests/app/commit/withdrawal-contract.test.ts),
+[replacement](../../tests/app/commit/replacement-contract.test.ts)) run both list transports
+against the real route handlers.
 
 ### Player lists
 

@@ -1,15 +1,17 @@
 import { z } from "zod";
-import type { AcceptReplacement } from "./replacement-ports";
+import type { AcceptReplacement, LoadReplacementInvitations, ReplacementInvitation } from "./replacement-ports";
 import { actionFailure, sendAsSignedInUser } from "./session-action-request";
 
 /**
- * UC2-05 production adapter for accepting a replacement invitation. It calls the existing API,
- * validates the reply with Zod and maps it explicitly to the presentation contract:
+ * UC2-05 production adapters for replacement invitations. Each calls an existing API, validates the
+ * reply with Zod and maps it explicitly to the presentation contract:
  *
  * | API reply | Presentation result |
  * | --- | --- |
+ * | GET /api/sessions/replacements `{ invitations: [{ sessionId, venueName, sport, region, startAt, endAt, bookingShareCents }] }` | `ReplacementInvitation[]` (same fields) |
  * | POST /api/sessions/replacements/accept `{ sessionId, participationId, heldCents, refundedParticipationId? }` | `{ status: "accepted", heldCents }` |
  */
+export const REPLACEMENT_INVITATIONS_URL = "/api/sessions/replacements";
 export const ACCEPT_REPLACEMENT_URL = "/api/sessions/replacements/accept";
 
 const acceptResponseSchema = z.object({
@@ -17,6 +19,14 @@ const acceptResponseSchema = z.object({
   participationId: z.string(),
   heldCents: z.number().int().safe().nonnegative(),
   refundedParticipationId: z.string().optional(),
+});
+
+const invitationsResponseSchema = z.object({
+  invitations: z.array(z.object({
+    sessionId: z.string(), venueName: z.string(), sport: z.string(), region: z.string(),
+    startAt: z.string().datetime({ offset: true }), endAt: z.string().datetime({ offset: true }),
+    bookingShareCents: z.number().int().safe().nonnegative(),
+  })),
 });
 
 /** What the player is told for each error code the route can return. */
@@ -41,6 +51,30 @@ export const ACCEPT_REPLACEMENT_ERROR_MESSAGES: Readonly<Record<string, string>>
 
 export const UNCONFIRMED_ACCEPT_MESSAGE =
   "We couldn't confirm whether you took the place. Try again: the same request is reused, so your share is never held twice.";
+
+export const INVITATIONS_LOAD_MESSAGE = "We couldn't load your invitations. Check your connection and try again.";
+
+/**
+ * UC2-05: the player's pending invitations, for React Query. Throws when they cannot be loaded,
+ * including a malformed reply, so a missing invitation is never mistaken for one that was resolved.
+ */
+export const loadReplacementInvitations: LoadReplacementInvitations = async () => {
+  const sent = await sendAsSignedInUser(REPLACEMENT_INVITATIONS_URL, { method: "GET" }, {
+    unconfirmed: INVITATIONS_LOAD_MESSAGE, signedOut: ACCEPT_REPLACEMENT_ERROR_MESSAGES.UNAUTHENTICATED!,
+  });
+  if (sent.status === "error") throw new Error(sent.unconfirmed ? INVITATIONS_LOAD_MESSAGE : sent.message);
+  if (sent.response.ok) {
+    const parsed = invitationsResponseSchema.safeParse(sent.body);
+    if (parsed.success) return parsed.data.invitations.map((invitation): ReplacementInvitation => ({
+      sessionId: invitation.sessionId, venueName: invitation.venueName, sport: invitation.sport, region: invitation.region,
+      startAt: invitation.startAt, endAt: invitation.endAt, bookingShareCents: invitation.bookingShareCents,
+    }));
+    throw new Error(INVITATIONS_LOAD_MESSAGE);
+  }
+  throw new Error(actionFailure(sent, {
+    unconfirmed: INVITATIONS_LOAD_MESSAGE, byCode: ACCEPT_REPLACEMENT_ERROR_MESSAGES, fallback: INVITATIONS_LOAD_MESSAGE,
+  }).message);
+};
 
 /** UC2-05: accepts the player's own invitation. The server holds the share; the browser sends no amount. */
 export const acceptReplacement: AcceptReplacement = async (request) => {

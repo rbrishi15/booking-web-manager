@@ -3,8 +3,8 @@
  * the screens, not copied from the HTTP replies: `withdrawal-transport.ts` validates each API
  * reply with Zod and maps it to these types explicitly (see the table there), and
  * `tests/app/commit/withdrawal-contract.test.ts` checks that mapping against the real routes.
- * The joined-sessions list has no API yet, so stories use the fakes in
- * `_components/withdrawal-fakes.ts`. React Query calls these through the flow hooks, which
+ * Stories use the fakes in `_components/withdrawal-fakes.ts`; `/sessions/joined` uses the real
+ * transports. React Query calls these through the flow hooks, which
  * turn error results into thrown `SessionActionError`s.
  */
 

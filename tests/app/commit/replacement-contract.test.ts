@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createClient } from "@/lib/supabase/client";
 import { commitmentDependencies } from "./commitment-test-dependencies";
 
-const mocks = vi.hoisted(() => ({ commitment: vi.fn() }));
+const mocks = vi.hoisted(() => ({ commitment: vi.fn(), playerSessions: vi.fn() }));
 vi.mock("@/app/commit/commitment-server-dependencies", () => ({ getCommitmentDependencies: mocks.commitment }));
+vi.mock("@/app/commit/player-sessions-server-dependencies", () => ({ getPlayerSessionsDependencies: mocks.playerSessions }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: vi.fn() }));
 
 import { POST as acceptRoute } from "@/app/api/sessions/replacements/accept/route";
-import { ACCEPT_REPLACEMENT_URL, acceptReplacement } from "@/app/commit/replacement-transport";
+import { GET as invitationsRoute } from "@/app/api/sessions/replacements/route";
+import {
+  ACCEPT_REPLACEMENT_URL, acceptReplacement, loadReplacementInvitations, REPLACEMENT_INVITATIONS_URL,
+} from "@/app/commit/replacement-transport";
 
 const userId = "10000000-0000-4000-8000-000000000001";
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -18,11 +22,13 @@ function routeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   const request = new Request(new URL(String(input), "http://localhost"), init);
   const path = new URL(request.url).pathname;
   if (path === ACCEPT_REPLACEMENT_URL) return acceptRoute(request);
+  if (path === REPLACEMENT_INVITATIONS_URL) return invitationsRoute(request);
   throw new Error(`No route for ${path}`);
 }
 
 describe("UC2-05 accept-replacement transport against the real route", () => {
   const forInvitee = vi.fn();
+  const listInvitations = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,8 +38,29 @@ describe("UC2-05 accept-replacement transport against the real route", () => {
     vi.stubGlobal("fetch", vi.fn(routeFetch));
     const authenticate = async (request: Request) => request.headers.get("authorization") === "Bearer player-token" ? userId : null;
     mocks.commitment.mockResolvedValue(commitmentDependencies({ authenticate, acceptReplacement: { forInvitee } }));
+    mocks.playerSessions.mockResolvedValue({
+      authenticate, listJoinedSessions: { forParticipant: vi.fn() }, listReplacementInvitations: { forInvitee: listInvitations },
+    });
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  test("reads the invitations the route returns as the screen's list", async () => {
+    // Arrange
+    listInvitations.mockResolvedValue([
+      { sessionId, venueName: "Court 3", sport: "Futsal", region: "West", startAt: new Date("2026-11-01T10:00:00Z"),
+        endAt: new Date("2026-11-01T12:00:00Z"), bookingShareCents: 900 },
+    ]);
+
+    // Act
+    const invitations = await loadReplacementInvitations();
+
+    // Assert
+    expect(invitations).toEqual([
+      { sessionId, venueName: "Court 3", sport: "Futsal", region: "West", startAt: "2026-11-01T10:00:00.000Z",
+        endAt: "2026-11-01T12:00:00.000Z", bookingShareCents: 900 },
+    ]);
+    expect(listInvitations).toHaveBeenCalledExactlyOnceWith(userId);
+  });
 
   test("sends an acceptance the route accepts and reads the amount held", async () => {
     // Arrange
