@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { actionFailure, sendAsSignedInUser, type SentRequest } from "./session-action-request";
-import type { LeaveWaitlist, PreviewWithdrawal, WithdrawFromSession } from "./withdrawal-ports";
+import type { JoinedSessionItem, LeaveWaitlist, LoadJoinedSessions, PreviewWithdrawal, WithdrawFromSession } from "./withdrawal-ports";
 
 /**
  * UC2-05 production adapters. Each one calls an existing API, validates the reply with Zod, and
@@ -8,6 +8,7 @@ import type { LeaveWaitlist, PreviewWithdrawal, WithdrawFromSession } from "./wi
  *
  * | API reply | Presentation result |
  * | --- | --- |
+ * | GET /api/sessions/joined `{ sessions: [{ sessionId, venueName, sport, region, startAt, endAt, status, bookingShareCents }] }` | `JoinedSessionItem[]` (same fields) |
  * | GET /api/sessions/{sessionId}/withdrawal-preview `{ kind, refundCents, heldCents, … }` | `{ status: "ready", preview: { kind, refundCents, heldCents } }` |
  * | POST /api/sessions/withdraw `{ kind, refundedCents, promotion, … }` | `{ status: "withdrawn", kind, refundedCents }` |
  * | POST /api/sessions/waitlist/leave `{ sessionId, participationId, promotion }` | `{ status: "left" }` |
@@ -15,6 +16,7 @@ import type { LeaveWaitlist, PreviewWithdrawal, WithdrawFromSession } from "./wi
  * Fields the screens do not use (participation IDs, promotion results) are validated but dropped.
  */
 export const withdrawalPreviewUrl = (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/withdrawal-preview`;
+export const JOINED_SESSIONS_URL = "/api/sessions/joined";
 export const WITHDRAW_URL = "/api/sessions/withdraw";
 export const LEAVE_WAITLIST_URL = "/api/sessions/waitlist/leave";
 
@@ -23,6 +25,13 @@ const kind = z.enum(["REFUNDED", "AWAITING_REPLACEMENT"]);
 const previewResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundCents: cents, heldCents: cents });
 const withdrawResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundedCents: cents });
 const leaveResponseSchema = z.object({ sessionId: z.string(), participationId: z.string() });
+const joinedResponseSchema = z.object({
+  sessions: z.array(z.object({
+    sessionId: z.string(), venueName: z.string(), sport: z.string(), region: z.string(),
+    startAt: z.string().datetime({ offset: true }), endAt: z.string().datetime({ offset: true }),
+    status: z.enum(["COMMITTED", "WAITLISTED"]), bookingShareCents: cents,
+  })),
+});
 
 /** What the player is told for each error code these routes can return. */
 export const WITHDRAWAL_ERROR_MESSAGES: Readonly<Record<string, string>> = {
@@ -47,6 +56,26 @@ const send = (url: string, init: RequestInit, unconfirmed: string) =>
   sendAsSignedInUser(url, init, { unconfirmed, signedOut: WITHDRAWAL_ERROR_MESSAGES.UNAUTHENTICATED! });
 const failure = (sent: Extract<SentRequest, { status: "sent" }>, unconfirmed: string, fallback: string) =>
   actionFailure(sent, { unconfirmed, byCode: WITHDRAWAL_ERROR_MESSAGES, fallback });
+
+export const JOINED_SESSIONS_LOAD_MESSAGE = "We couldn't load your sessions. Check your connection and try again.";
+
+/**
+ * UC2-05: the player's places, for React Query. Throws when the list cannot be loaded, including a
+ * malformed reply, so a missing place is never mistaken for one that has gone.
+ */
+export const loadJoinedSessions: LoadJoinedSessions = async () => {
+  const sent = await send(JOINED_SESSIONS_URL, { method: "GET" }, JOINED_SESSIONS_LOAD_MESSAGE);
+  if (sent.status === "error") throw new Error(sent.unconfirmed ? JOINED_SESSIONS_LOAD_MESSAGE : sent.message);
+  if (sent.response.ok) {
+    const parsed = joinedResponseSchema.safeParse(sent.body);
+    if (parsed.success) return parsed.data.sessions.map((session): JoinedSessionItem => ({
+      sessionId: session.sessionId, venueName: session.venueName, sport: session.sport, region: session.region,
+      startAt: session.startAt, endAt: session.endAt, status: session.status, bookingShareCents: session.bookingShareCents,
+    }));
+    throw new Error(JOINED_SESSIONS_LOAD_MESSAGE);
+  }
+  throw new Error(failure(sent, JOINED_SESSIONS_LOAD_MESSAGE, JOINED_SESSIONS_LOAD_MESSAGE).message);
+};
 
 /** UC2-05: what withdrawing now would refund. Read-only; nothing is saved. */
 export const previewWithdrawal: PreviewWithdrawal = async (sessionId) => {

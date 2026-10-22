@@ -194,6 +194,7 @@
 /app/api/sessions/commit/ @Wyjessie
 /app/api/sessions/withdraw/ @Wyjessie
 /app/api/sessions/joined/ @Wyjessie
+/app/sessions/(manage)/joined/ @Wyjessie
 /app/api/sessions/replacements/ @Wyjessie
 /app/api/sessions/waitlist/ @Wyjessie
 /app/api/sessions/attendance/ @Wyjessie

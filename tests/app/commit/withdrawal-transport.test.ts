@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  leaveWaitlist, previewWithdrawal, UNCONFIRMED_LEAVE_MESSAGE, UNCONFIRMED_WITHDRAWAL_MESSAGE, withdrawalPreviewUrl, withdrawFromSession,
+  JOINED_SESSIONS_LOAD_MESSAGE, JOINED_SESSIONS_URL, leaveWaitlist, loadJoinedSessions, previewWithdrawal, UNCONFIRMED_LEAVE_MESSAGE,
+  UNCONFIRMED_WITHDRAWAL_MESSAGE, WITHDRAWAL_ERROR_MESSAGES, withdrawalPreviewUrl, withdrawFromSession,
 } from "@/app/commit/withdrawal-transport";
 import { createClient } from "@/lib/supabase/client";
 
@@ -119,5 +120,54 @@ describe("UC2-05 withdrawal transport", () => {
     expect(await withdrawFromSession(withdrawRequest)).toMatchObject({ code: "UNAUTHENTICATED", unconfirmed: false });
     expect(await leaveWaitlist({ sessionId, idempotencyKey: "leave-key" })).toMatchObject({ code: "UNAUTHENTICATED", unconfirmed: false });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  describe("joined sessions", () => {
+    const joined = {
+      sessionId, venueName: "Court 3", sport: "Badminton", region: "East",
+      startAt: "2026-11-01T10:00:00.000Z", endAt: "2026-11-01T12:00:00.000Z", status: "WAITLISTED", bookingShareCents: 1250,
+    };
+
+    test("loads the list as the signed-in player and maps each place", async () => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json({ sessions: [{ ...joined, extra: "dropped" }] }));
+
+      // Act
+      const sessions = await loadJoinedSessions();
+
+      // Assert
+      expect(sessions).toEqual([joined]);
+      const [url, init] = fetcher.mock.calls[0]!;
+      expect(url).toBe(JOINED_SESSIONS_URL);
+      expect(init).toMatchObject({ method: "GET", cache: "no-store", headers: { Authorization: "Bearer player-token" } });
+    });
+
+    test.each([
+      ["a fractional share", { sessions: [{ ...joined, bookingShareCents: 12.5 }] }],
+      ["an unknown status", { sessions: [{ ...joined, status: "WITHDRAWN" }] }],
+      ["no list", {}],
+    ])("throws on a reply with %s instead of showing a wrong list", async (_name, body) => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json(body));
+
+      // Act & Assert
+      await expect(loadJoinedSessions()).rejects.toThrow(JOINED_SESSIONS_LOAD_MESSAGE);
+    });
+
+    test("throws a player-facing message for a rejection", async () => {
+      // Arrange
+      fetcher.mockResolvedValueOnce(Response.json({ error: { code: "UNAUTHENTICATED", message: "Authentication is required" } }, { status: 401 }));
+
+      // Act & Assert
+      await expect(loadJoinedSessions()).rejects.toThrow(WITHDRAWAL_ERROR_MESSAGES.UNAUTHENTICATED);
+    });
+
+    test("throws when the request fails, so a place is never treated as gone", async () => {
+      // Arrange
+      fetcher.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      // Act & Assert
+      await expect(loadJoinedSessions()).rejects.toThrow(JOINED_SESSIONS_LOAD_MESSAGE);
+    });
   });
 });
