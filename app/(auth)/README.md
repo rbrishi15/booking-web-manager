@@ -31,9 +31,12 @@ full. The form submits one complete `email` value; the server remains responsibl
 for validation. Password strength is a visual hint, not an additional policy.
 
 Run `npm run test:e2e:auth` for responsive layout, navigation, field controls,
-step transitions and failed-validation checks. This suite uses an isolated Next
-development server with dummy Supabase settings and creates no accounts. Run it
-separately from production builds because both write to `.next`. Successful
+step transitions and failed-validation checks. This suite builds and starts an
+isolated Next production server with dummy Supabase settings and creates no
+accounts. Building with those settings embeds the correct public values and
+avoids the development server's blocking npm registry version check. The startup
+budget includes the build, and build/server output is included in test logs. Run
+it separately from other builds and E2E suites because they write to `.next`. Successful
 sign-in, registration and confirmation still need a configured Supabase service.
 
 ## Invitation continuation
