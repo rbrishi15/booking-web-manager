@@ -41,7 +41,7 @@ sign-in, registration and confirmation still need a configured Supabase service.
 `/sessions/{sessionId}/join?token=...` is a public preview for a UUID session ID.
 Its token is checked by the session reader; becoming signed in never joins a
 session automatically. Other Sessions routes remain protected. Missing or
-unavailable authentication does not block this preview, just as with Discover.
+unavailable authentication does not block this invitation preview; Discover itself now requires an active login.
 Invitation responses and authentication/recovery responses carrying their return
 destination use `Cache-Control: private, no-store` and `Referrer-Policy: no-referrer`.
 
