@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
   // The callback establishes its own session, including when there is no login cookie yet.
   if (pathname === AUTH_CALLBACK_PATH) return response;
   if (pathname === "/storybook" || pathname.startsWith("/storybook/") || pathname.startsWith("/fonts/")) return response;
-  if ((pathname === "/" || invitation) && !isAuthenticationConfigured()) return response;
+  if (isPublicPath(pathname) && !isAuthenticationConfigured()) return response;
   // Even an unconfigured deployment must not expose private discovery listings.
   if (pathname === "/discover" && !isAuthenticationConfigured()) {
     const loginUrl = new URL("/login", request.url);
