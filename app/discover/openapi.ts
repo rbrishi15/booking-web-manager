@@ -4,7 +4,7 @@ import { REGIONS, SPORTS } from "@/app/(auth)/schemas";
 import { MAX_SESSION_SLOTS } from "@/domain/sessions/capacity";
 import { DISCOVERY_API_UNAVAILABLE_MESSAGE } from "./discovery-api-unavailable";
 
-/** Registers public session discovery filters, listing responses and safe failure diagnostics. */
+/** Registers authenticated session discovery filters, listing responses and safe failure diagnostics. */
 export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
   const discoveryResultSchema = registry.register("DiscoverSessionsResult", z.object({
     items: z.array(z.object({
@@ -31,7 +31,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
         "INITIALIZATION_FAILED",
         "UNEXPECTED_ERROR",
       ]),
-      stage: z.enum(["initialization", "validation", "query", "serialization"]),
+      stage: z.enum(["initialization", "authentication", "validation", "query", "serialization"]),
       diagnostics: z.array(z.object({
         message: z.string().max(500).openapi({ description: "Fixed safe message for an allowlisted error code or exact known message; otherwise Unknown error. Raw exception text, stack traces and SQL fields are never returned." }),
         code: z.string().max(64).optional().openapi({ description: "Allowlisted driver error code, when recognized; unknown codes are omitted." }),
@@ -60,7 +60,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
     tags: ["Sessions"],
     summary: "UC2-01 Discover Sessions",
     description: [
-      "Lists upcoming PUBLIC, OPEN sessions for everyone, including signed-out and unverified visitors and full sessions.",
+      "Lists upcoming PUBLIC, OPEN sessions for signed-in users with ACTIVE profiles, including unverified emails and full sessions.",
       "Only sessions starting strictly after the server clock are returned; minimum reliability and current capacity do not hide listings.",
       "Optional q matches a case-insensitive literal substring of the sport or venue name and combines with every other filter. Percent signs, underscores, and backslashes are literal text, not wildcards. Search text is trimmed, blank text is omitted, and the maximum is 100 characters after trimming.",
       "For example, ?q=Jurong&sport=Badminton&region=West&date=2040-01-02 finds matching West-region badminton sessions starting on that Singapore day.",
@@ -70,9 +70,9 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
       "The lower time must precede the upper time. Blank values are omitted, duplicate known parameters are rejected, and unknown parameters are ignored.",
       "Results are ordered by startAt then sessionId, with at most 20 items per page. Pass the opaque nextCursor unchanged with the same filters for the next page; null means the final page.",
       "The response contains listing fields only, never room tokens or participant, wallet, holding-account, payout, or invitation data. totalSlots is capacity, not remaining availability.",
-      "Responses use Cache-Control: no-store. Missing settings return 503 DISCOVERY_API_UNAVAILABLE.",
+      "Bearer tokens or same-origin Supabase login cookies are required. Responses use Cache-Control: no-store. Missing settings return 503 DISCOVERY_API_UNAVAILABLE.",
     ].join(" "),
-    security: [],
+    security: [{ bearerAuth: [] }, { loginCookie: [] }],
     request: {
       query: z.object({
         q: z.string().max(100).optional().openapi({
@@ -101,7 +101,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
     },
     responses: {
       200: {
-        description: "A page of public session listings, or an empty result. All responses use Cache-Control: no-store.",
+        description: "A page of public-visibility session listings for an authenticated viewer, or an empty result. All responses use Cache-Control: no-store.",
         headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } },
         content: {
           "application/json": {
@@ -124,6 +124,9 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
         },
       },
       400: errorResponse("Malformed or duplicate filters, search text longer than 100 characters after trimming, invalid calendar date/time range, or invalid cursor.", "INVALID_REQUEST", "Invalid session discovery query"),
+      401: errorResponse("Missing or invalid login cookie or bearer token.", "UNAUTHENTICATED", "Authentication is required"),
+      403: errorResponse("The signed-in account is inactive.", "INACTIVE_ACCOUNT", "An inactive account cannot use the session API"),
+      404: errorResponse("The signed-in account has no profile.", "NOT_FOUND", "User was not found"),
       500: {
         description: "Discovery failed. The response identifies the failure category and stage with a generated requestId. Diagnostics use fixed safe explanations for allowlisted driver codes and exact known messages. Exact known messages can identify failures even with no code or a generic code; unknown codes are omitted. Unrecognized failures return Unknown error. Raw exception text, stack traces and SQL fields are never returned. Safe diagnostics require no environment toggle or operator authentication. The matching 'Session discovery failed' server-log entry retains the original error and cause.",
         headers: {
@@ -149,7 +152,7 @@ export function registerDiscoveryApi(registry: OpenAPIRegistry): void {
           },
         },
       },
-      503: errorResponse("Required discovery server settings are missing.", "DISCOVERY_API_UNAVAILABLE", DISCOVERY_API_UNAVAILABLE_MESSAGE),
+      503: errorResponse("Required discovery database or authentication settings are missing.", "DISCOVERY_API_UNAVAILABLE", DISCOVERY_API_UNAVAILABLE_MESSAGE),
     },
   });
 }
