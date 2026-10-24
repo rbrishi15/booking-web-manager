@@ -7,11 +7,11 @@
 Authenticated `/` is a personal bookings dashboard with compact date cards, or a
 Singapore weather forecast when no upcoming bookings exist. It has no filters or
 public discovery feed. See [`app/home/README.md`](../home/README.md).
-`/discover` is the dedicated public-session search page. It lists upcoming, public,
+`/discover` is the dedicated authenticated search page for public-visibility sessions. It lists upcoming, public,
 open sessions, including full sessions, using the stored region. Cards show venue,
 sport, region, Singapore timing, total capacity and the participant share in SGD.
-Cards use the shared join confirmation. Signed-out visitors sign in before
-joining; full sessions can accept waitlist requests without holding funds.
+Cards use the shared join confirmation. Signed-out visitors must sign in before
+browsing; full sessions can accept waitlist requests without holding funds.
 
 The creation wizard supports OneMap venue search and coordinate-based region
 derivation. Discovery filters the persisted region; its tests do not establish
@@ -20,23 +20,23 @@ live OneMap availability. Private sessions are accessible through valid
 
 ## Query and HTTP contract
 
-`GET /api/sessions` and `/discover` allow signed-out, unverified and verified
-visitors. The API validates the external query and calls
-`DiscoverSessions.searchPublic(criteria)` without authenticating or loading a
-User. The page invokes the same use case. Cookie authentication is optional for
-the signed-in navigation and verification prompt; an unavailable auth provider
-must not block public browsing. Other personal screens remain protected.
+`GET /api/sessions` and `/discover` require a signed-in ACTIVE account.
+The API verifies either a Supabase bearer token or a same-origin login cookie
+before validating filters and running `DiscoverSessions.searchPublic(criteria)`.
+The server page also checks the viewer before loading results, and middleware
+redirects signed-out visitors to login while preserving filters. An unverified
+email is allowed, but inactive and missing accounts are rejected.
 
-Discovery requires only `DATABASE_URL` and the existing session schema. It has no
+Discovery requires the existing database and Supabase authentication settings and session schema. It has no
 new migration, browser table grants, wallet dependency or cached results. The
 GET route declares `parse`, `run` and `serialize` through
 [`discoveryAction`](./discovery-action.ts). Its factory owns one error boundary
 around dependency loading, query validation, querying and serialization; the
 route's `run` callback visibly invokes `DiscoverSessions.searchPublic`, and its
-serializer applies pagination. It does not authenticate or read a request body.
+serializer applies pagination. It authenticates on every request and does not read a request body.
 Unexpected failures return a category, execution stage, request identifier and
 safe exception/cause diagnostics. Original exceptions stay in server logs.
-The factory preserves the four diagnostic stages described below.
+The factory preserves five diagnostic stages: initialization, authentication, validation, query and serialization.
 All responses use `Cache-Control: no-store`. See
 [ADR-0015](../../docs/adr/0015-declarative-session-http-actions.md).
 
@@ -51,8 +51,7 @@ unknown parameters are ignored. `q` is trimmed, limited to 100 characters, and m
 a case-insensitive literal substring of sport or venue name. SQL wildcard characters
 are treated literally. Search combines with all other filters, preserving the same
 ordering and pagination. A repeatable-read transaction loads only public summaries;
-no profile, wallet, membership, payout or reliability facts are loaded. Missing
-account records therefore cannot prevent browsing.
+no wallet, membership, payout or reliability facts are loaded. An ACTIVE profile is required before the search.
 
 Dates use `YYYY-MM-DD`; times use `HH:mm`. Date and time refer to
 `Asia/Singapore`. A date alone selects that calendar day. Time bounds require a
