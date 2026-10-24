@@ -19,6 +19,17 @@ prevents an edit from restoring personal details after concurrent deactivation.
 Registration still permits empty preferences; the signup trigger filters
 unsupported metadata choices. Existing profile rows are not rewritten.
 
+## User ID
+
+Settings shows the user ID under the name. Every active account has one: people
+choose it at sign-up, and migration 0016 gave existing accounts one made from
+their name. Edit profile includes the shared `UserHandleField`
+(`app/users/_components`), and every save keeps a user ID. A taken ID returns a
+field error; `update_profile` from migration 0016 sets it in the same guarded write
+and leaves it unchanged when an older caller omits it. Account deletion clears
+the ID so others can use it. See
+[ADR-0021](../../docs/adr/0021-user-ids-for-finding-players.md).
+
 Run `npm test -- tests/use-cases/UC1-03-manage-profile.test.ts tests/app/profile/actions.test.ts`
 for application coverage and `npm run test:integration` for the real RPC,
 privilege, signup and deactivation-race scenarios on the disposable stack.

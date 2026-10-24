@@ -12,6 +12,10 @@ import { fakeSupabase, formDataOf } from "./support/fake-supabase-auth";
 // Postgres in UC1-01-provisioning.db.test.ts.
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
+const handles = vi.hoisted(() => ({ availability: vi.fn() }));
+vi.mock("@/app/users/user-handle-server-dependencies", () => ({
+  getUserHandleDependencies: async () => ({ checkUserHandle: { availability: handles.availability } }),
+}));
 vi.mock("next/navigation", async () => {
   const { RedirectCalled } = await import("./support/fake-supabase-auth");
   return {
@@ -26,6 +30,7 @@ describe("UC1-01 Register User", () => {
   beforeEach(() => {
     vi.mocked(createClient).mockReset();
     vi.mocked(headers).mockResolvedValue(new Headers({ origin: "https://booking-web-manager.vercel.app" }) as never);
+    handles.availability.mockReset().mockResolvedValue("AVAILABLE");
   });
 
   test("registers a new user with a unique email", async () => {
@@ -44,7 +49,7 @@ describe("UC1-01 Register User", () => {
       password: "password123",
       options: {
         emailRedirectTo: "https://booking-web-manager.vercel.app/auth/callback",
-        data: { display_name: "Marcus Lim", preferred_sports: ["Tennis"], preferred_regions: ["West"] },
+        data: { display_name: "Marcus Lim", preferred_sports: ["Tennis"], preferred_regions: ["West"], handle: "marcus_lim" },
       },
     });
   });
@@ -177,6 +182,66 @@ describe("UC1-01 Register User", () => {
     expect(result.data?.email).toBe("marcus@example.com");
   });
 
+  test("stores the user ID in lower case without the @ (ADR-0021)", () => {
+    // Arrange
+    const input = validRegistration({ handle: "  @Marcus_Lim " });
+
+    // Act
+    const result = registerSchema.safeParse(input);
+
+    // Assert
+    expect(result.data?.handle).toBe("marcus_lim");
+  });
+
+  test.each([
+    ["", "Choose a user ID"],
+    ["abcd", "Use at least 5 characters"],
+    ["a".repeat(33), "Use 32 characters or fewer"],
+    ["marcus.lim", "Use only letters, numbers and underscores"],
+    ["9marcus", "Start with a letter"],
+    ["marcus_", "Don't end with or repeat an underscore"],
+    ["marcus__lim", "Don't end with or repeat an underscore"],
+  ])("rejects the user ID %j with %j", (handle, message) => {
+    // Act
+    const result = registerSchema.safeParse(validRegistration({ handle }));
+
+    // Assert
+    expect(result.error?.flatten().fieldErrors.handle).toEqual([message]);
+  });
+
+  test("asks for another user ID when it is already taken, without signing up", async () => {
+    // Arrange
+    handles.availability.mockResolvedValue("TAKEN");
+    const supabase = fakeSupabase({ signUp: { data: { user: null, session: null }, error: null } });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    // Act
+    const result = await registerUser({ status: "idle" }, formDataOf(validRegistration({ handle: "@Marcus_Lim" })));
+
+    // Assert
+    expect(result).toEqual({
+      status: "error",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: { handle: ["That user ID is taken. Try another."] },
+    });
+    expect(handles.availability).toHaveBeenCalledExactlyOnceWith("marcus_lim");
+    expect(supabase.auth.signUp).not.toHaveBeenCalled();
+  });
+
+  test("still signs up when user IDs cannot be checked, leaving uniqueness to the database", async () => {
+    // Arrange: the sign-up trigger keeps IDs unique even when this check is unavailable.
+    handles.availability.mockRejectedValue(new Error("database unreachable"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const supabase = fakeSupabase({
+      signUp: { data: { user: { id: "marcus", identities: [{}] }, session: {} }, error: null },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    // Act & Assert
+    await expect(registerUser({ status: "idle" }, formDataOf(validRegistration()))).rejects.toMatchObject({ path: HOME_PATH });
+    expect(supabase.auth.signUp).toHaveBeenCalledOnce();
+  });
+
   describe("password strength hint", () => {
     test.each([
       ["", 0],
@@ -202,6 +267,7 @@ function validRegistration(overrides: Record<string, string> = {}) {
     password: "password123",
     region: "West",
     sport: "Tennis",
+    handle: "marcus_lim",
     ...overrides,
   };
 }

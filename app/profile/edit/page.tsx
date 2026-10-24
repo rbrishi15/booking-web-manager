@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { EditProfileForm } from "./edit-profile-form";
 
-/** UC1-03 Manage Profile: change name, preferred sports and preferred regions. */
+/** UC1-03 Manage Profile: change name, user ID, preferred sports and preferred regions. */
 export default async function EditProfilePage() {
   const user = await getCurrentUser();
   if (user === null) redirect("/login");
@@ -20,6 +20,7 @@ export default async function EditProfilePage() {
           <EditProfileForm
             initial={{
               displayName: user.profileName,
+              handle: user.handle ?? null,
               preferredSports: user.preferredSports,
               preferredRegions: user.preferredRegions,
             }}

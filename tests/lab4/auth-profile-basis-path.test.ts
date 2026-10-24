@@ -11,6 +11,10 @@ import { fakeSupabase, formDataOf, RedirectCalled } from "../use-cases/support/f
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
+// User IDs (ADR-0021) came after these basis paths; every path here uses a free one.
+vi.mock("@/app/users/user-handle-server-dependencies", () => ({
+  getUserHandleDependencies: async () => ({ checkUserHandle: { availability: async () => "AVAILABLE" } }),
+}));
 vi.mock("next/navigation", async () => {
   const { RedirectCalled } = await import("../use-cases/support/fake-supabase-auth");
   return { redirect: (target: string) => { throw new RedirectCalled(target); } };
@@ -25,7 +29,7 @@ function observe(id: string, input: string, predictedPath: string, expected: obj
 
 // ---------- UC1-01: registerUser ----------
 
-const registration = { displayName: "Marcus Lim", email: "marcus@example.com", password: "password123", region: "West", sport: "Tennis" };
+const registration = { displayName: "Marcus Lim", email: "marcus@example.com", password: "password123", region: "West", sport: "Tennis", handle: "marcus_lim" };
 
 /** The action's outcome: its returned state, or where it redirected. */
 async function registerOutcome(fields: Record<string, string>) {

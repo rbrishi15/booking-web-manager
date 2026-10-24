@@ -12,6 +12,11 @@ export interface CurrentUser {
   readonly displayName: string;
   /** The saved name exactly as stored; may be "" (used to fill the Edit profile form). */
   readonly profileName: string;
+  /**
+   * The public user ID without "@" (ADR-0021). Every ACTIVE profile has one; null only when
+   * the profile could not be read. Optional so fixtures that predate user IDs stay valid.
+   */
+  readonly handle?: string | null;
   readonly preferredSports: readonly string[];
   readonly preferredRegions: readonly string[];
   /**
@@ -40,7 +45,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("display_name, preferred_sports, preferred_regions, account_status")
+    .select("display_name, preferred_sports, preferred_regions, account_status, handle")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -56,6 +61,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     accountStatus: profileError === null && profile?.account_status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
     displayName: profileName.trim() !== "" ? profileName : email ?? "Your account",
     profileName,
+    handle: typeof profile?.handle === "string" && profile.handle !== "" ? profile.handle : null,
     preferredSports: textList(profile?.preferred_sports),
     preferredRegions: textList(profile?.preferred_regions),
     reliabilityScore: ReliabilityScore.fromHistory(user.id, [], new Date()).toNumber(),

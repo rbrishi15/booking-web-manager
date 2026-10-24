@@ -35,6 +35,7 @@ most likely way this project loses an afternoon.
 | 0012 | `payout_attempts` — UC1-08 payout attempts (the PayoutAttempt aggregate); a REQUESTED row is the durable payout intent | Rishi |
 | 0013 | `session_slot_limit` — session capacity raised from 8 to 30 slots | Neoh / Rishi |
 | 0014 | `commitment_sweep_schedule` — pg_cron + pg_net call to the scheduled commitment sweep every five minutes | Yajie |
+| 0016 | `user_handles` — unique public user IDs: generated for existing accounts, chosen at sign-up, set by `update_profile` | Joseph / Rishi |
 
 The deployed sequence ends at 0011. New migrations must use a unique number
 after it; do not reuse a deployed number or insert a file below it. Supabase's
@@ -45,7 +46,9 @@ sessions still require `minimum_headcount`; do not restore or renumber it.
 Migrations 0010/0011 use tables already created by 0004/0005 and can be tested
 against the current main sequence.
 Apply 0011 before deploying the profile action, which calls its `update_profile`
-operation. These migrations retain existing rows; rollback requires restoring
+operation. 0016 replaces `update_profile` with a version whose new `p_handle`
+parameter defaults to null, so the previous app keeps working while the new
+version deploys; deploy the app that sends user IDs after applying 0016. These migrations retain existing rows; rollback requires restoring
 the previous function/privilege definitions, not deleting account or group data.
 
 Apply 0007 before deploying session management. It locks the session and

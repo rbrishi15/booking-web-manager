@@ -8,6 +8,7 @@ import { ErrorMessage } from "@/components/ui/error-message";
 import { InfoNote } from "@/components/ui/info-note";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UserHandleField } from "@/app/users/_components/user-handle-field";
 import { updateProfile, type ProfileState } from "../actions";
 
 const initialState: ProfileState = { status: "idle" };
@@ -15,12 +16,13 @@ const initialState: ProfileState = { status: "idle" };
 interface EditProfileFormProps {
   readonly initial: {
     readonly displayName: string;
+    readonly handle: string | null;
     readonly preferredSports: readonly string[];
     readonly preferredRegions: readonly string[];
   };
 }
 
-/** UC1-03 Manage Profile form: name plus one or more sports and regions (REQ-3, REQ-4). */
+/** UC1-03 Manage Profile form: name, user ID, and one or more sports and regions (REQ-3, REQ-4). */
 export function EditProfileForm({ initial }: EditProfileFormProps) {
   const [state, formAction, pending] = useActionState(updateProfile, initialState);
   const [, startTransition] = useTransition();
@@ -55,6 +57,8 @@ export function EditProfileForm({ initial }: EditProfileFormProps) {
         />
         <FieldError id="displayName-error" messages={errors.displayName} />
       </div>
+
+      <UserHandleField defaultValue={initial.handle ?? ""} currentHandle={initial.handle} errors={errors.handle} />
 
       <ChoiceGroup
         name="preferredSports"

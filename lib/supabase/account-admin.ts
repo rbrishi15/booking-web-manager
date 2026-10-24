@@ -102,18 +102,18 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
     async deactivateProfile(userId): Promise<ProfileSnapshot> {
       const { data: before, error: readError } = await admin
         .from("profiles")
-        .select("display_name, preferred_sports, preferred_regions")
+        .select("display_name, preferred_sports, preferred_regions, handle")
         .eq("user_id", userId)
         .single();
       if (readError !== null) throw readError;
 
-      // Blank the personal details and mark INACTIVE. Login and middleware now refuse the account.
+      // Blank the personal details, free the user ID and mark INACTIVE. Login and middleware now refuse the account.
       // Only an ACTIVE profile is claimed, in one UPDATE: if two deletions run at once, only one
       // of them can claim it, and only that one may later restore it.
       const { error, count } = await admin
         .from("profiles")
         .update(
-          { display_name: "", preferred_sports: [], preferred_regions: [], account_status: "INACTIVE" },
+          { display_name: "", preferred_sports: [], preferred_regions: [], handle: null, account_status: "INACTIVE" },
           { count: "exact" },
         )
         .eq("user_id", userId)
@@ -127,24 +127,31 @@ export function supabaseDeleteAccountPorts(): DeleteAccountPorts {
         displayName: typeof before.display_name === "string" ? before.display_name : "",
         preferredSports: textList(before.preferred_sports),
         preferredRegions: textList(before.preferred_regions),
+        handle: typeof before.handle === "string" ? before.handle : null,
       };
     },
 
     async restoreProfile(snapshot) {
       // Only undo our own deactivation: the profile must still be INACTIVE.
-      const { error, count } = await admin
+      const restore = (handle: string | null) => admin
         .from("profiles")
         .update(
           {
             display_name: snapshot.displayName,
             preferred_sports: [...snapshot.preferredSports],
             preferred_regions: [...snapshot.preferredRegions],
+            handle,
             account_status: "ACTIVE",
           },
           { count: "exact" },
         )
         .eq("user_id", snapshot.userId)
         .eq("account_status", "INACTIVE");
+      const handle = snapshot.handle ?? null;
+      let { error, count } = await restore(handle);
+      // Someone took the freed user ID in the meantime: restore the account without it, and the
+      // database gives it a new one made from the name (migration 0016).
+      if (error?.code === "23505" && handle !== null) ({ error, count } = await restore(null));
       if (error !== null) throw error;
       if (count !== 1) throw new Error(`UC1-04: expected to restore one profile for ${snapshot.userId}, updated ${count}`);
     },

@@ -3,9 +3,10 @@ import { ReliabilityUnavailableError } from "./reliability-dependencies";
 import { getReliabilityDependencies } from "./reliability-server-dependencies";
 
 /**
- * The signed-in user's reliability score (0–100) for Settings and the sidebar, or null when it
- * can't be read. Null is shown as unavailable, never as the starting score. Pass only the
- * verified current user's ID. Wrapped in cache() so one request reads the history once.
+ * A reliability score (0–100) for Settings, the sidebar and player search, or null when it
+ * can't be read. Null is shown as unavailable, never as the starting score. Pass the verified
+ * current user's ID, or the ID of a player found by user ID (ADR-0021). Wrapped in cache() so
+ * one request reads each history once.
  */
 export const loadReliabilityScore = cache(async (userId: string): Promise<number | null> => {
   try {

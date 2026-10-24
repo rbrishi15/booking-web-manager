@@ -28,6 +28,7 @@ vi.mock("@/app/commit/withdrawal-preview-server-dependencies", () => ({ getWithd
 vi.mock("@/app/commit/push-subscription-server-dependencies", () => ({ getPushSubscriptionDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/wallet/server-dependencies", () => ({ getWalletDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/payouts/payout-server-dependencies", () => ({ getPayoutDependencies: mocks.protectedDependencies }));
+vi.mock("@/app/users/user-handle-server-dependencies", () => ({ getUserHandleDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/venues/server-dependencies", () => ({ getVenueDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/discover/server-dependencies", () => ({ getDiscoveryDependencies: mocks.discoveryDependencies }));
 vi.mock("@/app/commit/scheduled-jobs-server-dependencies", () => ({ getScheduledJobsDependencies: mocks.cronDependencies }));
@@ -57,6 +58,7 @@ import * as walletTopUp from "@/app/api/wallet/top-up/route";
 import * as payoutAccount from "@/app/api/payouts/account/route";
 import * as payoutSessions from "@/app/api/payouts/sessions/route";
 import * as payoutWithdraw from "@/app/api/payouts/withdraw/route";
+import * as userByHandle from "@/app/api/users/by-handle/[handle]/route";
 import * as venues from "@/app/api/venues/route";
 import * as pushSubscriptions from "@/app/api/push/subscriptions/route";
 import * as cron from "@/app/api/cron/commitments/route";
@@ -93,6 +95,7 @@ const routes: Route[] = [
   { path: "/api/payouts/account", handlers: payoutAccount },
   { path: "/api/payouts/sessions", handlers: payoutSessions },
   { path: "/api/payouts/withdraw", handlers: payoutWithdraw },
+  { path: "/api/users/by-handle/[handle]", handlers: userByHandle },
   { path: "/api/venues", handlers: venues },
   { path: "/api/push/subscriptions", handlers: pushSubscriptions },
   { path: "/api/cron/commitments", handlers: cron },

@@ -14,6 +14,7 @@ export default async function ProfilePage() {
     <SettingsView
       user={{
         displayName: user.displayName,
+        handle: user.handle ?? null,
         reliabilityScore,
         preferredSports: user.preferredSports,
         preferredRegions: user.preferredRegions,

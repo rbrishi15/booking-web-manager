@@ -11,6 +11,7 @@ function validProfile(overrides: Record<string, unknown> = {}) {
     displayName: "Marcus Lim",
     preferredSports: ["Badminton", "Tennis"],
     preferredRegions: ["West"],
+    handle: "marcus_lim",
     ...overrides,
   };
 }

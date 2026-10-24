@@ -78,7 +78,7 @@ test.each(["signup", "resend"].flatMap((flow) => [
 
   const state = flow === "signup"
     ? await registerUser({ status: "idle" }, formDataOf({
-      displayName: "Marcus Lim", email: user.email, password: "password123", region: "West", sport: "Tennis", next,
+      displayName: "Marcus Lim", email: user.email, password: "password123", region: "West", sport: "Tennis", handle: "marcus_lim", next,
     }))
     : await resendConfirmation({ status: "idle" }, formDataOf({ email: user.email, next }));
 

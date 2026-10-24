@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ProfileChanges } from "@/domain/accounts/profile";
 import { DomainError } from "@/domain/shared/errors";
 import type { AccountStatus } from "@/domain/shared/statuses";
 import type { UUID } from "@/domain/shared/types";
-import type { ProfileStore } from "@/use-cases/accounts/update-profile";
+import type { ProfileStore, ProfileUpdate } from "@/use-cases/accounts/update-profile";
 
 /** Uses the caller's authenticated client; the RPC validates that identity again. */
 export class SupabaseProfileStore implements ProfileStore {
@@ -19,17 +18,19 @@ export class SupabaseProfileStore implements ProfileStore {
     return data.account_status;
   }
 
-  async saveForActiveUser(userId: UUID, changes: ProfileChanges): Promise<void> {
+  async saveForActiveUser(userId: UUID, changes: ProfileUpdate): Promise<void> {
     const { error } = await this.client.rpc("update_profile", {
       p_user_id: userId,
       p_display_name: changes.displayName,
       p_preferred_sports: [...changes.preferredSports],
       p_preferred_regions: [...changes.preferredRegions],
+      ...(changes.handle === undefined ? {} : { p_handle: changes.handle }),
     });
     if (error === null) return;
     if (error.code === "PRF01") throw new DomainError("INACTIVE_ACCOUNT", "The account is inactive");
     if (error.code === "PRF02") throw new DomainError("INVALID_INPUT", "The profile changes are invalid");
     if (error.code === "PRF03") throw new DomainError("NOT_FOUND", "The profile was not found");
+    if (error.code === "PRF04") throw new DomainError("HANDLE_TAKEN", "The user ID is already taken");
     throw new Error("Profile changes could not be saved", { cause: error });
   }
 }

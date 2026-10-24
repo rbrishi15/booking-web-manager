@@ -17,11 +17,19 @@ async function continueRegistration(page: Page) {
   await expect(page.getByLabel("Name", { exact: true })).toBeFocused();
 }
 
+async function continueToUserId(page: Page) {
+  await page.getByLabel("Name", { exact: true }).fill("Jamie Tan");
+  await page.getByLabel("Preferred sport", { exact: true }).selectOption("Tennis");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your user ID", exact: true })).toBeVisible();
+  await expect(page.getByLabel("User ID", { exact: true })).toBeFocused();
+}
+
 for (const viewport of viewports) {
   test.describe(`${viewport.name} authentication pages`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("UC1-01 registration presents account details first and preserves the profile when going back", async ({ page }) => {
+    test("UC1-01 registration presents account details, profile and user ID, and preserves them when going back", async ({ page }) => {
       await page.goto("/register");
 
       await expect(page.getByRole("heading", { name: "Register", exact: true })).toBeVisible();
@@ -34,14 +42,19 @@ for (const viewport of viewports) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
       await continueRegistration(page);
-      await page.getByLabel("Name", { exact: true }).fill("Jamie Tan");
-      await page.getByLabel("Preferred sport", { exact: true }).selectOption("Tennis");
+      await expect(page.getByRole("link", { name: "Terms", exact: true })).toBeHidden();
+      await continueToUserId(page);
+      await page.getByLabel("User ID", { exact: true }).fill("Jamie_Tan");
+      await expect(page.getByLabel("User ID", { exact: true })).toHaveAccessibleDescription(/Other players find you with it, like a Telegram username/);
       await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: "Terms", exact: true })).toHaveAttribute("href", "/terms");
       await expect(page.getByRole("link", { name: "Privacy Policy", exact: true })).toHaveAttribute("href", "/privacy");
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-      await page.getByRole("button", { name: /^back/i }).click();
+      await page.getByRole("button", { name: "Back to your profile", exact: true }).click();
+      await expect(page.getByLabel("Name", { exact: true })).toBeFocused();
+      await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Jamie Tan");
+      await page.getByRole("button", { name: "Back to account details", exact: true }).click();
       await expect(page.getByLabel("Region", { exact: true })).toBeFocused();
       await expect(page.getByLabel("Region", { exact: true })).toHaveValue("West");
       await expect(page.getByLabel("Email", { exact: true })).toHaveValue("jamie@example.test");
@@ -49,6 +62,8 @@ for (const viewport of viewports) {
       await page.getByRole("button", { name: /^sign up$/i }).click();
       await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Jamie Tan");
       await expect(page.getByLabel("Preferred sport", { exact: true })).toHaveValue("Tennis");
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await expect(page.getByLabel("User ID", { exact: true })).toHaveValue("Jamie_Tan");
 
       await page.locator('a[href="/login"]:visible').last().click();
       await expect(page).toHaveURL(/\/login$/);
@@ -138,25 +153,68 @@ test("UC1-01 email endings preserve full addresses and survive navigation betwee
   expect(await page.evaluate(() => new FormData(document.forms[0]).get("email"))).toBe("jamie@example.net");
 });
 
-test("UC1-01 server validation preserves both steps of the registration draft", async ({ page }) => {
+test("UC1-01 an incomplete profile stays on the profile step with accessible errors", async ({ page }) => {
   await page.goto("/register");
   await continueRegistration(page);
   await page.getByLabel("Name", { exact: true }).fill("Jamie Tan");
-  // Leave sport empty so server validation returns before any Supabase request.
-  const [response] = await Promise.all([
-    page.waitForResponse((result) => result.request().method() === "POST" && new URL(result.url()).pathname === "/register"),
-    page.getByRole("button", { name: "Create account", exact: true }).click(),
-  ]);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 
-  expect(response.ok()).toBe(true);
   await expect(page.getByText("Please fix the highlighted fields.", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Preferred sport", { exact: true })).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByLabel("Preferred sport", { exact: true })).toHaveAccessibleDescription("Choose a sport");
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Jamie Tan");
+  await expect(page.getByLabel("User ID", { exact: true })).toBeHidden();
+});
+
+test("UC1-01 the user ID step explains each rule before anything is submitted", async ({ page }) => {
+  const posts: string[] = [];
+  page.on("request", (request) => { if (request.method() === "POST") posts.push(new URL(request.url()).pathname); });
+  await page.goto("/register");
+  await continueRegistration(page);
+  await continueToUserId(page);
+  const userId = page.getByLabel("User ID", { exact: true });
+
+  for (const [typed, rule] of [
+    ["jam", "Use at least 5 characters"],
+    ["9lives", "Start with a letter"],
+    ["jamie.tan", "Use only letters, numbers and underscores"],
+    ["jamie__tan", "Don't end with or repeat an underscore"],
+  ] as const) {
+    await userId.fill(typed);
+    await expect(userId).toHaveAttribute("aria-invalid", "true");
+    await expect(userId).toHaveAccessibleDescription(new RegExp(rule));
+  }
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  await expect(page.getByText("Please fix the highlighted fields.", { exact: true })).toBeVisible();
+  await expect(userId).toHaveValue("jamie__tan");
+  expect(posts.filter((pathname) => pathname === "/register")).toEqual([]);
+});
+
+test("UC1-01 a failed sign-up keeps every step of the draft", async ({ page }) => {
+  // The dummy Supabase URL refuses connections, so the valid submission fails without creating an account.
+  await page.goto("/register");
+  await continueRegistration(page);
+  await continueToUserId(page);
+  const userId = page.getByLabel("User ID", { exact: true });
+  await userId.fill("@Jamie_Tan");
+  // Without database settings the live check cannot run; the sign-up trigger still keeps IDs unique.
+  await expect(userId).toHaveAccessibleDescription(/We couldn't check this ID now/);
+  const [response] = await Promise.all([
+    page.waitForResponse((result) => result.request().method() === "POST" && new URL(result.url()).pathname === "/register"
+      && result.request().postData()?.includes("Jamie_Tan") === true),
+    page.getByRole("button", { name: "Create account", exact: true }).click(),
+  ]);
+
+  expect(response.ok()).toBe(true);
+  await expect(page.getByText("We couldn't create your account. Please try again.", { exact: true })).toBeVisible();
+  await expect(userId).toHaveValue("Jamie_Tan");
   await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeEnabled();
 
-  await page.getByRole("button", { name: /^back/i }).click();
-  await expect(page.getByText("Please fix the highlighted fields.", { exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "Back to your profile", exact: true }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Jamie Tan");
+  await expect(page.getByLabel("Preferred sport", { exact: true })).toHaveValue("Tennis");
+  await page.getByRole("button", { name: "Back to account details", exact: true }).click();
   await expect(page.getByLabel("Region", { exact: true })).toHaveValue("West");
   await expect(page.getByLabel("Email", { exact: true })).toHaveValue("jamie@example.test");
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue("A-draft-password");

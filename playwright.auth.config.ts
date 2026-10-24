@@ -22,8 +22,8 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "auth-page-test-key",
       SUPABASE_SERVICE_ROLE_KEY: "",
     },
-    // Anonymous getUser resolves without a session or external request. Tests only
-    // submit invalid input, so no account creation or sign-in service is used.
+    // Anonymous getUser resolves without a session or external request. Only one test
+    // submits a valid sign-up, which fails against this unreachable URL; no account is created.
     url: "http://127.0.0.1:3101/login",
     reuseExistingServer: false,
     timeout: 60_000,

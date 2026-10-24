@@ -1,4 +1,5 @@
 export { Email } from "./accounts/email";
+export { UserHandle, USER_HANDLE_MAX_LENGTH, USER_HANDLE_MIN_LENGTH } from "./accounts/user-handle";
 export { assertDeactivationAllowed } from "./accounts/deactivation-policy";
 export {
   PROFILE_REGIONS,

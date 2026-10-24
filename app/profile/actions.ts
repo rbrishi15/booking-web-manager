@@ -6,7 +6,7 @@ import { DomainError } from "@/domain/shared/errors";
 import { createUpdateProfile } from "@/use-case-config/profiles";
 import { profileSchema } from "./schemas";
 
-type ProfileField = "displayName" | "preferredSports" | "preferredRegions";
+type ProfileField = "displayName" | "preferredSports" | "preferredRegions" | "handle";
 
 export interface ProfileState {
   readonly status: "idle" | "error" | "saved";
@@ -14,13 +14,14 @@ export interface ProfileState {
   readonly fieldErrors?: Partial<Record<ProfileField, string[]>>;
 }
 
-/** UC1-03 Manage Profile: checks the form, then saves the name and preferences of the logged-in user. */
+/** UC1-03 Manage Profile: checks the form, then saves the name, preferences and user ID of the logged-in user. */
 export async function updateProfile(_previous: ProfileState, formData: FormData): Promise<ProfileState> {
   // 1. Validate at the boundary. getAll() collects every ticked checkbox with that name.
   const parsed = profileSchema.safeParse({
     displayName: formData.get("displayName") ?? "",
     preferredSports: formData.getAll("preferredSports"),
     preferredRegions: formData.getAll("preferredRegions"),
+    handle: formData.get("handle") ?? "",
   });
   if (!parsed.success) {
     return {
@@ -42,6 +43,12 @@ export async function updateProfile(_previous: ProfileState, formData: FormData)
   } catch (error) {
     if (error instanceof DomainError && error.code === "INACTIVE_ACCOUNT")
       return { status: "error", message: "This account is no longer active." };
+    if (error instanceof DomainError && error.code === "HANDLE_TAKEN")
+      return {
+        status: "error",
+        message: "Please fix the highlighted fields.",
+        fieldErrors: { handle: ["That user ID is taken. Try another."] },
+      };
     console.error("UC1-03 profile update failed:", error);
     return { status: "error", message: "We couldn't save your changes. Please try again." };
   }

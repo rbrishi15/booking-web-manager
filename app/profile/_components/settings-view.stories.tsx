@@ -6,6 +6,7 @@ import { SettingsView } from "./settings-view";
 
 const exampleUser = {
   displayName: "Marcus Lim",
+  handle: "marcus_lim",
   reliabilityScore: 96,
   preferredSports: ["Badminton", "Tennis"],
   preferredRegions: ["West"],
@@ -142,6 +143,14 @@ export const EmptyPreferences: Story = {
     await expect(page.getByRole("link", { name: /preferred region/i })).toHaveTextContent("Not set yet");
     await expectSettingsLinks(canvas.getByRole("main"));
     await expectNoHorizontalOverflow(canvasElement);
+  },
+};
+
+/** The public user ID appears under the name (ADR-0021). */
+export const UserId: Story = {
+  play: async ({ canvas }) => {
+    const page = within(canvas.getByRole("main"));
+    await expect(page.getByText("@marcus_lim", { exact: true })).toBeVisible();
   },
 };
 

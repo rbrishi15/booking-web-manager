@@ -6,7 +6,7 @@ import { AccountNotActiveError } from "@/use-cases/accounts/delete-account";
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
-const SNAPSHOT = { userId: USER_ID, displayName: "Marcus Lim", preferredSports: ["Tennis"], preferredRegions: [] };
+const SNAPSHOT = { userId: USER_ID, displayName: "Marcus Lim", preferredSports: ["Tennis"], preferredRegions: [], handle: null };
 
 type Call = readonly [method: string, ...args: unknown[]];
 interface Query {
@@ -108,6 +108,22 @@ describe("supabaseDeleteAccountPorts (UC1-04)", () => {
       ]);
     });
 
+    test("frees the user ID while keeping it in the snapshot for an undo (ADR-0021)", async () => {
+      // Arrange
+      const queries = fakeAdmin((_table, calls) =>
+        isUpdate(calls)
+          ? { error: null, count: 1 }
+          : { data: { display_name: "Marcus Lim", preferred_sports: ["Tennis"], preferred_regions: [], handle: "marcus_lim" }, error: null },
+      );
+
+      // Act
+      const snapshot = await supabaseDeleteAccountPorts().deactivateProfile(USER_ID);
+
+      // Assert
+      expect(snapshot).toEqual({ ...SNAPSHOT, handle: "marcus_lim" });
+      expect(queries.find((query) => isUpdate(query.calls))?.calls[0]?.[1]).toMatchObject({ handle: null, account_status: "INACTIVE" });
+    });
+
     test("throws AccountNotActiveError when another deletion already claimed the profile", async () => {
       // Arrange: the conditional update matched no ACTIVE row.
       fakeAdmin((_table, calls) =>
@@ -133,6 +149,35 @@ describe("supabaseDeleteAccountPorts (UC1-04)", () => {
 
       // Assert
       expect(filters(queries[0])).toEqual([
+        ["eq", "user_id", USER_ID],
+        ["eq", "account_status", "INACTIVE"],
+      ]);
+    });
+
+    test("gives the user ID back with the rest of the profile", async () => {
+      // Arrange
+      const queries = fakeAdmin(() => ({ error: null, count: 1 }));
+
+      // Act
+      await supabaseDeleteAccountPorts().restoreProfile({ ...SNAPSHOT, handle: "marcus_lim" });
+
+      // Assert
+      expect(queries).toHaveLength(1);
+      expect(queries[0]?.calls[0]?.[1]).toMatchObject({ handle: "marcus_lim", account_status: "ACTIVE" });
+    });
+
+    test("lets the database choose a new user ID when someone took the old one in the meantime", async () => {
+      // Arrange: the first restore hits the unique index; the second one leaves the ID for migration 0016's trigger to fill.
+      const queries = fakeAdmin((_table, calls) => (calls[0]?.[1] as { handle: string | null }).handle === null
+        ? { error: null, count: 1 }
+        : { error: { code: "23505", message: "duplicate key value violates unique constraint" }, count: null });
+
+      // Act
+      await supabaseDeleteAccountPorts().restoreProfile({ ...SNAPSHOT, handle: "marcus_lim" });
+
+      // Assert
+      expect(queries.map((query) => (query.calls[0]?.[1] as { handle: string | null }).handle)).toEqual(["marcus_lim", null]);
+      expect(filters(queries[1])).toEqual([
         ["eq", "user_id", USER_ID],
         ["eq", "account_status", "INACTIVE"],
       ]);

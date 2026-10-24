@@ -12,6 +12,8 @@ export interface ProfileSnapshot {
   readonly displayName: string;
   readonly preferredSports: readonly string[];
   readonly preferredRegions: readonly string[];
+  /** The user ID it held; absent or null when it had none. Deactivation frees it for others. */
+  readonly handle?: string | null;
 }
 
 /** What the use case needs from the outside world. lib/supabase/account-admin.ts provides the real one. */

@@ -13,3 +13,7 @@ UC1-06 Manage Group: creation, invitation links, membership management.
 
 Leaving asks for confirmation on the group page, then opens `/groups?left=1`,
 which confirms "You left the group."
+
+**Find a player** at the top of the page searches by exact user ID and shows the
+player's name, `@id` and reliability score. It lives in [`app/users`](../users/README.md);
+see [ADR-0021](../../docs/adr/0021-user-ids-for-finding-players.md).

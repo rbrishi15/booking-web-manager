@@ -379,3 +379,39 @@ Execution: **3 passed / 3 cases**.
 | [ACTIVE](user.test.ts#L639) | Tennis | West | Absent | Status INACTIVE; null email; sports and regions both empty | Status INACTIVE; null email; sports and regions both empty |
 | [ACTIVE](user.test.ts#L653) | Empty | Empty | COMPLETE | User ID owner; same wallet instance; same payout-account instance; bank bank | User ID owner; same wallet instance; same payout-account instance; bank bank |
 | [INACTIVE (already deactivated)](user.test.ts#L668) | Empty | Empty | Absent | Account state unchanged | Account state unchanged |
+
+## UserHandle.parse — Telegram-style user IDs
+
+Added after the 2026-10-24 snapshot with [ADR-0021](../../../docs/adr/0021-user-ids-for-finding-players.md); these rows are not yet in the snapshot's JSON evidence. Quoted values are typed exactly as shown. A user ID keeps 5–32 characters of `a-z`, `0-9` and `_`, starts with a letter, and never ends with or repeats an underscore.
+
+**Input:** Typed user ID · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **14 passed / 14 cases** (run 2026-10-24).
+
+| Typed user ID | Expected Result | Test Result |
+| --- | --- | --- |
+| [`"marcus_lim"`](user-handle.test.ts#L5) | Stored `marcus_lim`; shown `@marcus_lim` | Stored `marcus_lim`; shown `@marcus_lim` |
+| [`"  @Marcus_Lim "`](user-handle.test.ts#L12) | Stored `marcus_lim` | Stored `marcus_lim` |
+| [`"abc12"` (5 characters)](user-handle.test.ts#L18) | Stored `abc12` | Stored `abc12` |
+| [32 × `"a"`](user-handle.test.ts#L24) | Stored unchanged | Stored unchanged |
+| [`"abcd"` (4 characters)](user-handle.test.ts#L32) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [33 × `"a"`](user-handle.test.ts#L36) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"9marcus"`](user-handle.test.ts#L40) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"_marcus"`](user-handle.test.ts#L44) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"marcus_"`](user-handle.test.ts#L48) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"marcus__lim"`](user-handle.test.ts#L52) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"marcus.lim"`](user-handle.test.ts#L56) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"marcus lim"`](user-handle.test.ts#L60) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"marcüs_lim"`](user-handle.test.ts#L64) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+| [`"@"`](user-handle.test.ts#L68) | Throws error with code INVALID_INPUT | Throws error with code INVALID_INPUT |
+
+## UserHandle.equals — case-insensitive identity
+
+**Input:** User ID, Other user ID · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **2 passed / 2 cases** (run 2026-10-24).
+
+| User ID | Other user ID | Expected Result | Test Result |
+| --- | --- | --- | --- |
+| [`"Marcus_Lim"`](user-handle.test.ts#L72) | `"marcus_lim"` | Equal | Equal |
+| [`"marcus_lim"`](user-handle.test.ts#L79) | `"marcus_tan"` | Not equal | Not equal |

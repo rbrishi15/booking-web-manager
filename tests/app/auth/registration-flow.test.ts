@@ -23,7 +23,7 @@ describe("UC1-01/UC1-02 pending email verification", () => {
     const supabase = fakeSupabase({ signUp: { data: { user: { id: "new-user", identities: [{}] }, session: {} }, error: null } });
     vi.mocked(createClient).mockResolvedValue(supabase as never);
     await expect(registerUser({ status: "idle" }, formDataOf({
-      displayName: "Marcus", email: "marcus@example.com", password: "password123", region: "West", sport: "Tennis", next,
+      displayName: "Marcus", email: "marcus@example.com", password: "password123", region: "West", sport: "Tennis", handle: "marcus_lim", next,
     }))).rejects.toThrow(`redirect:${destination}`);
     const redirectTo = new URL("https://booking-web-manager.vercel.app/auth/callback");
     if (destination !== "/") redirectTo.searchParams.set("next", destination);
@@ -38,7 +38,7 @@ describe("UC1-01/UC1-02 pending email verification", () => {
     vi.mocked(createClient).mockResolvedValue(supabase as never);
 
     const result = await registerUser({ status: "idle" }, formDataOf({
-      displayName: "Marcus", email: " Marcus@Example.com ", password: "password123", region: "West", sport: "Tennis",
+      displayName: "Marcus", email: " Marcus@Example.com ", password: "password123", region: "West", sport: "Tennis", handle: "marcus_lim",
     }));
 
     expect(result).toMatchObject({ status: "check-email", email: "marcus@example.com" });

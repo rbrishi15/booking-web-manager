@@ -25,7 +25,8 @@ export type DomainErrorCode =
   | "PAYOUT_CONFLICT"
   | "ACTIVE_OBLIGATIONS"
   | "OWNER_REMOVAL"
-  | "DUPLICATE_ID";
+  | "DUPLICATE_ID"
+  | "HANDLE_TAKEN";
 
 export class DomainError extends Error {
   constructor(

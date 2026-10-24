@@ -31,6 +31,18 @@ unavailable capability otherwise; `app/profile/reliability-server-dependencies.t
 caches it. See the [profile guide](../app/profile/README.md) and
 [ADR-0014](../docs/adr/0014-account-policies-and-transaction-guards.md).
 
+## User ID configuration
+
+`user-handles.ts` assembles `CheckUserHandle` and `FindUserByHandle` over one
+`PostgresUserDirectory`, using the validated `DATABASE_URL` and a lazy pool, plus
+the shared Supabase identity authenticator for the lookup route. Both are plain
+reads: availability looks at every profile, and the lookup returns only an ACTIVE
+account's user ID, UUID and name. Without server settings every capability throws
+`UserHandlesUnavailableError`; the availability action reports UNKNOWN, sign-up
+continues (the trigger still enforces uniqueness), and the lookup route answers
+503. `app/users/user-handle-server-dependencies.ts` caches the assembly. See
+[ADR-0021](../docs/adr/0021-user-ids-for-finding-players.md).
+
 ## Discovery configuration
 
 UC2-01 assembles `DiscoverSessions.searchPublic` in `discovery.ts`, using only

@@ -211,6 +211,11 @@
   padding-right: 56px;
 }
 
+/* Leaves room for the "@" in front of the user ID. */
+.field .handleInput {
+  padding-left: 36px;
+}
+
 .selectWrap {
   position: relative;
 }

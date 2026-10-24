@@ -10,6 +10,8 @@ import { SettingsRow } from "./settings-row";
 interface SettingsViewProps {
   readonly user: {
     readonly displayName: string;
+    /** The public user ID without "@" (ADR-0021); every active account has one. */
+    readonly handle?: string | null;
     readonly reliabilityScore: number | null;
     readonly preferredSports: readonly string[];
     readonly preferredRegions: readonly string[];
@@ -68,6 +70,7 @@ export function SettingsView({ user, notifications }: SettingsViewProps) {
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="break-words text-base font-bold tracking-tight md:text-2xl">{user.displayName}</h2>
+          {user.handle != null && <p className="break-all text-sm text-muted-foreground md:text-base">@{user.handle}</p>}
           {user.reliabilityScore === null ? (
             <p className="mt-1 text-sm text-muted-foreground">Reliability score unavailable right now.</p>
           ) : (

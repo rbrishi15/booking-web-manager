@@ -15,47 +15,73 @@ import { EmailInput } from "../_components/email-input";
 import { describedBy, FieldError } from "../_components/field-error";
 import { PasswordInput } from "../_components/password-input";
 import { REGIONS, SPORTS, registerSchema } from "../schemas";
+import { UserHandleField } from "@/app/users/_components/user-handle-field";
+import { userHandleSchema } from "@/app/users/schemas";
 import { registerUser, type RegisterState } from "./actions";
 import { passwordStrength } from "./password-strength";
 import { pathWithNext, safeRedirectPath } from "../redirect-path";
 
 const initialState: RegisterState = { status: "idle" };
 const accountSchema = registerSchema.pick({ region: true, email: true, password: true });
+const profileSchema = registerSchema.pick({ displayName: true, sport: true });
 
-/** UC1-01: account details first, then the required profile before account creation. */
+type Step = "account" | "profile" | "handle";
+
+const STEP_HEADINGS: Record<Step, { readonly title: string; readonly description: string }> = {
+  account: { title: "Register", description: "Create your account to get started." },
+  profile: { title: "Your profile", description: "A few details to help you find your next game." },
+  handle: { title: "Your user ID", description: "Pick the ID you'll be known by." },
+};
+
+/** UC1-01: account details, then the required profile, then the public user ID (ADR-0021). */
 export function RegisterForm({ next }: { readonly next?: string }) {
   const destination = safeRedirectPath(next);
   const loginHref = pathWithNext("/login", destination);
   const [state, formAction, pending] = useActionState(registerUser, initialState);
   const [, startTransition] = useTransition();
-  const [step, setStep] = useState<"account" | "profile">("account");
-  const [accountErrors, setAccountErrors] = useState<RegisterState["fieldErrors"]>();
+  const [step, setStep] = useState<Step>("account");
+  const [stepErrors, setStepErrors] = useState<RegisterState["fieldErrors"]>();
   const [password, setPassword] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
   const regionRef = useRef<HTMLSelectElement>(null);
   const strength = passwordStrength(password);
-  const errors = accountErrors ?? state.fieldErrors ?? {};
+  const errors = stepErrors ?? state.fieldErrors ?? {};
 
   useEffect(() => {
     if (step === "profile") nameRef.current?.focus();
+    if (step === "handle") document.getElementById("handle")?.focus();
   }, [step]);
 
-  // Both steps remain mounted so Back and failed submissions preserve every draft field.
+  // Every step remains mounted so Back and failed submissions preserve every draft field.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const formData = new FormData(event.currentTarget);
-    if (step === "account") {
-      const parsed = accountSchema.safeParse(Object.fromEntries(formData));
+    const values = Object.fromEntries(formData);
+    if (step === "account" || step === "profile") {
+      const parsed = (step === "account" ? accountSchema : profileSchema).safeParse(values);
       if (!parsed.success) {
-        setAccountErrors(parsed.error.flatten().fieldErrors);
+        setStepErrors(parsed.error.flatten().fieldErrors);
         return;
       }
-      setAccountErrors(undefined);
-      setStep("profile");
+      setStepErrors(undefined);
+      setStep(step === "account" ? "profile" : "handle");
       return;
     }
+    const handle = userHandleSchema.safeParse(values.handle ?? "");
+    if (!handle.success) {
+      setStepErrors({ handle: handle.error.flatten().formErrors });
+      return;
+    }
+    setStepErrors(undefined);
     startTransition(() => formAction(formData));
+  }
+
+  function goBack() {
+    setStepErrors(undefined);
+    const previous = step === "handle" ? "profile" : "account";
+    setStep(previous);
+    requestAnimationFrame(() => (previous === "profile" ? nameRef.current : regionRef.current)?.focus());
   }
 
   if (state.status === "check-email") {
@@ -74,15 +100,12 @@ export function RegisterForm({ next }: { readonly next?: string }) {
 
   return (
     <>
-      <AuthHeading
-        title={step === "account" ? "Register" : "Your profile"}
-        description={step === "account" ? "Create your account to get started." : "A few details to help you find your next game."}
-      />
+      <AuthHeading title={STEP_HEADINGS[step].title} description={STEP_HEADINGS[step].description} />
       {/* POST keeps the password out of the URL if the form is submitted before JavaScript loads. */}
       <form method="post" onSubmit={handleSubmit} noValidate className={styles.form}>
         <input type="hidden" name="next" value={destination} />
-        {accountErrors !== undefined && <ErrorMessage>Please fix the highlighted fields.</ErrorMessage>}
-        {state.status === "error" && state.message !== undefined && (step === "profile" || state.fieldErrors === undefined) && (
+        {stepErrors !== undefined && <ErrorMessage>Please fix the highlighted fields.</ErrorMessage>}
+        {stepErrors === undefined && state.status === "error" && state.message !== undefined && (step === "handle" || state.fieldErrors === undefined) && (
           <ErrorMessage>
             {state.message}{" "}
             {state.emailTaken === true && (
@@ -194,26 +217,23 @@ export function RegisterForm({ next }: { readonly next?: string }) {
           </div>
         </fieldset>
 
+        <fieldset hidden={step !== "handle"} className={styles.step}>
+          <legend className="sr-only">User ID</legend>
+          <UserHandleField className={styles.field} inputClassName={`${styles.input} ${styles.handleInput}`} errors={errors.handle} />
+        </fieldset>
+
         <Button type="submit" className={styles.submit} disabled={pending}>
-          {pending ? "Creating account…" : step === "account" ? "Sign Up" : "Create account"}
+          {pending ? "Creating account…" : step === "account" ? "Sign Up" : step === "profile" ? "Continue" : "Create account"}
         </Button>
 
-        <p hidden={step !== "profile"} className={styles.terms}>
+        <p hidden={step !== "handle"} className={styles.terms}>
           By continuing, you agree to the{" "}
           <Link href="/terms">Terms</Link> and{" "}
           <Link href="/privacy">Privacy Policy</Link>.
         </p>
-        {step === "profile" && (
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => {
-              setStep("account");
-              requestAnimationFrame(() => regionRef.current?.focus());
-            }}
-          >
-            Back to account details
+        {step !== "account" && (
+          <Button type="button" variant="ghost" disabled={pending} onClick={goBack}>
+            {step === "handle" ? "Back to your profile" : "Back to account details"}
           </Button>
         )}
         <p className={styles.footer}>

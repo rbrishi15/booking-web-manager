@@ -29,7 +29,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0011: API routes invoke use cases](./adr/0011-api-routes-invoke-use-cases.md) — repeated session HTTP orchestration superseded by ADR-0015; route-visible invocation and dependency-only assembly remain.
 - [ADR-0012: Booker-selected session pricing](./adr/0012-booker-selected-session-pricing.md).
 - [ADR-0013: Cancellation preserves terminal participations](./adr/0013-cancellation-preserves-terminal-participations.md).
-- [ADR-0014: Account policies and transaction guards](./adr/0014-account-policies-and-transaction-guards.md) — profile policy exception to ADR-0003, account deactivation, group transaction guards, and dependency enforcement.
+- [ADR-0014: Account policies and transaction guards](./adr/0014-account-policies-and-transaction-guards.md) — profile policy exception to ADR-0003, account deactivation, group transaction guards, and dependency enforcement; the profile write also carries the user ID under ADR-0021.
 - [ADR-0015: Declarative session HTTP actions](./adr/0015-declarative-session-http-actions.md).
 - [ADR-0016: Deep workflows and dependency assembly](./adr/0016-deep-workflows-and-dependency-assembly.md) — complete application results, construction-only configuration, app serialization, and technical endpoint boundaries.
 - [ADR-0017: Members leave regular groups through RegularGroup](./adr/0017-members-leave-regular-groups.md) — a member may leave on their own; the owner cannot leave and archives the group instead.
@@ -37,6 +37,7 @@ Architecture decisions are recorded in [`docs/adr`](./adr):
 - [ADR-0018: Readable domain tests and execution evidence](./adr/0018-domain-test-input-oracle-log.md) — supported public contracts, observable outcomes, and readable behavior groups, plus dated assertion-verified evidence; table layout superseded by ADR-0019.
 - [ADR-0019: Domain result tables follow the lecture format](./adr/0019-domain-result-table-layout.md) — individual input columns, Expected Result and Test Result, with source links on the first input value and execution counts above each table.
 - [ADR-0020: Payout request idempotency belongs to application transactions](./adr/0020-payout-request-idempotency.md) — supersedes only payout request-key ownership in ADRs 0003, 0008 and 0009; terminal receipts prevent payment redispatch.
+- [ADR-0021: User IDs for finding players](./adr/0021-user-ids-for-finding-players.md) — a unique, changeable, Telegram-style user ID on every active account: chosen at sign-up, generated from the name for existing accounts, editable in Edit profile, freed on deletion, and found only by exact signed-in lookup.
 
 Product decisions and remaining discussion:
 

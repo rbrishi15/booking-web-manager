@@ -52,6 +52,7 @@ describe("UC1-03 profile action", () => {
     expect(result.status).toBe("saved");
     expect(mocks.rpc).toHaveBeenCalledWith("update_profile", {
       p_user_id: "alice", p_display_name: "Alice", p_preferred_sports: ["Tennis"], p_preferred_regions: ["West"],
+      p_handle: "alice_tan",
     });
     expect(mocks.revalidate).toHaveBeenCalledWith("/", "layout");
   });
@@ -62,5 +63,6 @@ function validForm(): FormData {
   form.set("displayName", " Alice ");
   form.append("preferredSports", "Tennis");
   form.append("preferredRegions", "West");
+  form.set("handle", "@Alice_Tan");
   return form;
 }

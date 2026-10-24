@@ -2,13 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { UserHandlesUnavailableError } from "@/app/users/user-handle-dependencies";
+import { getUserHandleDependencies } from "@/app/users/user-handle-server-dependencies";
 import { emailConfirmationRedirectTo } from "../email-confirmation-url";
 import { safeRedirectPath } from "../redirect-path";
 import { registerSchema } from "../schemas";
 
-
-
-type RegisterField = "displayName" | "email" | "password" | "region" | "sport";
+type RegisterField = "displayName" | "email" | "password" | "region" | "sport" | "handle";
 
 export interface RegisterState {
   readonly status: "idle" | "error" | "check-email";
@@ -31,6 +31,7 @@ export async function registerUser(
     password: formData.get("password") ?? "",
     region: formData.get("region") ?? "",
     sport: formData.get("sport") ?? "",
+    handle: formData.get("handle") ?? "",
   });
   if (!parsed.success) {
     return {
@@ -40,8 +41,18 @@ export async function registerUser(
     };
   }
 
-  // 2. Create the account. Migration 0004's trigger then creates the profile and S$0.00 wallet.
-  const { displayName, email, password, region, sport } = parsed.data;
+  // 2. The user ID must be free. The sign-up trigger checks again, because another
+  //    sign-up may take it before this one finishes (ADR-0021).
+  const { displayName, email, password, region, sport, handle } = parsed.data;
+  if ((await handleAvailability(handle)) === "TAKEN") {
+    return {
+      status: "error",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: { handle: ["That user ID is taken. Try another."] },
+    };
+  }
+
+  // 3. Create the account. Migration 0004's trigger then creates the profile and S$0.00 wallet.
   const destination = safeRedirectPath(formData.get("next"));
   const emailRedirectTo = await emailConfirmationRedirectTo(destination);
   if (emailRedirectTo === null) {
@@ -57,11 +68,12 @@ export async function registerUser(
         display_name: displayName,
         preferred_sports: [sport],
         preferred_regions: [region],
+        handle,
       },
     },
   });
 
-  // 3. UC1-01 exception 4a: duplicate email → prompt to log in.
+  // 4. UC1-01 exception 4a: duplicate email → prompt to log in.
   const duplicate =
     error?.code === "user_already_exists" ||
     // With email confirmation on, Supabase hides duplicates by returning a user with no identities.
@@ -83,7 +95,7 @@ export async function registerUser(
     };
   }
 
-  // 4. If email confirmation is on, there is no session yet: ask the user to check their inbox.
+  // 5. If email confirmation is on, there is no session yet: ask the user to check their inbox.
   if (data.session === null) {
     return {
       status: "check-email",
@@ -92,6 +104,16 @@ export async function registerUser(
     };
   }
 
-  // 5. Return to the reviewed invitation or Home; joining still requires confirmation.
+  // 6. Return to the reviewed invitation or Home; joining still requires confirmation.
   redirect(destination);
+}
+
+/** UNKNOWN when user IDs cannot be checked here; the sign-up trigger still keeps them unique. */
+async function handleAvailability(handle: string): Promise<"AVAILABLE" | "TAKEN" | "INVALID" | "UNKNOWN"> {
+  try {
+    return await (await getUserHandleDependencies()).checkUserHandle.availability(handle);
+  } catch (error) {
+    if (!(error instanceof UserHandlesUnavailableError)) console.error("UC1-01 user ID check failed:", error);
+    return "UNKNOWN";
+  }
 }

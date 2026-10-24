@@ -75,6 +75,13 @@ class Email <<ValueObject>> {
   +equals(...) : boolean
 }
 
+class UserHandle <<ValueObject>> {
+  {static} +parse(...) : UserHandle
+  +toString() : string
+  +toDisplay() : string
+  +equals(...) : boolean
+}
+
 class PayoutAccount <<ImmutableChild>> {
   +payoutAccountId : UUID
   +userId : UUID
@@ -120,13 +127,15 @@ end note
 
 note bottom of User
   UC1-03 profile edits use prepareProfileUpdate(...)
-  without loading User (ADR-0014).
+  without loading User (ADR-0014). The public user ID
+  is a UserHandle on the profile, outside User (ADR-0021).
   Deactivation shares assertDeactivationAllowed(...).
 end note
 
 User -[hidden]right- RegularGroup
 Wallet -[hidden]right- Email
-Email -[hidden]right- PayoutAccount
+Email -[hidden]right- UserHandle
+UserHandle -[hidden]right- PayoutAccount
 
 caption Selected public members; (...) abbreviates parameters.\nRoles authorize actors and run workflows; Session validates and records prepared changes.\nSession creation/admission require an active account and a present email, without requiring email confirmation.\nWallet uses committed ledger history; reliability and group IDs are loaded related values.
 @enduml

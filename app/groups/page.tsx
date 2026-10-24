@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { createManageGroup } from "@/use-case-config/groups";
 import { getCurrentUser } from "@/lib/supabase/current-user";
+import { FindPlayer } from "@/app/users/_components/find-player";
+import { findPlayer } from "@/app/users/find-player-action";
 import { CreateGroupForm } from "./_components/group-controls";
 
 interface GroupsPageProps {
@@ -14,7 +16,7 @@ interface GroupsPageProps {
   readonly searchParams: Promise<{ left?: string | string[] }>;
 }
 
-/** UC1-06 Manage Group: the groups you belong to, and a form to create one. */
+/** UC1-06 Manage Group: the groups you belong to, a form to create one, and player search by user ID (ADR-0021). */
 export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   const user = await getCurrentUser();
   if (user === null) redirect("/login");
@@ -24,6 +26,13 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   return (
     <>
       <PageHeader breadcrumb="Groups" title="My groups" />
+      <section className="mx-4 mt-4 space-y-3 rounded-lg border bg-card p-6 md:mx-8 md:mt-8" aria-labelledby="find-player">
+        <h2 id="find-player" className="text-xl font-semibold">
+          Find a player
+        </h2>
+        <p className="text-sm text-muted-foreground">Search by their exact user ID, like a Telegram username.</p>
+        <FindPlayer action={findPlayer} />
+      </section>
       <div className="grid grid-cols-1 gap-8 p-4 md:p-8 lg:grid-cols-[1fr_22rem]">
         <section className="min-w-0 space-y-3" aria-labelledby="my-groups">
           <h2 id="my-groups" className="text-xl font-semibold">

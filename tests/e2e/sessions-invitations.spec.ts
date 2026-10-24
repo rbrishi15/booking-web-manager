@@ -331,6 +331,7 @@ test("immediate registration returns without joining and an unfunded wallet cann
   try {
     const fixture = await invitationFixture(context);
     const email = `invited-${randomUUID()}@example.com`;
+    const handle = `invited_${randomUUID().slice(0, 8)}`;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(fixture.invitationPath);
     const register = page.getByRole("link", { name: "Create account", exact: true });
@@ -342,6 +343,8 @@ test("immediate registration returns without joining and an unfunded wallet cann
     await page.getByRole("button", { name: "Sign Up", exact: true }).click();
     await page.getByLabel("Name", { exact: true }).fill("Invited player");
     await page.getByLabel("Preferred sport", { exact: true }).selectOption("Badminton");
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page.getByLabel("User ID", { exact: true }).fill(handle);
     await page.getByRole("button", { name: "Create account", exact: true }).click();
     await expectLocation(page, fixture.invitationPath);
     await expect(page.getByRole("heading", { name: fixture.venueName, exact: true })).toBeVisible();
@@ -352,6 +355,7 @@ test("immediate registration returns without joining and an unfunded wallet cann
     );
     expect(accounts.rows).toHaveLength(1);
     expect(accounts.rows[0]).toMatchObject({ available_cents: "0", entry_count: "0" });
+    expect((await context.pool.query("select handle from profiles where user_id=$1", [accounts.rows[0].id])).rows).toEqual([{ handle }]);
     expect((await context.pool.query("select count(*)::int as count from participations where session_id=$1 and user_id=$2", [fixture.sessionId, accounts.rows[0].id])).rows).toEqual([{ count: 0 }]);
     await page.getByRole("button", { name: `Join Badminton session at ${fixture.venueName}`, exact: true }).click();
     const unfunded = await confirmJoin(page);

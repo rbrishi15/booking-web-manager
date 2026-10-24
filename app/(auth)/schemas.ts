@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PROFILE_REGIONS, PROFILE_SPORTS } from "@/domain/accounts/profile";
+import { userHandleSchema } from "@/app/users/schemas";
 
 /**
  * Singapore regions shown in the region picker (REQ-4).
@@ -27,6 +28,8 @@ export const registerSchema = z.object({
     .max(72, "Use 72 characters or fewer"),
   region: z.enum(REGIONS, { errorMap: () => ({ message: "Choose a region" }) }),
   sport: z.enum(SPORTS, { errorMap: () => ({ message: "Choose a sport" }) }),
+  /** The public user ID (ADR-0021), in its stored lower-case form. */
+  handle: userHandleSchema,
 });
 
 /** UC1-02 Authenticate User: the login form (mockup 03). */
