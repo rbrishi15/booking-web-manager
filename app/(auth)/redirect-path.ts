@@ -1,6 +1,6 @@
 /**
  * Where users land after registering or logging in.
- * Home lists personal upcoming bookings; Discover is the public-session search page.
+ * Home lists personal upcoming bookings; Discover requires an active account.
  */
 export const HOME_PATH = "/";
 export const AUTH_CALLBACK_PATH = "/auth/callback";
@@ -40,11 +40,11 @@ function hasUnsafeCharacters(value: string): boolean {
   return false;
 }
 
-/** Pages anyone can open without logging in: Landing, discovery, registration, login, terms and privacy. */
-const PUBLIC_PATHS: readonly string[] = ["/", "/discover", "/login", "/register", "/terms", "/privacy", AUTH_CALLBACK_PATH];
+/** Pages anyone can open without logging in: Landing, registration, login, terms and privacy. */
+const PUBLIC_PATHS: readonly string[] = ["/", "/login", "/register", "/terms", "/privacy", AUTH_CALLBACK_PATH];
 
 /** Protected sections, except the explicitly public invitation preview. */
-const PROTECTED_PATHS: readonly string[] = ["/groups", "/payouts", "/profile", "/sessions", "/wallet"];
+const PROTECTED_PATHS: readonly string[] = ["/discover", "/groups", "/payouts", "/profile", "/sessions", "/wallet"];
 
 /** Signed-in visitors continue to their validated destination instead of these forms. */
 const AUTH_PATHS: readonly string[] = ["/login", "/register"];
