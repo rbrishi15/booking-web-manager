@@ -51,7 +51,7 @@ export function LandingView() {
           <p className={styles.eyebrow}>Courts bring<br className={styles.mobileBreak} /> people together</p>
           <h1 id="landing-title">Find your<br />next game.</h1>
           <p className={styles.intro}>Share the court. Meet players.<br />Make time for play.</p>
-          <Link className={styles.primaryLink} href="/discover">Browse sessions<ArrowRight aria-hidden="true" /></Link>
+          <Link className={styles.primaryLink} href="/register" prefetch={false}>Sign up<ArrowRight aria-hidden="true" /></Link>
         </div>
 
         <div className={styles.sectionIndex}>
@@ -93,7 +93,7 @@ export function LandingView() {
       <section className={styles.howSection} id="how-it-works" aria-labelledby="how-title" tabIndex={-1}>
         <div><p className={styles.eyebrow}>02 / Less planning. More playing.</p><h2 id="how-title">Good company.<br />A shared court.<br /><span>Your next game.</span></h2><Link href="/register" prefetch={false} className={styles.textLink}>Create account<ArrowRight size={20} aria-hidden="true" /></Link></div>
         <ol className={styles.steps}>
-          <li><span>01</span><div><h3>See what’s on.</h3><p>Explore public sports sessions without signing in. Start with a sport you love or try something different.</p></div></li>
+          <li><span>01</span><div><h3>See what’s on.</h3><p>Create an account to browse sports sessions. Start with a sport you love or try something different.</p></div></li>
           <li><span>02</span><div><h3>Find a time that fits.</h3><p>Narrow your search by sport, region, date and time. Make room for a game in your day.</p></div></li>
           <li><span>03</span><div><h3>Know the details.</h3><p>See the venue, session time and price per player up front, so you can plan before making a commitment.</p></div></li>
         </ol>
