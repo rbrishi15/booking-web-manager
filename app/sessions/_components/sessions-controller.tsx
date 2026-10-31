@@ -3,7 +3,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Money } from "@/components/ui/money";
@@ -17,14 +16,15 @@ import { SessionCancellationDialog } from "./session-cancellation-dialog";
 import type { HostedSessionItem } from "../types";
 import type { SessionCancellationResult } from "@/use-cases/sessions/session-cancellation-transaction";
 import { hostedSessionsQueryKey } from "./hosted-sessions-controller";
-import { SessionDetails, SessionsView } from "./sessions-view";
+import { SessionsView } from "./sessions-view";
 import { SessionsUiProvider, useSessionsUiStore } from "./sessions-ui-provider";
 import { createSessionsUrlStorage, readSessionsUrlState } from "./sessions-url-storage";
-import { sessionArtwork, sessionCanLeave, sessionStatus, sessionTitle, sessionVenueLabel } from "./session-display";
+import { sessionCanLeave, sessionStatus, sessionVenueLabel } from "./session-display";
 import styles from "./sessions.module.css";
 import details from "./session-details.module.css";
 import { SessionDetailsSummary } from "./session-details-summary";
-import { SessionParticipantControls } from "./session-participant-controls";
+import { JoinedSessionDetails } from "./joined-session-details";
+import joined from "./joined-session-details.module.css";
 import { SessionControlsSkeleton } from "./sessions-skeleton";
 
 export const sessionFeedQueryKey = ["sessions", "feed"] as const;
@@ -134,7 +134,7 @@ function SessionsContent({ userId, actions, loadFeed = defaultLoadFeed, loadHost
       loading={feed.isPending || signIn || (restoringSelection && !feed.isError)} error={!signIn && feed.isError ? feed.error instanceof SessionFeedLoadError && feed.error.kind === "unavailable" ? "Your sessions are temporarily unavailable." : "We couldn’t load your sessions. Please try again." : undefined}
       loadingMore={feed.isFetchingNextPage} hasMore={feed.hasNextPage} onLoadMore={loadMore} onRetry={retry} onOpenSession={(session) => { setLastOpenedSession(session); sessionTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; openSession(session.sessionId); }} />
     <Dialog open={mode.status === "viewingSession" && selected !== null} onOpenChange={(open) => { if (!open) closeSession(); }}>
-      <DialogContent overlayClassName={dialogSession?.role === "HOST" ? details.overlay : undefined} className={dialogSession?.role === "HOST" ? `${styles.dialogContent} ${details.dialog}` : `${styles.dialogContent} sm:max-w-[680px]`} onCloseAutoFocus={(event) => {
+      <DialogContent overlayClassName={dialogSession?.role === "HOST" ? details.overlay : joined.overlay} className={dialogSession?.role === "HOST" ? `${styles.dialogContent} ${details.dialog}` : joined.dialog} onCloseAutoFocus={(event) => {
         event.preventDefault();
         if (sessionTrigger.current?.isConnected) sessionTrigger.current.focus({ preventScroll: true });
         else document.getElementById("sessions-heading")?.focus({ preventScroll: true });
@@ -146,15 +146,11 @@ function SessionsContent({ userId, actions, loadFeed = defaultLoadFeed, loadHost
             <div className={details.titleRow}><DialogTitle className={details.title}>{dialogSession.sport} session</DialogTitle>
             </div>
             <DialogDescription className={details.subtitle}><a href={`https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: `${dialogSession.venueName}, Singapore` })}`} target="_blank" rel="noreferrer">{sessionVenueLabel(dialogSession.venueName)}<span className="sr-only"> (opens in a new tab)</span></a>{dialogSession.section === "past" && <span> · {sessionStatus(dialogSession)}</span>}</DialogDescription>
-          </DialogHeader> : <DialogHeader><DialogTitle className={styles.dialogHeading}>{sessionTitle(dialogSession)}</DialogTitle><DialogDescription>{dialogSession.venueName} · {sessionStatus(dialogSession)}</DialogDescription></DialogHeader>}
+          </DialogHeader> : null}
           {dialogSession.role === "HOST" ? <>
             <SessionDetailsSummary session={dialogSession} />
             <HostedSessionManagement userId={userId} session={dialogSession} loadHosted={loadHosted} onRefresh={refresh} onCancel={(session, trigger) => { cancellationTrigger.current = trigger; setCancelling(session); }} />
-          </> : <>
-            <div className={styles.dialogHero}><Image src={sessionArtwork(dialogSession)} alt="" fill sizes="680px" className={styles.photo} /></div>
-            <SessionDetails session={dialogSession} footer={false} />
-            <SessionParticipantControls userId={userId} session={dialogSession} onRefresh={refresh} available={sessionCanLeave(dialogSession, first?.asOf ?? new Date().toISOString())} />
-          </>}
+          </> : <JoinedSessionDetails session={dialogSession} userId={userId} canLeave={sessionCanLeave(dialogSession, first?.asOf ?? new Date().toISOString())} onRefresh={refresh} />}
         </>}
       </DialogContent>
     </Dialog>

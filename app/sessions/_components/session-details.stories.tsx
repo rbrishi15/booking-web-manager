@@ -73,9 +73,81 @@ export const Joined: Story = {
     await userEvent.click(await canvas.findByRole("button", { name: window.innerWidth < 768 ? `View Tennis Court Booking at ${session.venueName}, 6 Nov 2026` : "View details" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Tennis Court Booking" }));
     await waitFor(() => expect(dialog.getByRole("button", { name: "Leave session" })).toBeVisible());
-    await expect(dialog.getByText(`${session.venueName} · Joined`)).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Tennis Court Booking" })).toBeVisible();
+    await expect(dialog.getByText("3 / 8")).toBeVisible();
+    await expect(dialog.getByText("Held from your wallet")).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: "Participants (3)" })).toBeVisible();
     await expect(dialog.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument();
     await expect(dialog.queryByRole("button", { name: "Copy invitation link" })).not.toBeInTheDocument();
+  },
+};
+
+
+export const JoinedDark: Story = {
+  ...Joined,
+  parameters: { ...Joined.parameters, themes: { themeOverride: "dark" } },
+  globals: { theme: "dark" },
+};
+export const JoinedMobile: Story = { ...Joined, globals: { viewport: { value: "phone", isRotated: false } } };
+export const JoinedMobileDark: Story = {
+  ...JoinedDark,
+  globals: { theme: "dark", viewport: { value: "phone", isRotated: false } },
+};
+
+/** Regression for long address copy: no clipped venue text or horizontal modal overflow. */
+const longVenueName = "PCF SPARKLETOTS PRESCHOOL @ CHUA CHU KANG BLK 123 (KN) - TENNIS COURT";
+export const JoinedLongVenue: Story = {
+  ...Joined,
+  args: {
+    loadFeed: async () => ({
+      sessions: [{ ...session, venueName: longVenueName, role: "PARTICIPANT", participationStatus: "COMMITTED", participantCount: 3 }],
+      nextCursor: null, asOf: "2026-10-29T08:00:00+08:00", upcomingCount: 1, pastCount: 0,
+    }),
+  },
+  play: async ({ canvas, parameters }) => {
+    if (parameters.themes?.themeOverride === "dark") await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
+    await userEvent.click(await canvas.findByRole("button", {
+      name: window.innerWidth < 768 ? `View Tennis Court Booking at ${longVenueName}, 6 Nov 2026` : "View details",
+    }));
+    const element = await screen.findByRole("dialog", { name: "Tennis Court Booking" });
+    const dialog = within(element);
+    const schedule = dialog.getByRole("region", { name: "Session schedule and location" });
+    const location = dialog.getByRole("link", { name: /PCF Sparkletots Preschool/ });
+    await expect(location).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /View in calendar/ })).toBeVisible();
+    await waitFor(() => {
+      expect(schedule.scrollWidth).toBeLessThanOrEqual(schedule.clientWidth + 1);
+      expect(element.scrollWidth).toBeLessThanOrEqual(element.clientWidth + 1);
+      expect(location.getBoundingClientRect().right).toBeLessThanOrEqual(schedule.getBoundingClientRect().right + 1);
+    });
+    await userEvent.click(dialog.getByRole("tab", { name: "Participants (3)" }));
+    await expect(dialog.getByRole("tabpanel")).toBeVisible();
+    await expect(location).toBeVisible();
+  },
+};
+export const JoinedLongVenueDark: Story = {
+  ...JoinedLongVenue,
+  parameters: { ...JoinedLongVenue.parameters, themes: { themeOverride: "dark" } },
+  globals: { theme: "dark" },
+};
+export const JoinedLongVenueMobile: Story = {
+  ...JoinedLongVenue,
+  globals: { viewport: { value: "phone", isRotated: false } },
+};
+export const JoinedLongVenueMobileDark: Story = {
+  ...JoinedLongVenueDark,
+  globals: { theme: "dark", viewport: { value: "phone", isRotated: false } },
+};
+
+export const JoinedWaitlisted: Story = {
+  ...Joined,
+  args: { loadFeed: async () => ({ sessions: [{ ...session, role: "PARTICIPANT", participationStatus: "WAITLISTED", participantCount: 3 }], nextCursor: null, asOf: "2026-10-29T08:00:00+08:00", upcomingCount: 1, pastCount: 0 }) },
+  play: async ({ canvas }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: window.innerWidth < 768 ? `View Tennis Court Booking at ${session.venueName}, 6 Nov 2026` : "View details" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Tennis Court Booking" }));
+    await expect(dialog.getByText("No funds held")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Leave waitlist" })).toBeVisible();
+    await expect(dialog.queryByText("Held from your wallet")).not.toBeInTheDocument();
   },
 };
 
@@ -85,12 +157,12 @@ export const InProgress: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(await canvas.findByRole("button", { name: "View details" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Tennis Court Booking" }));
-    await waitFor(() => expect(dialog.getByRole("tabpanel")).toHaveTextContent("Fri, 6 Nov 2026"));
+    await waitFor(() => expect(dialog.getByRole("tabpanel")).toHaveTextContent("3 / 8"));
     await expect(dialog.queryByRole("button", { name: "Leave session" })).not.toBeInTheDocument();
   },
 };
 
-/** Protects the original Joined dialog independently of the host redesign. */
+/** Regression coverage for completed player sessions and their retained actions. */
 export const JoinedCompleted: Story = {
   ...Joined,
   args: { loadFeed: async () => ({ sessions: [{ ...session, venueName: "CLEMENTI CASCADIA", role: "PARTICIPANT", participationStatus: "COMMITTED", participantCount: 4, capacity: 4, status: "SETTLED", section: "past", startAt: "2026-10-29T10:19:00+08:00", endAt: "2026-10-29T11:19:00+08:00" }], nextCursor: null, asOf: "2026-10-29T12:00:00+08:00", upcomingCount: 0, pastCount: 1 }) },
@@ -99,11 +171,11 @@ export const JoinedCompleted: Story = {
     await userEvent.click(trigger);
     const element = await screen.findByRole("dialog", { name: "Tennis Court Booking" });
     const dialog = within(element);
-    await waitFor(() => expect(dialog.getByText("CLEMENTI CASCADIA · Completed")).toBeVisible());
+    await waitFor(() => expect(dialog.getByText("Completed")).toBeVisible());
     const photo = element.querySelector("img");
     await expect(photo).not.toBeNull();
     await expect(photo).toBeVisible();
-    await expect(dialog.getByText("4 of 4 places filled")).toBeVisible();
+    await expect(dialog.getByText("4 / 4")).toBeVisible();
     await expect(dialog.getByRole("link", { name: /View in calendar/ })).toHaveAttribute("href", expect.stringContaining("calendar.google.com"));
     const participants = dialog.getByRole("tab", { name: "Participants (4)" });
     await userEvent.click(participants);

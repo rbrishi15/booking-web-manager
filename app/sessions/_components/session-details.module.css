@@ -89,3 +89,20 @@
 @media (max-width: 580px) and (prefers-reduced-motion: reduce) {
   .dialog.dialog[data-state] { animation: none; }
 }
+
+
+/* The participant modal reuses the withdrawal flow but places its action in a fixed editorial footer. */
+.dangerCompact { margin: 0; padding: 0; border: 0; flex: 0 1 auto; }
+.dangerCompact button {
+  min-height: 48px;
+  padding: 8px 0;
+  background: transparent;
+  color: #bc3430;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+}
+.dangerCompact button:hover { text-decoration: underline; text-underline-offset: 4px; }
+.dangerCompact button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.dangerCompact button:disabled { opacity: .55; cursor: wait; }
+:global(.dark) .dangerCompact button { color: #ff8580; }

@@ -1,0 +1,303 @@
+.overlay {
+  background: rgb(8 10 11 / 72%);
+  backdrop-filter: blur(4px);
+}
+.dialog.dialog {
+  --sheet-bg: #f8f7f4;
+  --sheet-ink: #141514;
+  --sheet-muted: #65676a;
+  --sheet-line: #dddcd8;
+  --sheet-positive-bg: #e3eae2;
+  --sheet-positive: #294c34;
+  position: fixed;
+  display: block;
+  width: calc(100vw - 48px);
+  max-width: 1088px;
+  height: min(790px, calc(100dvh - 64px));
+  max-height: calc(100dvh - 64px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sheet-line);
+  border-radius: 6px;
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
+  box-shadow: 0 32px 100px rgb(0 0 0 / 24%);
+  transform: translate(-50%, -50%);
+  gap: 0;
+}
+:global(.dark) .dialog {
+  --sheet-bg: #1a1c1c;
+  --sheet-ink: #f0eee9;
+  --sheet-muted: #b3b5b3;
+  --sheet-line: #363938;
+  --sheet-positive-bg: #263a2c;
+  --sheet-positive: #c3d7c5;
+}
+.dialog > button:last-child {
+  top: 19px;
+  right: 18px;
+  z-index: 3;
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sheet-ink);
+  opacity: 1;
+}
+.dialog > button:last-child svg { width: 21px; height: 21px; stroke-width: 1.4; }
+.dialog :is(a, button, [role="tabpanel"]):focus-visible {
+  outline: 2px solid var(--sheet-ink);
+  outline-offset: 3px;
+}
+.dialog > button:last-child:focus-visible { outline-offset: -3px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 36.5% minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.artwork { position: relative; min-height: 0; background: #4e5147; overflow: hidden; }
+.photo { object-fit: cover; object-position: 47% center; }
+:global(.dark) .photo { filter: brightness(.83) saturate(.86); }
+.content { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.scrollArea {
+  flex: 1;
+  min-height: 0;
+  padding: 43px 62px 30px 64px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sheet-line) transparent;
+}
+.header { padding-bottom: 28px; border-bottom: 1px solid var(--sheet-line); }
+.eyebrow, .label {
+  margin: 0;
+  color: var(--sheet-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.eyebrow { margin-bottom: 27px; }
+.title {
+  max-width: 100%;
+  margin: 0;
+  padding-right: 16px;
+  color: var(--sheet-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 3.05vw, 49px);
+  font-weight: 400;
+  line-height: 1.16;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 22px;
+  padding: 5px 9px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--sheet-muted) 10%, transparent);
+  color: var(--sheet-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.status[data-positive="true"] { background: var(--sheet-positive-bg); color: var(--sheet-positive); }
+.statusDot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.schedule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  padding: 38px 0 43px;
+}
+.scheduleCell {
+  display: grid;
+  grid-template-columns: 23px minmax(0, 1fr);
+  align-content: start;
+  column-gap: 15px;
+  min-width: 0;
+}
+.scheduleCell + .scheduleCell { padding-left: 26px; border-left: 1px solid var(--sheet-line); }
+.scheduleCopy { min-width: 0; }
+.scheduleIcon { width: 23px; height: 23px; margin-top: 1px; color: var(--sheet-ink); }
+.scheduleValue {
+  min-width: 0;
+  margin: 13px 0 0;
+  color: var(--sheet-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 2.15vw, 35px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -.028em;
+  overflow-wrap: anywhere;
+}
+.scheduleValue[data-long="true"] {
+  font-size: clamp(18px, 1.4vw, 21px);
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+.supporting { margin: 6px 0 0; color: var(--sheet-muted); font-size: 13px; line-height: 1.6; }
+.venue { display: inline-flex; align-items: flex-start; gap: 9px; max-width: 100%; min-width: 0; }
+.venueText { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.venue svg { flex: 0 0 auto; margin-top: .18em; }
+.venue:hover { text-decoration: underline; text-underline-offset: 4px; }
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 58px;
+  min-height: 65px;
+  border-bottom: 1px solid var(--sheet-line);
+}
+.tabs button {
+  position: relative;
+  min-height: 48px;
+  padding: 0 2px;
+  color: var(--sheet-muted);
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.tabs button[aria-selected="true"] { color: var(--sheet-ink); font-weight: 550; }
+.tabs button[aria-selected="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--sheet-ink);
+  content: "";
+}
+.panel { padding: 39px 0 10px; outline-offset: -2px; }
+.metrics { display: grid; grid-template-columns: 1.1fr 1fr; margin: 0; }
+.metric { min-width: 0; }
+.metric + .metric { padding-left: 54px; border-left: 1px solid var(--sheet-line); }
+.metricValue {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.number {
+  color: var(--sheet-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 2.8vw, 43px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+}
+.unit { color: var(--sheet-muted); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.metric > .unit { margin-top: 7px; }
+.capacityBar { display: flex; gap: 5px; max-width: 280px; margin-top: 18px; }
+.capacityBar span { flex: 1 1 0; min-width: 0; height: 7px; border-radius: 999px; background: var(--sheet-line); }
+.capacityBar span[data-filled="true"] { background: var(--sheet-ink); }
+.roster { padding-top: 0; }
+.rosterRow { display: flex; align-items: center; gap: 15px; min-height: 72px; border-bottom: 1px solid var(--sheet-line); }
+.avatar { display: inline-flex; flex: 0 0 41px; width: 41px; height: 41px; align-items: center; justify-content: center; border-radius: 50%; background: color-mix(in srgb, var(--sheet-muted) 17%, transparent); color: var(--sheet-ink); font-size: 13px; }
+.rosterCopy { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; font-size: 14px; }
+.rosterCopy strong { font-weight: 500; overflow-wrap: anywhere; }
+.rosterCopy > span { color: var(--sheet-muted); font-size: 12px; }
+.rosterStatus { padding: 4px 9px; border-radius: 3px; background: var(--sheet-positive-bg); color: var(--sheet-positive); font-size: 12px; }
+.rosterNote { max-width: 420px; margin: 19px 0 0; color: var(--sheet-muted); font-size: 13px; line-height: 1.6; }
+.footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 116px;
+  padding: 20px 32px 20px 64px;
+  border-top: 1px solid var(--sheet-line);
+  background: var(--sheet-bg);
+}
+.calendarButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 15px 23px;
+  background: var(--sheet-ink);
+  color: var(--sheet-bg);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .19em;
+  text-align: center;
+  text-transform: uppercase;
+  transition: opacity 150ms;
+}
+.calendarButton:hover { opacity: .86; }
+.calendarButton:focus-visible { outline-offset: 3px; }
+
+@media (max-width: 950px) {
+  .scrollArea { padding-right: 36px; padding-left: 40px; }
+  .footer { padding-right: 28px; padding-left: 40px; }
+  .scheduleCell + .scheduleCell { padding-left: 20px; }
+  .metric + .metric { padding-left: 28px; }
+  .tabs { gap: 34px; }
+}
+@media (max-width: 700px) {
+  .dialog.dialog {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-width: none;
+    height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+    border-radius: 16px 16px 0 0;
+    transform: none;
+  }
+  .dialog > button:last-child { top: 12px; right: 12px; background: var(--sheet-bg); }
+  .layout { grid-template-columns: 1fr; grid-template-rows: clamp(125px, 21dvh, 175px) minmax(0, 1fr); }
+  .photo { object-position: center 60%; }
+  .scrollArea { padding: 28px 25px 26px; }
+  .header { padding-bottom: 23px; }
+  .eyebrow { margin-bottom: 15px; font-size: 10px; }
+  .title { max-width: 95%; padding: 0; font-size: clamp(30px, 8vw, 38px); }
+  .status { margin-top: 15px; }
+  .schedule { gap: 18px; padding: 24px 0 28px; }
+  .scheduleCell { grid-template-columns: 19px minmax(0, 1fr); column-gap: 9px; }
+  .scheduleIcon { width: 19px; height: 19px; }
+  .scheduleCell + .scheduleCell { padding-left: 17px; }
+  .scheduleValue { font-size: clamp(20px, 5.5vw, 26px); }
+  .scheduleValue[data-long="true"] { font-size: 18px; }
+  .supporting { font-size: 12px; }
+  .label { font-size: 10px; }
+  .tabs { gap: 26px; min-height: 55px; }
+  .tabs button { font-size: 13px; }
+  .panel { padding-top: 28px; }
+  .metric + .metric { padding-left: 19px; }
+  .number { font-size: clamp(26px, 7vw, 35px); }
+  .unit { font-size: 12px; }
+  .capacityBar { gap: 3px; }
+  .footer { min-height: 86px; padding: 12px 18px 12px 25px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .calendarButton { min-height: 49px; padding: 12px 14px; font-size: 10px; letter-spacing: .12em; gap: 9px; }
+}
+@media (max-width: 540px) {
+  /* A readable one-column schedule is preferable to squeezing an address into half a phone. */
+  .schedule { grid-template-columns: minmax(0, 1fr); gap: 21px; }
+  .scheduleCell + .scheduleCell {
+    padding: 19px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--sheet-line);
+  }
+}
+@media (max-width: 370px) {
+  .schedule { grid-template-columns: 1fr; gap: 18px; }
+  .scheduleCell + .scheduleCell { padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--sheet-line); }
+  .metrics { grid-template-columns: 1fr; gap: 24px; }
+  .metric + .metric { padding: 22px 0 0; border-left: 0; border-top: 1px solid var(--sheet-line); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .calendarButton { transition: none; }
+}

@@ -447,7 +447,7 @@ test("older-history pagination preserves the active artwork and viewport anchor 
   await expect(timeline(page)).toHaveAttribute("data-timeline-entrance", "complete");
 });
 
-test("URL-restored session details keep native dialog scrolling and restore focus", async ({ page }) => {
+test("URL-restored session details keep native pane scrolling and restore focus", async ({ page }) => {
   const story = "sessions-overview-loading--url-restores-session-and-panel-across-pages";
   await page.goto(`/storybook/iframe.html?id=${story}&viewMode=story`);
   // Wait for the user-visible loaded feed, not a private Storybook phase.
@@ -457,19 +457,23 @@ test("URL-restored session details keep native dialog scrolling and restore focu
   expect(new URL(page.url()).searchParams.get("panel")).toBe("participants");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // A short desktop makes the actual details dialog overflow without adding
-  // synthetic content or replacing its scroll container.
+  // The editorial layout scrolls its details pane, not the dialog itself,
+  // so its footer and artwork remain fixed as the content moves.
   await page.setViewportSize({ width: 1280, height: 420 });
   const trigger = current(page).getByRole("button", { name: "View details" });
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "Tennis Court Booking" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("tab", { name: "Participants (3)" })).toHaveAttribute("aria-selected", "true");
-  await expect.poll(() => dialog.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+  const content = dialog.getByTestId("session-details-scroll");
+  await expect.poll(() => content.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+  const calendarButton = dialog.getByRole("link", { name: /View in calendar/ });
+  const footerTop = await calendarButton.evaluate((element) => element.getBoundingClientRect().top);
   const documentTop = await page.evaluate(() => scrollY);
-  await dialog.hover();
+  await content.hover();
   await page.mouse.wheel(0, 120);
-  await expect.poll(() => dialog.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await calendarButton.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(footerTop, 0);
   expect(await page.evaluate(() => scrollY)).toBeCloseTo(documentTop, 0);
   // Radix correctly hides the background from role queries while the modal is
   // open; inspect its inert visual state without treating it as accessible UI.
