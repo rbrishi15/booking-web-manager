@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import type { SessionFeedItem } from "../session-feed-contract";
-import { TimelineGesture } from "./timeline-gesture";
 
 type Weights = Readonly<Record<string, number>>;
 type Stop = { id: string; top: number };
 const NAVIGATION_KEYS = ["PageUp", "ArrowUp", "Home", "PageDown", "ArrowDown", "End"];
 const DURATION = 280;
+const SCROLL_SETTLE_DELAY = 200;
 
 function acceptsInput(root: HTMLElement, event: WheelEvent | ReactKeyboardEvent<HTMLElement>) {
   if (!window.matchMedia("(min-width: 768px)").matches || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
@@ -20,7 +20,7 @@ function acceptsInput(root: HTMLElement, event: WheelEvent | ReactKeyboardEvent<
   return true;
 }
 
-/** Owns a finite transition; ordinary document scrolling never changes selection. */
+/** Native scrolling moves the marker; a quiet pause opens the nearest session. */
 export function useTimelineNavigation({ sessions, active, setActive, scrollTargetId, onUrlRestored }: {
   readonly sessions: readonly SessionFeedItem[];
   readonly active: string;
@@ -35,28 +35,54 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
   const [weights, setWeights] = useState<Weights>({ [active]: 1 });
   const weightsRef = useRef(weights);
   const [marker, setMarker] = useState(0);
+  const markerPosition = useRef(0);
+  const followingScroll = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollFrame = useRef<number | null>(null);
+  const controlledScroll = useRef<number | null>(null);
+  const controlledFrame = useRef<number | null>(null);
+  const selectAfterScroll = useRef<(id: string) => void>(() => {});
   const [transitioning, setTransitioning] = useState(false);
   const animation = useRef<{ frame: number; token: number; lastScroll: number } | null>(null);
   const generation = useRef(0);
-  const gesture = useRef(new TimelineGesture());
-  const pendingGesture = useRef<-1 | 1 | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const positioned = useRef(false);
   const viewportAnchor = useRef<{ id: string; top: number } | null>(null);
-  const navigateRef = useRef<(id: string) => void>(() => {});
+
+  const moveMarker = useCallback((position: number) => {
+    markerPosition.current = position;
+    setMarker(position);
+  }, []);
+
+  const recordScroll = useCallback(() => {
+    controlledScroll.current = window.scrollY;
+    if (controlledFrame.current !== null) cancelAnimationFrame(controlledFrame.current);
+    // A programmatic write can suppress its queued notification, never a later
+    // native return to the same coordinate.
+    controlledFrame.current = requestAnimationFrame(() => {
+      controlledScroll.current = null;
+      controlledFrame.current = null;
+    });
+  }, []);
+
+  const stopFollowing = useCallback(() => {
+    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    if (scrollFrame.current !== null) cancelAnimationFrame(scrollFrame.current);
+    settleTimer.current = null;
+    scrollFrame.current = null;
+  }, []);
 
   const publish = useCallback((next: Weights) => {
     weightsRef.current = next;
     setWeights(next);
   }, []);
 
-  const cancel = useCallback((settleTo?: string, preserveGesture = false) => {
+  const cancel = useCallback((settleTo?: string) => {
+    stopFollowing();
     const running = animation.current;
     ++generation.current;
     if (running) cancelAnimationFrame(running.frame);
     animation.current = null;
-    pendingGesture.current = null;
-    if (!preserveGesture) gesture.current.reset();
     setTransitioning(false);
     if (!running) return;
     const nearest = settleTo ?? Object.entries(weightsRef.current).reduce((best, entry) => entry[1] > best[1] ? entry : best, [selected.current, -1] as [string, number])[0];
@@ -64,17 +90,25 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     setActive(nearest);
     publish({ [nearest]: 1 });
     // Native takeover owns scrollY. In particular, never finish an old seek here.
-  }, [publish, setActive]);
+  }, [publish, setActive, stopFollowing]);
 
-  const select = useCallback((id: string, focus = false) => {
+  const select = useCallback((id: string, focus = false, fromScroll = false) => {
     const stop = positions.current.find((position) => position.id === id);
     if (!stop) return;
+    const root = list.current;
+    const row = rows.current.get(id);
+    if (!root || !row) return;
+    const markerStart = markerPosition.current + root.getBoundingClientRect().top;
+    const anchorTop = row.getBoundingClientRect().top;
+    stopFollowing();
+    followingScroll.current = fromScroll;
     const previous = animation.current;
     if (previous) cancelAnimationFrame(previous.frame);
     const token = ++generation.current;
-    pendingGesture.current = null;
     const start = { ...weightsRef.current };
     const startY = window.scrollY;
+    // Focus may have scrolled the browser before its queued scroll event arrives.
+    recordScroll();
     const focused = document.activeElement;
     if (focus) pendingFocus.current = id;
     if (focused instanceof HTMLElement && rows.current.get(selected.current)?.contains(focused) && !focused.matches("[data-date-control]")) pendingFocus.current = id;
@@ -83,19 +117,24 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     const complete = () => {
       if (generation.current !== token) return;
       animation.current = null;
+      followingScroll.current = fromScroll;
       setTransitioning(false);
-      gesture.current.transitionCompleted();
-      const direction = pendingGesture.current;
-      pendingGesture.current = null;
-      if (direction) {
-        const stops = positions.current;
-        const next = stops[stops.findIndex((position) => position.id === id) + direction];
-        if (next) navigateRef.current(next.id);
+    };
+    const position = (mix: number) => {
+      if (fromScroll) {
+        // Opening after a pause keeps this date in place as the old card closes.
+        const correction = row.getBoundingClientRect().top - anchorTop;
+        if (Math.abs(correction) > .5) window.scrollBy({ top: correction, behavior: "instant" });
+      } else {
+        window.scrollTo({ top: startY + (stop.top - startY) * mix, behavior: "instant" });
       }
+      recordScroll();
+      const day = row.querySelector<HTMLElement>("[data-date-control] time strong")?.getBoundingClientRect();
+      if (day) moveMarker((fromScroll ? markerStart : markerStart + (day.top + day.height / 2 - markerStart) * mix) - root.getBoundingClientRect().top);
     };
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      publish({ [id]: 1 });
-      window.scrollTo({ top: stop.top, behavior: "instant" });
+      flushSync(() => publish({ [id]: 1 }));
+      position(1);
       complete();
       return;
     }
@@ -114,19 +153,20 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       flushSync(() => publish(fraction === 1 ? { [id]: 1 } : next));
       // A layout effect may have cancelled this seek while committing geometry.
       if (generation.current !== token || animation.current !== state) return;
-      window.scrollTo({ top: startY + (stop.top - startY) * mix, behavior: "instant" });
+      position(mix);
       state.lastScroll = window.scrollY;
       if (fraction < 1) state.frame = requestAnimationFrame(tick);
       else complete();
     };
     state.frame = requestAnimationFrame(tick);
-  }, [publish, setActive]);
+  }, [publish, setActive, moveMarker, stopFollowing, recordScroll]);
 
-  useLayoutEffect(() => { navigateRef.current = select; }, [select]);
+  useLayoutEffect(() => { selectAfterScroll.current = (id) => select(id, false, true); }, [select]);
 
   useLayoutEffect(() => {
     if (selected.current !== active) {
       cancel(active);
+      followingScroll.current = false;
       selected.current = active;
       publish({ [active]: 1 });
     }
@@ -138,7 +178,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       pendingFocus.current = null;
     }
     const root = list.current;
-    if (!root) return;
+    if (!root || animation.current || followingScroll.current) return;
     let center = 0;
     for (const [id, weight] of Object.entries(weights)) {
       const day = rows.current.get(id)?.querySelector<HTMLElement>("[data-date-control] time strong");
@@ -147,8 +187,8 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
         center += weight * (bounds.top - root.getBoundingClientRect().top + bounds.height / 2);
       }
     }
-    setMarker(center);
-  }, [active, weights, sessions]);
+    moveMarker(center);
+  }, [active, weights, sessions, moveMarker]);
 
   useLayoutEffect(() => {
     const row = rows.current.get(active);
@@ -162,7 +202,9 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     const desktop = window.matchMedia("(min-width: 768px)");
     let measured = "";
     const measure = (initial = false, realign = false) => {
-      if (!desktop.matches) { positioned.current = false; cancel(); return; }
+      const markerScreen = markerPosition.current + root.getBoundingClientRect().top;
+      if (initial || realign) stopFollowing();
+      if (!desktop.matches) { positioned.current = false; followingScroll.current = false; cancel(); return; }
       const features = Array.from(root.querySelectorAll<HTMLElement>("[data-timeline-feature]"));
       const readingTop = (parseFloat(getComputedStyle(header).top) || 0) + header.getBoundingClientRect().height + 28;
       const width = features[0]?.getBoundingClientRect().width ?? 0;
@@ -205,7 +247,10 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       // scrollHeight is floored to the viewport and hides unused space in a
       // short feed. Measure the actual content edge before adding trailing room.
       const contentBottom = root.getBoundingClientRect().bottom + window.scrollY - padding;
-      const tail = Math.max(24, window.innerHeight + (positions.current.at(-1)?.top ?? 0) - contentBottom);
+      // Native scrolling must reach the last date while a full card is still
+      // open above it. Reserve that space independently of the selected card.
+      const nativeEnd = (natural.at(-1)?.top ?? 0) - readingTop + extra;
+      const tail = Math.max(24, window.innerHeight + Math.max(positions.current.at(-1)?.top ?? 0, nativeEnd) - contentBottom);
       root.style.setProperty("--timeline-tail", `${tail}px`);
       const currentBounds = rows.current.get(selected.current)?.getBoundingClientRect();
       const visible = currentBounds && currentBounds.bottom > readingTop && currentBounds.top < window.innerHeight;
@@ -216,6 +261,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
           selected.current = target;
           publish({ [target]: 1 });
           window.scrollTo({ top: stop.top, behavior: "instant" });
+          recordScroll();
           positioned.current = true;
           if (scrollTargetId) onUrlRestored?.();
         }
@@ -223,10 +269,14 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
         const row = rows.current.get(anchor.id);
         if (row) {
           const correction = row.getBoundingClientRect().top - anchor.top;
-          if (Math.abs(correction) > .5) window.scrollBy({ top: correction, behavior: "instant" });
+          if (Math.abs(correction) > .5) {
+            window.scrollBy({ top: correction, behavior: "instant" });
+            recordScroll();
+          }
         }
       }
       publish({ ...weightsRef.current });
+      if (followingScroll.current) moveMarker(markerScreen - root.getBoundingClientRect().top);
     };
     measure(true);
     let resizeFrame = 0;
@@ -240,31 +290,54 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     const onResize = () => { measured = ""; measure(false, true); };
     window.addEventListener("resize", onResize);
     return () => { observer.disconnect(); cancelAnimationFrame(resizeFrame); window.removeEventListener("resize", onResize); };
-  }, [sessions, scrollTargetId, onUrlRestored, cancel, publish]);
+  }, [sessions, scrollTargetId, onUrlRestored, cancel, publish, stopFollowing, moveMarker, recordScroll]);
 
   useEffect(() => {
     const root = list.current;
     if (!root) return;
-    const classified = new WeakSet<Event>();
-    const onWheel = (event: WheelEvent) => {
-      if (!acceptsInput(root, event) || !event.cancelable || !event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
-      const current = rows.current.get(selected.current)?.getBoundingClientRect();
-      if (!animation.current && current && (current.bottom <= 0 || current.top >= window.innerHeight)) return;
-      const line = parseFloat(getComputedStyle(root).lineHeight) || 16;
-      const delta = event.deltaY * (event.deltaMode === 1 ? line : event.deltaMode === 2 ? window.innerHeight : 1);
-      const stops = positions.current;
-      const direction = delta > 0 ? 1 : -1;
-      const next = stops[stops.findIndex((position) => position.id === selected.current) + direction];
-      const decision = gesture.current.handle({ delta, now: performance.now(), momentum: "momentum" in event && event.momentum === true, transitioning: Boolean(animation.current), hasNeighbor: Boolean(next) });
-      classified.add(event);
-      if (decision.kind === "pass") return;
-      event.preventDefault();
-      if (decision.kind === "navigate" && next) select(next.id);
-      if (decision.kind === "queue") pendingGesture.current = decision.direction;
+    const canFollow = () => window.matchMedia("(min-width: 768px)").matches && !document.hidden && !document.querySelector('[role="dialog"],dialog[open]');
+    const trackScroll = () => {
+      scrollFrame.current = null;
+      if (!canFollow()) { stopFollowing(); return; }
+      const header = root.closest("[data-view]")?.querySelector("header");
+      if (!header) return;
+      const bounds = root.getBoundingClientRect();
+      const readingLine = header.getBoundingClientRect().bottom + 28 + 63;
+      if (bounds.top > window.innerHeight || bounds.bottom < readingLine) { stopFollowing(); return; }
+      const dates = Array.from(rows.current, ([id, row]) => {
+        const day = row.querySelector<HTMLElement>("[data-date-control] time strong")!.getBoundingClientRect();
+        return { id, center: day.top + day.height / 2 - bounds.top };
+      }).sort((left, right) => left.center - right.center);
+      if (!dates.length) return;
+      const position = Math.max(dates[0]!.center, Math.min(dates.at(-1)!.center, readingLine - bounds.top));
+      followingScroll.current = true;
+      moveMarker(position);
+      const nearest = dates.reduce((best, date) => Math.abs(date.center - position) < Math.abs(best.center - position) ? date : best);
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
+        if (canFollow() && rows.current.has(nearest.id)) {
+          // The progress dot belongs to scrolling, even when the card stays open.
+          if (nearest.id !== selected.current) selectAfterScroll.current(nearest.id);
+        }
+        else stopFollowing();
+      }, SCROLL_SETTLE_DELAY);
+    };
+    const follow = () => {
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+      followingScroll.current = true;
+      if (scrollFrame.current === null) scrollFrame.current = requestAnimationFrame(trackScroll);
     };
     const onScroll = () => {
       const running = animation.current;
-      if (running && Math.abs(window.scrollY - running.lastScroll) > 1) cancel();
+      const ownScroll = (controlledScroll.current !== null && Math.abs(window.scrollY - controlledScroll.current) <= 1)
+        || (running !== null && Math.abs(window.scrollY - running.lastScroll) <= 1);
+      controlledScroll.current = null;
+      if (!ownScroll) {
+        if (running) cancel();
+        follow();
+      }
       if (!document.querySelector('[role="dialog"],dialog[open]')) {
         const row = rows.current.get(selected.current);
         if (row) viewportAnchor.current = { id: selected.current, top: row.getBoundingClientRect().top };
@@ -272,17 +345,24 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     };
     const release = (event: Event) => {
       if (event.defaultPrevented) return;
-      if (event instanceof KeyboardEvent && root.contains(event.target instanceof Node ? event.target : null) && NAVIGATION_KEYS.includes(event.key)) return;
+      if (event instanceof WheelEvent) {
+        if (!acceptsInput(root, event) || !event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+        cancel();
+        follow();
+        return;
+      }
       // Direct controls will replace the seek in their click handler. Keep the
       // live weights until then, including when clicking a date mid-transition.
       if (event.type === "pointerdown" && event.target instanceof Element && root.contains(event.target) && event.target.closest("button,a")) return;
-      cancel(undefined, classified.has(event));
+      cancel();
     };
     const dialogs = new MutationObserver(() => {
       if (document.querySelector('[role="dialog"],dialog[open]')) cancel(selected.current);
     });
     dialogs.observe(document.body, { childList: true });
-    root.addEventListener("wheel", onWheel, { passive: false });
+    const onVisibility = () => { if (document.hidden) cancel(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    // Native wheel/trackpad input owns scrolling and interrupts a click seek.
     window.addEventListener("wheel", release, { passive: true });
     window.addEventListener("pointerdown", release, { passive: true });
     window.addEventListener("keydown", release);
@@ -291,17 +371,22 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       ++generation.current;
       if (animation.current) cancelAnimationFrame(animation.current.frame);
       animation.current = null;
+      if (controlledFrame.current !== null) cancelAnimationFrame(controlledFrame.current);
+      controlledFrame.current = null;
+      controlledScroll.current = null;
+      stopFollowing();
       dialogs.disconnect();
-      root.removeEventListener("wheel", onWheel);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("wheel", release);
       window.removeEventListener("pointerdown", release);
       window.removeEventListener("keydown", release);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [cancel, select]);
+  }, [cancel, moveMarker, stopFollowing]);
 
   const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!list.current || !acceptsInput(list.current, event) || !NAVIGATION_KEYS.includes(event.key)) return;
+    if (!(event.target instanceof Element) || !event.target.closest("[data-date-control]")) return;
     const stops = positions.current;
     const index = stops.findIndex((stop) => stop.id === selected.current);
     const target = stops[event.key === "Home" ? 0 : event.key === "End" ? stops.length - 1 : index + (["PageDown", "ArrowDown"].includes(event.key) ? 1 : -1)];

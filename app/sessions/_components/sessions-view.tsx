@@ -34,7 +34,7 @@ export interface SessionsViewProps {
   readonly onUrlRestored?: () => void;
 }
 
-/** A shared feed, with a gesture-driven desktop timeline and a simple mobile list. */
+/** A shared feed, with a natively scrolling desktop timeline and a simple mobile list. */
 export function SessionsView(props: SessionsViewProps) {
   const { tab, onTabChange, sessions, actions, loading, error, onRetry } = props;
   const timelineEntrancePlayed = useRef(false);
@@ -192,7 +192,7 @@ function ExpandedSession({ session, index, onOpenSession, featured = true }: { r
   </div>;
 }
 
-/** Gestures choose a session; one finite glide transfers the featured space. */
+/** Explicit selection smoothly transfers the featured space; scrolling stays native. */
 function JoinedTimeline({ sessions: feedSessions, asOf, onOpenSession, scrollTargetId, onUrlRestored, entrancePlayed }: SessionsViewProps & { readonly entrancePlayed: RefObject<boolean> }) {
   const sessions = useMemo(() => [...feedSessions].sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.sessionId.localeCompare(right.sessionId)), [feedSessions]);
   const defaultSession = sessions.find((session) => session.section === "upcoming") ?? sessions.at(-1);
