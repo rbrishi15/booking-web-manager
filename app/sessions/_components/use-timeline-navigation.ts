@@ -40,6 +40,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
   const generation = useRef(0);
   const gesture = useRef(new TimelineGesture());
   const pendingGesture = useRef<-1 | 1 | null>(null);
+  const recoveryTarget = useRef<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const positioned = useRef(false);
   const viewportAnchor = useRef<{ id: string; top: number } | null>(null);
@@ -56,7 +57,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     if (running) cancelAnimationFrame(running.frame);
     animation.current = null;
     pendingGesture.current = null;
-    if (!preserveGesture) gesture.current.reset();
+    if (!preserveGesture) { gesture.current.reset(); recoveryTarget.current = null; }
     setTransitioning(false);
     if (!running) return;
     const nearest = settleTo ?? Object.entries(weightsRef.current).reduce((best, entry) => entry[1] > best[1] ? entry : best, [selected.current, -1] as [string, number])[0];
@@ -249,12 +250,31 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     const onWheel = (event: WheelEvent) => {
       if (!acceptsInput(root, event) || !event.cancelable || !event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
       const current = rows.current.get(selected.current)?.getBoundingClientRect();
-      if (!animation.current && current && (current.bottom <= 0 || current.top >= window.innerHeight)) return;
+      const readingTop = parseFloat(getComputedStyle(root).getPropertyValue("--reading-top")) || 0;
+      const stops = positions.current;
+      let recovery: Stop | undefined;
+      if (!animation.current && current && (current.bottom <= readingTop || current.top >= window.innerHeight)) {
+        // Native scrolling can carry the selected card entirely out of view.
+        // Resume at what the person is reading, rather than navigating from
+        // that off-screen selection or leaving every visible row collapsed.
+        let distance = Infinity;
+        for (const stop of stops) {
+          const bounds = rows.current.get(stop.id)?.getBoundingClientRect();
+          if (!bounds || bounds.bottom <= readingTop || bounds.top >= window.innerHeight) continue;
+          const offset = Math.abs(bounds.top - readingTop);
+          if (offset < distance) { recovery = stop; distance = offset; }
+        }
+        if (!recovery) return;
+        // Reset boundary ownership once on entry, not when native momentum
+        // changes the visible candidate between small trackpad packets:
+        // the usual intent threshold and explicit momentum rules still apply.
+        if (recoveryTarget.current === null) gesture.current.reset();
+        recoveryTarget.current = recovery.id;
+      } else recoveryTarget.current = null;
       const line = parseFloat(getComputedStyle(root).lineHeight) || 16;
       const delta = event.deltaY * (event.deltaMode === 1 ? line : event.deltaMode === 2 ? window.innerHeight : 1);
-      const stops = positions.current;
       const direction = delta > 0 ? 1 : -1;
-      const next = stops[stops.findIndex((position) => position.id === selected.current) + direction];
+      const next = recovery ?? stops[stops.findIndex((position) => position.id === selected.current) + direction];
       const decision = gesture.current.handle({ delta, now: performance.now(), momentum: "momentum" in event && event.momentum === true, transitioning: Boolean(animation.current), hasNeighbor: Boolean(next) });
       classified.add(event);
       if (decision.kind === "pass") return;

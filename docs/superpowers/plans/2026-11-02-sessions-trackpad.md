@@ -10,6 +10,8 @@
 
 **Files:** `timeline-gesture.ts` owns classification; its unit tests cover packet sequences; `sessions-timeline.spec.ts` exercises the real hook and transitions in Chromium/WebKit. Update `app/sessions/README.md` with the gesture contract.
 
+**Native scroll recovery:** If the selected card leaves the reading viewport, a deliberate wheel gesture resumes at the visible row nearest the sticky header. Reset old page ownership once on entering recovery, accumulate the normal 24 px intent even if native scrolling changes the candidate, and preserve explicit-momentum filtering. Ordinary document scrolling alone retains selection. Cover returning from the bottom, recovery with the old selection above the viewport, moving candidates, and normal adjacent navigation afterwards.
+
 ## Steps
 
 - [x] Add unit and browser regressions for immediate reversal, renewed same-direction pushes, and inertia/noise rejection; run against the baseline and observe failures.
