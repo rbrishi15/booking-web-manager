@@ -13,6 +13,7 @@ import { toFivePoint } from "@/components/ui/reliability-badge";
 import { cn } from "@/lib/utils";
 import { discoveryHref, discoveryReturnTo } from "@/app/discover/navigation";
 import { useNewNotifications } from "@/app/notifications/provider";
+import styles from "./app-shell.module.css";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: "home" },
@@ -61,7 +62,7 @@ function SidebarContents({
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-4 py-7 lg:px-5 lg:py-8">
+    <div className={cn(styles.sidebarContents, "flex h-full flex-col overflow-y-auto px-4 py-7 lg:px-5 lg:py-8")}>
       <div className="px-3">
         <Link
           href="/"
