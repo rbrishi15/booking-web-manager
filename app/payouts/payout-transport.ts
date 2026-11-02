@@ -24,7 +24,16 @@ const withdrawalSchema = z.object({
   kind: z.enum(["PAID", "NOTHING_TO_PAY", "DECLINED"]),
   amountCents: z.number().int().safe().positive().optional(),
   bankPayout: z.enum(["STANDARD", "INSTANT"]).optional(),
+  /** Stripe's decline code, present when kind is DECLINED. */
+  reason: z.string().optional(),
 });
+
+/** What a booker should know about a decline: no money moved, and what to do next. */
+export function declinedWithdrawalMessage(reason: string | undefined): string {
+  if (reason === "balance_insufficient")
+    return "Players' PayNow payments are still settling with Stripe, so this payout can't be sent yet. No money moved. Please try again in a day or two.";
+  return "Stripe couldn't send this payout, and no money moved. Please try again later.";
+}
 
 export type PayoutSetup = z.infer<typeof setupSchema>;
 export type PayoutSetupStatus = PayoutSetup["status"];
