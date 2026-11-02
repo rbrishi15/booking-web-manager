@@ -118,6 +118,56 @@ test("tiny input does not select and a deliberate 24 px gesture does", async ({ 
   await expectSettled(page, 23);
 });
 
+test("a quick trackpad reversal queues the previous card without waiting for silence", async ({ page }) => {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  const wheel = (deltaY: number) => timeline(page).evaluate((root, delta) => root.dispatchEvent(new WheelEvent("wheel", {
+    deltaY: delta, bubbles: true, cancelable: true,
+  })), deltaY);
+  expect(await wheel(40)).toBe(false);
+  await page.clock.runFor(80);
+  expect(await wheel(-12)).toBe(false);
+  await page.clock.runFor(16);
+  expect(await wheel(-12)).toBe(false);
+  for (const delta of [-10, -6, -2]) {
+    await page.clock.runFor(16);
+    expect(await wheel(delta)).toBe(false);
+  }
+  await page.clock.runFor(600);
+  await expectSettled(page, 21);
+  await expectVisibleSelection(page);
+});
+
+test("a second trackpad push advances one more card while the old tail is still arriving", async ({ page }) => {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  for (const delta of [80, 40, 10, 2, 20, 18, 12, 6, 2]) {
+    const passed = await timeline(page).evaluate((root, deltaY) => root.dispatchEvent(new WheelEvent("wheel", {
+      deltaY, bubbles: true, cancelable: true,
+    })), delta);
+    expect(passed).toBe(false);
+    await page.clock.runFor(16);
+  }
+  await page.clock.runFor(600);
+  await expectSettled(page, 24);
+  await expectVisibleSelection(page);
+});
+
+test("a rogue trackpad spike followed by tiny tail noise cannot skip another card", async ({ page }) => {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  for (const delta of [80, 40, 10, 2, 100, 4, 4, 4, 4, 4, 4]) {
+    const passed = await timeline(page).evaluate((root, deltaY) => root.dispatchEvent(new WheelEvent("wheel", {
+      deltaY, bubbles: true, cancelable: true,
+    })), delta);
+    expect(passed).toBe(false);
+    await page.clock.runFor(16);
+  }
+  await page.clock.runFor(600);
+  await expectSettled(page, 23);
+  await expectVisibleSelection(page);
+});
+
 test("plain document scrolling preserves the selected full card", async ({ page }) => {
   const start = await page.evaluate(() => scrollY);
   await page.evaluate((top) => { document.scrollingElement!.scrollTop = top + 256; }, start);
@@ -468,6 +518,11 @@ test("URL-restored session details keep native pane scrolling and restore focus"
   const content = dialog.getByTestId("session-details-scroll");
   await expect.poll(() => content.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
   const calendarButton = dialog.getByRole("link", { name: /View in calendar/ });
+  // Visibility does not imply the dialog's opening transform has finished.
+  // Measure its fixed footer only once those animations have actually settled.
+  await dialog.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   const footerTop = await calendarButton.evaluate((element) => element.getBoundingClientRect().top);
   const documentTop = await page.evaluate(() => scrollY);
   await content.hover();
