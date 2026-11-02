@@ -7,7 +7,7 @@ import { ErrorMessage } from "@/components/ui/error-message";
 import { InfoNote } from "@/components/ui/info-note";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Money } from "@/components/ui/money";
-import type { PayoutTransport, SessionPayout, WithdrawalMethod } from "../payout-transport";
+import { declinedWithdrawalMessage, type PayoutTransport, type SessionPayout, type WithdrawalMethod } from "../payout-transport";
 
 export interface SessionPayoutsProps {
   readonly transport: Pick<PayoutTransport, "loadSessions" | "withdraw">;
@@ -69,7 +69,7 @@ export function SessionPayouts({ transport, instantAvailable }: SessionPayoutsPr
       tone: outcome.kind === "DECLINED" ? "error" : "info",
       text:
         outcome.kind === "DECLINED"
-          ? "Stripe couldn't send this payout, and no money moved. Please try again later."
+          ? declinedWithdrawalMessage(outcome.reason)
           : outcome.kind === "NOTHING_TO_PAY"
             ? "Every share in this session was refunded, so there's nothing to withdraw."
             : outcome.bankPayout === "INSTANT"
