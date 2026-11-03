@@ -28,6 +28,7 @@ export function renderNotification(intent: NotificationIntent): NotificationPres
     case "GROUP_RENAMED": return make("Group name updated", `Your group is now called ${name}.`, groups, false, "groups");
     case "GROUP_ARCHIVED": return make("Group archived", `${name} has been archived.`, groups, true, "groups");
     case "GROUP_INVITATION_ENDED": return make("Group invitation no longer available", `Your invitation to ${name} has ended.`, "/groups", false, "groups");
+    case "SESSION_INVITATION": return make("You're invited to a session", `You were invited to join ${name}. Review the booking share and confirm your place.`, `/sessions/${session}/join?token=${encodeURIComponent(intent.invitationToken ?? "")}`, true);
     case "GROUP_BOOKING_CREATED": return make("A booking was shared with your group", `${name} is available to your group. Open the booking to view its details and join.`, `/sessions/${session}/join`, true);
     case "BOOKING_JOINED": return make("Your place is confirmed", `You joined ${name}; your booking share is held.`, history);
     case "WAITLIST_ENTERED": return make("You're on the waitlist", `You joined the waitlist for ${name}. No funds are held while you wait.`, history);

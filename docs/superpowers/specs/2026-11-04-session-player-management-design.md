@@ -150,4 +150,4 @@ existing payment model; no silent enrollment is added. Visual refinements must
 not change the sidebar. Any inability to reproduce a specific asset exactly
 must be disclosed with the resulting screenshots.
 
-Status: design awaiting user approval; implementation has not started.
+Status: user approved design and implementation on 2026-11-04.
