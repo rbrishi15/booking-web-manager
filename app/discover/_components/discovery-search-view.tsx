@@ -31,6 +31,8 @@ export interface DiscoverySearchViewProps {
   readonly onClear: () => void;
   readonly onNext: (cursor: string) => void;
   readonly onRetry: () => void;
+  /** Render layout-matched card placeholders while the route fetches server props. */
+  readonly loadingSkeleton?: boolean;
   /** Already validated by the navigation controller; this destination never reaches the API. */
   readonly returnTo?: string;
 }
@@ -39,7 +41,7 @@ const selectClassName = "flex h-11 w-full rounded-md border border-input bg-card
 const sportChoices = ["Tennis", ...SPORTS.filter((sport) => sport !== "Tennis")];
 
 /** Pure presentation: applied filters arrive from the URL; draft fields stay in the mounted form. */
-export function DiscoverySearchView({ filters, state, filterPanel, onToggleFilters, onApply, onEdit, onClear, onNext, onRetry, returnTo = "/" }: DiscoverySearchViewProps) {
+export function DiscoverySearchView({ filters, state, filterPanel, onToggleFilters, onApply, onEdit, onClear, onNext, onRetry, returnTo = "/", loadingSkeleton = false }: DiscoverySearchViewProps) {
   const id = useId();
   const busy = state.status === "loading";
   const errors: DiscoveryFieldErrors = state.status === "invalid" ? state.fieldErrors : {};
@@ -144,7 +146,7 @@ export function DiscoverySearchView({ filters, state, filterPanel, onToggleFilte
         <p aria-label="Applied filters" className={cn(styles.resultsSummary, "mt-1 break-words text-xs leading-relaxed text-muted-foreground")}>{summarizeFilters(filters) || "All upcoming public sessions"}</p>
       </div>
       <section aria-label="Upcoming sessions" aria-busy={busy} className={cn(styles.results, "mt-3 space-y-3")}>
-        <SearchResults state={state} onNext={onNext} onRetry={onRetry} />
+        <SearchResults state={state} onNext={onNext} onRetry={onRetry} loadingSkeleton={loadingSkeleton} />
       </section>
     </div>
   );
@@ -184,10 +186,10 @@ function FilterField({ id, name, label, errors, children }: {
   return <div className="min-w-0 space-y-2"><Label htmlFor={`${id}-${name}`}>{label}</Label>{children}{errors[name] && <p id={`${id}-${name}-error`} className="text-sm text-destructive">{errors[name]?.join(" ")}</p>}</div>;
 }
 
-function SearchResults({ state, onNext, onRetry }: Pick<DiscoverySearchViewProps, "state" | "onNext" | "onRetry">) {
+function SearchResults({ state, onNext, onRetry, loadingSkeleton }: Pick<DiscoverySearchViewProps, "state" | "onNext" | "onRetry" | "loadingSkeleton">) {
   switch (state.status) {
     case "loading":
-      return <LoadingSpinner label="Loading sessions…" />;
+      return loadingSkeleton ? <DiscoveryCardSkeletons /> : <LoadingSpinner label="Loading sessions…" />;
     case "invalid":
       return <ErrorMessage>{state.fieldErrors.cursor?.join(" ") ?? "Please fix the highlighted filters, then search again."}</ErrorMessage>;
     case "error":
@@ -204,6 +206,36 @@ function SearchResults({ state, onNext, onRetry }: Pick<DiscoverySearchViewProps
       throw new Error(`Unsupported discovery state: ${String(unsupported)}`);
     }
   }
+}
+
+
+/** Uses the real session-card classes so the desktop grid does not jump after data arrives. */
+function DiscoveryCardSkeletons() {
+  return (
+    <>
+      <p role="status" className="sr-only">Loading sessions…</p>
+      <ul className={cn(styles.cards, "flex flex-col gap-3")} aria-hidden="true">
+        {[0, 1].map((index) => (
+          <li key={index} className={cn(styles.card, "flex min-w-0 gap-3 rounded-lg border border-border/70 bg-card p-2 sm:gap-5 sm:p-3")}>
+            <div className={cn(styles.cardMedia, "min-h-[148px] w-[96px] shrink-0 animate-pulse rounded-md bg-muted sm:min-h-[160px] sm:w-[180px] motion-reduce:animate-none")} />
+            <div className={cn(styles.cardBody, "min-w-0 flex-1 py-1 pr-1 sm:py-2")}>
+              <div className="h-5 w-36 max-w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
+              <div className="mt-4 space-y-2.5">
+                <div className="h-3 w-4/5 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+              </div>
+              <div className={cn(styles.cardFooter, "mt-4 flex flex-wrap items-end justify-between gap-2")}>
+                <div className="h-6 w-24 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+                <div className="h-10 w-20 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 const singaporeDate = new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", day: "numeric", month: "short", year: "numeric" });
