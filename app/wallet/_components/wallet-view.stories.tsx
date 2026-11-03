@@ -427,6 +427,7 @@ const mockPayNowSession = {
     // Decorative, unscannable QR preview: actual payments use the URL from Stripe.
     imageUrlPng: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="224" height="224" viewBox="0 0 224 224"><rect width="224" height="224" fill="white"/><g fill="black"><path d="M8 8h64v64H8zM16 16v48h48V16zM152 8h64v64h-64zM160 16v48h48V16zM8 152h64v64H8zM16 160v48h48v-48zM88 8h16v16H88zM120 24h16v32h-16zM88 72h48v16H88zM152 88h16v48h-16zM184 88h32v16h-32zM88 104h16v48H88zM120 120h16v16h-16zM104 168h64v16h-64zM184 152h16v64h-16zM120 200h48v16h-48z"/></g></svg>'),
     expiresAt: Date.now() + 3600000,
+    testPaymentUrl: "https://payments.stripe.com/test/paynow/authorize",
   },
 };
 
@@ -503,6 +504,8 @@ export const PayNowQrPreview: Story = {
     await userEvent.click(modal.getByRole("button", { name: "Continue with PayNow" }));
     await expect(await modal.findByRole("img", { name: /PayNow QR code/ })).toBeVisible();
     await expect(modal.getByText("Waiting for payment confirmation")).toBeVisible();
+    await expect(modal.getByRole("link", { name: /Simulate scan/ })).toHaveAttribute("href", "https://payments.stripe.com/test/paynow/authorize");
+    await expect(modal.getByRole("link", { name: /Simulate scan/ })).toHaveAttribute("target", "_blank");
   },
 };
 
