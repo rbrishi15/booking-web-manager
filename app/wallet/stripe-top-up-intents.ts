@@ -32,6 +32,8 @@ export class StripeWalletTopUps implements WalletTopUpProvider {
         // Attach the PayNow method now: Stripe.js confirmPayNowPayment(clientSecret)
         // does not create one, and confirming without it is rejected.
         payment_method_data: { type: "paynow" },
+        // Confirm on the server so we can render Stripe's QR in our own modal.
+        confirm: true,
         metadata: {
           purpose: TOP_UP_PURPOSE,
           wallet_id: request.walletId,
@@ -42,12 +44,21 @@ export class StripeWalletTopUps implements WalletTopUpProvider {
     );
     if (intent.client_secret === null)
       throw new Error("Stripe returned a PaymentIntent without a client secret");
+    const nextAction = intent.next_action;
+    if (nextAction?.type !== "paynow_display_qr_code" || !nextAction.paynow_display_qr_code?.image_url_png)
+      throw new Error("Stripe did not return a PayNow QR code");
     return {
       paymentIntentId: intent.id,
       clientSecret: intent.client_secret,
       amountCents: intent.amount,
       currency: "SGD",
       status: intent.status,
+      qrCode: {
+        imageUrlPng: nextAction.paynow_display_qr_code.image_url_png,
+        hostedInstructionsUrl: nextAction.paynow_display_qr_code.hosted_instructions_url,
+        // Stripe PayNow QR codes expire after one hour.
+        expiresAt: (intent.created + 60 * 60) * 1000,
+      },
     };
   }
 }
