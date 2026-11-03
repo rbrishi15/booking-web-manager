@@ -32,13 +32,14 @@ This module adheres strictly to the non-negotiable rules defined in `CLAUDE.md`:
 
 ## Top-up flow (UC1-05)
 
-1. The Add funds button opens a responsive two-stage dialog (shown only with a `pk_test_` publishable key). Stage 1 validates the typed amount into integer cents, then calls `POST /api/wallet/top-up`.
+1. The Add funds button opens a responsive three-stage dialog (shown only with a `pk_test_` publishable key). Stage 1 validates the typed amount into integer cents, then calls `POST /api/wallet/top-up`.
 2. [`StripeWalletTopUps.createIntent`](./stripe-top-up-intents.ts) creates a PayNow
    PaymentIntent with a PayNow payment method already attached
    (`payment_method_data: { type: "paynow" }`) and metadata
    `purpose: "wallet_top_up"`, `wallet_id`, `user_id`.
 3. The server confirms the PaymentIntent and returns Stripe's PayNow QR image URL plus a validated Stripe-hosted test payment URL encoded in the QR when available. Stage 2 renders the QR inside Booking's dialog. The **Simulate scan** link opens the Stripe-hosted test payment page to authorize or fail the test payment; it never updates wallet balances directly. Stripe.js `retrievePaymentIntent` polls read-only status; closing the dialog never credits or cancels a payment. QR codes expire after one hour and a fresh attempt needs a new idempotency key. The browser credits nothing.
-4. Stripe's `payment_intent.succeeded` webhook
+4. Stage 3 shows **Payment confirmed** with the actual amount, PayNow (Test) method and Stripe PaymentIntent ID only after Stripe returns a succeeded status. The Done button closes the dialog; reopening starts a fresh top-up. The message does not claim the webhook has already run.
+5. Stripe's `payment_intent.succeeded` webhook
    ([handler](../api/webhooks/top-up-events.ts)) credits `amount_received` to the
    metadata's wallet through [`PostgresTopUpCredits`](../../lib/payments/postgres-top-up-credits.ts):
    one transaction claims a per-PaymentIntent idempotency key, appends the `TOP_UP`
@@ -76,8 +77,8 @@ than available balance or funds held for attendance. An older server response
 without this field displays an em dash. Transaction sport metadata is joined
 onto the already paginated ledger page and omitted when unavailable.
 
-Add funds opens a single responsive two-stage PayNow modal, not a secondary Stripe overlay.
-Amount selection and Stripe's own QR image share the same surface. Closing the
+Add funds opens a single responsive three-stage PayNow modal, not a secondary Stripe overlay.
+Amount entry, Stripe's own QR and payment confirmation are successive stages within the same surface. Simulate scan is the primary Stage 2 action when Stripe supplies its test payment URL, and a larger QR view is secondary. Closing the
 modal does not cancel a pending Stripe payment, and the verified webhook remains
 the only way to credit the wallet.
 

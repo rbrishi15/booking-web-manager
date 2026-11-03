@@ -566,6 +566,12 @@ const confirmedTopUp: TopUpTransport = {
   checkPayment: async () => ({ status: "paid" }),
 };
 
+/** Stable success state for the screenshot script (no play() that closes the dialog). */
+export const PayNowConfirmedScreenshotCapture: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={confirmedTopUp} onPaid={fn()} /> },
+};
+
 export const PayNowConfirmationPreview: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
   args: { topUp: <TopUpPanel transport={confirmedTopUp} onPaid={fn()} /> },
