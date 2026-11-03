@@ -37,7 +37,7 @@ This module adheres strictly to the non-negotiable rules defined in `CLAUDE.md`:
    PaymentIntent with a PayNow payment method already attached
    (`payment_method_data: { type: "paynow" }`) and metadata
    `purpose: "wallet_top_up"`, `wallet_id`, `user_id`.
-3. The server confirms the PaymentIntent and returns Stripe's PayNow QR image URL. Stage 2 renders that QR inside Booking's dialog. Stripe.js `retrievePaymentIntent` polls read-only status; closing the dialog never credits or cancels a payment. QR codes expire after one hour and a fresh attempt needs a new idempotency key. The browser credits nothing.
+3. The server confirms the PaymentIntent and returns Stripe's PayNow QR image URL plus a validated Stripe-hosted test payment URL encoded in the QR when available. Stage 2 renders the QR inside Booking's dialog. The **Simulate scan** link opens the Stripe-hosted test payment page to authorize or fail the test payment; it never updates wallet balances directly. Stripe.js `retrievePaymentIntent` polls read-only status; closing the dialog never credits or cancels a payment. QR codes expire after one hour and a fresh attempt needs a new idempotency key. The browser credits nothing.
 4. Stripe's `payment_intent.succeeded` webhook
    ([handler](../api/webhooks/top-up-events.ts)) credits `amount_received` to the
    metadata's wallet through [`PostgresTopUpCredits`](../../lib/payments/postgres-top-up-credits.ts):
