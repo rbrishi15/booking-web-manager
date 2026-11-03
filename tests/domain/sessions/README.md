@@ -354,6 +354,19 @@ Execution: **1 passed / 1 cases**.
 | --- | --- | --- | --- | --- | --- | --- |
 | [WITHDRAWN](participation.test.ts#L458) | FORFEITED | payout | 2026-10-03 | 2026-10-03 | 0 | 0 |
 
+### Forfeited places
+
+A forfeit withdrawal keeps its share due to the booker ([ADR-0024](../../../docs/adr/0024-late-withdrawal-forfeit.md)).
+
+**Input:** Participation state, Hold state, Withdrawn date, Replacement mode · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **2 passed / 2 cases**.
+
+| Participation state | Hold state | Withdrawn date | Replacement mode | Expected Result | Test Result |
+| --- | --- | --- | --- | --- | --- |
+| [WITHDRAWN](participation.test.ts#L476) | AWAITING_REPLACEMENT | 2026-10-03 | FORFEIT | INVALID_INPUT | INVALID_INPUT |
+| [WITHDRAWN](participation.test.ts#L489) | FORFEITURE_DUE | 2026-10-03 | FORFEIT | Replacement mode `FORFEIT`; hold `FORFEITURE_DUE` | Replacement mode `FORFEIT`; hold `FORFEITURE_DUE` |
+
 ## Session pricing
 
 Source: [pricing.test.ts](pricing.test.ts). All prices and costs are integer cents. Successful price-bound results give suggested / minimum / maximum and also verify maximum × slots ≤ 9,007,199,254,740,991 cents.

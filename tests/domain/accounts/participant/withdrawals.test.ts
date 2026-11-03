@@ -536,4 +536,75 @@ describe("Participant withdrawal and refund choices", () => {
       ).toThrow(expect.objectContaining({ code: "SESSION_STARTED" }));
     });
   });
+
+  describe("Forfeit", () => {
+    test("withdraw_WhenLateParticipantForfeits_MakesShareDueToBookerWithoutRefund", () => {
+      const withdrawalTime = hoursBeforeSessionStart(10);
+      const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+
+      const withdrawal = createTestUser({ userId: "alice" })
+        .asParticipant()
+        .withdraw(bookingSession, {
+          participationId: "p-alice",
+          replacementMode: "FORFEIT",
+          now: withdrawalTime,
+        });
+
+      const alice = bookingSession.participantList.requireParticipation("p-alice");
+      expect(withdrawal.kind).toBe("FORFEITURE_DUE");
+      expect(withdrawal.instructions).toEqual([]);
+      expect(alice.status).toBe("WITHDRAWN");
+      expect(alice.replacementMode).toBe("FORFEIT");
+      expect(alice.hold?.state).toBe("FORFEITURE_DUE");
+      expect(alice.hold?.amount.toCents()).toBe(500);
+    });
+
+    test("withdraw_WhenLateParticipantForfeits_ClosesTheirPlace", () => {
+      const withdrawalTime = hoursBeforeSessionStart(10);
+      // Three places: the booker's own, alice's and ben's.
+      const bookingSession = createTestSession({
+        totalSlots: 3,
+        committedUserIds: ["alice", "ben"],
+      });
+
+      createTestUser({ userId: "alice" }).asParticipant().withdraw(bookingSession, {
+        participationId: "p-alice",
+        replacementMode: "FORFEIT",
+        now: withdrawalTime,
+      });
+
+      expect(bookingSession.getAvailableSlots(withdrawalTime)).toBe(0);
+      expect(bookingSession.participantList.oldestAwaitingReplacement()).toBeUndefined();
+    });
+
+    test("withdraw_WhenForfeitingExactlyAtRefundCutoff_RejectsWithoutChangingState", () => {
+      const refundCutoff = hoursBeforeSessionStart(30);
+      const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+      const previousState = sessionState(bookingSession);
+
+      expect(() =>
+        createTestUser({ userId: "alice" }).asParticipant().withdraw(bookingSession, {
+          participationId: "p-alice",
+          replacementMode: "FORFEIT",
+          now: refundCutoff,
+        }),
+      ).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+
+    test("withdraw_WhenForfeitNamesAnInvitee_RejectsWithoutChangingState", () => {
+      const bookingSession = createTestSession({ committedUserIds: ["alice"] });
+      const previousState = sessionState(bookingSession);
+
+      expect(() =>
+        createTestUser({ userId: "alice" }).asParticipant().withdraw(bookingSession, {
+          participationId: "p-alice",
+          replacementMode: "FORFEIT",
+          replacementInviteeId: "cara",
+          now: hoursBeforeSessionStart(10),
+        }),
+      ).toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+      expect(sessionState(bookingSession)).toEqual(previousState);
+    });
+  });
 });

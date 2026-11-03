@@ -87,6 +87,14 @@ describe("UC2-05 withdrawal transport against the real routes", () => {
     expect(forParticipant.withdraw).toHaveBeenCalledExactlyOnceWith({ userId, ...request });
   });
 
+  test("sends a late forfeit the route accepts and reads that the share is due to the booker", async () => {
+    forParticipant.withdraw.mockResolvedValue({ kind: "FORFEITURE_DUE", sessionId, participationId, refundedCents: 0, promotion: { status: "NOT_NEEDED" } });
+    const request = { sessionId, idempotencyKey: "forfeit-key", replacement: { mode: "FORFEIT" as const } };
+
+    expect(await withdrawFromSession(request)).toEqual({ status: "withdrawn", kind: "FORFEITURE_DUE", refundedCents: 0 });
+    expect(forParticipant.withdraw).toHaveBeenCalledExactlyOnceWith({ userId, ...request });
+  });
+
   test("finds the invitee through the user ID route and names them in a withdrawal it accepts", async () => {
     const { DomainError } = await import("@/domain");
     forHandle.mockImplementation(async (handle: string) => {

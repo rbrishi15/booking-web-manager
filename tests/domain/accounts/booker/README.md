@@ -211,3 +211,15 @@ Execution: **2 passed / 2 cases**.
 | --- | --- | --- | --- | --- |
 | [out](settlement.test.ts#L311) | out | One | Error code `DUPLICATE_ID`; session unchanged. | Error code `DUPLICATE_ID`; session unchanged. |
 | [out](settlement.test.ts#L331) | retry | Original and independently restored | Returned payout `retry`; restored session `PAYOUT_PENDING`, pending payout `retry`; payout history `[out, retry]`; original session unchanged. | Returned payout `retry`; restored session `PAYOUT_PENDING`, pending payout `retry`; payout history `[out, retry]`; original session unchanged. |
+
+## cancel — refund a forfeited place
+
+A forfeited share is still held until settlement, so cancelling the session refunds it ([ADR-0024](../../../../docs/adr/0024-late-withdrawal-forfeit.md)).
+
+**Input:** Withdrawals, Cancellation time before start · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **1 passed / 1 cases**.
+
+| Withdrawals | Cancellation time before start | Expected Result | Test Result |
+| --- | --- | --- | --- |
+| [ben: −10 h, FORFEIT, hold `FORFEITURE_DUE`](administration.test.ts#L335) | 5 h | Exactly one instruction, `REFUND` of 500 cents; ben `CANCELLED`, hold `REFUNDED`. | Exactly one instruction, `REFUND` of 500 cents; ben `CANCELLED`, hold `REFUNDED`. |

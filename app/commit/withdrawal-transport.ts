@@ -28,7 +28,9 @@ export const userLookupUrl = (handle: string) => `/api/users/${encodeURIComponen
 const cents = z.number().int().safe().nonnegative();
 const kind = z.enum(["REFUNDED", "AWAITING_REPLACEMENT"]);
 const previewResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundCents: cents, heldCents: cents });
-const withdrawResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundedCents: cents });
+const withdrawResponseSchema = z.object({
+  sessionId: z.string(), participationId: z.string(), kind: z.enum(["REFUNDED", "AWAITING_REPLACEMENT", "FORFEITURE_DUE"]), refundedCents: cents,
+});
 const leaveResponseSchema = z.object({ sessionId: z.string(), participationId: z.string() });
 const userLookupResponseSchema = z.object({
   user: z.object({ userId: z.string().uuid(), handle: z.string(), displayName: z.string() }),

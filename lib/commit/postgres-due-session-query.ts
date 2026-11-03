@@ -15,9 +15,10 @@ const AUTO_VERIFY_AFTER_END_MS = 72 * 3_600_000;
  *
  * Promotion eligibility mirrors the domain so a session that cannot make
  * progress is never selected: free places are total slots minus the booker's
- * place, committed guests and pending personal-invitation reservations
- * (`Session.getAvailableSlots`), and a queue head who is the invitee of such a
- * reservation stops promotion (`PromoteFromWaitlist`). Every other outcome
+ * place, committed guests, pending personal-invitation reservations and places
+ * closed by a forfeit withdrawal (`Session.getAvailableSlots`, ADR-0024), and a
+ * queue head who is the invitee of such a reservation stops promotion
+ * (`PromoteFromWaitlist`). Every other outcome
  * changes the session (a promoted or skipped head leaves the queue; expiry and
  * verification leave this query), so unchanged sessions cannot fill a batch
  * and starve later ones. Each job still re-checks its own rule under the
@@ -64,6 +65,11 @@ export class PostgresDueSessionQuery implements DueSessionQuery {
                  and p.user_id <> s.booker_id
              ) + (
                select count(*) from reservations r where r.session_id = s.session_id
+             ) + (
+               -- Places closed by a forfeit withdrawal (forfeitedPlaces in the domain).
+               select count(*) from participations f
+               where f.session_id = s.session_id and f.status = 'WITHDRAWN'
+                 and f.replacement_mode = 'FORFEIT'
              ) < s.total_slots - 1
              and exists (
                select 1

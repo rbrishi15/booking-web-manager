@@ -294,3 +294,28 @@ Execution: **1 passed / 1 cases**.
 | Participant | Starting hold (cents) | Preview time before start | Withdrawal time before start | Expected Result | Test Result |
 | --- | --- | --- | --- | --- | --- |
 | [alice](withdrawals.test.ts#L482) | 500; HELD | 40 h | 40 h | Withdrawal kind equals preview kind; the withdrawal’s instruction-amount list contains exactly the preview refund amount. No fixed kind or amount is asserted. | Withdrawal kind equals preview kind; the withdrawal’s instruction-amount list contains exactly the preview refund amount. No fixed kind or amount is asserted. |
+
+## withdraw — forfeit a late place
+
+A late withdrawal may give the share to the booker and close the place instead of passing it on ([ADR-0024](../../../../docs/adr/0024-late-withdrawal-forfeit.md)). Default session of three places (the booker's own and two guest places).
+
+**Input:** Participant, Committed users, Replacement choice, Time before start · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **4 passed / 4 cases**.
+
+| Participant | Committed users | Replacement choice | Time before start | Expected Result | Test Result |
+| --- | --- | --- | --- | --- | --- |
+| [alice](withdrawals.test.ts#L541) | alice | FORFEIT | 10 h | Result `FORFEITURE_DUE`; instructions empty; alice `WITHDRAWN`, replacement mode `FORFEIT`, hold `FORFEITURE_DUE`, 500 cents. | Result `FORFEITURE_DUE`; instructions empty; alice `WITHDRAWN`, replacement mode `FORFEIT`, hold `FORFEITURE_DUE`, 500 cents. |
+| [alice](withdrawals.test.ts#L562) | alice, ben | FORFEIT | 10 h | Available slots 0; no withdrawal awaits a replacement. | Available slots 0; no withdrawal awaits a replacement. |
+| [alice](withdrawals.test.ts#L580) | alice | FORFEIT | 30 h | Error code `INVALID_STATE`; session unchanged. | Error code `INVALID_STATE`; session unchanged. |
+| [alice](withdrawals.test.ts#L595) | alice | FORFEIT, naming cara | 10 h | Error code `INVALID_INPUT`; session unchanged. | Error code `INVALID_INPUT`; session unchanged. |
+
+## join — a forfeited place stays closed
+
+**Input:** Applicant, Total places, Withdrawals, Time before start · **Oracle:** Expected Result · **Log:** Test Result
+
+Execution: **1 passed / 1 cases**.
+
+| Applicant | Total places | Withdrawals | Time before start | Expected Result | Test Result |
+| --- | --- | --- | --- | --- | --- |
+| [cara](admission.test.ts#L782) | 2 (booker and one guest) | ben: −10 h, FORFEIT, hold `FORFEITURE_DUE` | 5 h | Admission `WAITLISTED`; cara hold absent. | Admission `WAITLISTED`; cara hold absent. |

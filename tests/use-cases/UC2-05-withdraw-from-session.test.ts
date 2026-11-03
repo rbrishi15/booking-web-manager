@@ -201,6 +201,43 @@ describe("UC2-05 Withdraw from Session", () => {
     );
   });
 
+  test("a late forfeit gives the share to the booker and closes the place without promoting anyone", async () => {
+    // Arrange
+    const scenario = withdrawalScenario();
+    await scenario.commit("alice");
+    await scenario.commit("bob");
+    await scenario.commit("carol");
+    scenario.setTime(hoursBeforeSessionStart(10));
+
+    // Act
+    const result = await scenario.withdraw("alice", { mode: "FORFEIT" });
+
+    // Assert
+    expect(result).toMatchObject({ kind: "FORFEITURE_DUE", refundedCents: 0 });
+    expect(result.promotion).toEqual({ status: "NOT_NEEDED" });
+    expect(scenario.participation("id-1").hold?.state).toBe("FORFEITURE_DUE");
+    expect(scenario.unitOfWork.availableCents("alice")).toBe(9_500);
+    expect(scenario.ledgerKinds()).not.toContain("REFUND");
+    const session = scenario.unitOfWork.requireSession(sessionId);
+    expect(session.participantList.nextWaitlisted()?.userId).toBe("carol");
+    expect(session.getAvailableSlots(hoursBeforeSessionStart(10))).toBe(0);
+  });
+
+  test("rejects a forfeit 30 hours or more before start, which is refunded in full instead", async () => {
+    // Arrange
+    const scenario = withdrawalScenario();
+    await scenario.commit("alice");
+    scenario.setTime(hoursBeforeSessionStart(31));
+
+    // Act
+    const withdrawal = scenario.withdraw("alice", { mode: "FORFEIT" });
+
+    // Assert
+    await expect(withdrawal).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(scenario.participation("id-1").status).toBe("COMMITTED");
+    expect(scenario.unitOfWork.availableCents("alice")).toBe(9_500);
+  });
+
   test("keeps a withdrawal that committed even when the follow-up promotion fails", async () => {
     // Arrange
     const scenario = withdrawalScenario();
@@ -395,6 +432,19 @@ describe("UC2-05 Withdraw from Session", () => {
 
       // Assert
       expect(scenario.unitOfWork.notifications.filter((entry) => !["BOOKING_JOINED", "WAITLIST_ENTERED"].includes(entry.kind)).map((entry) => [entry.kind, entry.recipientId])).toEqual([["PROMOTED", "carol"]]);
+    });
+
+    test("a late forfeit sends no forfeiture warning, because the share is already the booker's", async () => {
+      // Arrange
+      const scenario = withdrawalScenario();
+      await scenario.commit("alice");
+      scenario.setTime(hoursBeforeSessionStart(10));
+
+      // Act
+      await scenario.withdraw("alice", { mode: "FORFEIT" });
+
+      // Assert
+      expect(scenario.unitOfWork.notifications.filter((entry) => !["BOOKING_JOINED", "WAITLIST_ENTERED"].includes(entry.kind))).toEqual([]);
     });
 
     test("the forfeiture sweep records that the share is due for forfeiture", async () => {

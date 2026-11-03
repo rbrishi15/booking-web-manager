@@ -12,6 +12,7 @@ const withdrawFromSessionRequestSchema = sessionRequestSchema.extend({
   replacement: z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("OPEN_SLOT") }),
     z.object({ mode: z.literal("DIRECT_INVITE"), inviteeId: uuid }),
+    z.object({ mode: z.literal("FORFEIT") }),
   ]),
 });
 const verifyAttendanceRequestSchema = sessionRequestSchema.extend({
@@ -56,7 +57,7 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
     refundedParticipationId: uuid.optional(),
   }));
   const withdrawalResult = registry.register("WithdrawFromSessionResult", z.object({
-    kind: z.enum(["REFUNDED", "AWAITING_REPLACEMENT"]),
+    kind: z.enum(["REFUNDED", "AWAITING_REPLACEMENT", "FORFEITURE_DUE"]),
     sessionId: uuid,
     participationId: uuid,
     refundedCents: cents,
@@ -98,6 +99,8 @@ export function registerCommitmentApi(registry: OpenAPIRegistry): void {
       description: "Withdraws the authenticated participant's own place. Choose OPEN_SLOT or DIRECT_INVITE " +
         "for one existing named invitee; the choice cannot change after withdrawal. At least 30 hours " +
         "before start refunds immediately; less than 30 hours retains the held share awaiting replacement. " +
+        "Less than 30 hours before start, FORFEIT instead gives the share to the booker (kind FORFEITURE_DUE) " +
+        "and closes the place; earlier it is refused with INVALID_STATE. " +
         "Open-slot withdrawal triggers promotion after commit. DEFERRED promotion keeps the withdrawal committed.",
     },
     {

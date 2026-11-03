@@ -95,6 +95,7 @@ interface ParticipantListView <<ReadOnlyView>> {
   +nextQueueSequence : number
   +committedCount : number
   +reservedCount : number
+  +forfeitedCount : number
   --
   +requireParticipation(id) : Participation
   +findByUserId(id) : Participation [0..1]

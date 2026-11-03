@@ -51,7 +51,7 @@ export function hydrateParticipation(row: SqlRow, walletId: UUID): Participation
     replacementMode:
       row.replacement_mode === null
         ? undefined
-        : choice(row.replacement_mode, ["OPEN_SLOT", "DIRECT_INVITE"]),
+        : choice(row.replacement_mode, ["OPEN_SLOT", "DIRECT_INVITE", "FORFEIT"]),
     replacementInviteeId: optionalText(row.replacement_invitee_id),
     verifiedAt: optionalDate(row.verified_at),
     verificationMethod:

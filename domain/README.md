@@ -140,8 +140,9 @@ for construction, mapping, and encapsulation conventions.
 
 Read participation state through `session.participantList`, a public
 `ParticipantListView`. Its readonly `participations`, `nextQueueSequence`,
-`committedCount`, and `reservedCount` properties describe the current collection.
-Reserved count covers active, unconsumed named places. Use
+`committedCount`, `reservedCount`, and `forfeitedCount` properties describe the current collection.
+Reserved count covers active, unconsumed named places; forfeited count covers
+places closed by a forfeit withdrawal. Use
 `requireParticipation(id)` for a required record, `findByUserId(id)` for an
 optional user lookup, `nextWaitlisted()` for the first waiter, and
 `oldestAwaitingReplacement()` for the oldest eligible open-slot late withdrawal.
@@ -294,6 +295,11 @@ It shares `withdraw`'s authorization, lifecycle checks and 30-hour rule.
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
 behavior. A direct invitation reserves the departing person's one place after
 early or late withdrawal. There is no replacement link or token.
+A late withdrawal may pass `replacementMode: "FORFEIT"` instead: its hold
+becomes `FORFEITURE_DUE` at once, the result kind is `FORFEITURE_DUE`, and the
+place closes for the rest of the session
+([ADR-0024](../docs/adr/0024-late-withdrawal-forfeit.md)). A forfeit at 30 hours
+or more before the start is refused with `INVALID_STATE`.
 
 The application loads the authenticated named user's participant role and calls
 `acceptReplacement(session, { participationId, holdId, now })`. The user's ID
