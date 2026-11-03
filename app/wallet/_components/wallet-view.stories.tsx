@@ -483,6 +483,15 @@ export const TopUpAmountPreview: Story = {
   },
 };
 
+export const PayNowAmountPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    await expect(within(document.body).getByRole("dialog", { name: "Add funds to your wallet" })).toBeVisible();
+  },
+};
+
 export const PayNowQrPreview: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
   args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
