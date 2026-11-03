@@ -1,0 +1,62 @@
+name: Wallet Storybook screenshots
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/wallet-storybook-screenshots.yml"
+      - "scripts/capture-wallet-modal.mjs"
+      - "app/wallet/_components/wallet-view.stories.tsx"
+      - "app/wallet/_components/top-up-panel.tsx"
+      - "app/wallet/_components/wallet-view.tsx"
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    # Only push screenshots into a branch of the repository itself, not external PRs.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build-storybook
+      - name: Start Storybook static server
+        run: |
+          python3 -m http.server 6006 --directory storybook-static > /tmp/storybook.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:6006/iframe.html > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/storybook.log
+          exit 1
+      - name: Capture stage one and stage two
+        run: node scripts/capture-wallet-modal.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wallet-paynow-storybook-screenshots
+          path: docs/assets/wallet/paynow-modal-step-*.png
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Commit screenshots to PR branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/wallet/paynow-modal-step-1.png docs/assets/wallet/paynow-modal-step-2.png
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+            exit 0
+          fi
+          git commit -m "docs(wallet): attach rendered Storybook payment modal screenshots"
+          git push origin "HEAD:refs/heads/$HEAD_REF"
