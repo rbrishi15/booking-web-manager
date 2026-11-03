@@ -300,7 +300,8 @@ test("resizing during closing, marker travel or opening cancels obsolete frames"
     await page.clock.runFor(900);
     await expectSettled(page, day!);
     await expectVisibleSelection(page);
-    expect(await page.evaluate(() => scrollY)).toBe(resized);
+    // WebKit can round the final resized layout by one device pixel.
+    expect(Math.abs(await page.evaluate(() => scrollY) - resized)).toBeLessThan(2);
   }
 });
 
