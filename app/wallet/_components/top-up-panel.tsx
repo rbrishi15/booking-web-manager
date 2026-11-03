@@ -166,7 +166,7 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
       ) : phase.kind === "payment" ? (
         <>
           <h2 className="text-[32px] font-semibold leading-tight tracking-[-.05em] sm:text-[38px]">Scan to pay.</h2>
-          <p className="mt-2 text-sm leading-6 text-[#6b746e] dark:text-[#9ba5b4]">Open your banking app and scan the PayNow QR code.</p>
+          <p className="mt-2 text-sm leading-6 text-[#6b746e] dark:text-[#9ba5b4]">Scan the PayNow QR or simulate a payment with Stripe's test environment.</p>
           <div className="mt-8 text-center">
             <p className="text-[34px] font-semibold tracking-[-.055em]">{formatSgd(displayCents)}</p>
             <div className="mx-auto mt-5 w-fit rounded-xl border border-[#e3e8e3] bg-white p-5 shadow-[0_14px_28px_-22px_#0006]">
@@ -174,6 +174,28 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
               <Image unoptimized src={phase.session.qrCode.imageUrlPng} width={224} height={224} className="h-[min(52vw,224px)] w-[min(52vw,224px)] object-contain" alt={`PayNow QR code for ${formatSgd(displayCents)}`} />
             </div>
           </div>
+          {phase.session.qrCode.testPaymentUrl ? (
+            <a
+              href={phase.session.qrCode.testPaymentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-auto mt-5 flex min-h-11 w-fit items-center justify-center gap-2 rounded-md border border-[#cdd6ce] bg-[#eff3ed] px-5 text-sm font-medium text-[#162119] transition-colors hover:bg-[#e3eae1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#162119] dark:border-[#36485e] dark:bg-[#172437] dark:text-[#e7edf6] dark:hover:bg-[#25364b]"
+            >
+              Simulate scan
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">(opens Stripe test payment page in a new tab)</span>
+            </a>
+          ) : phase.session.qrCode.hostedInstructionsUrl ? (
+            <a
+              href={phase.session.qrCode.hostedInstructionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-auto mt-5 flex min-h-11 w-fit items-center gap-2 text-sm font-medium underline underline-offset-4"
+            >
+              Open Stripe payment instructions
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </a>
+          ) : null}
           <div role="status" aria-live="polite" className="mt-7 flex items-center justify-center gap-2 text-xs text-[#657367] dark:text-[#afbdca]">
             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
             Waiting for payment confirmation
