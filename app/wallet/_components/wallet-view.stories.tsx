@@ -512,6 +512,98 @@ export const PayNowQrPreview: Story = {
   },
 };
 
+
+/** Narrow desktop: a dialog must never overflow the viewport horizontally. */
+export const PayNowNarrowDesktop: Story = {
+  parameters: {
+    viewport: {
+      options: {
+        narrowWallet: { name: "Narrow desktop 560 × 700", styles: { width: "560px", height: "700px" }, type: "desktop" },
+      },
+    },
+  },
+  globals: { viewport: { value: "narrowWallet", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await expect(within(modal).getByRole("heading", { name: "Add funds." })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByRole("link", { name: /Simulate scan/ })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+  },
+};
+
+/** 320px widths and short screens must keep amount, scan, and QR controls usable. */
+export const PayNowSmallPhone: Story = {
+  parameters: {
+    viewport: {
+      options: {
+        smallWallet: { name: "Small phone 320 × 568", styles: { width: "320px", height: "568px" }, type: "mobile" },
+      },
+    },
+  },
+  globals: { viewport: { value: "smallWallet", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    const topUp = within(modal);
+    await expect(topUp.getByRole("textbox", { name: "Amount (S$)" })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+    await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await topUp.findByRole("img", { name: /PayNow QR code/ })).toBeVisible();
+    await expect(topUp.getByRole("link", { name: /Simulate scan/ })).toBeVisible();
+    await userEvent.click(topUp.getByRole("button", { name: "Show larger QR code" }));
+    await expect(topUp.getByRole("button", { name: "Reduce QR code" })).toHaveAttribute("aria-expanded", "true");
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+  },
+};
+
+const confirmedTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: { ...mockPayNowSession, amountCents: cents } }),
+  checkPayment: async () => ({ status: "paid" }),
+};
+
+export const PayNowConfirmationPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={confirmedTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    const add = within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" });
+    await userEvent.click(add);
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByRole("heading", { name: "Payment confirmed!" })).toBeVisible();
+    await expect(within(modal).getByText("pi_test_mock")).toBeVisible();
+    await userEvent.click(within(modal).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(within(document.body).queryByRole("dialog", { name: "Add funds to your wallet" })).not.toBeInTheDocument());
+    await userEvent.click(add);
+    await expect(within(document.body).getByRole("textbox", { name: "Amount (S$)" })).toHaveValue("20");
+  },
+};
+
+const withoutSimulatorTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: {
+    ...mockPayNowSession,
+    amountCents: cents,
+    qrCode: { ...mockPayNowSession.qrCode, testPaymentUrl: undefined },
+  } }),
+  checkPayment: async () => ({ status: "pending" }),
+};
+
+export const PayNowNoSimulatorFallback: Story = {
+  args: { topUp: <TopUpPanel transport={withoutSimulatorTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByText(/did not provide a test scan link/)).toBeVisible();
+    await expect(within(modal).queryByRole("link", { name: /Simulate scan/ })).not.toBeInTheDocument();
+    await expect(within(modal).getByRole("link", { name: /Open Stripe payment instructions/ })).toBeVisible();
+  },
+};
+
 export const DesignPreview: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
   args: {

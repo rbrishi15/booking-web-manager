@@ -59,6 +59,7 @@
 .receipt { display: grid; gap: 21px; margin: 39px 0 0; padding: 23px 20px; border: 1px solid var(--line); border-radius: 9px; }
 .receipt > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; gap: 10px; }
 .receipt dt { color: var(--ink); font-size: 13px; font-weight: 400; }
+.transactionId { overflow-wrap: anywhere; }
 .receipt dd { min-width: 0; margin: 0; font-size: 13px; text-align: right; overflow-wrap: anywhere; }
 .successFooter { margin-top: auto; padding-top: 30px; }
 .successFooter .primaryButton { justify-content: center !important; }
