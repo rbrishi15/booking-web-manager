@@ -59,4 +59,12 @@ jobs:
             exit 0
           fi
           git commit -m "docs(wallet): attach rendered Storybook payment modal screenshots"
-          git push origin "HEAD:refs/heads/$HEAD_REF"
+          # Other PR commits may land while Storybook builds. Rebase the two image files
+          # on top of the latest branch head instead of attempting a force push.
+          for attempt in 1 2 3; do
+            git fetch origin "$HEAD_REF"
+            git rebase FETCH_HEAD
+            if git push origin "HEAD:refs/heads/$HEAD_REF"; then exit 0; fi
+            echo "Remote advanced, retrying push (attempt $attempt)"
+          done
+          exit 1
