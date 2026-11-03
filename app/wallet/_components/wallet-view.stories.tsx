@@ -412,46 +412,71 @@ export const FundsActions: Story = {
     await expect(balance.getByRole("link", { name: "Withdraw" })).toHaveAttribute("href", "/payouts");
     await expect(canvas.getByText("Topping up with PayNow is coming soon.")).not.toBeVisible();
     await userEvent.click(balance.getByRole("button", { name: "Add funds" }));
-    await expect(canvas.getByText("Topping up with PayNow is coming soon.")).toBeVisible();
+    await expect(within(document.body).getByText("Topping up with PayNow is coming soon.")).toBeVisible();
     const holds = within(canvas.getByRole("region", { name: "Held for sessions" }));
     await expect(holds.getByRole("link", { name: /Bishan Sports Hall/ })).toHaveAttribute("href", "/sessions?tab=joined&session=s1");
     await expect(holds.getByRole("link", { name: /Jurong East Sports Hall/ })).toHaveAttribute("href", "/sessions?tab=joined&session=s2");
   },
 };
 
+const mockPayNowSession = {
+  clientSecret: "pi_test_secret_mock",
+  paymentIntentId: "pi_test_mock",
+  amountCents: 1234,
+  qrCode: {
+    // Decorative, unscannable QR preview: actual payments use the URL from Stripe.
+    imageUrlPng: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="224" height="224" viewBox="0 0 224 224"><rect width="224" height="224" fill="white"/><g fill="black"><path d="M8 8h64v64H8zM16 16v48h48V16zM152 8h64v64h-64zM160 16v48h48V16zM8 152h64v64H8zM16 160v48h48v-48zM88 8h16v16H88zM120 24h16v32h-16zM88 72h48v16H88zM152 88h16v48h-16zM184 88h32v16h-32zM88 104h16v48H88zM120 120h16v16h-16zM104 168h64v16h-64zM184 152h16v64h-16zM120 200h48v16h-48z"/></g></svg>'),
+    expiresAt: Date.now() + 3600000,
+  },
+};
+
 const previewTopUp = {
-  payWithPayNow: fn<TopUpTransport["payWithPayNow"]>(async () => ({ status: "paid" })),
+  startPayNow: fn<TopUpTransport["startPayNow"]>(async (cents) => ({
+    status: "ready" as const, session: { ...mockPayNowSession, amountCents: cents },
+  })),
+  checkPayment: fn<TopUpTransport["checkPayment"]>(async () => ({ status: "paid" })),
 };
 const previewPaid = fn();
 
 export const AvailableTopUp: Story = {
   args: { topUp: <TopUpPanel transport={previewTopUp} onPaid={previewPaid} /> },
   beforeEach: () => {
-    previewTopUp.payWithPayNow.mockClear();
+    previewTopUp.startPayNow.mockClear();
+    previewTopUp.checkPayment.mockClear();
     previewPaid.mockClear();
   },
   play: async ({ canvas }) => {
     const balance = within(canvas.getByRole("region", { name: "Balance" }));
-    const disclosure = balance.getByRole("button", { name: "Add funds" });
-    await userEvent.click(disclosure);
-    const topUp = within(canvas.getByRole("region", { name: "Top up with PayNow" }));
+    await userEvent.click(balance.getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    const topUp = within(modal);
     const amount = topUp.getByRole("textbox", { name: "Amount (S$)" });
     await userEvent.click(topUp.getByRole("button", { name: "S$20" }));
     await expect(amount).toHaveValue("20");
     await userEvent.clear(amount);
     await userEvent.type(amount, "12.34");
-    await userEvent.click(disclosure);
-    await expect(amount).not.toBeVisible();
-    await expect(previewTopUp.payWithPayNow).not.toHaveBeenCalled();
-    await userEvent.click(disclosure);
-    await expect(amount).toBeVisible();
-    await expect(amount).toHaveValue("12.34");
-    await userEvent.click(topUp.getByRole("button", { name: "Pay with PayNow" }));
-    await expect(previewTopUp.payWithPayNow).toHaveBeenCalledOnce();
-    await expect(previewTopUp.payWithPayNow).toHaveBeenCalledWith(1234, expect.any(String));
-    await expect(previewPaid).toHaveBeenCalledOnce();
-    await expect(topUp.getByText("Payment received. Your balance updates in a few seconds.")).toBeVisible();
+    await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(previewTopUp.startPayNow).toHaveBeenCalledWith(1234, expect.any(String));
+    await waitFor(() => expect(previewPaid).toHaveBeenCalledOnce());
+    await expect(topUp.getByText("Payment received.")).toBeVisible();
     await expect(balance.getByText("$25.00")).toBeVisible();
+  },
+};
+
+const waitingTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: { ...mockPayNowSession, amountCents: cents } }),
+  checkPayment: async () => ({ status: "pending" }),
+};
+
+export const PayNowQrPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(within(document.body).getByRole("dialog"));
+    await userEvent.click(modal.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await modal.findByRole("img", { name: /PayNow QR code/ })).toBeVisible();
+    await expect(modal.getByText("Waiting for payment confirmation")).toBeVisible();
   },
 };
 
