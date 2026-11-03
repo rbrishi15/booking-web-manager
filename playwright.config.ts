@@ -20,6 +20,11 @@ export default defineConfig({
       use: { browserName: "webkit", trace: "retain-on-failure" },
     },
     {
+      name: "sessions-timeline-firefox",
+      testMatch: "**/sessions-timeline.spec.ts",
+      use: { browserName: "firefox", trace: "retain-on-failure" },
+    },
+    {
       name: "session-api-unavailable",
       testMatch: "**/session-api-unavailable.spec.ts",
       use: { trace: "off" },
