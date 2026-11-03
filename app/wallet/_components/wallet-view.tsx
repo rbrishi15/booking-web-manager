@@ -78,7 +78,7 @@ export function WalletView({ summary, history, loadingMore, moreError, onRetry, 
             </div>
           </div>
           <Dialog open={topUpOpen} onOpenChange={setTopUpOpen}>
-            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[490px] gap-0 overflow-y-auto rounded-xl border border-[#dfe4dd] bg-[#f8faf7] p-0 text-[#101613] shadow-2xl dark:border-[#293548] dark:bg-[#090f1b] dark:text-white sm:rounded-xl" overlayClassName="bg-black/75 backdrop-blur-[3px]">
+            <DialogContent forceMount className="data-[state=closed]:hidden max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[490px] gap-0 overflow-y-auto rounded-xl border border-[#dfe4dd] bg-[#f8faf7] p-0 text-[#101613] shadow-2xl dark:border-[#293548] dark:bg-[#090f1b] dark:text-white sm:rounded-xl" overlayClassName="data-[state=closed]:hidden bg-black/75 backdrop-blur-[3px]">
               <DialogTitle className="sr-only">Add funds to your wallet</DialogTitle>
               <DialogDescription className="sr-only">Choose an amount and complete the PayNow QR payment without leaving this window.</DialogDescription>
               {topUp ?? <div className="px-8 py-12"><InfoNote icon>Topping up with PayNow is coming soon.</InfoNote></div>}
