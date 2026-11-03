@@ -87,6 +87,12 @@ export interface WalletTopUpResult {
   readonly amountCents: number;
   readonly currency: "SGD";
   readonly status: string;
+  readonly qrCode: {
+    readonly imageUrlPng: string;
+    readonly hostedInstructionsUrl?: string;
+    /** Unix milliseconds. Stripe PayNow QR codes expire in one hour. */
+    readonly expiresAt: number;
+  };
 }
 
 /** Creates a payment request only. Verified webhook processing owns crediting. */
