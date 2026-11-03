@@ -1,0 +1,8 @@
+/* Keep every destination reachable in short windows without a visible scrollbar. */
+.sidebarContents {
+  scrollbar-width: none;
+}
+
+.sidebarContents::-webkit-scrollbar {
+  display: none;
+}
