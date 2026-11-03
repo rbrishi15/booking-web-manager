@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { InfoNote } from "@/components/ui/info-note";
@@ -29,7 +30,7 @@ export interface WalletViewProps {
   readonly moreError: string | null;
   readonly onRetry: () => void;
   readonly onLoadMore: () => void;
-  /** Existing PayNow form; absence shows the coming-soon notice when Add funds is opened. */
+  /** Two-stage PayNow modal; absence shows the coming-soon notice. */
   readonly topUp?: React.ReactNode;
 }
 
@@ -68,7 +69,7 @@ export function WalletView({ summary, history, loadingMore, moreError, onRetry, 
               </div>
             </dl>
             <div className={styles.balanceActions}>
-              <Button className={styles.addFunds} aria-expanded={topUpOpen} aria-controls="wallet-top-up" onClick={() => setTopUpOpen((open) => !open)}>
+              <Button className={styles.addFunds} aria-haspopup="dialog" onClick={() => setTopUpOpen(true)}>
                 <CirclePlus className={styles.mobileInline} aria-hidden="true" /><Plus className={styles.desktopInline} aria-hidden="true" />Add funds
               </Button>
               <Button asChild variant="outline" className={styles.payoutAction}>
@@ -76,11 +77,13 @@ export function WalletView({ summary, history, loadingMore, moreError, onRetry, 
               </Button>
             </div>
           </div>
-          {/* Preserve the form's draft and pending attempt when collapsed. Inline disclosure
-              also lets Stripe's payment overlay manage its focus normally. */}
-          <div id="wallet-top-up" hidden={!topUpOpen} className={styles.topUp}>
-            {topUp ?? <InfoNote icon>Topping up with PayNow is coming soon.</InfoNote>}
-          </div>
+          <Dialog open={topUpOpen} onOpenChange={setTopUpOpen}>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[490px] gap-0 overflow-y-auto rounded-xl border border-[#dfe4dd] bg-[#f8faf7] p-0 text-[#101613] shadow-2xl dark:border-[#293548] dark:bg-[#090f1b] dark:text-white sm:rounded-xl" overlayClassName="bg-black/75 backdrop-blur-[3px]">
+              <DialogTitle className="sr-only">Add funds to your wallet</DialogTitle>
+              <DialogDescription className="sr-only">Choose an amount and complete the PayNow QR payment without leaving this window.</DialogDescription>
+              {topUp ?? <div className="px-8 py-12"><InfoNote icon>Topping up with PayNow is coming soon.</InfoNote></div>}
+            </DialogContent>
+          </Dialog>
         </>}
       </section>
         {summary.status === "ready" && <Holds summary={summary.data} />}
