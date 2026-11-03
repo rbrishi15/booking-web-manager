@@ -151,7 +151,7 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
           </div>
           {phase.kind === "error" && <ErrorMessage className="mt-6">{phase.message}</ErrorMessage>}
           <Button
-            className="mt-10 flex h-13 min-h-12 w-full justify-between rounded-md bg-[#101613] px-5 text-sm font-medium text-white hover:bg-[#2c3730] dark:bg-[#f3f5f2] dark:text-[#101613] dark:hover:bg-white"
+            className="mt-10 flex h-12 min-h-12 w-full justify-between rounded-md bg-[#101613] px-5 text-sm font-medium text-white hover:bg-[#2c3730] dark:bg-[#f3f5f2] dark:text-[#101613] dark:hover:bg-white"
             disabled={parsed.status !== "valid" || phase.kind === "creating"}
             onClick={() => void continueToPayment()}
           >
