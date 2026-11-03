@@ -3,8 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-03
 - Extends: the either/or departure choice in [ADR-0006](./0006-personal-replacement-reservations.md)
-  with a third choice for late withdrawals. Open-slot and named-invitation
-  withdrawals, the 30-hour rule and settlement are unchanged.
+  with a forfeit choice for late withdrawals. The 30-hour refund boundary and
+  settlement are unchanged.
 
 ## Context
 
@@ -16,6 +16,22 @@ wait for a replacement, had no way to say so. The team confirmed on
 the place then **closes**: nobody else can take it.
 
 ## Decision
+
+The user clarified on 3 November 2026 that the choices depend on the time
+remaining until the start:
+
+| Time remaining | Allowed departure choices |
+| --- | --- |
+| At least 30 hours, including exactly 30 hours | Open to the waitlist or invite one person |
+| Less than 30 hours | Invite one person or forfeit the share |
+
+A new late `OPEN_SLOT` withdrawal (including the domain's omitted-mode
+default) is refused with `INVALID_STATE` before any state changes. Previously
+recorded late open-slot withdrawals remain readable and retain their existing
+replacement/refund behavior; no historical record is rewritten. The dialog
+uses the server's preview to show the allowed choices, clears a waitlist
+selection when the cutoff passes, and refreshes the choices if the server
+rejects a stale request after the final preview.
 
 `FORFEIT` becomes a third `ReplacementMode`, available only for a late
 withdrawal. At 30 hours or more before the start a withdrawal is refunded in
@@ -48,7 +64,7 @@ forfeited one, and clears the replacement mode as for any other withdrawal.
   kind `FORFEITURE_DUE`. The withdrawal preview is unchanged: forfeiting is a
   choice made only when withdrawing.
 - The withdrawal dialog offers "Forfeit my share" only when the preview shows
-  a late withdrawal.
+  a late withdrawal, and "Open it to the waitlist" only for an early withdrawal.
 - A booker may collect a forfeited share for a place that then stays empty.
   This is the intended trade for the player's immediate exit; the booker
   cannot reopen the place.

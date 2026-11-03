@@ -106,6 +106,8 @@ describe("PostgresCommitmentSessionRepository", () => {
       .withdraw(session, {
         participationId: "p-alice",
         now: hoursBeforeSessionStart(10),
+        replacementMode: "DIRECT_INVITE",
+        replacementInviteeId: "carol",
       });
 
     // Act
