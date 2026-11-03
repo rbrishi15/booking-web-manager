@@ -337,6 +337,17 @@ have loaded. The API cursor order and mobile/Hosting lists remain unchanged.
 dialog. Closing it returns keyboard focus to its trigger. Date buttons and compact
 rows provide keyboard alternatives; keyboard focus within a session prevents scroll selection
 from removing that control. Reduced-motion preferences remove transitions.
+Wheel input keeps one card per deliberate swipe and consumes its momentum tail.
+A 24 px reversal can immediately request a card in the new direction. A renewed push in
+the same direction is recognized after the old input has decayed, with two
+substantial packets required so an isolated tail spike cannot skip a card.
+These requests queue during a running transition. Explicit browser momentum
+never requests another card; the 220 ms quiet interval remains the fallback
+between otherwise indistinguishable gestures.
+If native scrolling carries the selected card completely outside the reading
+viewport, the next deliberate wheel gesture expands the visible row nearest
+the sticky header. It does not jump back to the off-screen selection; tiny
+packets still accumulate intent and explicit momentum cannot select a card.
 Desktop Hosting has equal-width upcoming carousel cards and compact history rows;
 it has no timeline. Both views use the original shared sidebar from `main`, with
 the sessions breadcrumb and header directly on the page canvas. Wide-desktop page
