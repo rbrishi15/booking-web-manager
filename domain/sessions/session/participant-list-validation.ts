@@ -24,6 +24,19 @@ export function personalReplacementReservations(
   );
 }
 
+/**
+ * Places closed by a late withdrawal that gave up its share (ADR-0024). They
+ * stay closed for the rest of the session; cancelling the session refunds the
+ * share and clears the replacement mode.
+ */
+export function forfeitedPlaces(
+  participations: readonly Participation[],
+): readonly Participation[] {
+  return participations.filter(
+    (p) => p.status === "WITHDRAWN" && p.replacementMode === "FORFEIT",
+  );
+}
+
 /** Collection invariants shared by hydration and every immutable candidate. */
 export function validateParticipantList(
   participations: readonly Participation[],
@@ -129,10 +142,11 @@ export function validateParticipantList(
   );
   DomainError.require(
     participations.filter((p) => p.status === "COMMITTED").length +
-      reservations.length <=
+      reservations.length +
+      forfeitedPlaces(participations).length <=
       terms.totalSlots,
     "CAPACITY_EXCEEDED",
-    "Commitments and reserved replacement seats exceed session capacity",
+    "Commitments, reserved replacement seats and forfeited places exceed session capacity",
   );
 }
 

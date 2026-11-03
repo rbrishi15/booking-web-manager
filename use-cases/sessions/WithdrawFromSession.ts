@@ -9,10 +9,14 @@ import {
 import { type FollowUpPromotion, promoteAfter } from "./follow-up-promotion";
 import type { PromoteFromWaitlist } from "./PromoteFromWaitlist";
 
-/** Either/or at withdrawal and fixed afterwards (ADR-0006). */
+/**
+ * One choice at withdrawal, fixed afterwards (ADR-0006). FORFEIT is only for a
+ * late withdrawal: the share goes to the booker and the place closes (ADR-0024).
+ */
 export type ReplacementChoice =
   | { readonly mode: "OPEN_SLOT" }
-  | { readonly mode: "DIRECT_INVITE"; readonly inviteeId: UUID };
+  | { readonly mode: "DIRECT_INVITE"; readonly inviteeId: UUID }
+  | { readonly mode: "FORFEIT" };
 
 export interface WithdrawFromSessionRequest {
   /** The authenticated participant; never taken from the request body. */
@@ -26,7 +30,7 @@ export interface WithdrawFromSessionResult {
   readonly kind: WithdrawalResult["kind"];
   readonly sessionId: UUID;
   readonly participationId: UUID;
-  /** Cents returned to the wallet now; zero while awaiting a replacement. */
+  /** Cents returned to the wallet now; zero while awaiting a replacement or after forfeiting. */
   readonly refundedCents: number;
   readonly promotion: FollowUpPromotion;
 }
@@ -50,7 +54,8 @@ export interface WithdrawFromSessionDependencies
  *
  * An open-slot withdrawal then triggers FIFO promotion in a separate unit of
  * work (see follow-up-promotion.ts). A named invitation reserves the place
- * for that person instead, who accepts through AcceptReplacement.
+ * for that person instead, who accepts through AcceptReplacement. A late
+ * forfeit closes the place, so nobody is promoted into it (ADR-0024).
  *
  * The same transaction saves a named invitation and warns a late withdrawer
  * that their held share is forfeited at start unless replaced.

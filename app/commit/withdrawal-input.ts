@@ -10,13 +10,14 @@ const withdrawRequest = sessionRequest.extend({
   replacement: z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("OPEN_SLOT") }),
     z.object({ mode: z.literal("DIRECT_INVITE"), inviteeId: uuid }),
+    z.object({ mode: z.literal("FORFEIT") }),
   ]),
 });
 
 /**
  * UC2-05 withdraw: `{ sessionId, idempotencyKey, replacement }`, where
- * replacement is `{ mode: "OPEN_SLOT" }` or `{ mode: "DIRECT_INVITE",
- * inviteeId }`. The refund amount and the 30-hour rule are decided by the
+ * replacement is `{ mode: "OPEN_SLOT" }`, `{ mode: "DIRECT_INVITE",
+ * inviteeId }` or, for a late withdrawal only, `{ mode: "FORFEIT" }` (ADR-0024). The refund amount and the 30-hour rule are decided by the
  * domain inside the use case's unit of work; the body carries no amount.
  */
 export function parseWithdrawInput(

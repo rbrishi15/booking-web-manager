@@ -471,6 +471,35 @@ describe("Participation state and fund lifecycle", () => {
       expect(reliabilityValue).toBe(0);
     });
   });
+
+  describe("Forfeited places", () => {
+    test("constructor_WhenForfeitedPlaceStillAwaitsReplacement_RejectsForfeit", () => {
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails({ state: "AWAITING_REPLACEMENT" })),
+        replacementMode: "FORFEIT",
+      });
+
+      expect(() => new Participation(details)).toThrow(
+        expect.objectContaining({ code: "INVALID_INPUT" }),
+      );
+    });
+
+    test("constructor_WhenForfeitedShareIsDue_KeepsForfeitMode", () => {
+      const details = participationDetails({
+        status: "WITHDRAWN",
+        withdrawnAt: settledAt,
+        hold: new FundHold(holdDetails({ state: "FORFEITURE_DUE" })),
+        replacementMode: "FORFEIT",
+      });
+
+      const participation = new Participation(details);
+
+      expect(participation.replacementMode).toBe("FORFEIT");
+      expect(participation.hold?.state).toBe("FORFEITURE_DUE");
+    });
+  });
 });
 
 function holdDetails(

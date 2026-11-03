@@ -161,7 +161,7 @@ export function useWithdrawalFlow({ userId, sessions, previewWithdrawal, withdra
       return;
     }
     const shown = presented;
-    const replacement: Replacement | null = mode === "OPEN_SLOT" ? { mode }
+    const replacement: Replacement | null = mode === "OPEN_SLOT" || mode === "FORFEIT" ? { mode }
       : mode === "DIRECT_INVITE" && inviteeId !== null ? { mode, inviteeId } : null;
     if (shown === null || replacement === null) return;
     mutation.reset();
@@ -219,7 +219,7 @@ export function useWithdrawalFlow({ userId, sessions, previewWithdrawal, withdra
     },
     chooseMode: (next) => {
       setMode(next);
-      if (next === "OPEN_SLOT") setInviteeId(null);
+      if (next !== "DIRECT_INVITE") setInviteeId(null);
     },
     chooseInvitee: setInviteeId,
     confirm: () => { void confirm(); },

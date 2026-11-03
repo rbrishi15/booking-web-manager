@@ -51,3 +51,4 @@ Product decisions and remaining discussion:
 - [Waitlists and replacements: confirmed scope, historical options, and remaining policy questions](./discussions/waitlist-and-replacement-options.md). The waitlist and fixed either/or departure choice are confirmed; unrelated financial and rejoining proposals remain under review.
 
 - [ADR-0023: Durable notifications and browser-local read state](./adr/0023-durable-notifications-and-local-read-state.md) — atomic inbox/push persistence, 30-day retention and private Realtime invalidation after commit.
+- [ADR-0024: A late withdrawal may forfeit its share and close the place](./adr/0024-late-withdrawal-forfeit.md) — a third departure choice under 30 hours: the share becomes due to the booker at once and nobody can take the place; extends ADR-0006.

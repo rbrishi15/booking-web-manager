@@ -77,7 +77,9 @@ export class Participation {
     );
     if (details.replacementMode !== undefined)
       DomainError.require(
-        ["OPEN_SLOT", "DIRECT_INVITE"].includes(details.replacementMode),
+        ["OPEN_SLOT", "DIRECT_INVITE", "FORFEIT"].includes(
+          details.replacementMode,
+        ),
         "INVALID_INPUT",
         "Unknown replacement mode",
       );
@@ -206,6 +208,12 @@ export class Participation {
         "Only an invitation replacement can have a named invitee",
       );
     }
+    if (details.replacementMode === "FORFEIT")
+      DomainError.require(
+        hold?.state === "FORFEITURE_DUE" || hold?.state === "FORFEITED",
+        "INVALID_INPUT",
+        "A forfeited place keeps its share due to the booker",
+      );
     if (details.replacesParticipationId !== undefined) {
       requireId(details.replacesParticipationId, "replacesParticipationId");
       DomainError.require(
@@ -335,9 +343,13 @@ export class Participation {
       "The hold belongs to another participation",
     );
     DomainError.require(
-      ["REFUNDED", "AWAITING_REPLACEMENT"].includes(hold.state),
+      replacementMode === "FORFEIT"
+        ? hold.state === "FORFEITURE_DUE"
+        : ["REFUNDED", "AWAITING_REPLACEMENT"].includes(hold.state),
       "INVALID_STATE",
-      "Withdrawal needs a refunded or awaiting-replacement hold",
+      replacementMode === "FORFEIT"
+        ? "A forfeit withdrawal needs a forfeiture-due hold"
+        : "Withdrawal needs a refunded or awaiting-replacement hold",
     );
     return this.withChanges({
       status: "WITHDRAWN",

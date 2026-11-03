@@ -156,7 +156,10 @@ export function validateAdmission(
   }
   const ordinarySlots = Math.max(
     0,
-    totalSlots - roster.committedCount - roster.reservedCount,
+    totalSlots -
+      roster.committedCount -
+      roster.reservedCount -
+      roster.forfeitedCount,
   );
   if (existing !== undefined) {
     DomainError.require(
@@ -307,12 +310,14 @@ export function validateParticipationTransition(
       "Withdrawal requires an active commitment and withdrawal time",
     );
     DomainError.require(
-      after.hold?.state === "REFUNDED" ||
-        after.hold?.state === "AWAITING_REPLACEMENT",
+      after.replacementMode === "FORFEIT"
+        ? after.hold?.state === "FORFEITURE_DUE"
+        : after.hold?.state === "REFUNDED" ||
+            after.hold?.state === "AWAITING_REPLACEMENT",
       "INVALID_STATE",
-      "Withdrawal requires a refund or pending replacement",
+      "Withdrawal requires a refund, pending replacement or forfeiture",
     );
-    if (after.hold.state === "REFUNDED") assertRefund(before, after, now);
+    if (after.hold?.state === "REFUNDED") assertRefund(before, after, now);
     return;
   }
   if (before.status === "COMMITTED" && after.status === "REMOVED") {

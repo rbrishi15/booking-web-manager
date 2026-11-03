@@ -128,6 +128,22 @@ describe("UC2-05 saved unresolved requests", () => {
     expect(otherUser.size).toBe(0);
   });
 
+  test("keep an uncertain late forfeit so the same forfeit can be retried after a reload", () => {
+    // Arrange
+    const storage = memoryStorage();
+    const forfeit: UnresolvedWithdrawal = {
+      request: { sessionId, idempotencyKey: "forfeit-key", replacement: { mode: "FORFEIT" } },
+      preview: { kind: "AWAITING_REPLACEMENT", refundCents: 0, heldCents: 1250 },
+    };
+    browserUnresolvedStore("withdrawals", "user-a", unresolvedWithdrawalSchema, () => storage).save(new Map([[sessionId, forfeit]]));
+
+    // Act
+    const reloaded = browserUnresolvedStore("withdrawals", "user-a", unresolvedWithdrawalSchema, () => storage).load();
+
+    // Assert
+    expect(reloaded.get(sessionId)).toEqual(forfeit);
+  });
+
   test("keeps withdrawals, waitlist departures and acceptances apart, and removes the entry when empty", () => {
     // Arrange
     const storage = memoryStorage();

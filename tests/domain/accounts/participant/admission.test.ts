@@ -777,4 +777,30 @@ describe("Participant session admission", () => {
       expect(sessionState(bookingSession)).toEqual(previousState);
     });
   });
+
+  describe("Forfeited places", () => {
+    test("join_WhenTheOnlyGuestPlaceWasForfeited_WaitlistsApplicant", () => {
+      // Two places: the booker's own and ben's, which ben forfeited.
+      const bookingSession = createTestSession({
+        totalSlots: 2,
+        committedUserIds: ["ben"],
+        participationOverrides: {
+          ben: withdrawnParticipation("ben", {
+            withdrawnAt: hoursBeforeSessionStart(10),
+            replacementMode: "FORFEIT",
+            holdState: "FORFEITURE_DUE",
+          }),
+        },
+      });
+
+      const admission = createTestUser({ userId: "cara" }).asParticipant().join(bookingSession, {
+        participationId: "p-cara",
+        holdId: "h-cara",
+        now: hoursBeforeSessionStart(5),
+      });
+
+      expect(admission.kind).toBe("WAITLISTED");
+      expect(bookingSession.participantList.requireParticipation("p-cara").hold).toBeUndefined();
+    });
+  });
 });

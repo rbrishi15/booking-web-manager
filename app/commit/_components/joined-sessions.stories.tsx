@@ -148,6 +148,8 @@ export const WithdrawWithFullRefund: Story = {
   play: async ({ args, canvas }) => {
     await openWithdraw(canvas, "Bishan Sports Hall");
     await waitFor(() => expect(within(dialog()).getByText("S$12.50")).toBeVisible());
+    // A full refund is coming, so there is nothing to forfeit (ADR-0024).
+    await expect(within(dialog()).queryByRole("radio", { name: /forfeit my share/i })).not.toBeInTheDocument();
     const withdraw = within(dialog()).getByRole("button", { name: "Withdraw" });
     await expect(withdraw).toBeDisabled();
     await userEvent.click(within(dialog()).getByRole("radio", { name: /open it to the waitlist/i }));
@@ -177,6 +179,18 @@ export const LateWithdrawalInvitingSomeone: Story = {
     await expect(args.withdraw).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: lateSession.sessionId, replacement: { mode: "DIRECT_INVITE", inviteeId: candidates[1]!.userId },
     }));
+  },
+};
+
+/** Less than 30 hours before the start: the player gives their share to the booker and the place closes (ADR-0024). */
+export const LateWithdrawalForfeiting: Story = {
+  play: async ({ args, canvas }) => {
+    await openWithdraw(canvas, "Kallang Tennis Centre");
+    await userEvent.click(await within(dialog()).findByRole("radio", { name: /forfeit my share/i }));
+    await expect(within(dialog()).getByText(/won.t come back to you, even if the\s+session fills/i)).toBeVisible();
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Forfeit and withdraw" }));
+    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("Your S$8.00 goes to the booker, and your place is closed."));
+    await expect(args.withdraw).toHaveBeenCalledWith(expect.objectContaining({ sessionId: lateSession.sessionId, replacement: { mode: "FORFEIT" } }));
   },
 };
 
