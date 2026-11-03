@@ -492,6 +492,12 @@ export const PayNowAmountPreview: Story = {
   },
 };
 
+/** Capture-only fixture. No Storybook play() so Chromium controls both steps deterministically. */
+export const PayNowScreenshotCapture: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+};
+
 export const PayNowQrPreview: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
   args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
