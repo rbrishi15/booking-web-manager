@@ -40,6 +40,7 @@ try {
           }
         });
       }
+      if (shot.step === 1) await modal.getByRole("heading", { name: "Add funds." }).click();
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({ path: resolve(output, shot.file), animations: "disabled" });
       console.log(`Captured ${shot.file} with Storybook at ${url}`);
