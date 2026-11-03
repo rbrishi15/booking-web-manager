@@ -156,8 +156,13 @@ test("an empty Home offers weather and discovery, and Settings logout returns to
       await page.screenshot({ path: testInfo.outputPath(`home-weather-${width}.png`), fullPage: true });
     }
     await page.getByRole("link", { name: "Find a session", exact: true }).first().click();
-    await expect(page.getByRole("heading", { name: "Find Your Next Game", exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "Back to previous page", exact: true }).click();
+    // The viewport is still 1280px: desktop Discover uses sidebar navigation,
+    // not the mobile-only back link or the mobile "Find Your Next Game" heading.
+    await expect(page.getByRole("heading", { name: "Upcoming sessions", exact: true })).toBeVisible();
+    const desktopNavigation = page.getByRole("navigation", { name: "Main", exact: true });
+    await expect(desktopNavigation.getByRole("link", { name: "Discover", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("link", { name: "Back to previous page", exact: true })).toHaveCount(0);
+    await desktopNavigation.getByRole("link", { name: "Home", exact: true }).click();
     await expect(page.getByText("You have no upcoming bookings.", { exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Settings", exact: true }).click();
