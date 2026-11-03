@@ -49,6 +49,7 @@ describe("StripeWalletTopUps", () => {
         currency: "sgd",
         payment_method_types: ["paynow"],
         payment_method_data: { type: "paynow" },
+        confirm: true,
         metadata: { purpose: "wallet_top_up", wallet_id: "wallet-user-a", user_id: "user-a" },
       },
       { idempotencyKey: '["UC1-05:top-up-intent","user-a","key-1"]' },
@@ -58,7 +59,12 @@ describe("StripeWalletTopUps", () => {
       clientSecret: "pi_1_secret_x",
       amountCents: 2000,
       currency: "SGD",
-      status: "requires_payment_method",
+      status: "requires_action",
+      qrCode: {
+        imageUrlPng: "https://stripe.example/qr.png",
+        hostedInstructionsUrl: "https://stripe.example/checkout",
+        expiresAt: (1_700_000_000 + 3600) * 1000,
+      },
     });
   });
 
@@ -113,7 +119,15 @@ function fakeStripe(clientSecret: string | null = "pi_1_secret_x") {
     id: "pi_1",
     client_secret: clientSecret,
     amount: params.amount,
-    status: "requires_payment_method",
+    status: "requires_action",
+    created: 1_700_000_000,
+    next_action: {
+      type: "paynow_display_qr_code",
+      paynow_display_qr_code: {
+        image_url_png: "https://stripe.example/qr.png",
+        hosted_instructions_url: "https://stripe.example/checkout",
+      },
+    },
   }));
   return { stripe: { paymentIntents: { create } } as unknown as Stripe, create };
 }
