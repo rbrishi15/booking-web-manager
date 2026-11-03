@@ -90,6 +90,8 @@ export interface WalletTopUpResult {
   readonly qrCode: {
     readonly imageUrlPng: string;
     readonly hostedInstructionsUrl?: string;
+    /** Stripe-hosted test payment page encoded into the test PayNow QR. */
+    readonly testPaymentUrl?: string;
     /** Unix milliseconds. Stripe PayNow QR codes expire in one hour. */
     readonly expiresAt: number;
   };
