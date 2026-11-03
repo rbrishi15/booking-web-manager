@@ -472,6 +472,17 @@ const waitingTopUp: TopUpTransport = {
   checkPayment: async () => ({ status: "pending" }),
 };
 
+/** Stable review state for automated desktop screenshots of stage one. */
+export const TopUpAmountPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await expect(within(modal).getByRole("textbox", { name: "Amount (S$)" })).toBeVisible();
+  },
+};
+
 export const PayNowQrPreview: Story = {
   globals: { viewport: { value: "desktop", isRotated: false } },
   args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
