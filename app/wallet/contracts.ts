@@ -71,6 +71,7 @@ export const walletTopUpResultSchema = z.object({
   qrCode: z.object({
     imageUrlPng: z.string().url(),
     hostedInstructionsUrl: z.string().url().optional(),
+    testPaymentUrl: z.string().url().optional(),
     expiresAt: z.number().int().positive(),
   }),
 });
