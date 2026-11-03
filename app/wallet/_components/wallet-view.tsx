@@ -78,9 +78,9 @@ export function WalletView({ summary, history, loadingMore, moreError, onRetry, 
             </div>
           </div>
           <Dialog open={topUpOpen} onOpenChange={setTopUpOpen}>
-            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[490px] gap-0 overflow-y-auto rounded-xl border border-[#dfe4dd] bg-[#f8faf7] p-0 text-[#101613] shadow-2xl dark:border-[#293548] dark:bg-[#090f1b] dark:text-white sm:rounded-xl" overlayClassName="bg-black/75 backdrop-blur-[3px]">
+            <DialogContent className="max-h-[calc(100dvh-1.25rem)] w-[calc(100vw-1.25rem)] max-w-[445px] min-w-0 gap-0 overflow-x-hidden overflow-y-auto rounded-[9px] border border-[#dfe4dd] bg-[#f7f9f7] p-0 text-[#181b19] shadow-2xl dark:border-[#303d49] dark:bg-[#101720] dark:text-[#f5f7f4] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]" overlayClassName="bg-black/75 backdrop-blur-[3px]">
               <DialogTitle className="sr-only">Add funds to your wallet</DialogTitle>
-              <DialogDescription className="sr-only">Choose an amount and complete the PayNow QR payment without leaving this window.</DialogDescription>
+              <DialogDescription className="sr-only">Choose an amount, simulate a test-mode PayNow scan or use the QR code, and view Stripe-confirmed payment details.</DialogDescription>
               {topUp ?? <div className="px-8 py-12"><InfoNote icon>Topping up with PayNow is coming soon.</InfoNote></div>}
             </DialogContent>
           </Dialog>

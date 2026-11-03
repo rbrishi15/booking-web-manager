@@ -2,17 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Copy, LoaderCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, Info, LoaderCircle, ScanLine, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DialogClose } from "@/components/ui/dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseTopUpAmount } from "../top-up-amount";
 import type { PayNowSession, TopUpTransport } from "../top-up-transport";
+import styles from "./top-up-panel.module.css";
 
 export interface TopUpPanelProps {
   readonly transport: TopUpTransport;
-  /** Stripe has confirmed receipt; refresh the webhook-backed wallet ledger. */
+  /** Stripe has confirmed payment; refresh the webhook-backed ledger. */
   readonly onPaid: () => void;
 }
 
@@ -21,19 +23,19 @@ type Phase =
   | { readonly kind: "amount" }
   | { readonly kind: "creating" }
   | { readonly kind: "payment"; readonly session: PayNowSession }
-  | { readonly kind: "success" }
+  | { readonly kind: "success"; readonly session: PayNowSession }
   | { readonly kind: "expired" }
   | { readonly kind: "error"; readonly message: string };
 
-const formatSgd = (cents: number) => `S$${(cents / 100).toFixed(2)}`;
+const formatSgd = (cents: number) => "S$" + (cents / 100).toFixed(2);
 
-/** Two stages: amount selection and a Stripe-generated QR, with no nested payment overlay. */
+/** Single accessible dialog: amount, real Stripe QR/test payment, then verified confirmation. */
 export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
   const [amount, setAmount] = useState("20");
   const [phase, setPhase] = useState<Phase>({ kind: "amount" });
   const [attemptKey, setAttemptKey] = useState(() => crypto.randomUUID());
   const [checkWarning, setCheckWarning] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
   const parsed = parseTopUpAmount(amount);
   const paymentSession = phase.kind === "payment" ? phase.session : null;
 
@@ -50,7 +52,7 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
         if (!active || completed) return;
         if (outcome.status === "paid") {
           completed = true;
-          setPhase({ kind: "success" });
+          setPhase({ kind: "success", session: paymentSession });
           onPaid();
         } else if (outcome.status === "expired" || Date.now() >= paymentSession.qrCode.expiresAt) {
           completed = true;
@@ -58,6 +60,8 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
         } else {
           setCheckWarning(outcome.status === "error" ? outcome.message : "");
         }
+      } catch {
+        if (active && !completed) setCheckWarning("Couldn't check payment status. We'll keep trying.");
       } finally {
         checking = false;
       }
@@ -79,7 +83,7 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
     const result = await transport.startPayNow(parsed.cents, attemptKey);
     if (result.status === "ready") {
       setCheckWarning("");
-      setCopied(false);
+      setQrExpanded(false);
       setPhase({ kind: "payment", session: result.session });
     } else {
       setPhase({ kind: "error", message: result.message });
@@ -92,34 +96,24 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
     setCheckWarning("");
   }
 
-  async function copyLink(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   const amountStage = phase.kind === "amount" || phase.kind === "creating" || phase.kind === "error";
-  const displayCents = phase.kind === "payment" ? phase.session.amountCents
-    : parsed.status === "valid" ? parsed.cents : 0;
 
   return (
-    <section aria-label="Add funds with PayNow" className="px-6 pb-7 pt-9 text-[#111714] dark:text-[#f6f7f5] sm:px-9 sm:pb-9 sm:pt-10">
-      <p className="mb-7 text-[10px] font-medium uppercase tracking-[.18em] text-[#7e8981] dark:text-[#8794a5]">
-        Wallet <span className="mx-2">/</span> {amountStage ? "01" : "02"} of 02
-      </p>
+    <section className={styles.panel} aria-label="Add funds with PayNow" data-stage={amountStage ? "amount" : phase.kind}>
+      <p className={styles.breadcrumb}>WALLET <span aria-hidden="true">/</span> ADD FUNDS</p>
       {amountStage ? (
         <>
-          <h2 className="text-[32px] font-semibold leading-tight tracking-[-.05em] sm:text-[38px]">Add funds.</h2>
-          <p className="mt-2 text-sm leading-6 text-[#6b746e] dark:text-[#9ba5b4]">Top up your wallet securely with PayNow.</p>
-          <div className="mt-10">
-            <Label htmlFor="top-up-amount" className="mb-2 block text-xs font-medium text-[#777f79] dark:text-[#9ba5b4]">Amount (S$)</Label>
-            <div className="flex items-baseline border-b border-[#cbd1cb] pb-3 dark:border-[#394555]">
-              <span className="mr-3 text-2xl font-medium">S$</span>
+          <header className={styles.intro}>
+            <h2 className={styles.heading}>Add funds.</h2>
+            <p className={styles.description}>Top up your wallet securely with PayNow.</p>
+          </header>
+          <div className={styles.amountSection}>
+            <Label htmlFor="top-up-amount" className={styles.label}>Amount (S$)</Label>
+            <div className={styles.amountControl}>
+              <span className={styles.currency} aria-hidden="true">S$</span>
               <Input
                 id="top-up-amount"
+                className={styles.amountInput}
                 inputMode="decimal"
                 autoComplete="off"
                 value={amount}
@@ -127,98 +121,131 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
                 disabled={phase.kind === "creating"}
                 aria-invalid={amount !== "" && parsed.status === "invalid"}
                 aria-describedby="top-up-help"
-                className="h-14 border-0 bg-transparent px-0 text-[38px] font-semibold tracking-[-.055em] shadow-none focus-visible:ring-0 md:text-[44px]"
-                placeholder="20.00"
+                placeholder="20"
               />
             </div>
-            <p id="top-up-help" className="mt-2 min-h-5 text-xs text-[#7d877f] dark:text-[#9ba5b4]">
-              {amount !== "" && parsed.status === "invalid" ? parsed.message : "Minimum S$1.00 · Maximum S$1,000.00"}
+            <p id="top-up-help" className={styles.help}>
+              {amount !== "" && parsed.status === "invalid" ? parsed.message : "Minimum S$1.00 · Maximum S$1,000.00."}
             </p>
-            <div className="mt-6 grid grid-cols-3 gap-3">
+            <div className={styles.presets} role="group" aria-label="Quick amounts">
               {PRESETS.map((preset) => (
                 <Button
                   key={preset}
                   variant="outline"
+                  className={styles.preset}
                   disabled={phase.kind === "creating"}
                   aria-pressed={amount === preset}
                   onClick={() => change(preset)}
-                  className={`h-12 rounded-md border-[#d8ddd9] bg-transparent text-sm font-medium hover:bg-[#e8ece6] dark:border-[#303c4d] dark:hover:bg-[#202b3a] ${amount === preset ? "border-[#151a16] bg-[#e5eae3] text-[#101611] dark:border-[#d4dbe5] dark:bg-[#263243] dark:text-white" : ""}`}
                 >
                   {"S$" + preset}
                 </Button>
               ))}
             </div>
           </div>
-          {phase.kind === "error" && <ErrorMessage className="mt-6">{phase.message}</ErrorMessage>}
-          <Button
-            className="mt-10 flex h-12 min-h-12 w-full justify-between rounded-md bg-[#101613] px-5 text-sm font-medium text-white hover:bg-[#2c3730] dark:bg-[#f3f5f2] dark:text-[#101613] dark:hover:bg-white"
-            disabled={parsed.status !== "valid" || phase.kind === "creating"}
-            onClick={() => void continueToPayment()}
-          >
-            <span>{phase.kind === "creating" ? "Preparing PayNow…" : "Continue with PayNow"}</span>
-            {phase.kind === "creating" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
-          </Button>
-          <div className="mt-5 flex items-center justify-center gap-2 text-xs text-[#79827d] dark:text-[#8d9bab]">
-            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            Payments processed securely by Stripe
-          </div>
+          {phase.kind === "error" && <ErrorMessage className={styles.error}>{phase.message}</ErrorMessage>}
+          <footer className={styles.footer}>
+            <Button
+              className={styles.primaryButton}
+              disabled={parsed.status !== "valid" || phase.kind === "creating"}
+              onClick={() => void continueToPayment()}
+            >
+              <span>{phase.kind === "creating" ? "Preparing PayNow…" : "Continue with PayNow"}</span>
+              {phase.kind === "creating" ? <LoaderCircle className={styles.buttonIcon + " animate-spin"} aria-hidden="true" /> : <ArrowUpRight className={styles.buttonIcon} aria-hidden="true" />}
+            </Button>
+            <p className={styles.security}><ShieldCheck size={15} aria-hidden="true" /> Payments processed securely by Stripe</p>
+          </footer>
         </>
       ) : phase.kind === "payment" ? (
         <>
-          <h2 className="text-[32px] font-semibold leading-tight tracking-[-.05em] sm:text-[38px]">Scan to pay.</h2>
-          <p className="mt-2 text-sm leading-6 text-[#6b746e] dark:text-[#9ba5b4]">Scan the PayNow QR or simulate a payment with Stripe's test environment.</p>
-          <div className="mt-8 text-center">
-            <p className="text-[34px] font-semibold tracking-[-.055em]">{formatSgd(displayCents)}</p>
-            <div className="mx-auto mt-5 w-fit rounded-xl border border-[#e3e8e3] bg-white p-5 shadow-[0_14px_28px_-22px_#0006]">
-              <span className="mb-3 block text-center text-xs font-extrabold tracking-[.12em] text-[#93217d]">PAYNOW</span>
-              <Image unoptimized src={phase.session.qrCode.imageUrlPng} width={224} height={224} className="h-[min(52vw,224px)] w-[min(52vw,224px)] object-contain" alt={`PayNow QR code for ${formatSgd(displayCents)}`} />
+          <header className={styles.paymentIntro}>
+            <h2 className={styles.heading}>Scan to pay.</h2>
+            <p className={styles.description}>Scan the PayNow QR or simulate a payment with Stripe&apos;s test environment.</p>
+          </header>
+          <div className={styles.qrArea}>
+            <div className={styles.qrFrame + (qrExpanded ? " " + styles.qrExpanded : "")}>
+              <div className={styles.qrSurface}>
+                <Image
+                  unoptimized
+                  src={phase.session.qrCode.imageUrlPng}
+                  width={170}
+                  height={170}
+                  alt={"PayNow QR code for " + formatSgd(phase.session.amountCents)}
+                  className={styles.qrImage}
+                />
+              </div>
+              <span className={styles.paynowBrand}>PAYN<span className={styles.paynowLogo}>◉</span>W</span>
             </div>
           </div>
-          {phase.session.qrCode.testPaymentUrl ? (
-            <a
-              href={phase.session.qrCode.testPaymentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mx-auto mt-5 flex min-h-11 w-fit items-center justify-center gap-2 rounded-md border border-[#cdd6ce] bg-[#eff3ed] px-5 text-sm font-medium text-[#162119] transition-colors hover:bg-[#e3eae1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#162119] dark:border-[#36485e] dark:bg-[#172437] dark:text-[#e7edf6] dark:hover:bg-[#25364b]"
+          <div className={styles.paymentActions}>
+            {phase.session.qrCode.testPaymentUrl ? (
+              <a
+                className={styles.simulateButton}
+                href={phase.session.qrCode.testPaymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ScanLine size={19} aria-hidden="true" />
+                <span>Simulate scan</span>
+                <ArrowUpRight size={19} aria-hidden="true" />
+                <span className="sr-only">(opens Stripe test payment page in a new tab)</span>
+              </a>
+            ) : (
+              <div className={styles.noSimulator} role="status">
+                <Info size={17} aria-hidden="true" />
+                <span>Stripe did not provide a test scan link for this QR code.</span>
+              </div>
+            )}
+            <div className={styles.orDivider}><span>OR</span></div>
+            <Button
+              variant="outline"
+              className={styles.secondaryButton}
+              onClick={() => setQrExpanded((previous) => !previous)}
+              aria-expanded={qrExpanded}
             >
-              Simulate scan
-              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only">(opens Stripe test payment page in a new tab)</span>
-            </a>
-          ) : phase.session.qrCode.hostedInstructionsUrl ? (
-            <a
-              href={phase.session.qrCode.hostedInstructionsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mx-auto mt-5 flex min-h-11 w-fit items-center gap-2 text-sm font-medium underline underline-offset-4"
-            >
-              Open Stripe payment instructions
-              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-            </a>
-          ) : null}
-          <div role="status" aria-live="polite" className="mt-7 flex items-center justify-center gap-2 text-xs text-[#657367] dark:text-[#afbdca]">
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Waiting for payment confirmation
-          </div>
-          {checkWarning && <p role="alert" className="mt-2 text-center text-xs text-amber-700 dark:text-amber-300">{checkWarning}</p>}
-          <p className="mt-3 text-center text-xs leading-5 text-[#79847c] dark:text-[#92a0b0]">QR codes expire after one hour. Closing this window does not cancel a payment.</p>
-          {phase.session.qrCode.hostedInstructionsUrl && (
-            <Button variant="outline" className="mt-6 h-12 w-full justify-between rounded-md border-[#d7ddd9] bg-transparent dark:border-[#334153]" onClick={() => void copyLink(phase.session.qrCode.hostedInstructionsUrl!)}>
-              <span>{copied ? "Payment link copied" : "Copy payment link"}</span>
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <ScanLine size={17} aria-hidden="true" />
+              <span>{qrExpanded ? "Reduce QR code" : "Show larger QR code"}</span>
             </Button>
-          )}
-          <p className="mt-5 text-center text-xs text-[#79847c] dark:text-[#92a0b0]">Payment is verified automatically. No need to press a confirmation button.</p>
+            {phase.session.qrCode.hostedInstructionsUrl && (
+              <a className={styles.instructionsLink} href={phase.session.qrCode.hostedInstructionsUrl} target="_blank" rel="noopener noreferrer">
+                Open Stripe payment instructions <ArrowUpRight size={14} aria-hidden="true" />
+              </a>
+            )}
+            <p role="status" aria-live="polite" className={styles.waiting}>
+              <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+              Waiting for payment confirmation · {formatSgd(phase.session.amountCents)}
+            </p>
+            {checkWarning && <p className={styles.warning} role="alert">{checkWarning}</p>}
+          </div>
+          <footer className={styles.paymentFootnote}>
+            <Info size={15} aria-hidden="true" />
+            <span>This is a test payment. No real money will be charged. QR expires after one hour.</span>
+          </footer>
+        </>
+      ) : phase.kind === "success" ? (
+        <>
+          <div className={styles.successHero} role="status" aria-live="polite">
+            <div className={styles.successIcon}><Check size={38} strokeWidth={1.8} aria-hidden="true" /></div>
+            <h2 className={styles.successHeading}>Payment confirmed!</h2>
+            <p className={styles.description}>Your wallet balance will update once the payment is credited.</p>
+          </div>
+          <dl className={styles.receipt}>
+            <div><dt>Amount</dt><dd>{formatSgd(phase.session.amountCents)}</dd></div>
+            <div><dt>Payment method</dt><dd>PayNow (Test)</dd></div>
+            <div><dt>Transaction ID</dt><dd className={styles.transactionId}>{phase.session.paymentIntentId}</dd></div>
+          </dl>
+          <footer className={styles.successFooter}>
+            <DialogClose asChild>
+              <Button className={styles.primaryButton}>Done</Button>
+            </DialogClose>
+          </footer>
         </>
       ) : (
-        <div className="py-8 text-center">
-          {phase.kind === "success" ? <CheckCircle2 className="mx-auto h-11 w-11 text-emerald-600 dark:text-emerald-400" /> : <LoaderCircle className="mx-auto h-11 w-11 text-[#758374] dark:text-[#96a3b7]" />}
-          <h2 className="mt-6 text-[32px] font-semibold tracking-[-.05em]">{phase.kind === "success" ? "Payment received." : "QR code expired."}</h2>
-          <p className="mt-3 text-sm leading-6 text-[#6b746e] dark:text-[#9ba5b4]">
-            {phase.kind === "success" ? "Your wallet balance will update when the verified payment is credited." : "This payment code is no longer valid. Start a new top-up to get a fresh QR code."}
-          </p>
-          <Button variant="outline" className="mt-8 h-12 w-full rounded-md dark:border-[#394555]" onClick={newPayment}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Start another top-up
+        <div className={styles.expired}>
+          <Info size={38} aria-hidden="true" />
+          <h2 className={styles.heading}>QR code expired.</h2>
+          <p className={styles.description}>This payment code is no longer valid. Start a new top-up for a fresh QR code.</p>
+          <Button variant="outline" onClick={newPayment} className={styles.secondaryButton}>
+            <ArrowLeft size={16} aria-hidden="true" /> Start another top-up
           </Button>
         </div>
       )}

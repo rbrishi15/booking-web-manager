@@ -459,7 +459,10 @@ export const AvailableTopUp: Story = {
     await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
     await expect(previewTopUp.startPayNow).toHaveBeenCalledWith(1234, expect.any(String));
     await waitFor(() => expect(previewPaid).toHaveBeenCalledOnce());
-    await expect(topUp.getByText("Payment received.")).toBeVisible();
+    await expect(topUp.getByText("Payment confirmed!")).toBeVisible();
+    await expect(topUp.getByText("PayNow (Test)")).toBeVisible();
+    await expect(topUp.getByText("pi_test_mock")).toBeVisible();
+    await expect(topUp.getByRole("button", { name: "Done" })).toBeVisible();
     await expect(balance.getByText("$25.00")).toBeVisible();
   },
 };
