@@ -185,7 +185,7 @@ export function registerWalletApi(registry: OpenAPIRegistry): void {
     tags: ["Wallet"],
     summary: "UC1-05 Create PayNow top-up intent",
     description:
-      "Initiates a PayNow top-up for the authenticated user's wallet via Stripe Payment Intents (or test simulation when running in offline/local test mode). Requires an idempotency key to prevent duplicate intent creation. Inbound funds credit the wallet only upon confirmed webhook receipt, satisfying CLAUDE.md rule #2.",
+      "Creates and confirms a test-mode PayNow PaymentIntent, returning the QR image and expiry to display inside Booking's two-stage wallet modal. Requires an idempotency key; only verified Stripe webhooks credit the wallet, satisfying CLAUDE.md rule #2.",
     security: [{ bearerAuth: [] }],
     request: {
       body: {
@@ -204,7 +204,7 @@ export function registerWalletApi(registry: OpenAPIRegistry): void {
     responses: {
       201: {
         description:
-          "PayNow top-up payment intent created successfully.",
+          "PayNow payment initiated with a provider-generated QR code.",
         content: {
           "application/json": {
             schema: topUpResultSchema,
@@ -214,6 +214,11 @@ export function registerWalletApi(registry: OpenAPIRegistry): void {
               amountCents: 5000,
               currency: "SGD",
               status: "requires_action",
+              qrCode: {
+                imageUrlPng: "https://stripe.example/paynow-qr.png",
+                hostedInstructionsUrl: "https://stripe.example/paynow",
+                expiresAt: 1790003600000,
+              },
             },
           },
         },
