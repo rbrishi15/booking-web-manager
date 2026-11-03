@@ -144,7 +144,7 @@ export function TopUpPanel({ transport, onPaid }: TopUpPanelProps) {
                   onClick={() => change(preset)}
                   className={`h-12 rounded-md border-[#d8ddd9] bg-transparent text-sm font-medium hover:bg-[#e8ece6] dark:border-[#303c4d] dark:hover:bg-[#202b3a] ${amount === preset ? "border-[#151a16] bg-[#e5eae3] text-[#101611] dark:border-[#d4dbe5] dark:bg-[#263243] dark:text-white" : ""}`}
                 >
-                  S$${preset}
+                  {`S${preset}`} 
                 </Button>
               ))}
             </div>
