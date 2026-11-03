@@ -26,7 +26,7 @@ try {
     url.searchParams.set("id", shot.id);
     url.searchParams.set("viewMode", "story");
     url.searchParams.set("globals", "theme:dark;viewport:desktop");
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: 90000 });
     const modal = page.getByRole("dialog", { name: "Add funds to your wallet" });
     await modal.waitFor({ state: "visible", timeout: 90000 });
     await modal.getByRole("heading", { name: shot.heading }).waitFor({ state: "visible", timeout: 90000 });
