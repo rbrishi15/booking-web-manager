@@ -1,6 +1,6 @@
 # Session Player Management Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Transfer and refine fork PR #13 into Rishi's repo with matching screens and a clean semantic history.
 
@@ -34,12 +34,12 @@
 
 **Interfaces:** Keep fork `inviteByHandles(hostId, sessionId, handles)`, `inviteFromGroup(hostId, sessionId, groupId, userIds)`, `listForBooker(hostId, sessionId)` and `SessionInviteSummary`. Provide typed load outcomes for optional group/invitation data rather than throwing or returning fake empty results.
 
-- [ ] Establish baseline unit/type checks in the isolated main-based worktree.
-- [ ] Port the fork's final diff, using its use-case tests as the inherited behavior contract; verify the new tests fail without implementation where practicable.
-- [ ] Add tests for optional loading failures, notification failures, duplicate persistence/acceptance and stale group membership; verify meaningful failures before fixes.
-- [ ] Refine the policy/read seam and adapter without adding payment/participation side effects.
-- [ ] Run targeted unit and disposable-database tests; expect authorization rejection, atomic rollback, and one notification per recipient.
-- [ ] Commit coherent backend changes with `feat(sessions): add booker session invitations` and source attribution.
+- [x] Establish baseline unit/type checks in the isolated main-based worktree.
+- [x] Port the fork's final diff, using its use-case tests as the inherited behavior contract; verify the new tests fail without implementation where practicable.
+- [x] Add tests for optional loading failures, notification failures, duplicate persistence/acceptance and stale group membership; verify meaningful failures before fixes.
+- [x] Refine the policy/read seam and adapter without adding payment/participation side effects.
+- [x] Run targeted unit and disposable-database tests; expect authorization rejection, atomic rollback, and one notification per recipient.
+- [x] Commit coherent backend changes with `feat(sessions): add booker session invitations` and source attribution.
 
 ### Task 2: Reference-matched participant page and dialogs
 
@@ -47,12 +47,12 @@
 
 **Interfaces:** Keep injected `SessionInvitationsTransport`; add authoritative `totalSlots` to participant results. Invitation dialogs report `SendSessionInvitationsResult` through `onInvited`.
 
-- [ ] Add a capacity regression asserting a reserved place leaves `totalSlots` unchanged, then implement/serialize it.
-- [ ] Match reference type/spacing/colors/background/rows/dialogs with real fixtures; reuse existing matching image assets and inspect remaining asset differences.
-- [ ] Give optional loads retry feedback, connect direct-invite success to the same notice as group invites, and correct participant/history labels.
-- [ ] Exercise queue normalization/duplicates, pending state, refreshes, and clipboard fallback through interaction tests before fixing regressions.
-- [ ] Use accessible tab/selection primitives or equivalent complete keyboard behavior; preserve removal and attendance flows.
-- [ ] Run targeted unit/Storybook checks and commit `feat(sessions): replicate player management design`.
+- [x] Add a capacity regression asserting a reserved place leaves `totalSlots` unchanged, then implement/serialize it.
+- [x] Match reference type/spacing/colors/background/rows/dialogs with real fixtures; reuse existing matching image assets and inspect remaining asset differences.
+- [x] Give optional loads retry feedback, connect direct-invite success to the same notice as group invites, and correct participant/history labels.
+- [x] Exercise queue normalization/duplicates, pending state, refreshes, and clipboard fallback through interaction tests before fixing regressions.
+- [x] Use accessible tab/selection primitives or equivalent complete keyboard behavior; preserve removal and attendance flows.
+- [x] Run targeted unit/Storybook checks and commit `feat(sessions): replicate player management design`.
 
 ### Task 3: Browser evidence, review, and PR
 
@@ -60,9 +60,9 @@
 
 **Interfaces:** Browser-safe story transports; existing routes remain unchanged.
 
-- [ ] Add representative reference fixtures and browser interaction checks for invitation send/link/import, tabs, errors, keyboard use, both themes, and mobile overflow.
-- [ ] Capture and inspect participant light/dark, direct invitation, and group import screenshots against the supplied images; refine concrete mismatches.
-- [ ] Run unit, typecheck, lint, production build, relevant Storybook and browser checks; report baseline failures separately.
-- [ ] Verify sidebar/shared shell files have no diff, migration numbering is unique, and semantic commit sequence is clean.
-- [ ] Obtain whole-branch review, fix actionable findings, and rerun affected checks.
+- [x] Add representative reference fixtures and browser interaction checks for invitation send/link/import, tabs, errors, keyboard use, both themes, and mobile overflow.
+- [x] Capture and inspect participant light/dark, direct invitation, and group import screenshots against the supplied images; refine concrete mismatches.
+- [x] Run unit, typecheck, lint, production build, relevant Storybook and browser checks; report baseline failures separately.
+- [x] Verify sidebar/shared shell files have no diff, migration numbering is unique, and semantic commit sequence is clean.
+- [x] Obtain whole-branch review, fix actionable findings, and rerun affected checks.
 - [ ] Commit acceptance evidence, push to Rishi's repo, create and attach a PR with migration and verification details. Do not merge.
