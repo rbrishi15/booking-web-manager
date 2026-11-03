@@ -455,6 +455,10 @@ export const AvailableTopUp: Story = {
     await expect(amount).toHaveValue("20");
     await userEvent.clear(amount);
     await userEvent.type(amount, "12.34");
+    await userEvent.click(topUp.getByRole("button", { name: "Close" }));
+    await expect(modal).not.toBeVisible();
+    await userEvent.click(balance.getByRole("button", { name: "Add funds" }));
+    await expect(amount).toHaveValue("12.34");
     await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
     await expect(previewTopUp.startPayNow).toHaveBeenCalledWith(1234, expect.any(String));
     await waitFor(() => expect(previewPaid).toHaveBeenCalledOnce());
