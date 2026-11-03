@@ -11,6 +11,7 @@ export interface PayNowSession {
   readonly qrCode: {
     readonly imageUrlPng: string;
     readonly hostedInstructionsUrl?: string;
+    readonly testPaymentUrl?: string;
     readonly expiresAt: number;
   };
 }
@@ -39,6 +40,7 @@ const intentSchema = z.object({
   qrCode: z.object({
     imageUrlPng: z.string().url(),
     hostedInstructionsUrl: z.string().url().optional(),
+    testPaymentUrl: z.string().url().optional(),
     expiresAt: z.number().int().positive(),
   }),
 });
