@@ -12,6 +12,7 @@ export interface SessionParticipants {
   readonly endAt: Date;
   readonly status: SessionStatus;
   readonly availableSlots: number;
+  readonly totalSlots: number;
   /** The booker's place is reserved without a wallet-funded Participation. */
   readonly booker: {
     readonly displayName: string;
@@ -52,6 +53,7 @@ export class ListSessionParticipants {
         sessionId, venueName: session.booking.venueName, sport: session.booking.sport,
         startAt: session.booking.startAt, endAt: session.booking.endAt, status: session.status,
         availableSlots: session.getAvailableSlots(now),
+        totalSlots: session.totalSlots,
         booker: { displayName: names.get(session.bookerId) ?? "Unnamed player",
           ...(legacyBooker ? { participationId: legacyBooker.participationId } : {}) },
         canVerifyAttendance: session.status === "OPEN" && session.booking.hasEnded(now),

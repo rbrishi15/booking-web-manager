@@ -179,6 +179,17 @@ describe("UC2-03b Remove Participant", () => {
 });
 
 describe("Session participant list", () => {
+  test("keeps total capacity when a withdrawn player reserves a named replacement place", async () => {
+    const initial = createTestSession({ totalSlots: 6, committedUserIds: ["alice", "ben"] });
+    createTestUser({ userId: "ben" }).asParticipant().withdraw(initial, {
+      participationId: "p-ben", replacementMode: "DIRECT_INVITE", replacementInviteeId: "cara", now: hoursBeforeSessionStart(5),
+    });
+    const scenario = removal(initial);
+    const list = await scenario.list.forBooker("booker", "s");
+    expect(list.totalSlots).toBe(6);
+    expect(list.availableSlots).toBe(3);
+  });
+
   test("links a legacy funded booker to their existing participation without allowing removal", async () => {
     const scenario = removal(createTestSession({ committedUserIds: ["booker", "alice"] }));
     scenario.names.mockResolvedValue(new Map([["booker", "Casey Tan"], ["alice", "Alice"]]));
@@ -221,7 +232,7 @@ describe("Session participant list", () => {
     const scenario = removal(initial);
     expect(await scenario.list.forBooker("booker", "s")).toEqual({
       sessionId: "s", venueName: "Court", sport: "Badminton", startAt: initial.booking.startAt, endAt: initial.booking.endAt,
-      status: "OPEN", availableSlots: 1, canVerifyAttendance: false, booker: { displayName: "Unnamed player" }, participants: [
+      status: "OPEN", availableSlots: 1, totalSlots: 3, canVerifyAttendance: false, booker: { displayName: "Unnamed player" }, participants: [
         { participationId: "p-alice", displayName: "Alice", status: "COMMITTED", attendance: "UNVERIFIED", canRemove: true },
         { participationId: "p-ben", displayName: "Deleted user", status: "REMOVED", attendance: "UNVERIFIED", canRemove: false },
         { participationId: "p-waiting", displayName: "Unnamed player", status: "WAITLISTED", attendance: "UNVERIFIED", canRemove: false },

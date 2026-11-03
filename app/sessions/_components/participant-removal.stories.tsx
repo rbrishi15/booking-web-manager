@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { SessionParticipantsOutcome } from "../removal-actions";
 import type { SessionParticipants } from "../removal-types";
 import { SessionParticipantsView } from "./session-participants-view";
+import type { SessionInvitationsTransport } from "./session-participants-invitations";
 import type { ParticipantRemovalTransport } from "./participant-removal-dialog";
 import { participantRemovalStorageKey } from "./participant-removal-storage";
 
@@ -12,7 +13,7 @@ const userId = "removal-story";
 const session: SessionParticipants = {
   sessionId: "20000000-0000-4000-8000-000000000001", venueName: "Bishan Sports Hall",
   sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z",
-  status: "OPEN", availableSlots: 0, canVerifyAttendance: false,
+  status: "OPEN", availableSlots: 0, totalSlots: 2, canVerifyAttendance: false,
   booker: { displayName: "Casey Tan" },
   participants: [
     { participationId: "30000000-0000-4000-8000-000000000001", displayName: "Alex Tan", status: "COMMITTED", attendance: "UNVERIFIED", canRemove: true },
@@ -27,11 +28,18 @@ const result = { sessionId: session.sessionId, participationId, status: "REMOVED
 const storageKey = participantRemovalStorageKey(userId, session.sessionId);
 const savedRequest = { ...preview, userId, displayName: "Alex Tan", idempotencyKey: "40000000-0000-4000-8000-000000000001" };
 
+const invitationTransport: SessionInvitationsTransport = {
+  findPlayer: fn<SessionInvitationsTransport["findPlayer"]>(async (_previous, form) => ({ status: "found", player: { handle: String(form.get("handle")), displayName: "Storybook Player", reliabilityScore: null, isSelf: false } })),
+  loadSessionInvitation: fn<SessionInvitationsTransport["loadSessionInvitation"]>(async (id) => ({ status: "ready", invitationPath: `/sessions/${id}/join?token=storybook` })),
+  sendDirectSessionInvitations: fn<SessionInvitationsTransport["sendDirectSessionInvitations"]>(async (_id, handles) => ({ status: "sent", invited: handles.length, alreadyInvited: 0, alreadyParticipating: 0 })),
+  sendGroupSessionInvitations: fn<SessionInvitationsTransport["sendGroupSessionInvitations"]>(async (_id, _groupId, members) => ({ status: "sent", invited: members.length, alreadyInvited: 0, alreadyParticipating: 0 })),
+};
+
 function Harness({ outcome, preview: loadPreview, remove }: Omit<ParticipantRemovalTransport, "userId"> & { readonly outcome: SessionParticipantsOutcome }) {
   const [mount, setMount] = useState(0);
   const [refreshes, setRefreshes] = useState(0);
   return <>
-    <SessionParticipantsView key={mount} sessionId={session.sessionId} outcome={outcome} refreshing={false}
+    <SessionParticipantsView key={mount} sessionId={session.sessionId} outcome={outcome} groups={[]} invitations={[]} invitationTransport={invitationTransport} refreshing={false}
       removal={{ userId, preview: loadPreview, remove }} onRefresh={() => setRefreshes((value) => value + 1)} />
     <div className="px-6 pb-6"><Button variant="outline" onClick={() => setMount((value) => value + 1)}>Simulate reload</Button>
       <span className="sr-only">Server refreshes: {refreshes}</span></div>
@@ -56,9 +64,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 async function openRemoval(canvas: ReturnType<typeof within>) {
-  const trigger = canvas.getByRole("button", { name: "Remove Alex Tan" });
+  const trigger = canvas.getByRole("button", { name: "Manage Alex Tan" });
   await waitFor(() => expect(trigger).toBeEnabled());
   await userEvent.click(trigger);
+  await userEvent.click(canvas.getByRole("button", { name: "Remove participant" }));
   const dialog = within(document.body).getByRole("dialog");
   await waitFor(() => expect(within(dialog).getByText("Wallet refund")).toBeVisible());
   return within(dialog);
@@ -67,7 +76,7 @@ async function openRemoval(canvas: ReturnType<typeof within>) {
 export const ConfirmHistoricalRefund: Story = {
   play: async ({ canvas, args }) => {
     const list = canvas.getByRole("list", { name: "Participants" });
-    await expect(within(list).getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Casey Tan", "Alex Tan", "Priya Lim", "Sam Lee", "Taylor Chan"]);
+    await expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     await expect(within(list).getAllByRole("button")).toHaveLength(1);
     const dialog = await openRemoval(canvas);
     await expect(dialog.getByText(/Removal prevents them from rejoining/)).toHaveTextContent("Alex Tan");
@@ -75,11 +84,12 @@ export const ConfirmHistoricalRefund: Story = {
     await expect(args.remove).not.toHaveBeenCalled();
     await userEvent.click(dialog.getByRole("button", { name: "Confirm removal" }));
     await waitFor(() => expect(canvas.getByRole("status")).toHaveTextContent("Alex Tan removed"));
-    await expect(canvas.getByText("1 slot available")).toBeVisible();
-    await expect(within(canvas.getByRole("article", { name: "Alex Tan" })).getByText("Removed")).toBeVisible();
-    await expect(canvas.getByText("Waitlisted")).toBeVisible();
-    await expect(canvas.queryByRole("button", { name: "Remove Alex Tan" })).not.toBeInTheDocument();
-    await waitFor(() => expect(canvas.getByRole("heading", { name: "Manage participants" })).toHaveFocus());
+    await waitFor(() => expect(canvas.getByRole("heading", { name: "Badminton Session" })).toHaveFocus());
+    await expect(canvas.getByText("1 / 2 players")).toBeVisible();
+    await userEvent.click(canvas.getByRole("tab", { name: "Withdrawn (3)" }));
+    await expect(canvas.getByRole("list", { name: "Withdrawn players" })).toHaveTextContent("Alex Tan");
+    await expect(canvas.getByRole("tab", { name: "Waitlist (1)" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Manage Alex Tan" })).not.toBeInTheDocument();
     await expect(args.remove).toHaveBeenCalledOnce();
     await expect(sessionStorage.getItem(storageKey)).toBeNull();
   },
@@ -87,10 +97,11 @@ export const ConfirmHistoricalRefund: Story = {
 
 export const KeyboardDismissal: Story = {
   play: async ({ canvas, args }) => {
-    const trigger = canvas.getByRole("button", { name: "Remove Alex Tan" });
+    const trigger = canvas.getByRole("button", { name: "Manage Alex Tan" });
     await waitFor(() => expect(trigger).toBeEnabled());
     trigger.focus();
     await userEvent.keyboard("{Enter}");
+    await userEvent.click(canvas.getByRole("button", { name: "Remove participant" }));
     const dialog = within(within(document.body).getByRole("dialog"));
     await waitFor(() => expect(dialog.getByText("Wallet refund")).toBeVisible());
     await userEvent.keyboard("{Escape}");
@@ -102,9 +113,10 @@ export const KeyboardDismissal: Story = {
 export const PreviewUnavailable: Story = {
   args: { preview: fn<ParticipantRemovalTransport["preview"]>(async () => ({ status: "error", code: "INTERNAL_ERROR", message: "We couldn't load the refund.", refresh: false, retrySameRequest: true })) },
   play: async ({ canvas, args }) => {
-    const trigger = canvas.getByRole("button", { name: "Remove Alex Tan" });
+    const trigger = canvas.getByRole("button", { name: "Manage Alex Tan" });
     await waitFor(() => expect(trigger).toBeEnabled());
     await userEvent.click(trigger);
+    await userEvent.click(canvas.getByRole("button", { name: "Remove participant" }));
     const dialog = within(within(document.body).getByRole("dialog"));
     await expect(await dialog.findByRole("alert")).toHaveTextContent("We couldn't load the refund");
     await expect(dialog.getByRole("button", { name: "Confirm removal" })).toBeDisabled();
@@ -226,7 +238,7 @@ export const SavedRequestAfterParticipantRemoved: Story = {
     const dialog = within(await within(document.body).findByRole("dialog"));
     await userEvent.click(dialog.getByRole("button", { name: "Retry removal" }));
     await waitFor(() => expect(canvas.getByRole("status")).toHaveTextContent("Alex Tan removed"));
-    await expect(canvas.getByText("1 slot available")).toBeVisible();
+    await expect(canvas.getByText("1 / 2 players")).toBeVisible();
     await expect(args.preview).not.toHaveBeenCalled();
     await expect(args.remove).toHaveBeenCalledWith(session.sessionId, participationId, { idempotencyKey: savedRequest.idempotencyKey, previewVersion: savedRequest.previewVersion });
   },
@@ -236,7 +248,7 @@ export const CorruptRecoveryIsPreserved: Story = {
   beforeEach: () => { sessionStorage.setItem(storageKey, "{incomplete"); },
   play: async ({ canvas, args }) => {
     await expect(await canvas.findByRole("alert")).toHaveTextContent("saved removal request could not be read safely");
-    await expect(canvas.getByRole("button", { name: "Remove Alex Tan" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Manage Alex Tan" })).toBeDisabled();
     await expect(sessionStorage.getItem(storageKey)).toBe("{incomplete");
     await expect(args.preview).not.toHaveBeenCalled();
     await expect(args.remove).not.toHaveBeenCalled();
@@ -247,7 +259,7 @@ export const CorruptPreviewVersionIsPreserved: Story = {
   beforeEach: () => { sessionStorage.setItem(storageKey, JSON.stringify({ ...savedRequest, previewVersion: "bad" })); },
   play: async ({ canvas, args }) => {
     await expect(await canvas.findByRole("alert")).toHaveTextContent("saved removal request could not be read safely");
-    await expect(canvas.getByRole("button", { name: "Remove Alex Tan" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Manage Alex Tan" })).toBeDisabled();
     await expect(JSON.parse(sessionStorage.getItem(storageKey)!).previewVersion).toBe("bad");
     await expect(args.preview).not.toHaveBeenCalled();
     await expect(args.remove).not.toHaveBeenCalled();
@@ -259,7 +271,7 @@ export const WrongUserRecoveryIsPreserved: Story = {
   play: async ({ canvas, args }) => {
     await expect(await canvas.findByRole("alert")).toHaveTextContent("saved removal request could not be read safely");
     await expect(canvas.queryByText("Private name")).not.toBeInTheDocument();
-    await expect(canvas.getByRole("button", { name: "Remove Alex Tan" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Manage Alex Tan" })).toBeDisabled();
     await expect(JSON.parse(sessionStorage.getItem(storageKey)!).userId).toBe("another-host");
     await expect(args.remove).not.toHaveBeenCalled();
   },
@@ -268,7 +280,7 @@ export const WrongUserRecoveryIsPreserved: Story = {
 export const OtherHostRequestStaysIsolated: Story = {
   beforeEach: () => { sessionStorage.setItem(participantRemovalStorageKey("another-host", session.sessionId), JSON.stringify({ ...savedRequest, userId: "another-host" })); },
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByRole("button", { name: "Remove Alex Tan" })).toBeEnabled());
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Manage Alex Tan" })).toBeEnabled());
     await expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument();
   },
 };
@@ -294,16 +306,29 @@ export const StorageFailurePreventsSubmission: Story = {
 export const StartedSession: Story = {
   args: { outcome: { status: "ready", session: { ...session, startAt: "2020-04-02T10:00:00Z", endAt: "2020-04-02T12:00:00Z", participants: session.participants.map((participant) => ({ ...participant, canRemove: false })) } } },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByRole("button", { name: "Remove Alex Tan" })).not.toBeInTheDocument();
-    await expect(canvas.getByText("Committed")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Manage Alex Tan" })).not.toBeInTheDocument();
+    for (const badge of canvas.getAllByText("Booked")) await expect(badge).toBeVisible();
+  },
+};
+
+export const ParticipationHistory: Story = {
+  args: { outcome: { status: "ready", session: { ...session, status: "CANCELLED", participants: [
+    { ...session.participants[0]!, status: "CANCELLED", canRemove: false },
+    { ...session.participants[1]!, status: "LEFT_WAITLIST", canRemove: false },
+  ] } } },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Withdrawn (2)" }));
+    const history = within(canvas.getByRole("list", { name: "Withdrawn players" }));
+    await expect(history.getByText("Cancelled", { exact: true })).toBeVisible();
+    await expect(history.getByText("Left waitlist", { exact: true })).toBeVisible();
   },
 };
 
 export const BookerOnly: Story = {
   args: { outcome: { status: "ready", session: { ...session, availableSlots: 0, participants: [] } } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Participants (1)" })).toBeVisible();
-    const booker = within(canvas.getByRole("article", { name: "Casey Tan" }));
+    await expect(canvas.getByRole("tab", { name: "Participants (1)" })).toBeVisible();
+    const booker = within(within(canvas.getByRole("list", { name: "Participants" })).getByRole("listitem"));
     await expect(booker.getByText("Booker · You")).toBeVisible();
     await expect(booker.queryByRole("button")).not.toBeInTheDocument();
     await expect(canvas.queryByText("No participants yet")).not.toBeInTheDocument();
@@ -316,9 +341,8 @@ export const LegacyFundedBooker: Story = {
     participants: [{ participationId: "30000000-0000-4000-8000-000000000005", displayName: "Casey Tan", status: "COMMITTED", attendance: "UNVERIFIED", canRemove: false }, ...session.participants],
   } } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Participants (5)" })).toBeVisible();
-    await expect(canvas.getAllByRole("article", { name: "Casey Tan" })).toHaveLength(1);
-    const booker = within(canvas.getByRole("article", { name: "Casey Tan" }));
+    await expect(canvas.getByRole("tab", { name: "Participants (2)" })).toBeVisible();
+    const booker = within(within(canvas.getByRole("list", { name: "Participants" })).getAllByRole("listitem")[0]!);
     await expect(booker.getByText(/Booker · You/)).toBeVisible();
     await expect(booker.queryByRole("button")).not.toBeInTheDocument();
     await expect(within(canvas.getByRole("region", { name: "Check attendance" })).getByRole("group", { name: "Casey Tan" })).toBeVisible();
@@ -326,6 +350,17 @@ export const LegacyFundedBooker: Story = {
 };
 export const Unavailable: Story = { args: { outcome: { status: "error", code: "SESSION_REMOVAL_UNAVAILABLE", message: "Participant management is temporarily unavailable.", refresh: false, retrySameRequest: true } } };
 export const Desktop: Story = { globals: { viewport: { value: "desktop", isRotated: false } } };
+
+/** A visible open-menu state for reviewing light-theme contrast in Storybook. */
+export const LightModeMenu: Story = {
+  globals: { theme: "light", viewport: { value: "desktop", isRotated: false } },
+  play: async ({ canvas }) => {
+    const trigger = canvas.getByRole("button", { name: "Manage Alex Tan" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await userEvent.click(trigger);
+    await expect(canvas.getByRole("button", { name: "Remove participant" })).toBeVisible();
+  },
+};
 
 /** UC2-06: once an open session has ended, the booker sees the attendance check above the list. */
 export const AttendanceCheckOpen: Story = {
@@ -343,7 +378,7 @@ export const AttendanceAlreadyMarked: Story = {
   args: { outcome: { status: "ready", session: { ...session, canVerifyAttendance: true, participants: session.participants.map((participant) =>
     participant.status === "COMMITTED" ? { ...participant, attendance: "ABSENT" as const, canRemove: false } : participant) } } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/Committed · Absent/)).toBeVisible();
+    await expect(canvas.getByText(/Absent/)).toBeVisible();
     await expect(within(canvas.getByRole("region", { name: "Check attendance" })).queryByRole("group")).not.toBeInTheDocument();
   },
 };
