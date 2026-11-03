@@ -20,6 +20,22 @@ export interface TopUpIntentRequest {
  * chose the same key would share one PaymentIntent, and the second user's
  * payment would credit the first user's wallet.
  */
+/**
+ * Stripe test PayNow QR payloads can contain an HTTPS link to Stripe's hosted
+ * success/failure simulator. Never turn an arbitrary QR payload into a clickable
+ * URL: live PayNow QR payloads aren't browser links, and URLs must be trusted.
+ */
+export function stripePayNowTestUrl(rawData: string): string | undefined {
+  try {
+    const url = new URL(rawData);
+    if (url.protocol !== "https:") return undefined;
+    if (url.hostname !== "stripe.com" && !url.hostname.endsWith(".stripe.com")) return undefined;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
 export class StripeWalletTopUps implements WalletTopUpProvider {
   constructor(private readonly stripe: Stripe) {}
 
@@ -56,6 +72,8 @@ export class StripeWalletTopUps implements WalletTopUpProvider {
       qrCode: {
         imageUrlPng: nextAction.paynow_display_qr_code.image_url_png,
         hostedInstructionsUrl: nextAction.paynow_display_qr_code.hosted_instructions_url ?? undefined,
+        // Test-only. This is the URL encoded in Stripe's QR, not an app-side fake.
+        testPaymentUrl: stripePayNowTestUrl(nextAction.paynow_display_qr_code.data),
         // Stripe PayNow QR codes expire after one hour.
         expiresAt: (intent.created + 60 * 60) * 1000,
       },
