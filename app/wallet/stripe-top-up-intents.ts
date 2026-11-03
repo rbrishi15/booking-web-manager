@@ -55,7 +55,7 @@ export class StripeWalletTopUps implements WalletTopUpProvider {
       status: intent.status,
       qrCode: {
         imageUrlPng: nextAction.paynow_display_qr_code.image_url_png,
-        hostedInstructionsUrl: nextAction.paynow_display_qr_code.hosted_instructions_url,
+        hostedInstructionsUrl: nextAction.paynow_display_qr_code.hosted_instructions_url ?? undefined,
         // Stripe PayNow QR codes expire after one hour.
         expiresAt: (intent.created + 60 * 60) * 1000,
       },
