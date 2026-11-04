@@ -69,4 +69,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Conceal default browser scrollbars in modal dialogs across all browsers */
+  [role="dialog"] {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  [role="dialog"]::-webkit-scrollbar {
+    display: none;
+  }
 }
