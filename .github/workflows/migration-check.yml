@@ -25,9 +25,10 @@ jobs:
       - name: Migration numbers are unique
         run: bash scripts/check-migration-numbers.sh
 
+      # Same CLI as the production push in supabase-migrations.yml.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.118.0
 
       # Starts only Postgres with the real Supabase auth schema and roles, then
       # applies supabase/migrations to the fresh database.
