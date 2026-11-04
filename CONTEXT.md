@@ -69,8 +69,9 @@ A withdrawing participant's place held for their named personal replacement,
 unavailable to ordinary admission while that invitation remains active.
 
 **Departure choice**:
-The participant's fixed choice at withdrawal between one named personal
-replacement and opening their place to the groups/public waitlist.
+The participant's fixed choice at withdrawal: invite one named personal
+replacement or open the place to the waitlist when at least 30 hours remain;
+invite one person or forfeit the share and close the place when less time remains.
 
 **Successful replacement**:
 A replacement who has successfully joined with their full booking share held.

@@ -50,7 +50,7 @@ describe("UC2-05 Withdraw from Session", () => {
     scenario.setTime(new Date(hoursBeforeSessionStart(30).getTime() + 1_000));
 
     // Act
-    const result = await scenario.withdraw("alice", openSlot);
+    const result = await scenario.withdraw("alice", { mode: "DIRECT_INVITE", inviteeId: "dave" });
 
     // Assert
     expect(result).toMatchObject({
@@ -88,7 +88,7 @@ describe("UC2-05 Withdraw from Session", () => {
     const scenario = withdrawalScenario();
     await scenario.commit("alice");
     scenario.setTime(hoursBeforeSessionStart(10));
-    await scenario.withdraw("alice", openSlot);
+    await scenario.withdraw("alice", { mode: "DIRECT_INVITE", inviteeId: "dave" });
     scenario.setTime(sessionStartsAt);
 
     // Act
@@ -132,7 +132,7 @@ describe("UC2-05 Withdraw from Session", () => {
     expect(scenario.unitOfWork.availableCents("dave")).toBe(9_500);
   });
 
-  test("a late open-slot withdrawal promotes the waitlist head, whose commitment refunds the withdrawer", async () => {
+  test("a late open-slot withdrawal is rejected without refunding or promoting the waitlist", async () => {
     // Arrange
     const scenario = withdrawalScenario();
     await scenario.commit("alice");
@@ -141,18 +141,15 @@ describe("UC2-05 Withdraw from Session", () => {
     scenario.setTime(hoursBeforeSessionStart(10));
 
     // Act
-    const result = await scenario.withdraw("alice", openSlot);
+    await expect(scenario.withdraw("alice", openSlot)).rejects.toMatchObject({ code: "INVALID_STATE" });
 
     // Assert
-    expect(result.kind).toBe("AWAITING_REPLACEMENT");
-    expect(result.promotion).toMatchObject({
-      status: "COMPLETED",
-      result: {
-        promoted: [{ userId: "carol", refundedParticipationId: "id-1" }],
-      },
-    });
-    expect(scenario.unitOfWork.availableCents("alice")).toBe(10_000);
-    expect(scenario.unitOfWork.availableCents("carol")).toBe(9_500);
+    expect(scenario.participation("id-1").status).toBe("COMMITTED");
+    expect(scenario.participation("id-1").hold?.state).toBe("HELD");
+    expect(scenario.unitOfWork.availableCents("alice")).toBe(9_500);
+    expect(scenario.unitOfWork.availableCents("carol")).toBe(10_000);
+    expect(scenario.unitOfWork.requireSession(sessionId).participantList.nextWaitlisted()?.userId).toBe("carol");
+    expect(scenario.ledgerKinds()).toEqual(["LOCK", "LOCK"]);
   });
 
   test("an early open-slot withdrawal is refunded once and still promotes the waitlist head", async () => {
@@ -223,11 +220,11 @@ describe("UC2-05 Withdraw from Session", () => {
     expect(session.getAvailableSlots(hoursBeforeSessionStart(10))).toBe(0);
   });
 
-  test("rejects a forfeit 30 hours or more before start, which is refunded in full instead", async () => {
+  test.each([30, 31])("rejects a forfeit %sh before start, which is refunded in full instead", async (hours) => {
     // Arrange
     const scenario = withdrawalScenario();
     await scenario.commit("alice");
-    scenario.setTime(hoursBeforeSessionStart(31));
+    scenario.setTime(hoursBeforeSessionStart(hours));
 
     // Act
     const withdrawal = scenario.withdraw("alice", { mode: "FORFEIT" });
@@ -244,15 +241,19 @@ describe("UC2-05 Withdraw from Session", () => {
     await scenario.commit("alice");
     await scenario.commit("bob");
     await scenario.commit("carol");
-    scenario.setTime(hoursBeforeSessionStart(10));
-    // A late withdrawal writes no ledger entry, so the promotion's LOCK fails.
-    scenario.unitOfWork.failNextLedgerAppend = true;
+    scenario.setTime(hoursBeforeSessionStart(31));
+    // The REFUND succeeds, but the subsequent promotion's LOCK fails.
+    const append = scenario.unitOfWork.execute.bind(scenario.unitOfWork);
+    scenario.unitOfWork.execute = async (key, work) => {
+      if (key.includes("promote")) scenario.unitOfWork.failNextLedgerAppend = true;
+      return append(key, work);
+    };
 
     // Act
     const result = await scenario.withdraw("alice", openSlot);
 
     // Assert
-    expect(result.kind).toBe("AWAITING_REPLACEMENT");
+    expect(result.kind).toBe("REFUNDED");
     expect(result.promotion).toEqual({ status: "DEFERRED" });
     expect(scenario.participation("id-1").status).toBe("WITHDRAWN");
     const list = scenario.unitOfWork.requireSession(sessionId).participantList;
@@ -336,7 +337,7 @@ describe("UC2-05 Withdraw from Session", () => {
     const scenario = withdrawalScenario();
     await scenario.commit("alice");
     scenario.setTime(hoursBeforeSessionStart(10));
-    await scenario.withdraw("alice", openSlot);
+    await scenario.withdraw("alice", { mode: "DIRECT_INVITE", inviteeId: "dave" });
 
     // Act
     const result = await scenario.expireReplacements.forSession({
@@ -381,7 +382,7 @@ describe("UC2-05 Withdraw from Session", () => {
     await scenario.commit("erin");
     await scenario.commit("carol");
     await scenario.commit("dave");
-    scenario.setTime(hoursBeforeSessionStart(10));
+    scenario.setTime(hoursBeforeSessionStart(31));
     await scenario.withdraw("erin", { mode: "DIRECT_INVITE", inviteeId: "carol" });
     await scenario.withdraw("alice", openSlot);
 
@@ -452,7 +453,7 @@ describe("UC2-05 Withdraw from Session", () => {
       const scenario = withdrawalScenario();
       await scenario.commit("alice");
       scenario.setTime(hoursBeforeSessionStart(10));
-      await scenario.withdraw("alice", openSlot);
+      await scenario.withdraw("alice", { mode: "DIRECT_INVITE", inviteeId: "dave" });
       scenario.unitOfWork.notifications.length = 0;
       scenario.setTime(sessionStartsAt);
 
@@ -565,11 +566,17 @@ describe("replacement notification receipts", () => {
     ]);
   });
 
-  test("an ordinary entrant replacing a late withdrawal sends the actual refund receipt", async () => {
+  test("an ordinary entrant replacing a legacy late open-slot withdrawal still sends the actual refund receipt", async () => {
     const scenario = withdrawalScenario();
     await scenario.commit("alice");
     scenario.setTime(hoursBeforeSessionStart(10));
-    await scenario.withdraw("alice", openSlot);
+    // Hydrate the old state without creating a new late waitlist withdrawal.
+    await scenario.unitOfWork.execute("seed-legacy-open-withdrawal", async ({ sessions }) => {
+      const session = (await sessions.get(sessionId))!;
+      const before = session.participantList.requireParticipation("id-1");
+      session.recordParticipationTransition(before, before.withdraw(before.hold!.awaitReplacement(), hoursBeforeSessionStart(10), "OPEN_SLOT"), hoursBeforeSessionStart(10));
+      await sessions.save(session);
+    });
     scenario.unitOfWork.notifications.length = 0;
     await scenario.commit("dave");
     expect(scenario.unitOfWork.notifications).toContainEqual(expect.objectContaining({ kind: "REPLACEMENT_REFUNDED", recipientId: "alice", refundCents: 500 }));

@@ -234,7 +234,8 @@ function withdrawLate(session: Session, userId: string): void {
     .withdraw(session, {
       participationId: `p-${userId}`,
       now: hoursBeforeSessionStart(10),
-      replacementMode: "OPEN_SLOT",
+      replacementMode: "DIRECT_INVITE",
+      replacementInviteeId: "replacement",
     });
 }
 
