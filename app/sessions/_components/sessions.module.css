@@ -191,7 +191,8 @@
 .manage a { display: inline-flex; min-height: 44px; align-items: center; gap: 6px; color: hsl(var(--foreground)); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .notice { margin-top: 20px; padding: 16px; font-size: 14px; border: 1px solid var(--session-line); border-radius: 6px; }
 .notice a { text-decoration: underline; }
-.dialogContent { --session-muted: #717175; --session-line: #e4e4e6; --session-paper: #faf9f7; max-height: 90dvh; overflow-y: auto; }
+.dialogContent { --session-muted: #717175; --session-line: #e4e4e6; --session-paper: #faf9f7; max-height: 90dvh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.dialogContent::-webkit-scrollbar { display: none; }
 .dialogHero { position: relative; height: 180px; margin: 0 -24px; overflow: hidden; }
 .dialogHeading { font-size: 22px; font-weight: 600; letter-spacing: -.6px; }
 .dialogContent .detailTabs { margin-top: 12px; }

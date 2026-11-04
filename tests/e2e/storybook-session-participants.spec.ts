@@ -152,3 +152,32 @@ test("light group choices and Cancel retain readable contrast on real pointer ho
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   }
 });
+
+test("tabs fit without horizontal clipping or scrollbar on MacBook Air narrow desktop screens", async ({ page }) => {
+  for (const theme of ["light", "dark"]) {
+    for (const width of [1280, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/storybook/iframe.html?viewMode=story&id=sessions-player-management--${theme}`);
+      const tabs = page.getByRole("tablist", { name: "Participant status" });
+      await expect(tabs).toBeVisible();
+      await expect(page.getByRole("tab", { name: "Invitations (0)" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Import from group", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Invite player", exact: true })).toBeVisible();
+      const scrollable = await tabs.evaluate((element) => ({
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+      }));
+      expect(scrollable.scrollbarWidth).toBe("none");
+      expect(scrollable.scrollWidth, `${theme} tabs at ${width}px`).toBeLessThanOrEqual(scrollable.clientWidth + 2);
+    }
+  }
+});
+
+test("dialogs conceal browser scrollbars", async ({ page }) => {
+  await page.goto("/storybook/iframe.html?viewMode=story&id=sessions-player-invitations--invite-by-user-id");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const scrollbarWidth = await dialog.evaluate((element) => getComputedStyle(element).scrollbarWidth);
+  expect(scrollbarWidth).toBe("none");
+});
