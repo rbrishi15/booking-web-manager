@@ -39,11 +39,11 @@ editable fields, permissions, minimum capacity and version. EditSession.forBooke
 accepts those fields plus version and returns saved details. Session.editDetails
 returns a validated Session candidate without mutating the original.
 
-- [ ] Write policy tests for successful terms/capacity changes, authorization,
+- [x] Write policy tests for successful terms/capacity changes, authorization,
   lifecycle, locks, reserved capacity, price bounds and stale versions.
-- [ ] Run the tests and confirm missing behavior fails.
-- [ ] Implement the domain candidate and application workflow; run policy tests.
-- [ ] Commit `feat(sessions): add authorized session editing policy`.
+- [x] Run the tests and confirm missing behavior fails.
+- [x] Implement the domain candidate and application workflow; run policy tests.
+- [x] Commit `feat(sessions): add authorized session editing policy`.
 
 ### Task 2: Persistent HTTP editing
 
@@ -56,11 +56,11 @@ tests/integration/session-management-persistence.test.ts.
 **Interfaces:** GET and PATCH /api/sessions/{sessionId}/edit return validated
 SessionEditingDetails. PATCH accepts SessionEditRequest. Identity comes from auth.
 
-- [ ] Write failing route and persistence tests for authenticated reads/writes,
+- [x] Write failing route and persistence tests for authenticated reads/writes,
   malformed payloads, safe errors and saving only editable session columns.
-- [ ] Implement the transaction, SQL write, server composition and route schemas.
-- [ ] Run route/policy/persistence checks; register the route in OpenAPI.
-- [ ] Commit `feat(sessions): persist session edits through authenticated API`.
+- [x] Implement the transaction, SQL write, server composition and route schemas.
+- [x] Run route/policy/persistence checks; register the route in OpenAPI.
+- [x] Commit `feat(sessions): persist session edits through authenticated API`.
 
 ### Task 3: Dialog and complete verification
 
@@ -73,9 +73,9 @@ app/sessions/editing-transport.ts, tests/app/sessions/session-editing-transport.
 **Interfaces:** SessionEditDialog consumes injected load/save transport and calls
 onSaved after commit. Participant view refreshes its current data on save.
 
-- [ ] Write failing browser stories for loading, locked fields, save, cancel,
+- [x] Write failing browser stories for loading, locked fields, save, cancel,
   errors, stale reload, focus and disabled lifecycle controls.
-- [ ] Implement the prefilled Singapore-time form, validation and pending/error UI.
-- [ ] Run the focused browser stories; inspect desktop and mobile rendering.
-- [ ] Run unit tests, typecheck, lint, build and diff checks; review final diff.
-- [ ] Commit `feat(sessions): connect edit session dialog`.
+- [x] Implement the prefilled Singapore-time form, validation and pending/error UI.
+- [x] Run the focused browser stories; inspect desktop and mobile rendering.
+- [x] Run unit tests, typecheck, lint, build and diff checks; review final diff.
+- [x] Commit `feat(sessions): connect edit session dialog`.
