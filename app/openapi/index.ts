@@ -6,6 +6,7 @@ import { registerHealthApi } from "@/app/health/openapi";
 import { registerPayoutApi } from "@/app/payouts/openapi";
 import { registerSessionApi } from "@/app/sessions/openapi";
 import { registerSessionManagementApi } from "@/app/sessions/management-openapi";
+import { registerSessionEditingApi } from "@/app/sessions/editing-openapi";
 import { registerSessionCancellationApi } from "@/app/sessions/cancellation-openapi";
 import { registerParticipantRemovalApi } from "@/app/sessions/removal-openapi";
 import { registerSessionInvitationApi } from "@/app/sessions/invitation-openapi";
@@ -26,6 +27,7 @@ export const openApiDocument = createOpenApiDocument([
   registerWithdrawalPreviewApi,
   registerPlayerSessionsApi,
   registerSessionManagementApi,
+  registerSessionEditingApi,
   registerSessionCancellationApi,
   registerParticipantRemovalApi,
   registerSessionInvitationApi,

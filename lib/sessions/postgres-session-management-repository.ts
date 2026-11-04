@@ -26,7 +26,7 @@ const storedBatch = z.object({
   })),
 });
 
-/** Complete aggregate reads and a deliberately visibility-only persistence command. */
+/** Complete aggregate reads and bounded session configuration writes. */
 export class PostgresSessionManagementRepository {
   /** Uses the caller's SQL executor so aggregate reads and writes share its transaction. */
   constructor(private readonly sql: SqlExecutor) {}
@@ -70,6 +70,19 @@ export class PostgresSessionManagementRepository {
     );
     if (rows.length !== 1)
       throw new SessionPersistenceError("Visibility update did not find exactly one session");
+  }
+
+  /** Caller holds the parent-row lock; never writes participant, hold or payout state. */
+  async saveDetails(session: Session): Promise<void> {
+    const rows = await this.sql.query(
+      `update sessions set venue_name = $2, region = $3, sport = $4, start_at = $5, end_at = $6,
+        total_cost_cents = $7, total_slots = $8, booking_share_cents = $9, visibility = $10
+       where session_id = $1 returning session_id`,
+      [session.sessionId, session.booking.venueName, session.booking.region, session.booking.sport,
+        session.booking.startAt, session.booking.endAt, session.booking.totalCost.toCents(),
+        session.totalSlots, session.bookingShare.toCents(), session.visibility],
+    );
+    if (rows.length !== 1) throw new SessionPersistenceError("Session update did not find exactly one session");
   }
 
   /** Reconstructs complete sessions with ordered participations; wraps invalid stored state while preserving SQL errors for retry. */

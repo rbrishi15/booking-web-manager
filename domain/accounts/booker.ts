@@ -5,6 +5,7 @@ import type { Participation } from "../sessions/participation";
 import { refundInstruction } from "../sessions/participation-instructions";
 import { resolveBookingShare } from "../sessions/pricing";
 import { Session } from "../sessions/session";
+import type { SessionEditDetails } from "../sessions/session/session";
 import {
   assertAttendanceOpen,
   assertOpenBefore,
@@ -192,6 +193,11 @@ export class Booker {
   ): void {
     this.assertCanChangeVisibility(session, visibility, now);
     session.changeVisibility(visibility, now);
+  }
+
+  editSession(session: Session, details: SessionEditDetails, now: Date): Session {
+    this.assertOwnsSession(session.bookerId);
+    return session.editDetails(details, now);
   }
 
   removeParticipant(

@@ -6,6 +6,7 @@ import type { SessionStatus, Visibility } from "../../shared/statuses";
 import type { UUID } from "../../shared/types";
 import type { Booking } from "../booking";
 import { resolveBookingShare, restoreBookingShare } from "../pricing";
+import { isValidSlotCount } from "../capacity";
 import type { Participation } from "../participation";
 import { ParticipantList, type ParticipantListView } from "./participant-list";
 import { completeSettlement } from "./session-settlement";
@@ -43,6 +44,13 @@ export interface SessionDetails {
   readonly nextQueueSequence: number;
   readonly pendingSettlement?: PayoutBatch;
   readonly payoutAttemptIds: readonly UUID[];
+}
+
+export interface SessionEditDetails {
+  readonly booking: Booking;
+  readonly bookingShare: Money;
+  readonly totalSlots: number;
+  readonly visibility: Visibility;
 }
 
 /** Prepared settlement values recorded together; this is not an actor command. */
@@ -188,6 +196,37 @@ export class Session {
       "Visibility cannot change after the session is full",
     );
     this.#visibility = visibility;
+  }
+
+  /** Validates a complete candidate before any editable state is persisted. */
+  editDetails(details: SessionEditDetails, now: Date): Session {
+    assertOpenBefore(this.#status, this.#booking, now);
+    DomainError.require(isValidSlotCount(details.totalSlots) || details.totalSlots === this.#totalSlots,
+      "INVALID_INPUT", "Capacity must be between 1 and 30 players");
+    DomainError.require(details.totalSlots >= this.#totalSlots - this.getAvailableSlots(now),
+      "CAPACITY_EXCEEDED", "Capacity cannot be lower than occupied or reserved places");
+    const termsChanged = !details.booking.equals(this.#booking) || !details.bookingShare.equals(this.#bookingShare);
+    DomainError.require(!termsChanged || !this.bookingDetailsLocked,
+      "SESSION_DETAILS_LOCKED", "Booking details and price are locked after a player has joined. Reload the session to continue.");
+    DomainError.require(!details.booking.hasStarted(now), "SESSION_STARTED", "The session must start in the future");
+    // Capacity changes retain the accepted price. Changed cost/price uses creation bounds.
+    if (!details.booking.totalCost.equals(this.#booking.totalCost) || !details.bookingShare.equals(this.#bookingShare))
+      resolveBookingShare(details.booking.totalCost, details.totalSlots, details.bookingShare);
+    const next = new Session({
+      sessionId: this.#sessionId, bookerId: this.#bookerId, booking: details.booking,
+      bookingShare: details.bookingShare, totalSlots: details.totalSlots, visibility: this.#visibility,
+      status: this.#status, minimumReliability: this.#minimumReliability, roomToken: this.#roomToken,
+      holdingAccountId: this.#holdingAccountId, invitedGroupId: this.#invitedGroupId,
+      participations: this.#participantList.participations, nextQueueSequence: this.#participantList.nextQueueSequence,
+      pendingSettlement: this.pendingSettlement, payoutAttemptIds: this.payoutAttemptIds,
+    });
+    if (details.visibility !== this.#visibility) next.changeVisibility(details.visibility, now);
+    return next;
+  }
+
+  get bookingDetailsLocked(): boolean {
+    // History continues to lock terms after withdrawal, including legacy funded bookers.
+    return this.#participantList.participations.length > 0;
   }
 
   expireReplacements(now: Date): void {
