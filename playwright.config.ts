@@ -17,6 +17,9 @@ export default defineConfig({
     {
       name: "sessions-timeline-webkit",
       testMatch: "**/sessions-timeline.spec.ts",
+      // Cold WebKit page creation can take 25s on CI before the story loads.
+      // Leave room for the existing animation assertions and wheel interactions.
+      timeout: 60_000,
       use: { browserName: "webkit", trace: "retain-on-failure" },
     },
     {
