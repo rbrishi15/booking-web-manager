@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { SessionParticipantsController } from "@/app/sessions/_components/session-participants-controller";
 import { listSessionParticipants } from "@/app/sessions/removal-actions";
+import { QueryProvider } from "@/app/_components/query-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -10,5 +11,6 @@ export default async function SessionParticipantsPage({ params }: { readonly par
   const { sessionId } = await params;
   const user = await getCurrentUser();
   if (user === null) redirect(`/login?next=${encodeURIComponent(`/sessions/${sessionId}/participants`)}`);
-  return <SessionParticipantsController sessionId={sessionId} userId={user.id} outcome={await listSessionParticipants(sessionId)} />;
+  const outcome = await listSessionParticipants(sessionId);
+  return <QueryProvider key={user.id}><SessionParticipantsController sessionId={sessionId} userId={user.id} outcome={outcome} /></QueryProvider>;
 }

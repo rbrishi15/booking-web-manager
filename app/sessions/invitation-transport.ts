@@ -6,7 +6,7 @@ export type InvitationLinkOutcome =
   | { readonly status: "ready"; readonly invitationPath: string }
   | { readonly status: "error"; readonly message: string; readonly signIn: boolean };
 
-export type LoadSessionInvitation = (sessionId: string) => Promise<InvitationLinkOutcome>;
+export type LoadSessionInvitation = (sessionId: string, signal?: AbortSignal) => Promise<InvitationLinkOutcome>;
 
 const responseSchema = z.object({ invitationPath: z.string().min(1) });
 const failureSchema = z.object({ error: z.object({ code: z.string() }) });
@@ -25,10 +25,11 @@ function readInvitationPath(body: unknown, sessionId: string): string {
 }
 
 /** Reads the current owner's invitation on demand using the browser's login cookie. */
-export const loadSessionInvitation: LoadSessionInvitation = async (sessionId) => {
+export const loadSessionInvitation: LoadSessionInvitation = async (sessionId, signal) => {
   try {
     const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/invitation`, {
-      credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(20_000),
+      credentials: "same-origin", cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
     });
     let body: unknown;
     try { body = await response.json(); }

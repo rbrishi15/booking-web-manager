@@ -25,7 +25,7 @@ function participant(page: Page, name = "Player 1") {
 
 function mutationResponse(page: Page) {
   return page.waitForResponse((response) => response.request().method() === "POST"
-    && Boolean(response.request().headers()["next-action"])
+    && /\/api\/sessions\/[^/]+\/participants\/[^/]+\/remove$/.test(new URL(response.url()).pathname)
     && (response.request().postData() ?? "").includes("previewVersion"));
 }
 
@@ -37,13 +37,32 @@ test("UC2-03b host removes a participant with a full refund, retained history, a
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, f.booker, "/sessions?tab=hosting");
     const management = await openHostedSession(page, f.venueName);
+    let releaseRoster: () => void = () => undefined;
+    let rosterRequested: () => void = () => undefined;
+    const rosterGate = new Promise<void>((resolve) => { releaseRoster = resolve; });
+    const rosterStarted = new Promise<void>((resolve) => { rosterRequested = resolve; });
+    let initialRoster = true;
+    await page.route(`**/api/sessions/${f.sessionId}/participants`, async (route) => {
+      if (initialRoster && route.request().method() === "GET") {
+        initialRoster = false;
+        rosterRequested();
+        await rosterGate;
+      }
+      await route.continue();
+    });
     await management.getByRole("link", { name: "Manage players" }).click();
     await expect(page).toHaveURL(new RegExp(`${f.path}$`));
-    await expect(page.getByRole("heading", { name: "Manage participants", exact: true })).toBeVisible();
-    await expect(page.getByText("0 slots available", { exact: true })).toBeVisible();
-    const trigger = participant(page).getByRole("button", { name: "Remove Player 1", exact: true });
+    await expect(page.getByRole("heading", { name: "Badminton Session", exact: true })).toBeVisible();
+    await expect(page.getByText("3 / 3 players", { exact: true })).toBeVisible();
+    const trigger = participant(page).getByRole("button", { name: "Manage Player 1", exact: true });
+    await rosterStarted;
+    await expect(trigger).toBeDisabled();
+    releaseRoster();
+    await expect(trigger).toBeEnabled();
     await trigger.focus();
+    await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
+    await participant(page).getByRole("button", { name: "Remove participant" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("5.00");
     await expect(dialog).toContainText("rejoin");
@@ -51,6 +70,7 @@ test("UC2-03b host removes a participant with a full refund, retained history, a
     await expect(dialog).not.toBeVisible();
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
+    await participant(page).getByRole("button", { name: "Remove participant" }).click();
     await expect(dialog.getByRole("button", { name: "Confirm removal" })).toBeEnabled();
     for (let index = 0; index < 5; index++) {
       await page.keyboard.press("Tab");
@@ -62,10 +82,10 @@ test("UC2-03b host removes a participant with a full refund, retained history, a
     await dialog.getByRole("button", { name: "Confirm removal" }).click();
     expect((await response).status()).toBe(200);
     await expect(page.getByRole("status").filter({ hasText: "Player 1 removed" })).toContainText("5.00");
-    await expect(participant(page)).toContainText("Removed");
-    await expect(participant(page).getByRole("button")).toHaveCount(0);
-    await expect(page.getByText("1 slot available", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Manage participants", exact: true })).toBeFocused();
+    await expect(page.getByText("2 / 3 players", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Badminton Session", exact: true })).toBeFocused();
+    await page.getByRole("tab", { name: "Withdrawn (1)" }).click();
+    await expect(page.getByRole("list", { name: "Withdrawn players" })).toContainText("Player 1");
     expect((await context.pool.query("select available_cents from wallet_balances where wallet_id=$1", [f.participants[0]!.walletId])).rows[0].available_cents).toBe("500");
     expect((await context.pool.query("select status from sessions where session_id=$1", [f.sessionId])).rows[0].status).toBe("OPEN");
     await page.screenshot({ path: testInfo.outputPath("participant-removed-mobile.png"), fullPage: true, animations: "disabled" });
@@ -78,13 +98,14 @@ test("lost committed removal response survives reload and retries the original k
   try {
     const f = await fixture(context);
     await login(page, f.booker, f.path);
-    await participant(page).getByRole("button", { name: "Remove Player 1", exact: true }).click();
+    await participant(page).getByRole("button", { name: "Manage Player 1", exact: true }).click();
+    await participant(page).getByRole("button", { name: "Remove participant" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("5.00");
     let intercepted = false;
-    await page.route(`**${f.path}`, async (route) => {
+    await page.route(`**/api/sessions/${f.sessionId}/participants/*/remove`, async (route) => {
       const request = route.request();
-      if (!intercepted && request.method() === "POST" && request.headers()["next-action"] && (request.postData() ?? "").includes("previewVersion")) {
+      if (!intercepted && request.method() === "POST" && (request.postData() ?? "").includes("previewVersion")) {
         intercepted = true;
         await route.fetch();
         await route.abort("failed");
@@ -96,7 +117,7 @@ test("lost committed removal response survives reload and retries the original k
     const saved = await page.evaluate((key) => sessionStorage.getItem(key), storageKey);
     expect(saved).not.toBeNull();
     expect((await context.pool.query("select status from participations where participation_id=$1", [f.participants[0]!.participationId])).rows[0].status).toBe("REMOVED");
-    await page.unroute(`**${f.path}`);
+    await page.unroute(`**/api/sessions/${f.sessionId}/participants/*/remove`);
     await page.reload();
     await expect(page.getByRole("dialog")).toContainText("Check removal result");
     const replay = mutationResponse(page);
@@ -114,7 +135,8 @@ test("a changed target requires a fresh preview and another confirmation", async
   try {
     const f = await fixture(context);
     await login(page, f.booker, f.path);
-    await participant(page).getByRole("button", { name: "Remove Player 1", exact: true }).click();
+    await participant(page).getByRole("button", { name: "Manage Player 1", exact: true }).click();
+    await participant(page).getByRole("button", { name: "Remove participant" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("5.00");
     await context.pool.query("update participations set committed_at=committed_at + interval '1 second' where participation_id=$1", [f.participants[0]!.participationId]);

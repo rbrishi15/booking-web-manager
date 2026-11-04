@@ -25,18 +25,19 @@ describe("session participants page", () => {
   });
 
   test("passes the authenticated owner's safe display outcome to the user-scoped controller", async () => {
-    const outcome = { status: "ready" as const, session: { sessionId, venueName: "Sports Hall", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", status: "OPEN" as const, availableSlots: 4, canVerifyAttendance: false, booker: { displayName: "Host" }, participants: [] } };
+    const outcome = { status: "ready" as const, session: { sessionId, venueName: "Sports Hall", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", status: "OPEN" as const, availableSlots: 4, totalSlots: 5, canVerifyAttendance: false, booker: { displayName: "Host" }, participants: [] } };
     vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
     const page = await SessionParticipantsPage(props);
     expect(listSessionParticipants).toHaveBeenCalledExactlyOnceWith(sessionId);
-    expect(page.props).toEqual({ sessionId, userId: "host", outcome });
+    expect(page.props.children.props).toEqual({ sessionId, userId: "host", outcome });
   });
 
   test("renders the safe denial outcome without participant identities", async () => {
     const outcome = { status: "error" as const, code: "UNAUTHORIZED", message: "Only the host can manage participants.", refresh: false, retrySameRequest: false };
     vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
     const page = await SessionParticipantsPage(props);
-    expect(page.props.outcome).toEqual(outcome);
-    expect(page.props.outcome).not.toHaveProperty("session");
+    expect(page.props.children.props.outcome).toEqual(outcome);
+    expect(page.props.children.props.outcome).not.toHaveProperty("session");
   });
+
 });

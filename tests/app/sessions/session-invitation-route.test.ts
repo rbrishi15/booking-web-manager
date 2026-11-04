@@ -67,7 +67,7 @@ test("publishes only the owner invitation API with both authentication methods",
   expect(Object.keys(operation?.responses ?? {})).toEqual(["200", "400", "401", "403", "404", "409", "500", "503"]);
   expect(operation?.parameters).toEqual([expect.objectContaining({ name: "sessionId", in: "path", required: true, schema: { type: "string", format: "uuid" } })]);
   expect(openApiDocument.components?.schemas?.SessionInvitation).toMatchObject({ required: ["invitationPath"], properties: { invitationPath: { type: "string" } } });
-  expect(Object.keys(openApiDocument.paths).filter((path) => /invitation|invited/.test(path))).toEqual(["/api/sessions/{sessionId}/invitation"]);
+  expect(Object.keys(openApiDocument.paths).filter((path) => /invitation|invited/.test(path))).toEqual(["/api/sessions/{sessionId}/invitation", "/api/sessions/{sessionId}/invitations"]);
 });
 
 function invoke(id = sessionId) {
