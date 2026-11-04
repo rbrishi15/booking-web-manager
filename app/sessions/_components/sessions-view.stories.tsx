@@ -13,7 +13,7 @@ const meta = {
     nextjs: { navigation: { pathname: "/sessions" } },
     docs: {
       description: {
-        component: "The signed-in sessions overview. Joined sessions use a chronological desktop agenda that opens at the next upcoming session. One deliberate wheel or trackpad gesture glides to one older or later session, then settles with that session fully open. Momentum belongs to the same gesture; ordinary scrollbar movement preserves the selected card. The active session places a wide photograph above its title, venue, and inline metadata, with a status badge over the photograph and a plain View details action to the right. Other sessions use unframed text rows with venue and time on the left and participant counts on the right. Dates sit in a dedicated timeline column, with larger selected dates. Time-based labels group the sessions. Detailed information and participant panels belong to the transient session dialog. Hosting shows upcoming cards and compact history. Below 768px both views use the simple dated list. Dates use Singapore time; artwork is decorative and participant icons represent aggregate counts.",
+        component: "The signed-in sessions overview. Joined sessions use a chronological desktop agenda that opens at the next upcoming session. Wheel and trackpad gestures close the current card over 160 ms before placing the next or previous compact session, with no page-scroll animation. The dot eases to that date over 180 ms. All cards stay collapsed while browsing; after 200 ms of quiet in the compact view, the selected card opens. Clicking a date or compact session row switches immediately and starts opening that card. Keyboard navigation is available on the date controls. The active session places a wide photograph above its title, venue, and inline metadata, with a status badge over the photograph and a plain View details action to the right. Other sessions use unframed text rows with venue and time on the left and participant counts on the right. Dates sit in a dedicated timeline column, with larger selected dates. Time-based labels group the sessions. Detailed information and participant panels belong to the transient session dialog. Hosting shows upcoming cards and compact history. Below 768px both views use the simple dated list. Dates use Singapore time; artwork is decorative and participant icons represent aggregate counts.",
       },
     },
   },
@@ -291,7 +291,7 @@ export const EntranceKeyboardInterrupt: Story = {
     date.focus();
     await userEvent.keyboard("{Enter}");
     await expect(timeline).toHaveAttribute("data-timeline-entrance", "complete");
-    await expect(date).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(date).toHaveAttribute("aria-expanded", "true"));
     await expectTimelineHierarchy(canvasElement, "2026-10-23");
   },
 };
@@ -322,7 +322,7 @@ export const DesktopCurrentSessionHierarchy: Story = {
     const third = canvasElement.querySelector<HTMLElement>(`#timeline-card-${joinedSessions[2]!.sessionId}`);
     if (!third) throw new globalThis.Error("The third session card was not rendered.");
     await userEvent.click(within(third).getByRole("button", { name: "Expand Tennis Court Booking at Choa Chu Kang Tennis Centre" }));
-    await expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 24 Oct 2026" })).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 24 Oct 2026" })).toHaveAttribute("aria-expanded", "true"));
     await expectTimelineHierarchy(canvasElement, "2026-10-24");
     await expect(getComputedStyle(timelineDay(canvasElement, "2026-10-21")).color).toBe(getComputedStyle(timelineDay(canvasElement, "2026-10-23")).color);
     await expect(getComputedStyle(timelineDay(canvasElement, "2026-10-21")).color).not.toBe(getComputedStyle(timelineDay(canvasElement, "2026-10-24")).color);
@@ -593,10 +593,10 @@ export const KeyboardAndSessionSummary: Story = {
   },
 };
 
-/** A neutral full feed for native Playwright gesture-input coverage. */
+/** A neutral full feed for native wheel and explicit-selection coverage. */
 export const DesktopWheelNavigation: Story = {};
 
-export const NativeScrollPreservesSelection: Story = {
+export const NativeScrollSettlesOnSession: Story = {
   play: async ({ canvas }) => {
     const timeline = canvas.getByRole("region", { name: "Joined session timeline" });
     await waitFor(() => expect(timeline).toHaveAttribute("data-timeline-entrance", "complete"), { timeout: 3000 });
@@ -605,28 +605,28 @@ export const NativeScrollPreservesSelection: Story = {
     window.scrollBy({ top: 144, behavior: "instant" });
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     await expect(window.scrollY).toBeGreaterThan(initialScroll);
-    await expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 21 Oct 2026" })).toHaveAttribute("aria-expanded", "true");
-    for (const row of timeline.querySelectorAll<HTMLElement>("[data-session-id]")) {
-      await expect(Number(row.style.getPropertyValue("--expansion"))).toBe(row.hasAttribute("data-current") ? 1 : 0);
-    }
+    await expect(canvas.queryByRole("button", { name: "View details" })).not.toBeInTheDocument();
     await expect(Math.abs(timeline.getBoundingClientRect().height - initialHeight)).toBeLessThan(1);
-    window.scrollTo({ top: initialScroll, behavior: "instant" });
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 21 Oct 2026" })).toHaveAttribute("aria-expanded", "true"));
+    await waitFor(() => expect(Math.abs(window.scrollY - initialScroll)).toBeLessThan(1));
     await expectNoHorizontalOverflow();
   },
 };
 
-export const OneSessionPerGesture: Story = {
+export const DirectWheelSelection: Story = {
   play: async ({ canvas, canvasElement }) => {
     const timeline = canvas.getByRole("region", { name: "Joined session timeline" });
     await waitFor(() => expect(timeline).toHaveAttribute("data-timeline-entrance", "complete"), { timeout: 3000 });
-    timeline.dispatchEvent(new WheelEvent("wheel", { deltaY: 400, bubbles: true, cancelable: true }));
+    const passed = timeline.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
+    await expect(passed).toBe(false);
+    await expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 23 Oct 2026" })).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => {
+      for (const row of timeline.querySelectorAll<HTMLElement>("[data-session-id]")) {
+        expect(Number(row.style.getPropertyValue("--expansion"))).toBe(0);
+      }
+    });
     await waitFor(() => expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 23 Oct 2026" })).toHaveAttribute("aria-expanded", "true"));
     await expectTimelineHierarchy(canvasElement, "2026-10-23");
-    await expect(canvas.getByRole("button", { name: "View details" })).toBeVisible();
-    for (const row of timeline.querySelectorAll<HTMLElement>("[data-session-id]")) {
-      await expect(Number(row.style.getPropertyValue("--expansion"))).toBe(row.hasAttribute("data-current") ? 1 : 0);
-    }
-    await expectNoHorizontalOverflow();
   },
 };
 
@@ -636,7 +636,7 @@ export const KeyboardNavigatesTimeline: Story = {
     for (const [key, date] of [["{ArrowDown}", "23 Oct 2026"], ["{PageDown}", "24 Oct 2026"], ["{ArrowUp}", "23 Oct 2026"], ["{PageUp}", "21 Oct 2026"], ["{Home}", "3 Oct 2026"], ["{End}", "25 Oct 2026"]]) {
       await userEvent.keyboard(key!);
       const selected = canvas.getByRole("button", { name: `Show Tennis Court Booking, ${date}` });
-      await expect(selected).toHaveAttribute("aria-expanded", "true");
+      await waitFor(() => expect(selected).toHaveAttribute("aria-expanded", "true"));
       await expect(selected).toHaveFocus();
     }
     await expectTimelineHierarchy(canvasElement, "2026-10-25");
@@ -644,7 +644,7 @@ export const KeyboardNavigatesTimeline: Story = {
   },
 };
 
-export const TallViewportGestureNavigation: Story = {
+export const TallViewportDateNavigation: Story = {
   globals: { viewport: { value: "tallDesktop", isRotated: false } },
   parameters: {
     viewport: { options: { tallDesktop: { name: "Tall desktop (1440px)", styles: { width: "1440px", height: "1800px" }, type: "desktop" } } },
@@ -652,7 +652,7 @@ export const TallViewportGestureNavigation: Story = {
   play: async ({ canvas, canvasElement }) => {
     const timeline = canvas.getByRole("region", { name: "Joined session timeline" });
     await waitFor(() => expect(timeline).toHaveAttribute("data-timeline-entrance", "complete"), { timeout: 3000 });
-    timeline.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
+    await userEvent.click(canvas.getByRole("button", { name: "Show Tennis Court Booking, 23 Oct 2026" }));
     await waitFor(() => expect(canvas.getByRole("button", { name: "Show Tennis Court Booking, 23 Oct 2026" })).toHaveAttribute("aria-expanded", "true"));
     await expectTimelineHierarchy(canvasElement, "2026-10-23");
     await expectNoHorizontalOverflow();

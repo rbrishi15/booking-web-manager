@@ -34,7 +34,7 @@ export interface SessionsViewProps {
   readonly onUrlRestored?: () => void;
 }
 
-/** A shared feed, with a gesture-driven desktop timeline and a simple mobile list. */
+/** A shared feed, with direct desktop timeline navigation and a simple mobile list. */
 export function SessionsView(props: SessionsViewProps) {
   const { tab, onTabChange, sessions, actions, loading, error, onRetry } = props;
   const timelineEntrancePlayed = useRef(false);
@@ -192,7 +192,7 @@ function ExpandedSession({ session, index, onOpenSession, featured = true }: { r
   </div>;
 }
 
-/** Gestures choose a session; one finite glide transfers the featured space. */
+/** Scroll closes the old card before changing dates; the final card opens after quiet. */
 function JoinedTimeline({ sessions: feedSessions, asOf, onOpenSession, scrollTargetId, onUrlRestored, entrancePlayed }: SessionsViewProps & { readonly entrancePlayed: RefObject<boolean> }) {
   const sessions = useMemo(() => [...feedSessions].sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.sessionId.localeCompare(right.sessionId)), [feedSessions]);
   const defaultSession = sessions.find((session) => session.section === "upcoming") ?? sessions.at(-1);
@@ -202,7 +202,7 @@ function JoinedTimeline({ sessions: feedSessions, asOf, onOpenSession, scrollTar
   const { list, rows, weights, marker, transitioning, select, onKey } = useTimelineNavigation({ sessions, active, setActive, scrollTargetId, onUrlRestored });
   const entrance = useTimelineEntrance({ root: list, played: entrancePlayed, marker, restoring: Boolean(scrollTargetId), activeSessionId: active });
 
-  return <div className={styles.timeline} ref={list} role="region" aria-label="Joined session timeline" data-timeline-entrance={entrance.phase} data-timeline-transitioning={transitioning || undefined} onKeyDown={onKey} onPointerDownCapture={entrance.finish} onFocusCapture={entrance.finish}>
+  return <div className={styles.timeline} ref={list} style={{ "--timeline-expansion": Object.values(weights).reduce((sum, weight) => sum + weight, 0) } as CSSProperties} role="region" aria-label="Joined session timeline" data-timeline-entrance={entrance.phase} data-timeline-transitioning={transitioning || undefined} onKeyDown={onKey} onPointerDownCapture={entrance.finish} onFocusCapture={entrance.finish}>
     <div className={styles.rail} data-timeline-rail aria-hidden />
     <span className={styles.railProgress} style={{ height: `${Math.max(0, marker - 32)}px` }} aria-hidden />
     <span data-timeline-marker className={styles.activeDot} style={{ "--marker-y": `${marker}px` } as CSSProperties} aria-hidden />
@@ -210,11 +210,12 @@ function JoinedTimeline({ sessions: feedSessions, asOf, onOpenSession, scrollTar
       const label = timelineGroup(session, asOf);
       const artworkIndex = feedSessions.findIndex((item) => item.sessionId === session.sessionId);
       const previous = sessions[index - 1];
-      const expanded = session.sessionId === active;
       const expansion = weights[session.sessionId] ?? 0;
+      const selected = session.sessionId === active;
+      const expanded = selected && expansion > 0;
       return <Fragment key={session.sessionId}>
         {(!previous || timelineGroup(previous, asOf) !== label) && <h2 className={styles.groupLabel} data-timeline-reveal="label">{label}</h2>}
-        <div className={styles.timelineRow} style={{ "--expansion": expansion } as CSSProperties} ref={(element) => { if (element) rows.current.set(session.sessionId, element); else rows.current.delete(session.sessionId); }} data-current={expanded || undefined} data-section={session.section} data-session-id={session.sessionId}>
+        <div className={styles.timelineRow} style={{ "--expansion": expansion } as CSSProperties} ref={(element) => { if (element) rows.current.set(session.sessionId, element); else rows.current.delete(session.sessionId); }} data-current={selected || undefined} data-section={session.section} data-session-id={session.sessionId}>
           <button type="button" data-date-control data-timeline-reveal="date" className={styles.dateButton} onClick={() => select(session.sessionId, true)} aria-label={`Show ${sessionTitle(session)}, ${sessionDate(session.startAt).full}`} aria-expanded={expanded} aria-controls={`timeline-card-${session.sessionId}`}><span className={styles.dot} aria-hidden /><DateStamp value={session.startAt} /></button>
           <article id={`timeline-card-${session.sessionId}`} className={styles.timelineCard} aria-label={`${sessionTitle(session)} at ${session.venueName}`}>
             <div className={styles.timelineFeature} style={{ visibility: expansion > 0 ? "visible" : "hidden" }} data-timeline-feature aria-hidden={!expanded} inert={!expanded}><ExpandedSession session={session} index={artworkIndex} onOpenSession={onOpenSession} featured={expanded} /></div>
