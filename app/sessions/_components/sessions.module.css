@@ -255,9 +255,9 @@
   .pastCount { flex-basis: 30px; font-size: 12px; }
 }
 @media (min-width: 768px) {
-  /* A single progress value shares one featured slot during a finite glide.
-     At rest exactly one row owns it; native page scrolling never resizes cards. */
-  .timeline { --feature-extra: 0px; --feature-height: 550px; --reading-top: 173px; padding-bottom: var(--timeline-tail, 24px); }
+  /* Reserve the featured space while browsing compact dates, keeping the
+     scrollbar stable as the selected card opens after input stops. */
+  .timeline { --feature-extra: 0px; --feature-height: 550px; --reading-top: 173px; padding-bottom: calc(var(--timeline-tail, 24px) + var(--feature-extra) * (1 - var(--timeline-expansion, 1))); }
   .timelineRow { height: calc(112px + var(--feature-extra) * var(--expansion)); }
   .timelineCard { position: relative; height: 100%; overflow: clip; }
   .timelineFeature { position: absolute; top: 0; left: 0; right: 0; }

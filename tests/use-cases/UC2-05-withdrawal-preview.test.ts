@@ -88,7 +88,7 @@ describe("UC2-05 Withdraw from Session — refund preview", () => {
     const { preview, session } = previewScenario(now);
     createTestUser({ userId: "alice" })
       .asParticipant()
-      .withdraw(session, { participationId: "p-alice", now });
+      .withdraw(session, { participationId: "p-alice", now, replacementMode: "DIRECT_INVITE", replacementInviteeId: "invitee" });
 
     // Act & Assert
     await expect(

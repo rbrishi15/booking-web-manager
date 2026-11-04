@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { describe, expect, test, vi } from "vitest";
 import { parseTopUpAmount } from "@/app/wallet/top-up-amount";
 import { readPublishableKey } from "@/app/wallet/top-up-transport";
-import { StripeWalletTopUps } from "@/app/wallet/stripe-top-up-intents";
+import { StripeWalletTopUps, stripePayNowTestUrl } from "@/app/wallet/stripe-top-up-intents";
 import { TopUpUnavailableError } from "@/app/wallet/wallet-api-unavailable";
 import { walletErrorResponse } from "@/app/wallet/wallet-response";
 
@@ -49,6 +49,7 @@ describe("StripeWalletTopUps", () => {
         currency: "sgd",
         payment_method_types: ["paynow"],
         payment_method_data: { type: "paynow" },
+        confirm: true,
         metadata: { purpose: "wallet_top_up", wallet_id: "wallet-user-a", user_id: "user-a" },
       },
       { idempotencyKey: '["UC1-05:top-up-intent","user-a","key-1"]' },
@@ -58,7 +59,13 @@ describe("StripeWalletTopUps", () => {
       clientSecret: "pi_1_secret_x",
       amountCents: 2000,
       currency: "SGD",
-      status: "requires_payment_method",
+      status: "requires_action",
+      qrCode: {
+        imageUrlPng: "https://stripe.example/qr.png",
+        hostedInstructionsUrl: "https://stripe.example/checkout",
+        testPaymentUrl: "https://payments.stripe.com/test/paynow/authorize",
+        expiresAt: (1_700_000_000 + 3600) * 1000,
+      },
     });
   });
 
@@ -81,6 +88,27 @@ describe("StripeWalletTopUps", () => {
 
     // Act & Assert
     await expect(new StripeWalletTopUps(stripe).createIntent(request("user-a", "key-1"))).rejects.toThrow("client secret");
+  });
+});
+
+describe("Stripe-hosted PayNow simulator links", () => {
+  test.each([
+    "https://payments.stripe.com/test/paynow/authorize",
+    "https://stripe.com/test/paynow",
+    "https://hooks.stripe.com/redirect",
+  ])("accepts Stripe test QR URLs (%s)", url => {
+    expect(stripePayNowTestUrl(url)).toBe(url);
+  });
+
+  test.each([
+    "javascript:alert(1)",
+    "http://payments.stripe.com/test",
+    "https://payments.stripe.com.evil.example/test",
+    "https://fake-stripe.com/paynow",
+    "0002010102122644SG.PAYNOW",
+    "",
+  ])("rejects untrusted or non-URL QR payloads (%s)", data => {
+    expect(stripePayNowTestUrl(data)).toBeUndefined();
   });
 });
 
@@ -113,7 +141,16 @@ function fakeStripe(clientSecret: string | null = "pi_1_secret_x") {
     id: "pi_1",
     client_secret: clientSecret,
     amount: params.amount,
-    status: "requires_payment_method",
+    status: "requires_action",
+    created: 1_700_000_000,
+    next_action: {
+      type: "paynow_display_qr_code",
+      paynow_display_qr_code: {
+        image_url_png: "https://stripe.example/qr.png",
+        data: "https://payments.stripe.com/test/paynow/authorize",
+        hosted_instructions_url: "https://stripe.example/checkout",
+      },
+    },
   }));
   return { stripe: { paymentIntents: { create } } as unknown as Stripe, create };
 }

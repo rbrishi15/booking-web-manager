@@ -4,19 +4,46 @@ import { createClient } from "@/lib/supabase/client";
 
 export const TOP_UP_URL = "/api/wallet/top-up";
 
-/** How one top-up attempt ended, from the browser's point of view. */
-export type TopUpOutcome =
-  /** Stripe has the money; the webhook credits the wallet moments later. */
+export interface PayNowSession {
+  readonly clientSecret: string;
+  readonly paymentIntentId: string;
+  readonly amountCents: number;
+  readonly qrCode: {
+    readonly imageUrlPng: string;
+    readonly hostedInstructionsUrl?: string;
+    readonly testPaymentUrl?: string;
+    readonly expiresAt: number;
+  };
+}
+
+export type StartTopUpOutcome =
+  | { readonly status: "ready"; readonly session: PayNowSession }
+  | { readonly status: "error"; readonly message: string };
+
+export type PaymentStatus =
+  | { readonly status: "pending" }
   | { readonly status: "paid" }
-  | { readonly status: "cancelled" }
+  | { readonly status: "expired" }
   | { readonly status: "error"; readonly message: string };
 
 export interface TopUpTransport {
-  /** Creates the PaymentIntent and shows Stripe's PayNow QR code until the payment ends. */
-  readonly payWithPayNow: (amountCents: number, idempotencyKey: string) => Promise<TopUpOutcome>;
+  /** Starts one Stripe PayNow payment. Never opens Stripe's overlay. */
+  readonly startPayNow: (amountCents: number, idempotencyKey: string) => Promise<StartTopUpOutcome>;
+  /** Read-only check; wallet credits are still exclusively webhook driven. */
+  readonly checkPayment: (session: PayNowSession) => Promise<PaymentStatus>;
 }
 
-const intentSchema = z.object({ clientSecret: z.string().min(1) });
+const intentSchema = z.object({
+  paymentIntentId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  amountCents: z.number().int().positive(),
+  qrCode: z.object({
+    imageUrlPng: z.string().url(),
+    hostedInstructionsUrl: z.string().url().optional(),
+    testPaymentUrl: z.string().url().optional(),
+    expiresAt: z.number().int().positive(),
+  }),
+});
 const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
@@ -26,7 +53,7 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
 };
 const FALLBACK = "We couldn't start the top-up. Please try again.";
 
-/** A test-mode publishable key, or undefined to hide top-ups. Live payments are out of scope. */
+/** The application intentionally only supports Stripe test mode. */
 export function readPublishableKey(value = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY): string | undefined {
   const key = value?.trim();
   return key?.startsWith("pk_test_") ? key : undefined;
@@ -34,9 +61,10 @@ export function readPublishableKey(value = process.env.NEXT_PUBLIC_STRIPE_PUBLIS
 
 export function createTopUpTransport(publishableKey: string): TopUpTransport {
   let stripe: Promise<StripeJs | null> | undefined;
+  const getStripe = () => (stripe ??= loadStripe(publishableKey));
+
   return {
-    async payWithPayNow(amountCents, idempotencyKey) {
-      let clientSecret: string;
+    async startPayNow(amountCents, idempotencyKey) {
       try {
         const { data } = await createClient().auth.getSession();
         const token = data.session?.access_token;
@@ -53,19 +81,33 @@ export function createTopUpTransport(publishableKey: string): TopUpTransport {
           const code = failure.success ? failure.data.error.code : "";
           return { status: "error", message: ERROR_MESSAGES[code] ?? FALLBACK };
         }
-        const intent = intentSchema.safeParse(body);
-        if (!intent.success) return { status: "error", message: FALLBACK };
-        clientSecret = intent.data.clientSecret;
+        const parsed = intentSchema.safeParse(body);
+        if (!parsed.success) return { status: "error", message: "Stripe did not return a usable QR code." };
+        return { status: "ready", session: parsed.data };
       } catch {
         return { status: "error", message: FALLBACK };
       }
-
-      stripe ??= loadStripe(publishableKey);
-      const client = await stripe;
-      if (client === null) return { status: "error", message: "Stripe couldn't load. Please try again." };
-      const result = await client.confirmPayNowPayment(clientSecret);
-      if (result.error) return { status: "error", message: result.error.message ?? FALLBACK };
-      return result.paymentIntent.status === "succeeded" ? { status: "paid" } : { status: "cancelled" };
+    },
+    async checkPayment(session) {
+      try {
+        const client = await getStripe();
+        if (!client) return { status: "error", message: "Stripe couldn't load. We'll keep checking." };
+        const result = await client.retrievePaymentIntent(session.clientSecret);
+        if (result.error) {
+          return { status: "error", message: result.error.message ?? "Couldn't check payment status." };
+        }
+        switch (result.paymentIntent.status) {
+          case "succeeded":
+            return { status: "paid" };
+          case "canceled":
+          case "requires_payment_method":
+            return { status: "expired" };
+          default:
+            return { status: "pending" };
+        }
+      } catch {
+        return { status: "error", message: "Couldn't check payment status. You can still complete the payment." };
+      }
     },
   };
 }

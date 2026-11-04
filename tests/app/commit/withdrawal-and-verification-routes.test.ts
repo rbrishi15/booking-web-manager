@@ -36,6 +36,21 @@ const daveId = "44444444-4444-4444-8444-444444444444";
 const sessionId = "55555555-5555-4555-8555-555555555555";
 
 describe("POST /api/sessions/withdraw", () => {
+  test("rejects a waitlist withdrawal one millisecond inside the cutoff without changing funds or the waitlist", async () => {
+    const scenario = await handlerScenario();
+    scenario.setTime(new Date(hoursBeforeSessionStart(30).getTime() + 1));
+
+    const response = await scenario.withdraw(aliceId, withdrawBody());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "INVALID_STATE" } });
+    expect(scenario.participantStatus(aliceId)).toBe("COMMITTED");
+    expect(scenario.participantStatus(carolId)).toBe("WAITLISTED");
+    expect(scenario.unitOfWork.availableCents(aliceId)).toBe(9_500);
+    expect(scenario.unitOfWork.availableCents(carolId)).toBe(10_000);
+    expect(scenario.unitOfWork.ledgerInstructions.map((line) => line.kind)).toEqual(["LOCK", "LOCK"]);
+  });
+
   test("withdrawRoute_WhenEarly_RefundsTheSignedInParticipant", async () => {
     // Arrange
     const scenario = await handlerScenario();

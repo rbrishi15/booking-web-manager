@@ -64,14 +64,16 @@ export function WithdrawalDialog({ state, inviteSearch, onSearchInvitee, onChoos
           <div className="space-y-4">
             {state.termsChanged && (
               <ErrorMessage>
-                Your refund changed while this was open: the session now starts in less than 30 hours. Check the new amount and confirm again.
+                Your refund changed while this was open: the session now starts in less than 30 hours. You can invite one person or forfeit your share. Check the new amount and confirm again.
               </ErrorMessage>
             )}
             <Refund preview={state.preview} forfeiting={state.mode === "FORFEIT"} />
             <fieldset className="space-y-2" disabled={state.submitting}>
               <legend className="mb-2 text-sm font-medium">What happens to your place?</legend>
-              <ChoiceOption name="withdraw-mode" checked={state.mode === "OPEN_SLOT"} onChange={() => onChooseMode("OPEN_SLOT")}
-                label="Open it to the waitlist" hint="The next eligible player in the queue gets it." />
+              {state.preview.kind === "REFUNDED" && (
+                <ChoiceOption name="withdraw-mode" checked={state.mode === "OPEN_SLOT"} onChange={() => onChooseMode("OPEN_SLOT")}
+                  label="Open it to the waitlist" hint="The next eligible player in the queue gets it." />
+              )}
               <ChoiceOption name="withdraw-mode" checked={state.mode === "DIRECT_INVITE"} onChange={() => onChooseMode("DIRECT_INVITE")}
                 label="Invite one person" hint="Find them by their user ID. Only they can take it, once they accept." />
               {state.mode === "DIRECT_INVITE" && (
@@ -131,8 +133,8 @@ export function WithdrawalDialog({ state, inviteSearch, onSearchInvitee, onChoos
               ) : (
                 <Button type="button" variant="destructive" className="min-h-11" onClick={onConfirm}
                   disabled={state.step !== "choosing" || state.submitting || state.mode === null || (state.mode === "DIRECT_INVITE" && state.inviteeId === null)}>
-                  {submitting ? "Withdrawing…" : state.step === "choosing" && state.termsChanged ? "Withdraw with new terms"
-                    : state.step === "choosing" && state.mode === "FORFEIT" ? "Forfeit and withdraw" : "Withdraw"}
+                  {submitting ? "Withdrawing…" : state.step === "choosing" && state.mode === "FORFEIT" ? "Forfeit and withdraw"
+                    : state.step === "choosing" && state.termsChanged ? "Withdraw with new terms" : "Withdraw"}
                 </Button>
               )}
             </>
@@ -227,7 +229,8 @@ function Refund({ preview, forfeiting }: { readonly preview: WithdrawalPreview; 
       ) : (
         <InfoNote icon>
           The session starts in less than 30 hours, so your <Money cents={preview.heldCents} /> stays held until someone
-          takes your place. If nobody does before it starts, it goes to the booker.
+          you invite accepts your place. You can invite one person or forfeit your share; the waitlist is closed.
+          If your invitee doesn&apos;t accept before it starts, your share goes to the booker.
         </InfoNote>
       ))}
       <p className="text-xs text-muted-foreground">The refund is checked again just before you withdraw; the server&apos;s result is final.</p>

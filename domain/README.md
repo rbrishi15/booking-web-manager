@@ -278,9 +278,11 @@ for the source diagram and remaining policy questions.
 
 ## Named replacements and the joining waitlist
 
-The user confirmed the session queue waitlist on 27 September 2026. A departing
-participant has two choices: invite one named person to take their one place,
-or open it to groups / the public waitlist. The choice is strictly either/or
+The user confirmed the session queue waitlist on 27 September 2026, and clarified
+the departure choices on 3 November 2026. At least 30 hours before start, a
+participant may invite one named person or open the place to the waitlist.
+Less than 30 hours before start, they may invite one person or forfeit their
+share and close the place. The choice is strictly either/or
 at withdrawal and cannot be changed afterward. See
 [ADR-0006](../docs/adr/0006-personal-replacement-reservations.md) for the confirmed
 scope and its distinction from unresolved financial and rejoining proposals.
@@ -293,7 +295,8 @@ It shares `withdraw`'s authorization, lifecycle checks and 30-hour rule.
 `Participant.withdraw` accepts `replacementMode: "DIRECT_INVITE"` with one
 `replacementInviteeId`, or
 `replacementMode: "OPEN_SLOT"`. Omitting the mode retains ordinary open-slot
-behavior. A direct invitation reserves the departing person's one place after
+behavior for early withdrawals; late open-slot withdrawals are refused with
+`INVALID_STATE`. A direct invitation reserves the departing person's one place after
 early or late withdrawal. There is no replacement link or token.
 A late withdrawal may pass `replacementMode: "FORFEIT"` instead: its hold
 becomes `FORFEITURE_DUE` at once, the result kind is `FORFEITURE_DUE`, and the

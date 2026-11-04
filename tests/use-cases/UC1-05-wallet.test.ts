@@ -22,7 +22,8 @@ function reader() {
 function provider() {
   return { createIntent: vi.fn<WalletTopUpProvider["createIntent"]>().mockResolvedValue({
     paymentIntentId: "pi_a", clientSecret: "secret", amountCents: 2000,
-    currency: "SGD", status: "requires_payment_method",
+    currency: "SGD", status: "requires_action",
+    qrCode: { imageUrlPng: "https://stripe.example/qr.png", expiresAt: 1790003600000 },
   }) };
 }
 

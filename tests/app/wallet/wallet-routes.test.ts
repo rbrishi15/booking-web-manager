@@ -65,6 +65,7 @@ const mockTopUpResult = {
   amountCents: 5000,
   currency: "SGD" as const,
   status: "requires_action",
+  qrCode: { imageUrlPng: "https://stripe.example/qr.png", expiresAt: 1790003600000 },
 };
 
 beforeEach(() => {

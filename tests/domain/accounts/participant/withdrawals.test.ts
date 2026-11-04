@@ -10,6 +10,20 @@ import {
 
 describe("Participant withdrawal and refund choices", () => {
   describe("Refund cutoff", () => {
+    test.each(["OPEN_SLOT", undefined] as const)("rejects late waitlist withdrawal (%s) without changing the place or hold", (replacementMode) => {
+      const session = createTestSession({ committedUserIds: ["alice"] });
+      const before = session.participantList.requireParticipation("p-alice");
+
+      expect(() => createTestUser({ userId: "alice" }).asParticipant().withdraw(session, {
+        participationId: "p-alice",
+        now: new Date(hoursBeforeSessionStart(30).getTime() + 1),
+        replacementMode,
+      })).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+
+      expect(session.participantList.requireParticipation("p-alice")).toBe(before);
+      expect(before.hold?.state).toBe("HELD");
+    });
+
     test("withdraw_WhenCommittedBeforeRefundCutoff_RefundsParticipant", () => {
       const participant = createTestUser({
         userId: "participant",
@@ -105,6 +119,8 @@ describe("Participant withdrawal and refund choices", () => {
         .asParticipant()
         .withdraw(bookingSession, {
           participationId: "p-alice",
+          replacementMode: "DIRECT_INVITE",
+          replacementInviteeId: "bob",
           now: new Date(hoursBeforeSessionStart(30).getTime() + 1_000),
         });
 
