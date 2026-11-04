@@ -189,6 +189,27 @@ export const JoinedCompleted: Story = {
   },
 };
 
+
+/** The scroll region stays keyboard accessible even when the scrollbar is concealed.
+ * At desktop heights of 720–840px, the standard completed-session content should fit
+ * above the footer without requiring browser zoom or an inner scroll. */
+export const JoinedCompactDesktop: Story = {
+  ...JoinedCompleted,
+  play: async ({ canvas }) => {
+    await userEvent.click(await canvas.findByRole("button", {
+      name: window.innerWidth < 768 ? "View Tennis Court Booking at CLEMENTI CASCADIA, 29 Oct 2026" : "View details",
+    }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Tennis Court Booking" }));
+    const scrollRegion = dialog.getByRole("region", { name: "Scrollable session details" });
+    await expect(scrollRegion).toHaveAttribute("tabindex", "0");
+    await expect(dialog.getByText("4 / 4")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /View in calendar/ })).toBeVisible();
+    if (window.innerWidth >= 1000 && window.innerHeight >= 720 && window.innerHeight <= 840) {
+      await waitFor(() => expect(scrollRegion.scrollHeight).toBeLessThanOrEqual(scrollRegion.clientHeight + 1));
+    }
+  },
+};
+
 export const JoinedCompletedMobile: Story = { ...JoinedCompleted, globals: { viewport: { value: "phone", isRotated: false } } };
 
 export const MobileSheetDismiss: Story = {

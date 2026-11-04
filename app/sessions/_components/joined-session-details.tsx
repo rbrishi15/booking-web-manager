@@ -50,7 +50,7 @@ export function JoinedSessionDetails({ session, userId, canLeave, onRefresh }: J
       <Image src={sessionArtwork(session)} alt="" fill sizes="(min-width: 760px) 400px, 100vw" className={styles.photo} />
     </div>
     <div className={styles.content}>
-      <div className={styles.scrollArea} data-testid="session-details-scroll">
+      <div className={styles.scrollArea} data-testid="session-details-scroll" role="region" aria-label="Scrollable session details" tabIndex={0}>
         <header className={styles.header}>
           <p className={styles.eyebrow}>Session details</p>
           <DialogTitle className={styles.title}>{sessionTitle(session)}</DialogTitle>
