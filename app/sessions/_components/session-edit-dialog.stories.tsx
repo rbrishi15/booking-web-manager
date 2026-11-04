@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, userEvent, waitFor, within } from "storybook/test";
 import { Button } from "@/components/ui/button";
 import { SessionEditDialog } from "./session-edit-dialog";
 import { SessionEditingError, type SessionEditingTransport } from "../editing-transport";
@@ -113,5 +113,63 @@ export const ReadOnly: Story = {
     const dialog = await open(canvasElement);
     await expect(dialog.getByRole("button", { name: "Save changes" })).toBeDisabled();
     await expect(dialog.getByLabelText("Capacity")).toBeDisabled();
+  },
+};
+
+export const SingaporeTimes: Story = {
+  args: { transport: transport() },
+  play: async ({ canvasElement, args }) => {
+    const dialog = await open(canvasElement);
+    fireEvent.change(dialog.getByLabelText("Starts (SGT)"), { target: { value: "2045-11-06T00:15" } });
+    fireEvent.change(dialog.getByLabelText("Ends (SGT)"), { target: { value: "2045-11-06T01:30" } });
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(args.transport.save).toHaveBeenCalledWith(editingFixture.sessionId, expect.objectContaining({
+      booking: expect.objectContaining({ startAt: "2045-11-05T16:15:00.000Z", endAt: "2045-11-05T17:30:00.000Z" }),
+    }));
+  },
+};
+
+export const FullSession: Story = {
+  args: { transport: { ...transport(), load: fn(async () => ({ ...editingFixture, bookingLocked: true, minimumSlots: 6 })) } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = await open(canvasElement);
+    await expect(dialog.getByLabelText("Visibility")).toBeDisabled();
+    await userEvent.clear(dialog.getByLabelText("Capacity"));
+    await userEvent.type(dialog.getByLabelText("Capacity"), "8");
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(args.transport.save).toHaveBeenCalledWith(editingFixture.sessionId, expect.objectContaining({
+      totalSlots: 8, visibility: "PUBLIC", booking: editingFixture.booking,
+    }));
+  },
+};
+
+export const VisibilityAtCapacity: Story = {
+  args: { transport: { ...transport(), load: fn(async () => ({ ...editingFixture, bookingLocked: true, minimumSlots: 3 })) } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = await open(canvasElement);
+    await userEvent.selectOptions(dialog.getByLabelText("Visibility"), "PRIVATE");
+    await userEvent.clear(dialog.getByLabelText("Capacity"));
+    await userEvent.type(dialog.getByLabelText("Capacity"), "3");
+    await expect(dialog.getByLabelText("Visibility")).toBeDisabled();
+    await expect(dialog.getByLabelText("Visibility")).toHaveValue("PUBLIC");
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(args.transport.save).toHaveBeenCalledWith(editingFixture.sessionId, expect.objectContaining({ totalSlots: 3, visibility: "PUBLIC" }));
+  },
+};
+
+let finishSaving: () => void;
+export const Saving: Story = {
+  args: { transport: { ...transport(), save: fn(() => new Promise<SessionEditingDetails>((resolve) => { finishSaving = () => resolve(editingFixture); })) } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = await open(canvasElement);
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(dialog.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await expect(dialog.getByLabelText("Capacity")).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    await expect(within(document.body).getByRole("dialog")).toBeVisible();
+    await expect(args.transport.save).toHaveBeenCalledTimes(1);
+    finishSaving();
+    await waitFor(() => expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument());
   },
 };

@@ -67,10 +67,12 @@ function SessionEditForm({ details, transport, onClose, onSaved, onSaving, onRel
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<{ message: string; reload: boolean } | null>(null);
   const [capacity, setCapacity] = useState(details.totalSlots);
+  const [visibility, setVisibility] = useState(details.visibility);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const locked = details.bookingLocked || !details.canEdit;
   const full = capacity <= details.minimumSlots;
+  const effectiveVisibility = full ? details.visibility : visibility;
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,7 +90,7 @@ function SessionEditForm({ details, transport, onClose, onSaved, onSaving, onRel
       booking = { venueName: text("venueName"), region: text("region"), sport: text("sport"), startAt, endAt, totalCostCents, pricePerSlotCents };
     }
     const input: SessionEditRequest = { version: details.version, booking, totalSlots: Number(text("totalSlots")),
-      visibility: full ? details.visibility : text("visibility") === "PRIVATE" ? "PRIVATE" : "PUBLIC" };
+      visibility: effectiveVisibility };
     setPending(true); onSaving(true); setFailure(null);
     try {
       const result = await transport.save(details.sessionId, input);
@@ -133,7 +135,9 @@ function SessionEditForm({ details, transport, onClose, onSaved, onSaving, onRel
               required value={Number.isNaN(capacity) ? "" : capacity} onChange={(event) => setCapacity(event.currentTarget.valueAsNumber)} aria-describedby={`${prefix}-capacity-hint`} />
           </label>
           <label className={styles.field} htmlFor={`${prefix}-visibility`}><span>Visibility</span>
-            <select id={`${prefix}-visibility`} name="visibility" defaultValue={details.visibility} disabled={full} aria-describedby={`${prefix}-visibility-hint`}>
+            <select id={`${prefix}-visibility`} name="visibility" value={effectiveVisibility}
+              onChange={(event) => setVisibility(event.currentTarget.value === "PRIVATE" ? "PRIVATE" : "PUBLIC")}
+              disabled={full} aria-describedby={`${prefix}-visibility-hint`}>
               <option value="PUBLIC">Public</option><option value="PRIVATE">Private</option>
             </select>
           </label>
