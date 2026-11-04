@@ -53,6 +53,25 @@ describe("booker session invitations persistence", () => {
     expect(await invitations().inviteByHandles(f.booker.userId, f.sessionId, [player.handle])).toMatchObject({ invited: 1 });
   });
 
+  test("crossing the start cutoff during the last write rolls back invitations and inbox rows", async () => {
+    const f = await invitationFixture(context);
+    const player = await recipient();
+    let current = new Date("2045-06-17T09:59:59Z");
+    const deadlineClock = { now: () => current };
+    const published: string[][] = [];
+    const real = new PostgresSessionInvitationTransaction(() => context.pool, deadlineClock, (recipients) => { published.push([...recipients]); });
+    const delayed: SessionInvitationTransaction = { run: (work) => real.run((repos) => work({
+      ...repos, notifications: { append: async (notices) => {
+        await repos.notifications.append(notices);
+        current = new Date("2045-06-17T10:00:00Z");
+      } },
+    })) };
+    const useCase = new ManageSessionInvitations({ transaction: delayed, clock: deadlineClock });
+    await expect(useCase.inviteByHandles(f.booker.userId, f.sessionId, [player.handle])).rejects.toMatchObject({ code: "SESSION_STARTED" });
+    expect(await counts(f.sessionId)).toEqual({ invites: 0, notices: 0, participants: 0, ledger: 0 });
+    expect(published).toEqual([]);
+  });
+
   test("group reads and sends use current active membership and reject arbitrary or stale member IDs", async () => {
     const f = await invitationFixture(context);
     const player = await recipient();

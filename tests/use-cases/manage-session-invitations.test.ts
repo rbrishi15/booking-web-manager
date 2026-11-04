@@ -130,6 +130,28 @@ describe("UC2-03d: booker sends session invitations", () => {
     expect(s.fromGroup).not.toHaveBeenCalled();
   });
 
+  test.each(["direct", "group"] as const)("rejects %s invitations if recipient lookup crosses the start cutoff", async (source) => {
+    const s = setup();
+    const players = [{ userId: "alice", handle: "alice_01", displayName: "Alice" }];
+    const delayedLookup = async () => { s.clock.now.mockReturnValue(sessionStartsAt); return players; };
+    s.byHandles.mockImplementation(delayedLookup);
+    s.fromGroup.mockImplementation(delayedLookup);
+    const send = source === "direct" ? s.useCase.inviteByHandles("booker", "s", ["alice_01"])
+      : s.useCase.inviteFromGroup("booker", "s", "group", ["alice"]);
+    await expect(send).rejects.toMatchObject({ code: "SESSION_STARTED" });
+    expect(s.add).not.toHaveBeenCalled();
+    expect(s.append).not.toHaveBeenCalled();
+  });
+
+  test.each(["direct", "group"] as const)("fails %s sends when the final notification write crosses the start cutoff", async (source) => {
+    const s = setup();
+    s.byHandles.mockResolvedValue([{ userId: "alice", handle: "alice_01", displayName: "Alice" }]);
+    s.append.mockImplementation(async () => { s.clock.now.mockReturnValue(sessionStartsAt); });
+    const send = source === "direct" ? s.useCase.inviteByHandles("booker", "s", ["alice_01"])
+      : s.useCase.inviteFromGroup("booker", "s", "group", ["alice"]);
+    await expect(send).rejects.toMatchObject({ code: "SESSION_STARTED" });
+  });
+
   test("rejects unknown users, repeated handles and unsafe bulk sizes", async () => {
     const s = setup();
     s.byHandles.mockResolvedValue([]);

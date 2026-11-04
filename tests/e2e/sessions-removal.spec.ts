@@ -37,12 +37,30 @@ test("UC2-03b host removes a participant with a full refund, retained history, a
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, f.booker, "/sessions?tab=hosting");
     const management = await openHostedSession(page, f.venueName);
+    let releaseRoster: () => void = () => undefined;
+    let rosterRequested: () => void = () => undefined;
+    const rosterGate = new Promise<void>((resolve) => { releaseRoster = resolve; });
+    const rosterStarted = new Promise<void>((resolve) => { rosterRequested = resolve; });
+    let initialRoster = true;
+    await page.route(`**/api/sessions/${f.sessionId}/participants`, async (route) => {
+      if (initialRoster && route.request().method() === "GET") {
+        initialRoster = false;
+        rosterRequested();
+        await rosterGate;
+      }
+      await route.continue();
+    });
     await management.getByRole("link", { name: "Manage players" }).click();
     await expect(page).toHaveURL(new RegExp(`${f.path}$`));
     await expect(page.getByRole("heading", { name: "Badminton Session", exact: true })).toBeVisible();
     await expect(page.getByText("3 / 3 players", { exact: true })).toBeVisible();
     const trigger = participant(page).getByRole("button", { name: "Manage Player 1", exact: true });
+    await rosterStarted;
+    await expect(trigger).toBeDisabled();
+    releaseRoster();
+    await expect(trigger).toBeEnabled();
     await trigger.focus();
+    await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     await participant(page).getByRole("button", { name: "Remove participant" }).click();
     const dialog = page.getByRole("dialog");

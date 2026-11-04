@@ -82,8 +82,8 @@ this assembly as well as the injected controller stories.
 
 | Follow-up check | Result |
 | --- | --- |
-| Full unit suite | 3,569 passed; existing 75 skipped and 1 todo retained |
-| Disposable Supabase database suite | 142 passed across 18 files |
+| Full unit suite | 3,575 passed; existing 75 skipped and 1 todo retained |
+| Disposable Supabase database suite | 143 passed across 18 files |
 | Production Chromium/browser and HTTP suite | 83 passed |
 | Relevant Storybook interactions/accessibility | 42 passed across 4 files |
 | Production Next.js/Storybook build | Passed |
@@ -104,6 +104,28 @@ cookie write support, and optional loading disabled participant controls. Each
 correction was verified with a failing regression followed by a passing run.
 The missing-configuration API path was also corrected to return the documented
 503 response while unexpected assembly failures remain opaque 500 responses.
+
+
+## CI and CodeRabbit follow-up
+
+- The keyboard removal test now holds the first roster HTTP request, verifies
+  that controls are disabled while it is pending, and waits for the control to
+  become enabled and focused before pressing Enter. This covers the CI race
+  without increasing timeouts or adding retries.
+- Invitation sends recheck the upcoming-session cutoff after recipient lookup
+  and after the final awaited notification write inside the transaction. Late
+  sends fail with `SESSION_STARTED`; a disposable database regression confirms
+  that both invitation and inbox rows roll back and no publication occurs.
+- Migration 0023 documents manual reversal order, invitation data loss, app
+  rollback sequencing and later-migration dependencies. No executable migration
+  statements or live databases were changed by this follow-up.
+- The pool comment referred to the removed Server Action factory. The current
+  HTTP loader already shares a module-scoped initialization promise. Regression
+  checks use the actual composition root to verify one pool provider for
+  concurrent/warm callers, lazy opening, and recovery after setup failure.
+- Fresh local verification: 3,575 unit tests, 143 disposable database tests and
+  83 production browser/HTTP tests passed; build, typecheck, lint, migration
+  numbering and diff checks passed. Existing 75 unit skips and 1 todo remain.
 
 ## Visual evidence
 

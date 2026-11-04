@@ -75,12 +75,14 @@ export class ManageSessionInvitations {
       DomainError.require(user.accountStatus === "ACTIVE", "INACTIVE_ACCOUNT", "An inactive host cannot manage invitations");
       const session = await requireAggregate(repos.sessions, sessionId, "Session");
       requireParticipantListOwner(user, session);
-      if (mustBeUpcoming) {
-        DomainError.require(session.status === "OPEN", "SESSION_CLOSED", "This session is closed for invitations");
-        DomainError.require(session.booking.startAt > this.deps.clock.now(), "SESSION_STARTED", "This session has started");
-      }
+      if (mustBeUpcoming) this.requireUpcoming(session);
       return work(repos, session);
     });
+  }
+
+  private requireUpcoming(session: Session): void {
+    DomainError.require(session.status === "OPEN", "SESSION_CLOSED", "This session is closed for invitations");
+    DomainError.require(session.booking.startAt > this.deps.clock.now(), "SESSION_STARTED", "This session has started");
   }
 
   async inviteByHandles(hostId: UUID, sessionId: UUID, rawHandles: readonly string[]): Promise<SessionInviteSummary> {
@@ -124,6 +126,7 @@ export class ManageSessionInvitations {
   ): Promise<SessionInviteSummary> {
     const inRoster = new Set(session.participantList.participations.map((participant) => participant.userId));
     const eligible = players.filter((player) => player.userId !== hostId && !inRoster.has(player.userId));
+    this.requireUpcoming(session);
     const inserted = await repos.invitations.add(session.sessionId, hostId, eligible, groupId);
     const added = new Set(inserted);
     await repos.notifications.append(eligible.filter((player) => added.has(player.userId)).map((player) => ({
@@ -133,6 +136,9 @@ export class ManageSessionInvitations {
       invitationToken: session.roomToken,
       occurrenceKey: JSON.stringify(["SESSION_INVITATION", session.sessionId, player.userId]),
     })));
+    // The last awaited write can cross the deadline. Throw inside the transaction
+    // so neither invitations nor inbox rows commit, and no post-commit hint fires.
+    this.requireUpcoming(session);
     return {
       invited: inserted.length,
       alreadyInvited: eligible.length - inserted.length,

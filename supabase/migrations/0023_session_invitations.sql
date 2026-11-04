@@ -64,3 +64,17 @@ grant execute on function public.notification_push_relevant(text,uuid,uuid,uuid)
 comment on table public.session_invitations is
   'Recipient-specific invitations to upcoming hosted sessions; membership is accepted only through UC2-04 wallet-guarded commitment.';
 commit;
+
+-- Manual rollback: first roll back the application that uses these invitations.
+-- Pending/accepted/declined invitation rows are lost; existing participations,
+-- wallets and notification inbox rows are retained. Apply only when 0023 is the
+-- latest migration; review any later function dependencies before reversing it.
+-- Restore the original notification function name before dropping the table:
+-- begin;
+-- drop trigger accept_pending_session_invitation on public.participations;
+-- drop function public.accept_pending_session_invitation();
+-- drop function public.notification_push_relevant(text,uuid,uuid,uuid);
+-- alter function public.notification_push_relevant_before_session_invitations(text,uuid,uuid,uuid)
+--   rename to notification_push_relevant;
+-- drop table public.session_invitations;
+-- commit;
