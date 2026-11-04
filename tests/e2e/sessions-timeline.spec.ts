@@ -28,13 +28,6 @@ async function goToDate(page: Page, day: number) {
   await expectSettled(page, day);
 }
 
-// Gesture boundaries are intentional input, rather than a wait for animation.
-async function freshGesture(page: Page, delta: number) {
-  await page.waitForTimeout(240);
-  await pointAtPhoto(page);
-  await page.mouse.wheel(0, delta);
-}
-
 async function expectVisibleSelection(page: Page) {
   const bounds = await current(page).evaluate((el) => {
     const feature = el.querySelector('[data-timeline-expanded]')!.getBoundingClientRect();
@@ -58,233 +51,290 @@ test.beforeEach(async ({ page }) => {
   await expectSettled(page, 21);
 });
 
-test("one wheel gesture glides to one full card with stable document height", async ({ page }, testInfo) => {
-  await pointAtPhoto(page);
-  await timeline(page).evaluate((root) => {
-    const frames: { weights: number[]; height: number; documentHeight: number; y: number }[] = [];
-    const end = performance.now() + 900;
-    Object.defineProperty(window, "timelineFrames", { value: frames });
-    const sample = () => {
-      frames.push({ weights: Array.from(root.querySelectorAll<HTMLElement>("[data-session-id]"), (element) => Number(element.style.getPropertyValue("--expansion"))),
-        height: root.getBoundingClientRect().height, documentHeight: document.documentElement.scrollHeight, y: scrollY });
-      if (performance.now() < end) requestAnimationFrame(sample);
-    };
-    sample();
+async function wheel(page: Page, deltaY: number, momentum = false, deltaMode = 0) {
+  return timeline(page).evaluate((root, input) => {
+    const event = new WheelEvent("wheel", { deltaY: input.deltaY, deltaMode: input.deltaMode, bubbles: true, cancelable: true });
+    if (input.momentum) Object.defineProperty(event, "momentum", { value: true });
+    return root.dispatchEvent(event);
+  }, { deltaY, momentum, deltaMode });
+}
+
+async function expectCompactSelection(page: Page, day: number) {
+  await expect(current(page)).toHaveAttribute("data-session-id", await row(page, day).getAttribute("data-session-id") as string);
+  expect(await timeline(page).locator("[data-session-id]").evaluateAll((elements) => elements.every((element) => Number((element as HTMLElement).style.getPropertyValue("--expansion")) === 0))).toBe(true);
+  await expect(timeline(page).getByRole("button", { name: "View details" })).toHaveCount(0);
+  await expect(date(page, day)).toHaveAttribute("aria-expanded", "false");
+}
+
+async function markerPosition(page: Page) {
+  return timeline(page).evaluate((root) => {
+    const marker = root.querySelector('[data-timeline-marker]')!.getBoundingClientRect();
+    const date = root.querySelector('[data-current] [data-date-control] strong')!.getBoundingClientRect();
+    const top = root.getBoundingClientRect().top;
+    return { dot: marker.top + marker.height / 2 - top, target: date.top + date.height / 2 - top };
   });
-  await page.mouse.wheel(0, 368);
-  await expectSettled(page, 23);
-  const frames = await page.evaluate(() => Reflect.get(window, "timelineFrames") as { weights: number[]; height: number; documentHeight: number; y: number }[]);
-  expect(frames.some(({ weights }) => weights.some((value) => value > .05 && value < .95))).toBe(true);
-  expect(new Set(frames.map(({ y }) => y)).size).toBeGreaterThan(2);
-  for (const frame of frames) {
-    expect(frame.weights.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 6);
-    expect(frame.height).toBeCloseTo(frames[0]!.height, 0);
-    expect(frame.documentHeight).toBe(frames[0]!.documentHeight);
-  }
-  await expectVisibleSelection(page);
-  await page.screenshot({ path: testInfo.outputPath("joined-gesture-settled.png") });
-});
+}
 
-test("momentum beyond animation completion stays one gesture, then fresh gestures repeat and reverse", async ({ page }) => {
-  await pointAtPhoto(page);
-  // A continuous tail lasts over twice the 280 ms glide. Each gap is below the
-  // 220 ms quiet boundary, including the tiny final deltas.
-  // Keep wheel intervals inside the browser event loop. Playwright RPC and CI
-  // scheduling can stretch 65ms into >220ms and falsely split one gesture.
-  await timeline(page).evaluate(async (root) => {
-    for (const delta of [40, 32, 24, 18, 12, 8, 6, 4, 2, 1]) {
-      const target = root.querySelector<HTMLElement>('[data-current="true"] [data-timeline-reveal="hero"]');
-      if (!target) throw new Error("No active session photo for the wheel gesture");
-      const consumed = !target.dispatchEvent(new WheelEvent("wheel", { deltaY: delta, bubbles: true, cancelable: true }));
-      if (!consumed) throw new Error("Timeline did not consume the current wheel burst");
-      await new Promise<void>((resolve) => setTimeout(resolve, 65));
-    }
-  });
-  await expectSettled(page, 23);
-  await freshGesture(page, 80);
-  await expectSettled(page, 24);
-  await freshGesture(page, -80);
-  await expectSettled(page, 23);
-});
-
-test("tiny input does not select and a deliberate 24 px gesture does", async ({ page }) => {
-  await pointAtPhoto(page);
-  for (const delta of [1, 2, -1, 2]) await page.mouse.wheel(0, delta);
-  await expectSettled(page, 21);
-  await page.waitForTimeout(240);
-  await page.mouse.wheel(0, 12);
-  await expect(date(page, 21)).toHaveAttribute("aria-expanded", "true");
-  await page.mouse.wheel(0, 12);
-  await expectSettled(page, 23);
-});
-
-test("a quick trackpad reversal queues the previous card without waiting for silence", async ({ page }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
-  const wheel = (deltaY: number) => timeline(page).evaluate((root, delta) => root.dispatchEvent(new WheelEvent("wheel", {
-    deltaY: delta, bubbles: true, cancelable: true,
-  })), deltaY);
-  expect(await wheel(40)).toBe(false);
+test("the dot glides between compact dates and reverses from its current position", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 10);
+  await page.clock.runFor(176);
+  const before = await markerPosition(page);
+  await wheel(page, 14);
+  await expectCompactSelection(page, 23);
+  const start = await markerPosition(page);
+  expect(Math.abs(start.dot - before.dot)).toBeLessThan(1);
+  expect(start.dot).toBeLessThan(start.target - 20);
+  const snapped = await page.evaluate(() => scrollY);
   await page.clock.runFor(80);
-  expect(await wheel(-12)).toBe(false);
-  await page.clock.runFor(16);
-  expect(await wheel(-12)).toBe(false);
-  for (const delta of [-10, -6, -2]) {
-    await page.clock.runFor(16);
-    expect(await wheel(delta)).toBe(false);
-  }
-  await page.clock.runFor(600);
+  const middle = await markerPosition(page);
+  expect(middle.dot).toBeGreaterThan(start.dot + 10);
+  expect(middle.dot).toBeLessThan(middle.target - 1);
+  expect(await page.evaluate(() => scrollY)).toBe(snapped);
+  await wheel(page, -40);
+  const reversed = await markerPosition(page);
+  expect(Math.abs(reversed.dot - middle.dot)).toBeLessThan(1);
+  await page.clock.runFor(80);
+  expect((await markerPosition(page)).dot).toBeLessThan(reversed.dot - 10);
+  await page.clock.runFor(110);
+  const landed = await markerPosition(page);
+  expect(Math.abs(landed.dot - landed.target)).toBeLessThan(1);
+  await expectCompactSelection(page, 21);
+  await page.clock.runFor(500);
   await expectSettled(page, 21);
   await expectVisibleSelection(page);
 });
 
-test("a second trackpad push advances one more card while the old tail is still arriving", async ({ page }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
-  for (const delta of [80, 40, 10, 2, 20, 18, 12, 6, 2]) {
-    const passed = await timeline(page).evaluate((root, deltaY) => root.dispatchEvent(new WheelEvent("wheel", {
-      deltaY, bubbles: true, cancelable: true,
-    })), delta);
-    expect(passed).toBe(false);
-    await page.clock.runFor(16);
-  }
-  await page.clock.runFor(600);
-  await expectSettled(page, 24);
-  await expectVisibleSelection(page);
-});
-
-test("a rogue trackpad spike followed by tiny tail noise cannot skip another card", async ({ page }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
-  for (const delta of [80, 40, 10, 2, 100, 4, 4, 4, 4, 4, 4]) {
-    const passed = await timeline(page).evaluate((root, deltaY) => root.dispatchEvent(new WheelEvent("wheel", {
-      deltaY, bubbles: true, cancelable: true,
-    })), delta);
-    expect(passed).toBe(false);
-    await page.clock.runFor(16);
-  }
-  await page.clock.runFor(600);
+test("scroll closes the old card smoothly before moving, then opens only after a pause", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  const start = await page.evaluate(() => ({ y: scrollY, height: document.documentElement.scrollHeight }));
+  expect(await wheel(page, 40)).toBe(false);
+  expect(await weight(page, 21)).toBe(1);
+  expect(await page.evaluate(() => scrollY)).toBe(start.y);
+  await page.clock.runFor(80);
+  expect(await weight(page, 21)).toBeGreaterThan(0);
+  expect(await weight(page, 21)).toBeLessThan(1);
+  expect(await page.evaluate(() => scrollY)).toBe(start.y);
+  await page.clock.runFor(96);
+  await expectCompactSelection(page, 23);
+  const snapped = await page.evaluate(() => scrollY);
+  expect(snapped).not.toBe(start.y);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(start.height);
+  await page.clock.runFor(180);
+  await expectCompactSelection(page, 23);
+  expect(await page.evaluate(() => scrollY)).toBe(snapped);
+  await page.clock.runFor(80);
+  expect(await weight(page, 23)).toBeGreaterThan(0);
+  expect(await weight(page, 23)).toBeLessThan(1);
+  await page.clock.runFor(300);
   await expectSettled(page, 23);
+  expect(await page.evaluate(() => scrollY)).toBe(snapped);
   await expectVisibleSelection(page);
 });
 
-test("plain document scrolling preserves the selected full card", async ({ page }) => {
-  const start = await page.evaluate(() => scrollY);
-  await page.evaluate((top) => { document.scrollingElement!.scrollTop = top + 256; }, start);
-  await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(start + 256, 0);
-  await page.waitForTimeout(350);
-  await expectSettled(page, 21);
-  expect(await page.evaluate(() => scrollY)).toBeCloseTo(start + 256, 0);
-});
-
-test("native scroll takeover cancels an unfinished seek without a stale reposition", async ({ page }) => {
-  await date(page, 21).evaluate((button) => button.focus({ preventScroll: true }));
-  const position = await page.evaluate(async () => {
-    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    document.scrollingElement!.scrollTop = window.scrollY + 73;
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return window.scrollY;
-  });
-  await page.waitForTimeout(450);
-  expect(await page.evaluate(() => scrollY)).toBeCloseTo(position, 0);
-  const weights = await timeline(page).locator("[data-session-id]").evaluateAll((elements) => elements.map((element) => Number((element as HTMLElement).style.getPropertyValue("--expansion"))));
-  expect(weights.filter((value) => value === 1)).toHaveLength(1);
-  expect(weights.every((value) => value === 0 || value === 1)).toBe(true);
-});
-
-test("fresh outward gestures at the first and last sessions scroll the page", async ({ page }) => {
-  await page.locator("main").evaluate((main) => {
-    const footer = document.createElement("div");
-    footer.style.height = "1000px";
-    main.append(footer);
-  });
-  await goToDate(page, 3);
-  await page.evaluate(() => { document.scrollingElement!.scrollTop = 50; });
-  await freshGesture(page, -80);
-  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
-  await expectSettled(page, 3);
-  await goToDate(page, 25);
-  const lastStop = await page.evaluate(() => scrollY);
-  await goToDate(page, 24);
-  await pointAtPhoto(page);
-  for (const delta of [80, 40, 24, 12, 6, 2]) {
-    await page.mouse.wheel(0, delta);
-    await page.waitForTimeout(65);
+test("momentum postpones opening without skipping, and a fresh gesture switches again", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 40);
+  await page.clock.runFor(176);
+  for (const delta of [30, 15, 7, 3, 1]) {
+    await page.clock.runFor(100);
+    expect(await wheel(page, delta, true)).toBe(false);
+    await expectCompactSelection(page, 23);
   }
-  await expectSettled(page, 25);
-  const settled = await page.evaluate(() => scrollY);
-  expect(settled).toBeCloseTo(lastStop, 0);
-  // Landing on the final card does not leak the original gesture's momentum
-  // into the page; only a fresh outward gesture scrolls beyond the timeline.
-  await freshGesture(page, 100);
-  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(settled + 90);
-  await expectSettled(page, 25);
-  await freshGesture(page, -80);
+  await page.clock.runFor(180);
+  await expectCompactSelection(page, 23);
+  await page.clock.runFor(400);
+  await expectSettled(page, 23);
+  await wheel(page, 40);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 24);
+  await page.clock.runFor(600);
   await expectSettled(page, 24);
 });
 
-test("returning from the bottom resumes at a visible card instead of leaving every visible row collapsed", async ({ page }, testInfo) => {
-  await goToDate(page, 25);
-  const outwardPassed = await timeline(page).evaluate((root) => root.dispatchEvent(new WheelEvent("wheel", { deltaY: 80, bubbles: true, cancelable: true })));
-  expect(outwardPassed).toBe(true);
-  // A large reverse native scroll can leave the selected final card below
-  // the viewport while the earlier dates are all collapsed (the reported view).
-  await page.evaluate(() => { document.scrollingElement!.scrollTop = 0; });
-  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
-  const bounds = await row(page, 3).boundingBox();
-  if (!bounds) throw new Error("The first collapsed session is missing");
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-  await page.mouse.wheel(0, -40);
-  await expectSettled(page, 3);
-  await expectVisibleSelection(page);
-  await page.screenshot({ path: testInfo.outputPath("returned-from-bottom.png") });
-  await freshGesture(page, 40);
-  await expectSettled(page, 7);
-  await expectVisibleSelection(page);
+test("reversal during card opening closes it and changes destination without stale movement", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 40);
+  await page.clock.runFor(176);
+  await page.clock.runFor(280);
+  expect(await weight(page, 23)).toBeGreaterThan(0);
+  expect(await weight(page, 23)).toBeLessThan(1);
+  await wheel(page, -40);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 21);
+  const snapped = await page.evaluate(() => scrollY);
+  await page.clock.runFor(180);
+  await expectCompactSelection(page, 21);
+  await page.clock.runFor(500);
+  await expectSettled(page, 21);
+  expect(await page.evaluate(() => scrollY)).toBe(snapped);
 });
 
-test("recovery keeps small-packet intent when native scrolling changes the visible candidate", async ({ page }) => {
-  await goToDate(page, 25);
-  // Keep the packets in one browser task: CI scheduling must not introduce
-  // a quiet interval between two parts of the same physical swipe.
-  const packets = await timeline(page).evaluate((root) => {
-    const control = (day: number) => root.querySelector<HTMLButtonElement>(`[aria-label="Show Tennis Court Booking, ${day} Oct 2026"]`)!;
-    const wheel = (day: number) => control(day).dispatchEvent(new WheelEvent("wheel", { deltaY: -12, bubbles: true, cancelable: true }));
-    document.scrollingElement!.scrollTop = 0;
-    const firstPassed = wheel(3);
-    const selectedAfterFirst = control(25).getAttribute("aria-expanded");
-    const candidate = control(7).parentElement!;
-    const readingTop = parseFloat(getComputedStyle(root).getPropertyValue("--reading-top"));
-    document.scrollingElement!.scrollTop = candidate.getBoundingClientRect().top + scrollY - readingTop;
-    const collapsedBeforeSecond = control(7).getAttribute("aria-expanded");
-    return { firstPassed, selectedAfterFirst, collapsedBeforeSecond, secondPassed: wheel(7) };
+test("reversing while the old card closes redirects it without showing an intermediate session", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  const initial = await page.evaluate(() => scrollY);
+  await wheel(page, 40);
+  await page.clock.runFor(80);
+  const closing = await weight(page, 21);
+  await wheel(page, -40);
+  expect(await weight(page, 21)).toBe(closing);
+  expect(await weight(page, 23)).toBe(0);
+  await page.clock.runFor(96);
+  await expectCompactSelection(page, 21);
+  expect(await page.evaluate(() => scrollY)).toBe(initial);
+  await page.clock.runFor(500);
+  await expectSettled(page, 21);
+  expect(await weight(page, 23)).toBe(0);
+});
+
+test("repeated real wheel gestures switch directly between sessions", async ({ page }, testInfo) => {
+  for (const [delta, day] of [[120, 23], [1600, 24], [-120, 23], [-120, 21]]) {
+    await pointAtPhoto(page);
+    await page.mouse.wheel(0, delta!);
+    // Precise compact-state timing is covered with the paused clock above.
+    // Real browser round trips can outlast that intentionally brief phase.
+    await expectSettled(page, day!);
+    await expectVisibleSelection(page);
+  }
+  await page.screenshot({ path: testInfo.outputPath("joined-direct-scroll.png") });
+});
+
+test("tiny input accumulates intent and line/page wheel units switch one session", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 10);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 21);
+  await wheel(page, 14);
+  await expectCompactSelection(page, 23);
+  await page.clock.runFor(600);
+  await wheel(page, 2, false, 1);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 24);
+  await page.clock.runFor(600);
+  await wheel(page, -.1, false, 2);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 23);
+});
+
+test("reduced motion retains the pause and then opens without animation", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 40);
+  await page.clock.runFor(180);
+  await expectCompactSelection(page, 23);
+  await page.clock.runFor(40);
+  await expectSettled(page, 23);
+  await expect(timeline(page)).not.toHaveAttribute("data-timeline-transitioning");
+});
+
+test("date clicks and dialogs cancel pending scroll expansion", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 40);
+  await date(page, 20).dispatchEvent("click");
+  await page.clock.runFor(800);
+  await expectSettled(page, 20);
+  await wheel(page, 40);
+  await page.clock.runFor(176);
+  await expectCompactSelection(page, 21);
+  await page.evaluate(() => {
+    const dialog = document.createElement("dialog");
+    dialog.textContent = "Session details";
+    document.body.append(dialog);
+    dialog.showModal();
   });
-  expect(packets).toEqual({ firstPassed: false, selectedAfterFirst: "true", collapsedBeforeSecond: "false", secondPassed: false });
-  await expectSettled(page, 7);
-  await expectVisibleSelection(page);
+  await page.clock.runFor(800);
+  await page.getByRole("dialog").evaluate((element) => { (element as HTMLDialogElement).close(); element.remove(); });
+  await expectSettled(page, 21);
 });
 
-test("off-screen recovery ignores explicit momentum and resumes when deliberate input returns", async ({ page }) => {
+test("outward gestures at the first and last sessions pass through", async ({ page }) => {
   await goToDate(page, 3);
-  // Return to a mid-feed position with the old selected card above the viewport.
-  await row(page, 14).evaluate((element) => {
-    const root = element.closest('[role="region"]')!;
-    const readingTop = parseFloat(getComputedStyle(root).getPropertyValue("--reading-top"));
-    document.scrollingElement!.scrollTop = element.getBoundingClientRect().top + scrollY - readingTop;
-  });
-  const momentumPassed = await row(page, 14).evaluate((element) => {
-    const event = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
-    Object.defineProperty(event, "momentum", { value: true });
-    return element.dispatchEvent(event);
-  });
-  expect(momentumPassed).toBe(true);
-  await expect(date(page, 3)).toHaveAttribute("aria-expanded", "true");
-  await page.waitForTimeout(240);
-  const passed = await row(page, 14).evaluate((element) => element.dispatchEvent(new WheelEvent("wheel", { deltaY: -40, bubbles: true, cancelable: true })));
-  expect(passed).toBe(false);
-  await expectSettled(page, 14);
+  expect(await wheel(page, -80)).toBe(true);
+  await goToDate(page, 25);
+  expect(await wheel(page, 80)).toBe(true);
+  const start = await page.evaluate(() => scrollY);
+  await pointAtPhoto(page);
+  await page.mouse.wheel(0, 80);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(start);
+  const exited = await page.evaluate(() => scrollY);
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => scrollY)).toBe(exited);
+  await expectSettled(page, 25);
+});
+
+test("a closing boundary session retains input until its pending placement finishes", async ({ page }) => {
+  await goToDate(page, 24);
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  for (const delta of [40, 20, 10, 2, 40, 40]) {
+    expect(await wheel(page, delta)).toBe(false);
+    await page.clock.runFor(10);
+  }
+  await page.clock.runFor(116);
+  await expectCompactSelection(page, 25);
+  await page.clock.runFor(600);
+  expect(await wheel(page, 80)).toBe(true);
+  await page.evaluate(() => { scrollBy(0, 40); window.dispatchEvent(new Event("scroll")); });
+  const exited = await page.evaluate(() => scrollY);
+  await page.clock.runFor(800);
+  expect(await page.evaluate(() => scrollY)).toBe(exited);
+});
+
+test("resizing during closing, marker travel or opening cancels obsolete frames", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  for (const [width, delay, day] of [[1280, 80, 23], [1440, 240, 24], [1280, 440, 25]]) {
+    await wheel(page, 40);
+    await page.clock.runFor(delay!);
+    await page.setViewportSize({ width: width!, height: 1024 });
+    await page.clock.runFor(32);
+    const resized = await page.evaluate(() => scrollY);
+    await page.clock.runFor(900);
+    await expectSettled(page, day!);
+    await expectVisibleSelection(page);
+    // WebKit can round the final resized layout by one device pixel.
+    expect(Math.abs(await page.evaluate(() => scrollY) - resized)).toBeLessThan(2);
+  }
+});
+
+test("diagonal wheel input does not prematurely open a pending card", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await wheel(page, 40);
+  await page.clock.runFor(176);
+  await page.clock.runFor(100);
+  await timeline(page).dispatchEvent("wheel", { deltaX: 100, deltaY: 10, bubbles: true, cancelable: true });
+  await expectCompactSelection(page, 23);
+  await page.clock.runFor(80);
+  await expectCompactSelection(page, 23);
+  await page.clock.runFor(400);
+  await expectSettled(page, 23);
+});
+
+test("scrollbar movement collapses cards and reaches the last session without jumping back", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
+  await page.evaluate(() => { scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event("scroll")); });
+  await page.clock.runFor(32);
+  await expectCompactSelection(page, 25);
+  await page.clock.runFor(80);
+  await page.evaluate(() => { scrollBy(0, -10); window.dispatchEvent(new Event("scroll")); });
+  await page.clock.runFor(32);
+  await expectCompactSelection(page, 25);
+  await page.clock.runFor(600);
+  await expectSettled(page, 25);
   await expectVisibleSelection(page);
+  const position = await page.evaluate(() => scrollY);
+  await page.clock.runFor(800);
+  expect(await page.evaluate(() => scrollY)).toBe(position);
 });
 
 test("nested scrollers, open dialogs, horizontal wheels and pinch gestures keep their own input", async ({ page }) => {
@@ -341,26 +391,6 @@ test("keyboard, date and collapsed-row navigation select and focus their intende
   await expect(date(page, 23)).toBeFocused();
 });
 
-test("new keyboard and date targets replace a running transition", async ({ page }) => {
-  await date(page, 21).focus();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await expectSettled(page, 24);
-  await expect(date(page, 24)).toBeFocused();
-  await page.evaluate(async () => {
-    const root = document.querySelector('[aria-label="Joined session timeline"]')!;
-    const control = (day: number) => root.querySelector<HTMLButtonElement>(`[aria-label="Show Tennis Court Booking, ${day} Oct 2026"]`)!;
-    control(3).click();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    control(20).click();
-  });
-  await expectSettled(page, 20);
-  const position = await page.evaluate(() => scrollY);
-  await page.waitForTimeout(350);
-  await expectSettled(page, 20);
-  expect(await page.evaluate(() => scrollY)).toBeCloseTo(position, 0);
-});
-
 test("the reference desktop keeps compact neighbors and one accessible feature", async ({ page }) => {
   await goToDate(page, 24);
   await expectVisibleSelection(page);
@@ -383,20 +413,17 @@ test("the reference desktop keeps compact neighbors and one accessible feature",
 test("reduced motion selects immediately with a synchronized marker and date", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await pointAtPhoto(page);
-  await page.mouse.wheel(0, 40);
-  await expectSettled(page, 23);
+  await goToDate(page, 23);
   await expectVisibleSelection(page);
   expect(await timeline(page).evaluate((element) => element.getAnimations({ subtree: true }).filter((animation) => animation.playState === "running").length)).toBe(0);
 });
 
-test("narrow, short and tall desktop windows advance on their first qualifying gesture", async ({ page }) => {
+test("narrow, short and tall desktop windows retain direct date selection", async ({ page }) => {
   for (const viewport of [{ width: 820, height: 900 }, { width: 1280, height: 600 }, { width: 1440, height: 1800 }]) {
     await page.setViewportSize(viewport);
     await goToDate(page, 21);
-    await freshGesture(page, 40);
-    await expectSettled(page, 23);
-    await freshGesture(page, -40);
-    await expectSettled(page, 21);
+    await goToDate(page, 23);
+    await goToDate(page, 21);
   }
 });
 
@@ -409,114 +436,7 @@ test("mobile Joined keeps native list scrolling", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
 });
 
-test("a date retarget continues from the current visual state without an endpoint jump", async ({ page }) => {
-  const retarget = await timeline(page).evaluate(async (root) => {
-    const control = (day: number) => root.querySelector<HTMLButtonElement>(`[aria-label="Show Tennis Court Booking, ${day} Oct 2026"]`)!;
-    const snapshot = () => ({
-      y: scrollY,
-      height: root.getBoundingClientRect().height,
-      weights: Array.from(root.querySelectorAll<HTMLElement>("[data-session-id]"), (element) => Number(element.style.getPropertyValue("--expansion"))),
-    });
-    control(3).click();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    const before = snapshot();
-    control(20).click();
-    // React may publish the new selected ID here; the current geometry must
-    // survive until the replacement animation contributes its first frame.
-    await Promise.resolve();
-    const immediate = snapshot();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return { before, immediate, moving: snapshot() };
-  });
-  expect(retarget.before.weights.some((value) => value > 0 && value < 1)).toBe(true);
-  expect(retarget.immediate.weights).toEqual(retarget.before.weights);
-  expect(retarget.immediate.y).toBe(retarget.before.y);
-  expect(retarget.moving.weights.filter((value) => value > 0 && value < 1)).toHaveLength(3);
-  expect(retarget.moving.weights.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 6);
-  expect(retarget.moving.height).toBeCloseTo(retarget.before.height, 0);
-  await expectSettled(page, 20);
-  await expectVisibleSelection(page);
-  const settled = await page.evaluate(() => scrollY);
-  await page.waitForTimeout(350);
-  expect(await page.evaluate(() => scrollY)).toBe(settled);
-});
-
-test("resizing during a glide settles a full visible session without a late scroll write", async ({ page }) => {
-  const moving = await timeline(page).evaluate(async (root) => {
-    root.querySelector<HTMLButtonElement>('[aria-label="Show Tennis Court Booking, 25 Oct 2026"]')!.click();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return root.hasAttribute("data-timeline-transitioning") && Array.from(root.querySelectorAll<HTMLElement>("[data-session-id]")).some((element) => {
-      const expansion = Number(element.style.getPropertyValue("--expansion"));
-      return expansion > 0 && expansion < 1;
-    });
-  });
-  expect(moving).toBe(true);
-  await page.setViewportSize({ width: 1280, height: 600 });
-  await expectSettled(page, 25);
-  await expectVisibleSelection(page);
-  const settled = await page.evaluate(() => scrollY);
-  await page.waitForTimeout(400);
-  expect(await page.evaluate(() => scrollY)).toBeCloseTo(settled, 0);
-  await expectSettled(page, 25);
-});
-
-test("line and page wheel units reach the same one-session navigation", async ({ page }) => {
-  for (const wheel of [{ deltaMode: 1, deltaY: 2 }, { deltaMode: 2, deltaY: .1 }]) {
-    await goToDate(page, 21);
-    await page.waitForTimeout(240);
-    const passed = await timeline(page).evaluate((root, input) => root.dispatchEvent(new WheelEvent("wheel", { ...input, bubbles: true, cancelable: true })), wheel);
-    expect(passed).toBe(false);
-    await expectSettled(page, 23);
-  }
-});
-
-test("positive momentum never starts navigation and a late owned tail remains consumed", async ({ page }) => {
-  const momentum = () => timeline(page).evaluate((root) => {
-    const event = new WheelEvent("wheel", { deltaY: 500, bubbles: true, cancelable: true });
-    // Exercise the feature-detected path on both engines, including engines
-    // that do not yet expose a native momentum property.
-    Object.defineProperty(event, "momentum", { value: true });
-    return root.dispatchEvent(event);
-  });
-  expect(await momentum()).toBe(true);
-  await expectSettled(page, 21);
-  await freshGesture(page, 40);
-  await expectSettled(page, 23);
-  await page.waitForTimeout(240);
-  expect(await momentum()).toBe(false);
-  await page.waitForTimeout(350);
-  await expectSettled(page, 23);
-});
-
-test("a fresh gesture during a glide queues one neighboring session and consumes its tail", async ({ page }) => {
-  // Control animation frames and input timestamps together: 240 ms is a fresh
-  // gesture after the 220 ms quiet gap, while the 280 ms glide is still running.
-  await page.clock.install({ time: new Date("2026-10-21T00:00:00Z") });
-  await page.clock.pauseAt(new Date("2026-10-21T00:00:01Z"));
-  const wheel = (deltaY: number) => timeline(page).evaluate((root, delta) => root.dispatchEvent(new WheelEvent("wheel", {
-    deltaY: delta, bubbles: true, cancelable: true,
-  })), deltaY);
-  expect(await wheel(40)).toBe(false);
-  await page.clock.runFor(240);
-  await expect(date(page, 23)).toHaveAttribute("aria-expanded", "true");
-  await expect(timeline(page)).toHaveAttribute("data-timeline-transitioning");
-  expect(await weight(page, 23)).toBeGreaterThan(0);
-  expect(await weight(page, 23)).toBeLessThan(1);
-
-  expect(await wheel(40)).toBe(false);
-  // The new gesture waits for the first destination instead of replacing it.
-  await expect(date(page, 23)).toHaveAttribute("aria-expanded", "true");
-  await expect(date(page, 24)).toHaveAttribute("aria-expanded", "false");
-  for (const delta of [30, 20, 12, 8, 4, 1]) {
-    await page.clock.runFor(80);
-    expect(await wheel(delta)).toBe(false);
-  }
-  await page.clock.runFor(300);
-  await expectSettled(page, 24);
-  await expect(date(page, 25)).toHaveAttribute("aria-expanded", "false");
-});
-
-test("older-history pagination preserves the active artwork and viewport anchor before further gestures", async ({ page }) => {
+test("older-history pagination preserves the active artwork and viewport anchor before further date selection", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   // Observe the real page insertion before Storybook's play function releases
   // its pending feed. The browser test owns these independent geometry checks.
@@ -555,8 +475,7 @@ test("older-history pagination preserves the active artwork and viewport anchor 
   expect(anchors.after!.artwork).toBe(anchors.before!.artwork);
   expect(Math.abs(anchors.after!.top - anchors.before!.top)).toBeLessThan(2);
   await expect(page.getByRole("button", { name: "Load more sessions", exact: true })).toHaveCount(0);
-  await freshGesture(page, -40);
-  await expectSettled(page, 20);
+  await goToDate(page, 20);
   await expect(timeline(page)).toHaveAttribute("data-timeline-entrance", "complete");
 });
 
@@ -577,15 +496,12 @@ test("URL-restored session details keep native pane scrolling and restore focus"
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "Tennis Court Booking" });
   await expect(dialog).toBeVisible();
+  // Measure the fixed footer after the dialog's opening transform has settled.
+  await expect.poll(() => dialog.evaluate((element) => element.getAnimations({ subtree: true }).some((animation) => animation.playState === "running"))).toBe(false);
   await expect(dialog.getByRole("tab", { name: "Participants (3)" })).toHaveAttribute("aria-selected", "true");
   const content = dialog.getByTestId("session-details-scroll");
   await expect.poll(() => content.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
   const calendarButton = dialog.getByRole("link", { name: /View in calendar/ });
-  // Visibility does not imply the dialog's opening transform has finished.
-  // Measure its fixed footer only once those animations have actually settled.
-  await dialog.evaluate(async (element) => {
-    await Promise.all(element.getAnimations().map((animation) => animation.finished));
-  });
   const footerTop = await calendarButton.evaluate((element) => element.getBoundingClientRect().top);
   const documentTop = await page.evaluate(() => scrollY);
   await content.hover();

@@ -68,4 +68,10 @@ export const walletTopUpResultSchema = z.object({
   amountCents: positiveCentsSchema,
   currency: z.literal("SGD"),
   status: z.string(),
+  qrCode: z.object({
+    imageUrlPng: z.string().url(),
+    hostedInstructionsUrl: z.string().url().optional(),
+    testPaymentUrl: z.string().url().optional(),
+    expiresAt: z.number().int().positive(),
+  }),
 });

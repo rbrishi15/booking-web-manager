@@ -167,8 +167,10 @@ export const WithdrawWithFullRefund: Story = {
 export const LateWithdrawalInvitingSomeone: Story = {
   play: async ({ args, canvas }) => {
     await openWithdraw(canvas, "Kallang Tennis Centre");
-    await waitFor(() => expect(within(dialog()).getByText(/stays held until\s+someone takes your place/i)).toBeVisible());
+    await waitFor(() => expect(within(dialog()).getByText(/stays held until someone\s+you invite accepts your place/i)).toBeVisible());
     await expect(within(dialog()).getByText("S$0.00")).toBeVisible();
+    await expect(within(dialog()).queryByRole("radio", { name: /open it to the waitlist/i })).not.toBeInTheDocument();
+    await expect(within(dialog()).getByRole("radio", { name: /forfeit my share/i })).toBeVisible();
     await userEvent.click(within(dialog()).getByRole("radio", { name: /invite one person/i }));
     await expect(within(dialog()).getByRole("button", { name: "Withdraw" })).toBeDisabled();
     await userEvent.type(within(dialog()).getByRole("textbox", { name: "Their user ID" }), "@Priya_Lim{Enter}");
@@ -262,12 +264,12 @@ export const SearchingAgainClearsTheChoice: Story = {
   },
 };
 
-/** Without the lookup, say so and point to the waitlist instead. */
+/** Without the lookup, explain that finding a player can be retried later. */
 export const LookupUnavailable: Story = {
   args: {
     findCandidate: fn<FindReplacementCandidate>(async () => ({
       status: "error",
-      message: "Finding players by user ID isn't available right now. You can open your place to the waitlist instead.",
+      message: "Finding players by user ID isn't available right now. Please try again later.",
     })),
   },
   play: async ({ canvas }) => {
@@ -343,9 +345,15 @@ export const RefundChangedBeforeConfirming: Story = {
     await waitFor(() => expect(within(dialog()).getByText(/your refund changed while this was open/i)).toBeVisible());
     await expect(within(dialog()).getByText("S$0.00")).toBeVisible();
     await expect(args.withdraw).not.toHaveBeenCalled();
+    await expect(within(dialog()).queryByRole("radio", { name: /open it to the waitlist/i })).not.toBeInTheDocument();
+    await expect(within(dialog()).getByRole("button", { name: "Withdraw with new terms" })).toBeDisabled();
+    await userEvent.click(within(dialog()).getByRole("radio", { name: /invite one person/i }));
+    await userEvent.type(within(dialog()).getByRole("textbox", { name: "Their user ID" }), "alex_tan{Enter}");
+    await within(dialog()).findByText(/will be invited/);
     await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw with new terms" }));
-    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("stays held until someone takes your place"));
+    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("stays held until Alex Tan accepts"));
     await expect(args.withdraw).toHaveBeenCalledOnce();
+    await expect(args.withdraw).toHaveBeenCalledWith(expect.objectContaining({ replacement: { mode: "DIRECT_INVITE", inviteeId: candidates[0]!.userId } }));
   },
 };
 
@@ -354,9 +362,40 @@ export const CutoffPassedWhileWithdrawing: Story = {
   args: { withdraw: fn<WithdrawFromSession>(async () => ({ status: "withdrawn", kind: "AWAITING_REPLACEMENT", refundedCents: 0 })) },
   play: async ({ canvas }) => {
     await openWithdraw(canvas, "Bishan Sports Hall");
-    await userEvent.click(await within(dialog()).findByRole("radio", { name: /open it to the waitlist/i }));
+    await userEvent.click(await within(dialog()).findByRole("radio", { name: /invite one person/i }));
+    await userEvent.type(within(dialog()).getByRole("textbox", { name: "Their user ID" }), "alex_tan{Enter}");
+    await within(dialog()).findByText(/will be invited/);
     await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(within(dialog()).getByText(/30-hour cutoff passed while you were confirming/i)).toBeVisible());
+  },
+};
+
+/** A stale waitlist request rejected by the server refreshes the choices before the player tries again. */
+let racePreviewCalls = 0;
+export const WaitlistRejectedAtCutoff: Story = {
+  beforeEach: () => { racePreviewCalls = 0; },
+  args: {
+    previewWithdrawal: fn<PreviewWithdrawal>(async (sessionId) => {
+      racePreviewCalls += 1;
+      return racePreviewCalls <= 2 ? fakePreviewWithdrawal(sessionId) : { status: "ready", preview: { kind: "AWAITING_REPLACEMENT", refundCents: 0, heldCents: 1250 } };
+    }),
+    withdraw: fn<WithdrawFromSession>(async (request) => request.replacement.mode === "FORFEIT"
+      ? { status: "withdrawn", kind: "FORFEITURE_DUE", refundedCents: 0 }
+      : { status: "error", code: "INVALID_STATE", message: "Your place has already changed. Refresh to see your sessions.", unconfirmed: false }),
+  },
+  play: async ({ args, canvas }) => {
+    await openWithdraw(canvas, "Bishan Sports Hall");
+    await userEvent.click(await within(dialog()).findByRole("radio", { name: /open it to the waitlist/i }));
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(within(dialog()).getByText(/your refund changed while this was open/i)).toBeVisible());
+    await expect(within(dialog()).queryByRole("radio", { name: /open it to the waitlist/i })).not.toBeInTheDocument();
+    await expect(within(dialog()).getByRole("button", { name: "Withdraw with new terms" })).toBeDisabled();
+    await userEvent.click(within(dialog()).getByRole("radio", { name: /forfeit my share/i }));
+    await userEvent.click(within(dialog()).getByRole("button", { name: "Forfeit and withdraw" }));
+    await waitFor(() => expect(within(dialog()).getByRole("status")).toHaveTextContent("Your S$12.50 goes to the booker, and your place is closed."));
+    await expect(args.withdraw).toHaveBeenCalledTimes(2);
+    const [first, second] = calls(args.withdraw);
+    await expect(second![0].idempotencyKey).not.toBe(first![0].idempotencyKey);
   },
 };
 

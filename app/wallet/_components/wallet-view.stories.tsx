@@ -412,46 +412,201 @@ export const FundsActions: Story = {
     await expect(balance.getByRole("link", { name: "Withdraw" })).toHaveAttribute("href", "/payouts");
     await expect(canvas.getByText("Topping up with PayNow is coming soon.")).not.toBeVisible();
     await userEvent.click(balance.getByRole("button", { name: "Add funds" }));
-    await expect(canvas.getByText("Topping up with PayNow is coming soon.")).toBeVisible();
+    await expect(within(document.body).getByText("Topping up with PayNow is coming soon.")).toBeVisible();
     const holds = within(canvas.getByRole("region", { name: "Held for sessions" }));
     await expect(holds.getByRole("link", { name: /Bishan Sports Hall/ })).toHaveAttribute("href", "/sessions?tab=joined&session=s1");
     await expect(holds.getByRole("link", { name: /Jurong East Sports Hall/ })).toHaveAttribute("href", "/sessions?tab=joined&session=s2");
   },
 };
 
+const mockPayNowSession = {
+  clientSecret: "pi_test_secret_mock",
+  paymentIntentId: "pi_test_mock",
+  amountCents: 1234,
+  qrCode: {
+    // Decorative, unscannable QR preview: actual payments use the URL from Stripe.
+    imageUrlPng: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="224" height="224" viewBox="0 0 224 224"><rect width="224" height="224" fill="white"/><g fill="black"><path d="M8 8h64v64H8zM16 16v48h48V16zM152 8h64v64h-64zM160 16v48h48V16zM8 152h64v64H8zM16 160v48h48v-48zM88 8h16v16H88zM120 24h16v32h-16zM88 72h48v16H88zM152 88h16v48h-16zM184 88h32v16h-32zM88 104h16v48H88zM120 120h16v16h-16zM104 168h64v16h-64zM184 152h16v64h-16zM120 200h48v16h-48z"/></g></svg>'),
+    expiresAt: Date.now() + 3600000,
+    testPaymentUrl: "https://payments.stripe.com/test/paynow/authorize",
+  },
+};
+
 const previewTopUp = {
-  payWithPayNow: fn<TopUpTransport["payWithPayNow"]>(async () => ({ status: "paid" })),
+  startPayNow: fn<TopUpTransport["startPayNow"]>(async (cents) => ({
+    status: "ready" as const, session: { ...mockPayNowSession, amountCents: cents },
+  })),
+  checkPayment: fn<TopUpTransport["checkPayment"]>(async () => ({ status: "paid" })),
 };
 const previewPaid = fn();
 
 export const AvailableTopUp: Story = {
   args: { topUp: <TopUpPanel transport={previewTopUp} onPaid={previewPaid} /> },
   beforeEach: () => {
-    previewTopUp.payWithPayNow.mockClear();
+    previewTopUp.startPayNow.mockClear();
+    previewTopUp.checkPayment.mockClear();
     previewPaid.mockClear();
   },
   play: async ({ canvas }) => {
     const balance = within(canvas.getByRole("region", { name: "Balance" }));
-    const disclosure = balance.getByRole("button", { name: "Add funds" });
-    await userEvent.click(disclosure);
-    const topUp = within(canvas.getByRole("region", { name: "Top up with PayNow" }));
+    await userEvent.click(balance.getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    const topUp = within(modal);
     const amount = topUp.getByRole("textbox", { name: "Amount (S$)" });
     await userEvent.click(topUp.getByRole("button", { name: "S$20" }));
     await expect(amount).toHaveValue("20");
     await userEvent.clear(amount);
     await userEvent.type(amount, "12.34");
-    await userEvent.click(disclosure);
-    await expect(amount).not.toBeVisible();
-    await expect(previewTopUp.payWithPayNow).not.toHaveBeenCalled();
-    await userEvent.click(disclosure);
-    await expect(amount).toBeVisible();
-    await expect(amount).toHaveValue("12.34");
-    await userEvent.click(topUp.getByRole("button", { name: "Pay with PayNow" }));
-    await expect(previewTopUp.payWithPayNow).toHaveBeenCalledOnce();
-    await expect(previewTopUp.payWithPayNow).toHaveBeenCalledWith(1234, expect.any(String));
-    await expect(previewPaid).toHaveBeenCalledOnce();
-    await expect(topUp.getByText("Payment received. Your balance updates in a few seconds.")).toBeVisible();
+    await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(previewTopUp.startPayNow).toHaveBeenCalledWith(1234, expect.any(String));
+    await waitFor(() => expect(previewPaid).toHaveBeenCalledOnce());
+    await expect(topUp.getByText("Payment confirmed!")).toBeVisible();
+    await expect(topUp.getByText("PayNow (Test)")).toBeVisible();
+    await expect(topUp.getByText("pi_test_mock")).toBeVisible();
+    await expect(topUp.getByRole("button", { name: "Done" })).toBeVisible();
     await expect(balance.getByText("$25.00")).toBeVisible();
+  },
+};
+
+const waitingTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: { ...mockPayNowSession, amountCents: cents } }),
+  checkPayment: async () => ({ status: "pending" }),
+};
+
+/** Stable review state for automated desktop screenshots of stage one. */
+export const TopUpAmountPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await expect(within(modal).getByRole("textbox", { name: "Amount (S$)" })).toBeVisible();
+  },
+};
+
+export const PayNowAmountPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    await expect(within(document.body).getByRole("dialog", { name: "Add funds to your wallet" })).toBeVisible();
+  },
+};
+
+/** Capture-only fixture. No Storybook play() so Chromium controls both steps deterministically. */
+export const PayNowScreenshotCapture: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+};
+
+export const PayNowQrPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(within(document.body).getByRole("dialog"));
+    await userEvent.click(modal.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await modal.findByRole("img", { name: /PayNow QR code/ })).toBeVisible();
+    await expect(modal.getByText("Waiting for payment confirmation")).toBeVisible();
+    await expect(modal.getByRole("link", { name: /Simulate scan/ })).toHaveAttribute("href", "https://payments.stripe.com/test/paynow/authorize");
+    await expect(modal.getByRole("link", { name: /Simulate scan/ })).toHaveAttribute("target", "_blank");
+  },
+};
+
+
+/** Narrow desktop: a dialog must never overflow the viewport horizontally. */
+export const PayNowNarrowDesktop: Story = {
+  parameters: {
+    viewport: {
+      options: {
+        narrowWallet: { name: "Narrow desktop 560 × 700", styles: { width: "560px", height: "700px" }, type: "desktop" },
+      },
+    },
+  },
+  globals: { viewport: { value: "narrowWallet", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await expect(within(modal).getByRole("heading", { name: "Add funds." })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByRole("link", { name: /Simulate scan/ })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+  },
+};
+
+/** 320px widths and short screens must keep amount, scan, and QR controls usable. */
+export const PayNowSmallPhone: Story = {
+  parameters: {
+    viewport: {
+      options: {
+        smallWallet: { name: "Small phone 320 × 568", styles: { width: "320px", height: "568px" }, type: "mobile" },
+      },
+    },
+  },
+  globals: { viewport: { value: "smallWallet", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={waitingTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    const topUp = within(modal);
+    await expect(topUp.getByRole("textbox", { name: "Amount (S$)" })).toBeVisible();
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+    await userEvent.click(topUp.getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await topUp.findByRole("img", { name: /PayNow QR code/ })).toBeVisible();
+    await expect(topUp.getByRole("link", { name: /Simulate scan/ })).toBeVisible();
+    await userEvent.click(topUp.getByRole("button", { name: "Show larger QR code" }));
+    await expect(topUp.getByRole("button", { name: "Reduce QR code" })).toHaveAttribute("aria-expanded", "true");
+    await expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth + 2);
+  },
+};
+
+const confirmedTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: { ...mockPayNowSession, amountCents: cents } }),
+  checkPayment: async () => ({ status: "paid" }),
+};
+
+/** Stable success state for the screenshot script (no play() that closes the dialog). */
+export const PayNowConfirmedScreenshotCapture: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={confirmedTopUp} onPaid={fn()} /> },
+};
+
+export const PayNowConfirmationPreview: Story = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  args: { topUp: <TopUpPanel transport={confirmedTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    const add = within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" });
+    await userEvent.click(add);
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByRole("heading", { name: "Payment confirmed!" })).toBeVisible();
+    await expect(within(modal).getByText("pi_test_mock")).toBeVisible();
+    await userEvent.click(within(modal).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(within(document.body).queryByRole("dialog", { name: "Add funds to your wallet" })).not.toBeInTheDocument());
+    await userEvent.click(add);
+    await expect(within(document.body).getByRole("textbox", { name: "Amount (S$)" })).toHaveValue("20");
+  },
+};
+
+const withoutSimulatorTopUp: TopUpTransport = {
+  startPayNow: async (cents) => ({ status: "ready", session: {
+    ...mockPayNowSession,
+    amountCents: cents,
+    qrCode: { ...mockPayNowSession.qrCode, testPaymentUrl: undefined },
+  } }),
+  checkPayment: async () => ({ status: "pending" }),
+};
+
+export const PayNowNoSimulatorFallback: Story = {
+  args: { topUp: <TopUpPanel transport={withoutSimulatorTopUp} onPaid={fn()} /> },
+  play: async ({ canvas }) => {
+    await userEvent.click(within(canvas.getByRole("region", { name: "Balance" })).getByRole("button", { name: "Add funds" }));
+    const modal = within(document.body).getByRole("dialog", { name: "Add funds to your wallet" });
+    await userEvent.click(within(modal).getByRole("button", { name: "Continue with PayNow" }));
+    await expect(await within(modal).findByText(/did not provide a test scan link/)).toBeVisible();
+    await expect(within(modal).queryByRole("link", { name: /Simulate scan/ })).not.toBeInTheDocument();
+    await expect(within(modal).getByRole("link", { name: /Open Stripe payment instructions/ })).toBeVisible();
   },
 };
 

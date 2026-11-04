@@ -8,7 +8,10 @@ import { TimelineGesture } from "./timeline-gesture";
 type Weights = Readonly<Record<string, number>>;
 type Stop = { id: string; top: number };
 const NAVIGATION_KEYS = ["PageUp", "ArrowUp", "Home", "PageDown", "ArrowDown", "End"];
-const DURATION = 280;
+const OPEN_DELAY = 200;
+const OPEN_DURATION = 280;
+const MARKER_DURATION = 180;
+const CLOSE_DURATION = 160;
 
 function acceptsInput(root: HTMLElement, event: WheelEvent | ReactKeyboardEvent<HTMLElement>) {
   if (!window.matchMedia("(min-width: 768px)").matches || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
@@ -20,7 +23,7 @@ function acceptsInput(root: HTMLElement, event: WheelEvent | ReactKeyboardEvent<
   return true;
 }
 
-/** Owns a finite transition; ordinary document scrolling never changes selection. */
+/** Close the current card, position the compact destination, then open after quiet. */
 export function useTimelineNavigation({ sessions, active, setActive, scrollTargetId, onUrlRestored }: {
   readonly sessions: readonly SessionFeedItem[];
   readonly active: string;
@@ -35,103 +38,124 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
   const [weights, setWeights] = useState<Weights>({ [active]: 1 });
   const weightsRef = useRef(weights);
   const [marker, setMarker] = useState(0);
+  const markerPosition = useRef(0);
+  const markerSession = useRef(active);
+  const markerFrame = useRef<number | null>(null);
   const [transitioning, setTransitioning] = useState(false);
-  const animation = useRef<{ frame: number; token: number; lastScroll: number } | null>(null);
+  const animation = useRef<{ frame: number; token: number } | null>(null);
+  const closing = useRef<{ frame: number; target: string } | null>(null);
+  const openingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generation = useRef(0);
   const gesture = useRef(new TimelineGesture());
-  const pendingGesture = useRef<-1 | 1 | null>(null);
   const recoveryTarget = useRef<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const positioned = useRef(false);
   const viewportAnchor = useRef<{ id: string; top: number } | null>(null);
-  const navigateRef = useRef<(id: string) => void>(() => {});
+  const controlledScroll = useRef<number | null>(null);
 
   const publish = useCallback((next: Weights) => {
     weightsRef.current = next;
     setWeights(next);
   }, []);
 
-  const cancel = useCallback((settleTo?: string, preserveGesture = false) => {
-    const running = animation.current;
-    ++generation.current;
-    if (running) cancelAnimationFrame(running.frame);
-    animation.current = null;
-    pendingGesture.current = null;
-    if (!preserveGesture) { gesture.current.reset(); recoveryTarget.current = null; }
-    setTransitioning(false);
-    if (!running) return;
-    const nearest = settleTo ?? Object.entries(weightsRef.current).reduce((best, entry) => entry[1] > best[1] ? entry : best, [selected.current, -1] as [string, number])[0];
-    selected.current = nearest;
-    setActive(nearest);
-    publish({ [nearest]: 1 });
-    // Native takeover owns scrollY. In particular, never finish an old seek here.
-  }, [publish, setActive]);
+  const recordScroll = useCallback(() => {
+    // Native scroll events may arrive after several animation frames. Match
+    // their actual position instead of expiring ownership on a frame deadline.
+    controlledScroll.current = window.scrollY;
+  }, []);
 
-  const select = useCallback((id: string, focus = false) => {
-    const stop = positions.current.find((position) => position.id === id);
-    if (!stop) return;
-    const previous = animation.current;
-    if (previous) cancelAnimationFrame(previous.frame);
-    const token = ++generation.current;
-    pendingGesture.current = null;
-    const start = { ...weightsRef.current };
-    const startY = window.scrollY;
-    const focused = document.activeElement;
-    if (focus) pendingFocus.current = id;
-    if (focused instanceof HTMLElement && rows.current.get(selected.current)?.contains(focused) && !focused.matches("[data-date-control]")) pendingFocus.current = id;
-    selected.current = id;
-    setActive(id);
-    const complete = () => {
-      if (generation.current !== token) return;
-      animation.current = null;
-      setTransitioning(false);
-      gesture.current.transitionCompleted();
-      const direction = pendingGesture.current;
-      pendingGesture.current = null;
-      if (direction) {
-        const stops = positions.current;
-        const next = stops[stops.findIndex((position) => position.id === id) + direction];
-        if (next) navigateRef.current(next.id);
-      }
-    };
+  const stopOpening = useCallback(() => {
+    ++generation.current;
+    if (openingTimer.current !== null) clearTimeout(openingTimer.current);
+    openingTimer.current = null;
+    if (animation.current) cancelAnimationFrame(animation.current.frame);
+    if (closing.current) cancelAnimationFrame(closing.current.frame);
+    animation.current = null;
+    closing.current = null;
+    setTransitioning(false);
+  }, []);
+
+  const cancel = useCallback((settleTo = closing.current?.target ?? selected.current) => {
+    stopOpening();
+    gesture.current.reset();
+    recoveryTarget.current = null;
+    selected.current = settleTo;
+    setActive(settleTo);
+    publish({ [settleTo]: 1 });
+  }, [publish, setActive, stopOpening]);
+
+  const open = useCallback((id: string, token: number) => {
+    openingTimer.current = null;
+    if (generation.current !== token || selected.current !== id || !rows.current.has(id) || document.hidden || document.querySelector('[role="dialog"],dialog[open]')) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       publish({ [id]: 1 });
-      window.scrollTo({ top: stop.top, behavior: "instant" });
-      complete();
       return;
     }
     const started = performance.now();
-    const state = { frame: 0, token, lastScroll: startY };
+    const state = { frame: 0, token };
     animation.current = state;
     setTransitioning(true);
     const tick = (now: number) => {
       if (generation.current !== token) return;
-      const fraction = Math.min(1, (now - started) / DURATION);
-      const mix = 1 - (1 - fraction) ** 3;
-      const next: Record<string, number> = {};
-      for (const [key, weight] of Object.entries(start)) if (weight > 0 && fraction < 1) next[key] = weight * (1 - mix);
-      next[id] = (next[id] ?? 0) + mix;
-      // Commit geometry before the matching scroll write, so neither can lag a frame.
-      flushSync(() => publish(fraction === 1 ? { [id]: 1 } : next));
-      // A layout effect may have cancelled this seek while committing geometry.
-      if (generation.current !== token || animation.current !== state) return;
-      window.scrollTo({ top: startY + (stop.top - startY) * mix, behavior: "instant" });
-      state.lastScroll = window.scrollY;
+      const fraction = Math.min(1, (now - started) / OPEN_DURATION);
+      publish({ [id]: 1 - (1 - fraction) ** 3 });
+      // Expanding this row changes only the space below it. Page position is
+      // never interpolated; the reserved feature space keeps the scrollbar stable.
       if (fraction < 1) state.frame = requestAnimationFrame(tick);
-      else complete();
+      else { animation.current = null; setTransitioning(false); }
     };
     state.frame = requestAnimationFrame(tick);
-  }, [publish, setActive]);
+  }, [publish]);
 
-  useLayoutEffect(() => { navigateRef.current = select; }, [select]);
+  const place = useCallback((id: string, focus = false, deferOpening = false) => {
+    const stop = positions.current.find((position) => position.id === id);
+    if (!stop) return;
+    stopOpening();
+    if (!deferOpening) { gesture.current.reset(); recoveryTarget.current = null; }
+    const focused = document.activeElement;
+    if (focus || (focused instanceof HTMLElement && rows.current.get(selected.current)?.contains(focused) && !focused.matches("[data-date-control]"))) pendingFocus.current = id;
+    selected.current = id;
+    flushSync(() => { setActive(id); publish({}); });
+    window.scrollTo({ top: stop.top, behavior: "instant" });
+    recordScroll();
+    const token = generation.current;
+    if (deferOpening) openingTimer.current = setTimeout(() => open(id, token), OPEN_DELAY);
+    else open(id, token);
+  }, [open, publish, recordScroll, setActive, stopOpening]);
+
+  const select = useCallback((id: string, focus = false, deferOpening = false) => {
+    if (!positions.current.some((position) => position.id === id)) return;
+    if (!deferOpening || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      place(id, focus, deferOpening);
+      return;
+    }
+    // Input can redirect an in-flight close without restarting it. The old
+    // card finishes closing before the page is placed at the compact new row.
+    if (closing.current) { closing.current.target = id; return; }
+    const from = weightsRef.current;
+    if (!Object.values(from).some((weight) => weight > 0)) { place(id, focus, true); return; }
+    stopOpening();
+    const state = { frame: 0, target: id };
+    const token = generation.current;
+    const started = performance.now();
+    closing.current = state;
+    setTransitioning(true);
+    const tick = (now: number) => {
+      if (generation.current !== token) return;
+      const fraction = Math.min(1, (now - started) / CLOSE_DURATION);
+      publish(Object.fromEntries(Object.entries(from).map(([key, weight]) => [key, weight * (1 - fraction) ** 3])));
+      if (fraction < 1) state.frame = requestAnimationFrame(tick);
+      else {
+        closing.current = null;
+        place(state.target, focus, true);
+      }
+    };
+    state.frame = requestAnimationFrame(tick);
+  }, [place, publish, stopOpening]);
 
   useLayoutEffect(() => {
-    if (selected.current !== active) {
-      cancel(active);
-      selected.current = active;
-      publish({ [active]: 1 });
-    }
-  }, [active, cancel, publish]);
+    if (selected.current !== active) cancel(active);
+  }, [active, cancel]);
 
   useLayoutEffect(() => {
     if (pendingFocus.current) {
@@ -140,20 +164,38 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     }
     const root = list.current;
     if (!root) return;
-    let center = 0;
-    for (const [id, weight] of Object.entries(weights)) {
-      const day = rows.current.get(id)?.querySelector<HTMLElement>("[data-date-control] time strong");
-      if (day && weight) {
-        const bounds = day.getBoundingClientRect();
-        center += weight * (bounds.top - root.getBoundingClientRect().top + bounds.height / 2);
+    const target = () => {
+      const day = rows.current.get(selected.current)?.querySelector<HTMLElement>("[data-date-control] time strong");
+      if (!day) return markerPosition.current;
+      const bounds = day.getBoundingClientRect();
+      return bounds.top - root.getBoundingClientRect().top + bounds.height / 2;
+    };
+    const move = (position: number) => { markerPosition.current = position; setMarker(position); };
+    if (markerSession.current !== selected.current) {
+      markerSession.current = selected.current;
+      if (markerFrame.current !== null) cancelAnimationFrame(markerFrame.current);
+      markerFrame.current = null;
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        // Retarget from the visible position, including a reversal mid-flight.
+        // Only the dot/rail animate; this never writes the page scroll position.
+        const from = markerPosition.current;
+        const started = performance.now();
+        const tick = (now: number) => {
+          const fraction = Math.min(1, (now - started) / MARKER_DURATION);
+          move(from + (target() - from) * (1 - (1 - fraction) ** 3));
+          markerFrame.current = fraction < 1 ? requestAnimationFrame(tick) : null;
+        };
+        markerFrame.current = requestAnimationFrame(tick);
       }
     }
-    setMarker(center);
+    if (markerFrame.current === null) move(target());
   }, [active, weights, sessions]);
 
   useLayoutEffect(() => {
-    const row = rows.current.get(active);
-    if (row) viewportAnchor.current = { id: active, top: row.getBoundingClientRect().top };
+    // Feed insertion must use the previous viewport anchor, before new rows
+    // change this row's position. Measurement below applies the correction.
+    const row = rows.current.get(selected.current);
+    if (row) viewportAnchor.current = { id: selected.current, top: row.getBoundingClientRect().top };
   }, [active, weights]);
 
   useLayoutEffect(() => {
@@ -174,9 +216,11 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       if (!initial && measured === signature) return;
       measured = signature;
       const anchor = viewportAnchor.current;
-      // A changing feed or viewport invalidates all coordinates of an old glide.
-      const interrupted = Boolean(animation.current);
-      if (interrupted) cancel(selected.current);
+      // A changing feed or viewport invalidates pending opening coordinates.
+      if (markerFrame.current !== null) cancelAnimationFrame(markerFrame.current);
+      markerFrame.current = null;
+      const interrupted = Boolean(animation.current || closing.current || openingTimer.current);
+      if (interrupted) cancel();
       root.style.setProperty("--timeline-photo-height", `${photo}px`);
       const height = Math.max(112, ...features.map((feature) => feature.offsetHeight));
       const extra = height - 112;
@@ -206,7 +250,8 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
       // scrollHeight is floored to the viewport and hides unused space in a
       // short feed. Measure the actual content edge before adding trailing room.
       const contentBottom = root.getBoundingClientRect().bottom + window.scrollY - padding;
-      const tail = Math.max(24, window.innerHeight + (positions.current.at(-1)?.top ?? 0) - contentBottom);
+      const nativeEnd = (natural.at(-1)?.top ?? 0) - readingTop + extra;
+      const tail = Math.max(24, window.innerHeight + Math.max(positions.current.at(-1)?.top ?? 0, nativeEnd) - contentBottom);
       root.style.setProperty("--timeline-tail", `${tail}px`);
       const currentBounds = rows.current.get(selected.current)?.getBoundingClientRect();
       const visible = currentBounds && currentBounds.bottom > readingTop && currentBounds.top < window.innerHeight;
@@ -217,6 +262,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
           selected.current = target;
           publish({ [target]: 1 });
           window.scrollTo({ top: stop.top, behavior: "instant" });
+          recordScroll();
           positioned.current = true;
           if (scrollTargetId) onUrlRestored?.();
         }
@@ -224,7 +270,7 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
         const row = rows.current.get(anchor.id);
         if (row) {
           const correction = row.getBoundingClientRect().top - anchor.top;
-          if (Math.abs(correction) > .5) window.scrollBy({ top: correction, behavior: "instant" });
+          if (Math.abs(correction) > .5) { window.scrollBy({ top: correction, behavior: "instant" }); recordScroll(); }
         }
       }
       publish({ ...weightsRef.current });
@@ -241,22 +287,20 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
     const onResize = () => { measured = ""; measure(false, true); };
     window.addEventListener("resize", onResize);
     return () => { observer.disconnect(); cancelAnimationFrame(resizeFrame); window.removeEventListener("resize", onResize); };
-  }, [sessions, scrollTargetId, onUrlRestored, cancel, publish]);
+  }, [sessions, scrollTargetId, onUrlRestored, cancel, publish, recordScroll]);
 
   useEffect(() => {
     const root = list.current;
     if (!root) return;
-    const classified = new WeakSet<Event>();
+    let nativeExit = false;
+    const canNavigate = () => window.matchMedia("(min-width: 768px)").matches && !document.hidden && !document.querySelector('[role="dialog"],dialog[open]');
     const onWheel = (event: WheelEvent) => {
       if (!acceptsInput(root, event) || !event.cancelable || !event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
       const current = rows.current.get(selected.current)?.getBoundingClientRect();
       const readingTop = parseFloat(getComputedStyle(root).getPropertyValue("--reading-top")) || 0;
       const stops = positions.current;
       let recovery: Stop | undefined;
-      if (!animation.current && current && (current.bottom <= readingTop || current.top >= window.innerHeight)) {
-        // Native scrolling can carry the selected card entirely out of view.
-        // Resume at what the person is reading, rather than navigating from
-        // that off-screen selection or leaving every visible row collapsed.
+      if (current && (current.bottom <= readingTop || current.top >= window.innerHeight)) {
         let distance = Infinity;
         for (const stop of stops) {
           const bounds = rows.current.get(stop.id)?.getBoundingClientRect();
@@ -265,70 +309,105 @@ export function useTimelineNavigation({ sessions, active, setActive, scrollTarge
           if (offset < distance) { recovery = stop; distance = offset; }
         }
         if (!recovery) return;
-        // Reset boundary ownership once on entry, not when native momentum
-        // changes the visible candidate between small trackpad packets:
-        // the usual intent threshold and explicit momentum rules still apply.
         if (recoveryTarget.current === null) gesture.current.reset();
         recoveryTarget.current = recovery.id;
       } else recoveryTarget.current = null;
       const line = parseFloat(getComputedStyle(root).lineHeight) || 16;
       const delta = event.deltaY * (event.deltaMode === 1 ? line : event.deltaMode === 2 ? window.innerHeight : 1);
-      const direction = delta > 0 ? 1 : -1;
-      const next = recovery ?? stops[stops.findIndex((position) => position.id === selected.current) + direction];
-      const decision = gesture.current.handle({ delta, now: performance.now(), momentum: "momentum" in event && event.momentum === true, transitioning: Boolean(animation.current), hasNeighbor: Boolean(next) });
-      classified.add(event);
-      if (decision.kind === "pass") return;
+      const destination = closing.current?.target ?? selected.current;
+      const next = recovery ?? stops[stops.findIndex((position) => position.id === destination) + (delta > 0 ? 1 : -1)];
+      // Gesture ownership is independent of animation. New intent redirects
+      // the destination instead of queuing behind opening or page scrolling.
+      const decision = gesture.current.handle({ delta, now: performance.now(), momentum: "momentum" in event && event.momentum === true, transitioning: false, hasNeighbor: Boolean(next) });
+      // Do not release page scrolling while a close still owns a pending seek.
+      // The next outward packet can pass once the compact boundary is placed.
+      nativeExit = decision.kind === "pass" && closing.current === null;
+      if (nativeExit) return;
       event.preventDefault();
-      if (decision.kind === "navigate" && next) select(next.id);
-      if (decision.kind === "queue") pendingGesture.current = decision.direction;
+      select(decision.kind === "navigate" && next ? next.id : destination, false, true);
+      gesture.current.transitionCompleted();
     };
     const onScroll = () => {
-      const running = animation.current;
-      if (running && Math.abs(window.scrollY - running.lastScroll) > 1) cancel();
-      if (!document.querySelector('[role="dialog"],dialog[open]')) {
+      const ownScroll = window.scrollY === controlledScroll.current;
+      if (!ownScroll) controlledScroll.current = null;
+      if (!ownScroll && !nativeExit && canNavigate()) {
+        const readingTop = parseFloat(getComputedStyle(root).getPropertyValue("--reading-top")) || 0;
+        const readingLine = readingTop + 63;
+        const current = rows.current.get(selected.current)?.getBoundingClientRect();
+        // In short windows a fully open card cannot fit below the header.
+        // Let native scrolling reveal its actions before choosing another date.
+        if (weightsRef.current[selected.current] === 1 && current && current.height > window.innerHeight - readingTop - 24 && current.top <= readingLine && current.bottom > readingLine) {
+          viewportAnchor.current = { id: selected.current, top: current.top };
+          return;
+        }
+        const dates = Array.from(rows.current, ([id, row]) => {
+          const date = row.querySelector<HTMLElement>("[data-date-control] time strong")!.getBoundingClientRect();
+          return { id, center: date.top + date.height / 2 };
+        }).sort((left, right) => left.center - right.center);
+        const nearest = dates.reduce<typeof dates[number] | undefined>((best, date) => !best || Math.abs(date.center - readingLine) < Math.abs(best.center - readingLine) ? date : best, undefined);
+        // Clamp a scrollbar jump to the nearest boundary. Once that boundary
+        // is selected, outward page movement remains native.
+        const withinDates = dates.length && readingLine >= dates[0]!.center && readingLine <= dates.at(-1)!.center;
+        if (nearest && (withinDates || nearest.id !== selected.current || openingTimer.current !== null)) {
+          const row = rows.current.get(nearest.id)!;
+          const anchor = row.getBoundingClientRect().top;
+          stopOpening();
+          gesture.current.reset();
+          selected.current = nearest.id;
+          flushSync(() => { setActive(nearest.id); publish({}); });
+          const correction = row.getBoundingClientRect().top - anchor;
+          if (Math.abs(correction) > .5) { window.scrollBy({ top: correction, behavior: "instant" }); recordScroll(); }
+          openingTimer.current = setTimeout(() => { if (canNavigate()) select(nearest.id); }, OPEN_DELAY);
+        } else if (openingTimer.current !== null || animation.current) cancel();
+      }
+      if (canNavigate()) {
         const row = rows.current.get(selected.current);
         if (row) viewportAnchor.current = { id: selected.current, top: row.getBoundingClientRect().top };
       }
     };
     const release = (event: Event) => {
       if (event.defaultPrevented) return;
-      if (event instanceof KeyboardEvent && root.contains(event.target instanceof Node ? event.target : null) && NAVIGATION_KEYS.includes(event.key)) return;
-      // Direct controls will replace the seek in their click handler. Keep the
-      // live weights until then, including when clicking a date mid-transition.
+      nativeExit = false;
       if (event.type === "pointerdown" && event.target instanceof Element && root.contains(event.target) && event.target.closest("button,a")) return;
-      cancel(undefined, classified.has(event));
+      cancel();
     };
-    const dialogs = new MutationObserver(() => {
-      if (document.querySelector('[role="dialog"],dialog[open]')) cancel(selected.current);
-    });
+    const dialogs = new MutationObserver(() => { if (document.querySelector('[role="dialog"],dialog[open]')) cancel(); });
     dialogs.observe(document.body, { childList: true });
+    const onVisibility = () => { if (document.hidden) cancel(); };
     root.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("wheel", release, { passive: true });
     window.addEventListener("pointerdown", release, { passive: true });
     window.addEventListener("keydown", release);
     window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       ++generation.current;
+      if (openingTimer.current !== null) clearTimeout(openingTimer.current);
       if (animation.current) cancelAnimationFrame(animation.current.frame);
+      if (closing.current) cancelAnimationFrame(closing.current.frame);
+      if (markerFrame.current !== null) cancelAnimationFrame(markerFrame.current);
+      openingTimer.current = null;
       animation.current = null;
+      closing.current = null;
+      controlledScroll.current = null;
+      markerFrame.current = null;
       dialogs.disconnect();
       root.removeEventListener("wheel", onWheel);
-      window.removeEventListener("wheel", release);
       window.removeEventListener("pointerdown", release);
       window.removeEventListener("keydown", release);
       window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [cancel, select]);
+  }, [cancel, publish, recordScroll, select, setActive, stopOpening]);
 
   const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!list.current || !acceptsInput(list.current, event) || !NAVIGATION_KEYS.includes(event.key)) return;
+    if (!(event.target instanceof Element) || !event.target.closest("[data-date-control]")) return;
     const stops = positions.current;
     const index = stops.findIndex((stop) => stop.id === selected.current);
     const target = stops[event.key === "Home" ? 0 : event.key === "End" ? stops.length - 1 : index + (["PageDown", "ArrowDown"].includes(event.key) ? 1 : -1)];
     if (!target) return;
     event.preventDefault();
-    pendingFocus.current = target.id;
-    select(target.id);
+    select(target.id, true);
   };
 
   return { list, rows, weights, marker, transitioning, select, onKey };
