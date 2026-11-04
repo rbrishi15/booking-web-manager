@@ -13,8 +13,8 @@
   display: block;
   width: calc(100vw - 48px);
   max-width: 1088px;
-  height: min(790px, calc(100dvh - 64px));
-  max-height: calc(100dvh - 64px);
+  height: min(790px, calc(100dvh - 40px));
+  max-height: calc(100dvh - 40px);
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--sheet-line);
@@ -72,9 +72,11 @@
   padding: 43px 62px 30px 64px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--sheet-line) transparent;
+  /* Preserve wheel, touch and keyboard scrolling without a distracting gutter. */
+  scrollbar-width: none;
 }
+.scrollArea::-webkit-scrollbar { display: none; }
+.scrollArea:focus-visible { outline: 2px solid var(--sheet-ink); outline-offset: -3px; }
 .header { padding-bottom: 28px; border-bottom: 1px solid var(--sheet-line); }
 .eyebrow, .label {
   margin: 0;
@@ -300,4 +302,36 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .calendarButton { transition: none; }
+}
+
+/* A viewport-height breakpoint keeps normal desktop zoom from clipping the metrics.
+   Long locations and unusually short windows still scroll inside the content, never
+   underneath the persistent actions. */
+@media (min-width: 701px) and (max-height: 840px) {
+  .scrollArea { padding-top: clamp(20px, 3.5dvh, 32px); padding-bottom: 18px; }
+  .header { padding-bottom: 19px; }
+  .eyebrow { margin-bottom: 17px; }
+  .title { font-size: clamp(32px, 3vw, 43px); }
+  .status { margin-top: 15px; }
+  .schedule { padding-top: 24px; padding-bottom: 28px; }
+  .scheduleValue { margin-top: 9px; font-size: clamp(23px, 2.1vw, 31px); }
+  .scheduleValue[data-long="true"] { font-size: clamp(18px, 1.4vw, 21px); }
+  .tabs { min-height: 51px; }
+  .panel { padding-top: 24px; padding-bottom: 5px; }
+  .number { font-size: clamp(30px, 2.6vw, 39px); }
+  .capacityBar { margin-top: 12px; }
+  .footer { min-height: 91px; padding-top: 14px; padding-bottom: 14px; }
+  .calendarButton { min-height: 54px; padding-top: 12px; padding-bottom: 12px; }
+}
+@media (min-width: 701px) and (max-height: 650px) {
+  .scrollArea { padding-top: 16px; padding-bottom: 12px; }
+  .header { padding-bottom: 14px; }
+  .eyebrow { margin-bottom: 11px; }
+  .title { font-size: 34px; }
+  .status { margin-top: 11px; }
+  .schedule { padding-top: 17px; padding-bottom: 19px; }
+  .tabs { min-height: 44px; }
+  .panel { padding-top: 18px; }
+  .footer { min-height: 74px; padding-top: 10px; padding-bottom: 10px; }
+  .calendarButton { min-height: 49px; }
 }

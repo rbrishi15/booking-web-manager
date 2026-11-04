@@ -40,11 +40,11 @@ export default function TermsPage() {
 
       <InfoSection id="terms-withdrawing" title="Withdrawing">
         <ul>
-          <li>At least 30 hours before the start: your full share comes back to your wallet.</li>
+          <li>At least 30 hours before the start: your full share comes back to your wallet. Open your place to the waitlist or invite one person.</li>
           <li>
-            Less than 30 hours before the start: your share stays held until someone takes your place, either the next
-            person on the waitlist or one person you invite. If nobody does before the session starts, it goes to the
-            booker.
+            Less than 30 hours before the start: invite one person or forfeit your share. If you invite someone,
+            your share stays held until they accept; if they do not accept before the session starts, it goes to the
+            booker. If you forfeit, your share goes to the booker and your place closes. You cannot open it to the waitlist.
           </li>
           <li>Someone you invite takes your place only if they accept.</li>
         </ul>

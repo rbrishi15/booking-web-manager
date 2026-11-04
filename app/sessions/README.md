@@ -324,30 +324,28 @@ with each date's numeral. The date column is 148px on wide desktop, 96px below
 1200px and 72px below 951px. The photograph uses an 8:3 aspect ratio, with its
 wide-desktop height bounded between 240px and 420px. The selected feature has 32px
 of space below it, while compact rows are at least 112px high with 24px vertical
-padding. Scrolling selects the
-next/previous session and moves the marker to the selected date. The desktop
-timeline sorts by actual start time, oldest above newest, including future-dated
-cancelled sessions. Entry keeps the earliest upcoming booking selected (or the
-latest booking when no upcoming session exists), with earlier dates above it.
-The breadcrumb and tabs stay visible while scrolling. Older cursor pages are
-inserted in chronological position without moving the selected row or changing
-its artwork; desktop pagination moves above history after all upcoming records
-have loaded. The API cursor order and mobile/Hosting lists remain unchanged.
-**View details** opens Details/Participants and calendar/map actions in a transient
-dialog. Closing it returns keyboard focus to its trigger. Date buttons and compact
-rows provide keyboard alternatives; keyboard focus within a session prevents scroll selection
-from removing that control. Reduced-motion preferences remove transitions.
-Wheel input keeps one card per deliberate swipe and consumes its momentum tail.
-A 24 px reversal can immediately request a card in the new direction. A renewed push in
-the same direction is recognized after the old input has decayed, with two
-substantial packets required so an isolated tail spike cannot skip a card.
-These requests queue during a running transition. Explicit browser momentum
-never requests another card; the 220 ms quiet interval remains the fallback
-between otherwise indistinguishable gestures.
-If native scrolling carries the selected card completely outside the reading
-viewport, the next deliberate wheel gesture expands the visible row nearest
-the sticky header. It does not jump back to the off-screen selection; tiny
-packets still accumulate intent and explicit momentum cannot select a card.
+padding. Wheel and trackpad gestures first close the current card over 160 ms,
+then place the selected compact session without interpolating page scroll. The dot and filled rail ease to the selected date over
+180 ms, redirecting from their current position on reversal. All cards stay
+collapsed while input continues; after 200 ms of quiet in the compact view, the
+selected card opens over 280 ms. Further input redirects a closing card without
+restarting its close or opening intermediate sessions. Reserved space keeps the
+scrollbar stable while cards collapse and open. Momentum belongs to its current
+scroll gesture; fresh or reversed intent updates the destination immediately
+instead of queuing behind the opening animation.
+
+The desktop timeline sorts by actual start time, oldest above newest. Entry
+selects the earliest upcoming booking, or the latest booking when none is upcoming.
+The breadcrumb and tabs remain visible. Older cursor pages retain the selected
+row and artwork. Date/compact-row clicks and focused-date navigation keys switch
+immediately and open the requested card. Scrollbar movement collapses the cards,
+then settles on the nearby session after the pause. Outside the first/last dates,
+native page scrolling remains available.
+
+**View details** opens the transient details dialog and returns focus to its
+trigger when closed. Dialogs and external selection cancel pending expansion.
+Reduced motion retains the input pause but removes card-opening animation.
+The API cursor order and mobile/Hosting lists remain unchanged.
 Desktop Hosting has equal-width upcoming carousel cards and compact history rows;
 it has no timeline. Both views use the original shared sidebar from `main`, with
 the sessions breadcrumb and header directly on the page canvas. Wide-desktop page
