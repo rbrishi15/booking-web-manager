@@ -22,10 +22,11 @@ jobs:
       - name: Migration numbers are unique
         run: bash scripts/check-migration-numbers.sh
 
+      # Pinned: this job writes to production, so a new CLI release must not change it.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.118.0
 
       - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
-      - run: supabase db push --yes
+      - run: supabase db push --linked --yes

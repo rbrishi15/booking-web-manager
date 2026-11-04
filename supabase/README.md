@@ -92,6 +92,11 @@ https://supabase.com/dashboard/account/tokens the first time).
 Nobody should need to run `supabase db push --linked` against it by hand;
 if you find yourself doing that, something upstream of this file didn't work.
 
+The migration workflows pin the Supabase CLI to one version, so a new release
+cannot change what production runs. From CLI 3.0, `db push` targets the local
+stack by default and `--linked` becomes `--remote`; update the flag and both
+pins together when upgrading.
+
 ### Auth config (site URL, redirects, email confirmation)
 
 The committed `config.toml` in this directory is the **local dev** config —
