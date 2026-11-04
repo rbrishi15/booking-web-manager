@@ -42,7 +42,11 @@ export interface ParticipantReplacementAcceptanceCommand {
 export interface ParticipantWithdrawalCommand {
   readonly participationId: UUID;
   readonly now: Date;
-  readonly replacementMode?: "OPEN_SLOT" | "DIRECT_INVITE";
+  /**
+   * Early: OPEN_SLOT (default) or DIRECT_INVITE. Late: DIRECT_INVITE or FORFEIT,
+   * which gives the share to the booker and closes the place (ADR-0024).
+   */
+  readonly replacementMode?: "OPEN_SLOT" | "DIRECT_INVITE" | "FORFEIT";
   readonly replacementInviteeId?: UUID;
 }
 
@@ -338,6 +342,11 @@ export class Participant {
       command,
       session.sessionId,
     );
+    DomainError.require(
+      change.result.kind !== "AWAITING_REPLACEMENT" || command.replacementMode === "DIRECT_INVITE",
+      "INVALID_STATE",
+      "Less than 30 hours before start, invite one person or forfeit your share",
+    );
     if (command.replacementMode === "DIRECT_INVITE") {
       DomainError.require(command.replacementInviteeId !== session.bookerId,
         "INVALID_STATE", "The booker already has a place in this session");
@@ -385,7 +394,8 @@ export class Participant {
       (instruction) => instruction.kind === "REFUND",
     );
     return {
-      kind: result.kind,
+      // No replacement mode was given, so this is never FORFEITURE_DUE.
+      kind: result.kind === "REFUNDED" ? "REFUNDED" : "AWAITING_REPLACEMENT",
       participationId: result.participationId,
       refundAmount: refund?.amount ?? Money.fromCents(0),
       heldAmount: existing.hold?.amount ?? Money.fromCents(0),
@@ -486,9 +496,16 @@ export class Participant {
     if (command.replacementMode !== undefined)
       DomainError.require(
         command.replacementMode === "OPEN_SLOT" ||
-          command.replacementMode === "DIRECT_INVITE",
+          command.replacementMode === "DIRECT_INVITE" ||
+          command.replacementMode === "FORFEIT",
         "INVALID_INPUT",
         "Unknown replacement mode",
+      );
+    if (command.replacementMode === "FORFEIT")
+      DomainError.require(
+        command.replacementInviteeId === undefined,
+        "INVALID_INPUT",
+        "A forfeit withdrawal cannot name a replacement",
       );
     if (command.replacementInviteeId !== undefined)
       DomainError.require(
@@ -518,7 +535,17 @@ export class Participant {
     );
     const hold = participation.hold;
     const late = booking.hoursUntilStart(command.now) < 30;
-    const nextHold = late ? hold.awaitReplacement() : hold.refund(command.now);
+    const forfeit = command.replacementMode === "FORFEIT";
+    DomainError.require(
+      late || !forfeit,
+      "INVALID_STATE",
+      "Only a late withdrawal can forfeit; this one is refunded in full",
+    );
+    const nextHold = !late
+      ? hold.refund(command.now)
+      : forfeit
+        ? hold.awaitReplacement().markForfeitureDue(command.now)
+        : hold.awaitReplacement();
     const next = participation.withdraw(
       nextHold,
       command.now,
@@ -528,7 +555,7 @@ export class Participant {
     return {
       participation: next,
       result: {
-        kind: late ? "AWAITING_REPLACEMENT" : "REFUNDED",
+        kind: !late ? "REFUNDED" : forfeit ? "FORFEITURE_DUE" : "AWAITING_REPLACEMENT",
         participationId: participation.participationId,
         instructions: late
           ? []

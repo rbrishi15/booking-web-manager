@@ -322,7 +322,7 @@ describe("UC2-04 Commit to Session", () => {
       expect(unitOfWork.availableCents("carol")).toBe(499);
     });
 
-    test("refunds the oldest late open-slot withdrawal replaced by the promoted person", async () => {
+    test("refunds a legacy late open-slot withdrawal replaced by the promoted person", async () => {
       // Arrange
       const lateWithdrawal = hoursBeforeSessionStart(10);
       const session = promotionSession({
@@ -330,13 +330,9 @@ describe("UC2-04 Commit to Session", () => {
         committed: ["alice", "bob"],
         waitlisted: ["carol"],
       });
-      createTestUser({ userId: "alice" })
-        .asParticipant()
-        .withdraw(session, {
-          participationId: "p-alice",
-          now: lateWithdrawal,
-          replacementMode: "OPEN_SLOT",
-        });
+      // This historical state remains readable, but new late withdrawals cannot choose the waitlist.
+      const before = session.participantList.requireParticipation("p-alice");
+      session.recordParticipationTransition(before, before.withdraw(before.hold!.awaitReplacement(), lateWithdrawal, "OPEN_SLOT"), lateWithdrawal);
       const { promote, unitOfWork } = promotionScenario({
         session,
         now: lateWithdrawal,

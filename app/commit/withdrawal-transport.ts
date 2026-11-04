@@ -28,7 +28,9 @@ export const userLookupUrl = (handle: string) => `/api/users/${encodeURIComponen
 const cents = z.number().int().safe().nonnegative();
 const kind = z.enum(["REFUNDED", "AWAITING_REPLACEMENT"]);
 const previewResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundCents: cents, heldCents: cents });
-const withdrawResponseSchema = z.object({ sessionId: z.string(), participationId: z.string(), kind, refundedCents: cents });
+const withdrawResponseSchema = z.object({
+  sessionId: z.string(), participationId: z.string(), kind: z.enum(["REFUNDED", "AWAITING_REPLACEMENT", "FORFEITURE_DUE"]), refundedCents: cents,
+});
 const leaveResponseSchema = z.object({ sessionId: z.string(), participationId: z.string() });
 const userLookupResponseSchema = z.object({
   user: z.object({ userId: z.string().uuid(), handle: z.string(), displayName: z.string() }),
@@ -129,7 +131,7 @@ export const FIND_REPLACEMENT_ERROR_MESSAGES: Readonly<Record<string, string>> =
   UNAUTHENTICATED: WITHDRAWAL_ERROR_MESSAGES.UNAUTHENTICATED!,
   INVALID_INPUT: "Check the user ID and try again.",
   INVALID_REQUEST: "Check the user ID and try again.",
-  USER_IDS_UNAVAILABLE: "Finding players by user ID isn't available right now. You can open your place to the waitlist instead.",
+  USER_IDS_UNAVAILABLE: "Finding players by user ID isn't available right now. Please try again later.",
 };
 
 /** UC2-05 with ADR-0021: finds the player to name as the replacement by exact user ID. Read-only. */

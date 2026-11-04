@@ -17,7 +17,7 @@ const sessions: readonly Question[] = [
   },
   {
     question: "What happens if I can't make it?",
-    answer: <>Withdraw as early as you can. At least 30 hours before the start, your full share comes back to your wallet. After that, it stays held until someone takes your place, either the next person on the waitlist or one person you invite. If nobody does before the start, it goes to the booker. You always see what you'll get back before you confirm.</>,
+    answer: <>Withdraw as early as you can. At least 30 hours before the start, your full share comes back to your wallet, and you can open your place to the waitlist or invite one person. With less than 30 hours left, you can only invite one person or forfeit your share. If you invite someone, your share stays held until they accept; if they do not accept before the start, it goes to the booker. If you forfeit, your share goes to the booker and your place closes. You always see what you'll get back before you confirm.</>,
   },
   {
     question: "How does the waitlist work?",

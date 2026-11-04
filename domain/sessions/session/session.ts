@@ -368,7 +368,8 @@ export class Session {
       0,
       this.#totalSlots - (bookerHasFundedPlace ? 0 : 1) -
         this.#participantList.committedCount -
-        this.#participantList.reservedCount,
+        this.#participantList.reservedCount -
+        this.#participantList.forfeitedCount,
     );
   }
 

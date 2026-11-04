@@ -92,6 +92,7 @@ const previewSchema = z.object({ kind: z.enum(["REFUNDED", "AWAITING_REPLACEMENT
 const replacementSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("OPEN_SLOT") }),
   z.object({ mode: z.literal("DIRECT_INVITE"), inviteeId: z.string().min(1) }),
+  z.object({ mode: z.literal("FORFEIT") }),
 ]);
 export const unresolvedWithdrawalSchema: z.ZodType<UnresolvedWithdrawal> = z.object({
   request: z.object({ sessionId: z.string().min(1), idempotencyKey: z.string().min(1), replacement: replacementSchema }),

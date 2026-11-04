@@ -330,4 +330,27 @@ describe("Booker administration", () => {
       expect(removed.hold?.state).toBe("REFUNDED");
     });
   });
+
+  describe("Forfeited places", () => {
+    test("cancel_WhenAPlaceWasForfeited_RefundsTheForfeitedShare", () => {
+      const bookingSession = createTestSession({
+        committedUserIds: ["ben"],
+        participationOverrides: {
+          ben: withdrawnParticipation("ben", {
+            withdrawnAt: hoursBeforeSessionStart(10),
+            replacementMode: "FORFEIT",
+            holdState: "FORFEITURE_DUE",
+          }),
+        },
+      });
+
+      const cancellation = readyBooker().cancel(bookingSession, hoursBeforeSessionStart(5));
+
+      const ben = bookingSession.participantList.requireParticipation("p-ben");
+      expect(cancellation.instructions.map((instruction) => instruction.kind)).toEqual(["REFUND"]);
+      expect(cancellation.instructions[0]?.amount.toCents()).toBe(500);
+      expect(ben.status).toBe("CANCELLED");
+      expect(ben.hold?.state).toBe("REFUNDED");
+    });
+  });
 });

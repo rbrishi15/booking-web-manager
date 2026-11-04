@@ -75,7 +75,9 @@ idempotency key.
   the share is refunded at once (the REFUND is written with the session
   change). Less than 30 hours before start it stays held, awaiting a replacement. The
   participant chooses either `OPEN_SLOT` or `DIRECT_INVITE` for one named,
-  existing user, and cannot change it later (ADR-0006).
+  existing user, and cannot change it later (ADR-0006). A late participant may
+  instead choose `FORFEIT`: the share becomes due to the booker at once and the
+  place closes, so nobody is promoted into it (ADR-0024).
 - [`AcceptReplacement`](../../use-cases/sessions/AcceptReplacement.ts) lets the
   named invitee take the reserved place: their LOCK and the late withdrawer's
   REFUND are written together.
@@ -264,7 +266,7 @@ cached.
 | Route | Parser | Body | Success |
 | --- | --- | --- | --- |
 | [`POST /api/sessions/commit`](../api/sessions/commit/route.ts) | [`parseCommitToSessionInput`](./commit-to-session-input.ts) | `{ sessionId, idempotencyKey, roomToken? }` | 201 |
-| [`POST /api/sessions/withdraw`](../api/sessions/withdraw/route.ts) | [`parseWithdrawInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } }` | 200 |
+| [`POST /api/sessions/withdraw`](../api/sessions/withdraw/route.ts) | [`parseWithdrawInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey, replacement: { mode: "OPEN_SLOT" } \| { mode: "DIRECT_INVITE", inviteeId } \| { mode: "FORFEIT" } }` | 200 |
 | [`POST /api/sessions/replacements/accept`](../api/sessions/replacements/accept/route.ts) | [`parseSessionActionInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey }` | 201 |
 | [`POST /api/sessions/waitlist/leave`](../api/sessions/waitlist/leave/route.ts) | [`parseSessionActionInput`](./withdrawal-input.ts) | `{ sessionId, idempotencyKey }` | 200 |
 | [`POST /api/sessions/attendance`](../api/sessions/attendance/route.ts) | [`parseVerifyAttendanceInput`](./verify-attendance-input.ts) | `{ sessionId, idempotencyKey, marks: [{ participationId, attendance }] }` | 200 |

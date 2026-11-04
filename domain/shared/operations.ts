@@ -70,13 +70,19 @@ export interface PromotionResult extends FinancialResult {
 }
 
 export interface WithdrawalResult extends FinancialResult {
-  readonly kind: "REFUNDED" | "AWAITING_REPLACEMENT";
+  /**
+   * REFUNDED: 30 hours or more before start. AWAITING_REPLACEMENT: a late
+   * open-slot or named-invitation withdrawal. FORFEITURE_DUE: a late withdrawal
+   * that gave up the share and closed the place (ADR-0024).
+   */
+  readonly kind: "REFUNDED" | "AWAITING_REPLACEMENT" | "FORFEITURE_DUE";
   readonly participationId: UUID;
 }
 
 /** What withdrawing now would do; computing it changes nothing. */
 export interface WithdrawalPreview {
-  readonly kind: WithdrawalResult["kind"];
+  /** The 30-hour rule alone; forfeiting is a choice made only when withdrawing. */
+  readonly kind: "REFUNDED" | "AWAITING_REPLACEMENT";
   readonly participationId: UUID;
   /** Returned to the wallet at once; zero when the share stays held. */
   readonly refundAmount: Money;

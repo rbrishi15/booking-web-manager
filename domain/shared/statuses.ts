@@ -13,7 +13,8 @@ export type ParticipationStatus =
   | "WITHDRAWN"
   | "REMOVED"
   | "CANCELLED";
-export type ReplacementMode = "OPEN_SLOT" | "DIRECT_INVITE";
+/** How a withdrawn place is passed on (ADR-0006); FORFEIT closes it (ADR-0024). */
+export type ReplacementMode = "OPEN_SLOT" | "DIRECT_INVITE" | "FORFEIT";
 export type AttendanceStatus = "UNVERIFIED" | "ATTENDED" | "ABSENT";
 export type VerificationMethod = "BOOKER" | "AUTOMATIC";
 export type HoldState =

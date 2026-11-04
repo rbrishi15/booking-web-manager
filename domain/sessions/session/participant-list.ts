@@ -12,6 +12,7 @@ import {
 } from "./session-recording";
 import {
   type ParticipantListTerms,
+  forfeitedPlaces,
   personalReplacementReservations,
   validateParticipantList,
 } from "./participant-list-validation";
@@ -22,6 +23,8 @@ export interface ParticipantListView {
   readonly nextQueueSequence: number;
   readonly committedCount: number;
   readonly reservedCount: number;
+  /** Places closed by forfeit withdrawals (ADR-0024); never offered again. */
+  readonly forfeitedCount: number;
   requireParticipation(id: UUID): Participation;
   findByUserId(userId: UUID): Participation | undefined;
   nextWaitlisted(): Participation | undefined;
@@ -79,6 +82,10 @@ export class ParticipantList implements ParticipantListView {
 
   get reservedCount(): number {
     return personalReplacementReservations(this.participations).length;
+  }
+
+  get forfeitedCount(): number {
+    return forfeitedPlaces(this.participations).length;
   }
 
   personalReplacementForInvitee(userId: UUID): Participation | undefined {

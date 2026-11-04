@@ -37,10 +37,14 @@ export type PreviewWithdrawal = (sessionId: string) => Promise<
   | { readonly status: "error"; readonly message: string }
 >;
 
-/** ADR-0006: open the place to the waitlist, or reserve it for one named person. Cannot change later. */
+/**
+ * ADR-0006: open the place to the waitlist, or reserve it for one named person. ADR-0024: when
+ * late, give the share to the booker and close the place instead. Cannot change later.
+ */
 export type Replacement =
   | { readonly mode: "OPEN_SLOT" }
-  | { readonly mode: "DIRECT_INVITE"; readonly inviteeId: string };
+  | { readonly mode: "DIRECT_INVITE"; readonly inviteeId: string }
+  | { readonly mode: "FORFEIT" };
 
 /** Someone the player may name as their replacement, found by their user ID (ADR-0021). */
 export interface ReplacementCandidate {
@@ -73,7 +77,12 @@ export interface WithdrawRequest {
 }
 
 export type WithdrawFromSession = (request: WithdrawRequest) => Promise<
-  | { readonly status: "withdrawn"; readonly kind: WithdrawalPreview["kind"]; readonly refundedCents: number }
+  | {
+      readonly status: "withdrawn";
+      /** FORFEITURE_DUE: a late forfeit; the share goes to the booker and the place is closed. */
+      readonly kind: WithdrawalPreview["kind"] | "FORFEITURE_DUE";
+      readonly refundedCents: number;
+    }
   | ActionError
 >;
 
