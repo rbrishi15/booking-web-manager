@@ -6,6 +6,8 @@ import type { ImportGroup } from "../session-invitation-contract";
 import { SessionParticipantsView } from "./session-participants-view";
 import type { SessionInvitationsTransport } from "./session-participants-invitations";
 import type { ParticipantRemovalTransport } from "./participant-removal-dialog";
+import type { SessionEditingTransport } from "../editing-transport";
+import type { SessionEditingDetails } from "../editing-contract";
 
 const session: SessionParticipants = {
   sessionId: "20000000-0000-4000-8000-000000000001", sport: "Tennis",
@@ -42,11 +44,22 @@ const transport: SessionInvitationsTransport = {
   sendGroupSessionInvitations: fn<SessionInvitationsTransport["sendGroupSessionInvitations"]>(async (_id, _group, users) => ({ status: "sent", invited: users.length, alreadyInvited: 0, alreadyParticipating: 0 })),
 };
 
+const editingDetails: SessionEditingDetails = {
+  sessionId: session.sessionId, version: "a".repeat(64), totalSlots: session.totalSlots, visibility: "PUBLIC",
+  canEdit: true, bookingLocked: true, minimumSlots: 4,
+  booking: { venueName: session.venueName, region: "West", sport: session.sport, startAt: session.startAt, endAt: session.endAt,
+    totalCostCents: 3600, pricePerSlotCents: 600 },
+};
+const editingTransport: SessionEditingTransport = {
+  load: fn(async () => editingDetails), save: fn(async (_id, input) => ({ ...editingDetails, ...input })),
+};
+
 function ReferencePage({ invitationError, referenceDate = false }: { readonly invitationError?: string; readonly referenceDate?: boolean }) {
   const displayedSession = referenceDate ? { ...session, startAt: "2026-11-06T01:50:00Z", endAt: "2026-11-06T03:20:00Z" } : session;
   return <AppShell user={{ name: "Tian Pok Neoh", reliabilityScore: 100 }} logoutAction={fn(async () => undefined)}>
     <SessionParticipantsView sessionId={session.sessionId} outcome={{ status: "ready", session: displayedSession }} groups={groups} invitations={[]}
       invitationTransport={transport} invitationError={invitationError} refreshing={false} onRefresh={fn()}
+      editingTransport={editingTransport}
       removal={{ userId: "booker", preview: fn<ParticipantRemovalTransport["preview"]>(async () => ({ status: "error", code: "PREVIEW_UNAVAILABLE", message: "Preview unavailable in this visual fixture.", refresh: false, retrySameRequest: true })), remove: fn<ParticipantRemovalTransport["remove"]>(async () => ({ status: "error", code: "REMOVAL_UNAVAILABLE", message: "Removal unavailable in this visual fixture.", refresh: false, retrySameRequest: true })) }} />
   </AppShell>;
 }
@@ -61,6 +74,15 @@ type Story = StoryObj<typeof meta>;
 
 export const Dark: Story = { args: { referenceDate: true } };
 export const Light: Story = { args: { referenceDate: true }, globals: { theme: "light" }, parameters: { themes: { themeOverride: "light" } } };
+
+export const EditSession: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit session" }));
+    const dialog = within(await within(document.body).findByRole("dialog", { name: "Edit session" }));
+    await expect(await dialog.findByLabelText("Venue name")).toBeDisabled();
+    await expect(dialog.getByLabelText("Capacity")).toBeEnabled();
+  },
+};
 
 export const InvitePlayers: Story = {
   play: async ({ canvas }) => {

@@ -77,5 +77,6 @@ export function SessionParticipantsController({ sessionId, userId, outcome, api 
     invitationsLoading={options.isPending}
     invitationTransport={invitationTransport} refreshing={refreshing || roster.isFetching}
     removal={{ userId, preview, remove: removeWithRecovery }}
+    onSessionEdited={() => { void queryClient.invalidateQueries({ queryKey: ["sessions"] }); startTransition(() => router.refresh()); }}
     onRefresh={() => { void invalidate(); startTransition(() => router.refresh()); }} />;
 }

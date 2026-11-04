@@ -5,8 +5,9 @@ const timestamp = z.string().datetime({ offset: true });
 export const sessionEditRequestSchema = z.object({
   version: z.string().regex(/^[a-f0-9]{64}$/),
   booking: z.object({
-    venueName: z.string().trim().min(1).max(300), region: z.string().trim().min(1).max(100),
-    sport: z.string().trim().min(1).max(100), startAt: timestamp, endAt: timestamp,
+    venueName: z.string().max(300).refine((value) => value.trim().length > 0),
+    region: z.string().max(100).refine((value) => value.trim().length > 0),
+    sport: z.string().max(100).refine((value) => value.trim().length > 0), startAt: timestamp, endAt: timestamp,
     totalCostCents: z.number().int().safe().positive(), pricePerSlotCents: z.number().int().safe().positive(),
   }),
   totalSlots: z.number().int().min(1).max(31), visibility: z.enum(["PUBLIC", "PRIVATE"]),
