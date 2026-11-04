@@ -147,7 +147,7 @@ describe("UC2-03b Remove Participant", () => {
     const initial = createTestSession({ committedUserIds: ["alice"], waitlistedUserIds: ["waiting"] });
     const target = status === "WAITLISTED" || status === "LEFT_WAITLIST" ? "p-waiting" : "p-alice";
     if (status === "LEFT_WAITLIST") createTestUser({ userId: "waiting" }).asParticipant().leaveWaitlist(initial, { participationId: target, now: hoursBeforeSessionStart(5) });
-    if (status === "WITHDRAWN") createTestUser({ userId: "alice" }).asParticipant().withdraw(initial, { participationId: target, replacementMode: "OPEN_SLOT", now: hoursBeforeSessionStart(5) });
+    if (status === "WITHDRAWN") createTestUser({ userId: "alice" }).asParticipant().withdraw(initial, { participationId: target, replacementMode: "FORFEIT", now: hoursBeforeSessionStart(5) });
     if (status === "REMOVED") readyBooker().removeParticipant(initial, target, hoursBeforeSessionStart(5));
     const scenario = removal(initial);
     await expect(scenario.remove.forBooker("booker", "s", target, "version")).rejects.toMatchObject({ code: "INVALID_STATE" });

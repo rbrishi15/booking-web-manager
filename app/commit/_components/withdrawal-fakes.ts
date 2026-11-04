@@ -51,6 +51,8 @@ export const fakeWithdraw: WithdrawFromSession = async (request) => {
   const session = joinedSessions.find((candidate) => candidate.sessionId === request.sessionId);
   if (session === undefined) return { status: "error", code: "NOT_FOUND", message: "This session no longer exists.", unconfirmed: false };
   const preview = previewFor(session);
+  if (preview.kind === "AWAITING_REPLACEMENT" && request.replacement.mode === "OPEN_SLOT")
+    return { status: "error", code: "INVALID_STATE", message: "Less than 30 hours before start, invite one person or forfeit your share.", unconfirmed: false };
   if (request.replacement.mode === "FORFEIT")
     return preview.kind === "REFUNDED"
       ? { status: "error", code: "INVALID_STATE", message: "Your place has already changed. Refresh to see your sessions.", unconfirmed: false }

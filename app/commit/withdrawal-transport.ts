@@ -131,7 +131,7 @@ export const FIND_REPLACEMENT_ERROR_MESSAGES: Readonly<Record<string, string>> =
   UNAUTHENTICATED: WITHDRAWAL_ERROR_MESSAGES.UNAUTHENTICATED!,
   INVALID_INPUT: "Check the user ID and try again.",
   INVALID_REQUEST: "Check the user ID and try again.",
-  USER_IDS_UNAVAILABLE: "Finding players by user ID isn't available right now. You can open your place to the waitlist instead.",
+  USER_IDS_UNAVAILABLE: "Finding players by user ID isn't available right now. Please try again later.",
 };
 
 /** UC2-05 with ADR-0021: finds the player to name as the replacement by exact user ID. Read-only. */

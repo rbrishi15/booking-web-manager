@@ -137,11 +137,18 @@ export function useWithdrawalFlow({ userId, sessions, previewWithdrawal, withdra
       void queryClient.invalidateQueries({ queryKey: joinedSessionsQueryKey(userId) });
       void queryClient.invalidateQueries({ queryKey: walletQueryKey });
     },
-    onError: (error) => {
+    onError: async (error) => {
       settle(error.unconfirmed ? "unconfirmed" : "rejected");
       if (!error.unconfirmed && !attemptRef.current?.retry) {
         setMode(null);
         setInviteeId(null);
+        if (error.code === "INVALID_STATE") {
+          const latest = await preview.refetch();
+          if (latest.data !== undefined && presented !== null && termsDiffer(presented, latest.data)) {
+            setPresented(latest.data);
+            setTermsChanged(true);
+          }
+        }
       }
     },
     onSettled: () => setFirstAttempt(null),
@@ -177,6 +184,10 @@ export function useWithdrawalFlow({ userId, sessions, previewWithdrawal, withdra
     if (termsDiffer(shown, latest)) {
       setPresented(latest);
       setTermsChanged(true);
+      if ((latest.kind === "AWAITING_REPLACEMENT" && mode === "OPEN_SLOT") || (latest.kind === "REFUNDED" && mode === "FORFEIT")) {
+        setMode(null);
+        setInviteeId(null);
+      }
       return;
     }
     setTermsChanged(false);

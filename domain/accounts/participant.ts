@@ -43,9 +43,8 @@ export interface ParticipantWithdrawalCommand {
   readonly participationId: UUID;
   readonly now: Date;
   /**
-   * OPEN_SLOT (default) or DIRECT_INVITE pass the place on (ADR-0006); FORFEIT,
-   * only for a late withdrawal, gives the share to the booker and closes the
-   * place (ADR-0024).
+   * Early: OPEN_SLOT (default) or DIRECT_INVITE. Late: DIRECT_INVITE or FORFEIT,
+   * which gives the share to the booker and closes the place (ADR-0024).
    */
   readonly replacementMode?: "OPEN_SLOT" | "DIRECT_INVITE" | "FORFEIT";
   readonly replacementInviteeId?: UUID;
@@ -342,6 +341,11 @@ export class Participant {
       session.booking,
       command,
       session.sessionId,
+    );
+    DomainError.require(
+      change.result.kind !== "AWAITING_REPLACEMENT" || command.replacementMode === "DIRECT_INVITE",
+      "INVALID_STATE",
+      "Less than 30 hours before start, invite one person or forfeit your share",
     );
     if (command.replacementMode === "DIRECT_INVITE") {
       DomainError.require(command.replacementInviteeId !== session.bookerId,
