@@ -25,7 +25,7 @@ function participant(page: Page, name = "Player 1") {
 
 function mutationResponse(page: Page) {
   return page.waitForResponse((response) => response.request().method() === "POST"
-    && Boolean(response.request().headers()["next-action"])
+    && /\/api\/sessions\/[^/]+\/participants\/[^/]+\/remove$/.test(new URL(response.url()).pathname)
     && (response.request().postData() ?? "").includes("previewVersion"));
 }
 
@@ -85,9 +85,9 @@ test("lost committed removal response survives reload and retries the original k
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("5.00");
     let intercepted = false;
-    await page.route(`**${f.path}`, async (route) => {
+    await page.route(`**/api/sessions/${f.sessionId}/participants/*/remove`, async (route) => {
       const request = route.request();
-      if (!intercepted && request.method() === "POST" && request.headers()["next-action"] && (request.postData() ?? "").includes("previewVersion")) {
+      if (!intercepted && request.method() === "POST" && (request.postData() ?? "").includes("previewVersion")) {
         intercepted = true;
         await route.fetch();
         await route.abort("failed");
@@ -99,7 +99,7 @@ test("lost committed removal response survives reload and retries the original k
     const saved = await page.evaluate((key) => sessionStorage.getItem(key), storageKey);
     expect(saved).not.toBeNull();
     expect((await context.pool.query("select status from participations where participation_id=$1", [f.participants[0]!.participationId])).rows[0].status).toBe("REMOVED");
-    await page.unroute(`**${f.path}`);
+    await page.unroute(`**/api/sessions/${f.sessionId}/participants/*/remove`);
     await page.reload();
     await expect(page.getByRole("dialog")).toContainText("Check removal result");
     const replay = mutationResponse(page);

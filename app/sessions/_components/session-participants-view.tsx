@@ -23,6 +23,7 @@ export interface SessionParticipantsViewProps {
   readonly invitations: readonly SessionInviteDisplay[];
   readonly invitationTransport: SessionInvitationsTransport;
   readonly invitationError?: string;
+  readonly invitationsLoading?: boolean;
   readonly refreshing: boolean;
   readonly removal: ParticipantRemovalTransport;
   readonly onRefresh: () => void;
@@ -53,7 +54,7 @@ function PlayerAvatar({ name }: { readonly name: string }) {
 }
 
 /** Editorial host roster, with the original transaction-safe refund removal and attendance workflows intact. */
-export function SessionParticipantsView({ sessionId, outcome, groups, invitations, invitationTransport, invitationError, refreshing, removal, onRefresh }: SessionParticipantsViewProps) {
+export function SessionParticipantsView({ sessionId, outcome, groups, invitations, invitationTransport, invitationError, invitationsLoading = false, refreshing, removal, onRefresh }: SessionParticipantsViewProps) {
   const [selected, setSelected] = useState<RemovalTarget | null>(null);
   const [removed, setRemoved] = useState<ReadonlyMap<string, RemovalResult>>(new Map());
   const [success, setSuccess] = useState<{ result: RemovalResult; displayName: string } | null>(null);
@@ -194,6 +195,7 @@ export function SessionParticipantsView({ sessionId, outcome, groups, invitation
 
       <Tabs.Root asChild value={tab} onValueChange={(value) => { setTab(value as RosterTab); setVisibleCount(2); setMenuId(null); }}>
       <section aria-label="Manage players">
+        {invitationsLoading && <p role="status" className={styles.feedback}>Loading invitations and groups…</p>}
         {invitationError && <div role="alert" className={styles.feedback}>
           <p>{invitationError}</p>
           <Button variant="outline" className="mt-3" disabled={refreshing} onClick={onRefresh}>{refreshing ? "Loading…" : "Retry invitations"}</Button>
@@ -204,13 +206,13 @@ export function SessionParticipantsView({ sessionId, outcome, groups, invitation
               ["participants", "Participants", committed.length],
               ["waitlist", "Waitlist", waitlisted.length],
               ["withdrawn", "Withdrawn", withdrawn.length],
-              ["invitations", "Invitations", invitationError ? "—" : invitations.length],
+              ["invitations", "Invitations", invitationError || invitationsLoading ? "—" : invitations.length],
             ] as const).map(([value, label, count]) => <Tabs.Trigger key={value} value={value} className={styles.tab}>
               {label} ({count})
             </Tabs.Trigger>)}
           </Tabs.List>
           <div className={styles.rosterActions}>
-            <button type="button" disabled={!canInvite || Boolean(invitationError)} className={styles.importButton} onClick={(event) => { invitationTrigger.current = event.currentTarget; setShowGroups(true); }}>
+            <button type="button" disabled={!canInvite || Boolean(invitationError) || invitationsLoading} className={styles.importButton} onClick={(event) => { invitationTrigger.current = event.currentTarget; setShowGroups(true); }}>
               <UsersRound size={22} aria-hidden="true" /> Import from group
             </button>
             <span className={styles.actionDivider} aria-hidden="true" />

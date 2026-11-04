@@ -21,6 +21,7 @@ vi.mock("@/app/sessions/server-dependencies", () => ({ getSessionDependencies: m
 vi.mock("@/app/sessions/management-server-dependencies", () => ({ getSessionManagementDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/cancellation-server-dependencies", () => ({ getSessionCancellationDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/invitation-server-dependencies", () => ({ getSessionInvitationDependencies: mocks.protectedDependencies }));
+vi.mock("@/app/sessions/session-invitation-server-dependencies", () => ({ getSessionInvitationManagementDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/removal-server-dependencies", () => ({ getSessionRemovalDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/session-feed-server-dependencies", () => ({ getSessionFeedDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/commit/commitment-server-dependencies", () => ({ getCommitmentDependencies: mocks.protectedDependencies }));
@@ -50,6 +51,7 @@ import * as replacementAccept from "@/app/api/sessions/replacements/accept/route
 import * as cancellation from "@/app/api/sessions/[sessionId]/cancel/route";
 import * as cancellationPreview from "@/app/api/sessions/[sessionId]/cancellation-preview/route";
 import * as invitation from "@/app/api/sessions/[sessionId]/invitation/route";
+import * as invitations from "@/app/api/sessions/[sessionId]/invitations/route";
 import * as participants from "@/app/api/sessions/[sessionId]/participants/route";
 import * as removal from "@/app/api/sessions/[sessionId]/participants/[participationId]/remove/route";
 import * as removalPreview from "@/app/api/sessions/[sessionId]/participants/[participationId]/removal-preview/route";
@@ -90,6 +92,7 @@ const routes: Route[] = [
   { path: "/api/sessions/[sessionId]/cancel", handlers: cancellation },
   { path: "/api/sessions/[sessionId]/cancellation-preview", handlers: cancellationPreview },
   { path: "/api/sessions/[sessionId]/invitation", handlers: invitation },
+  { path: "/api/sessions/[sessionId]/invitations", handlers: invitations },
   { path: "/api/sessions/[sessionId]/participants", handlers: participants },
   { path: "/api/sessions/[sessionId]/participants/[participationId]/remove", handlers: removal },
   { path: "/api/sessions/[sessionId]/participants/[participationId]/removal-preview", handlers: removalPreview },

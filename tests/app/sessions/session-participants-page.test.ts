@@ -2,10 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import SessionParticipantsPage, { dynamic } from "@/app/sessions/(manage)/[sessionId]/participants/page";
 import { listSessionParticipants } from "@/app/sessions/removal-actions";
 import { getCurrentUser } from "@/lib/supabase/current-user";
-import { loadSessionInvitationOptions } from "@/app/sessions/session-invitation-actions";
 
 vi.mock("@/app/sessions/removal-actions", () => ({ listSessionParticipants: vi.fn() }));
-vi.mock("@/app/sessions/session-invitation-actions", () => ({ loadSessionInvitationOptions: vi.fn() }));
 vi.mock("@/app/sessions/_components/session-participants-controller", () => ({ SessionParticipantsController: () => null }));
 vi.mock("@/lib/supabase/current-user", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
@@ -16,7 +14,6 @@ const props = { params: Promise.resolve({ sessionId }) };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getCurrentUser).mockResolvedValue({ id: "host", email: "host@example.com", emailVerified: true, pendingEmail: null, accountStatus: "ACTIVE", displayName: "Host", profileName: "Host", preferredSports: [], preferredRegions: [], reliabilityScore: 100 });
-  vi.mocked(loadSessionInvitationOptions).mockResolvedValue({ status: "ready", groups: [], invitations: [] });
 });
 
 describe("session participants page", () => {
@@ -32,24 +29,15 @@ describe("session participants page", () => {
     vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
     const page = await SessionParticipantsPage(props);
     expect(listSessionParticipants).toHaveBeenCalledExactlyOnceWith(sessionId);
-    expect(page.props).toEqual({ sessionId, userId: "host", outcome, invitationOptions: { status: "ready", groups: [], invitations: [] } });
+    expect(page.props.children.props).toEqual({ sessionId, userId: "host", outcome });
   });
 
   test("renders the safe denial outcome without participant identities", async () => {
     const outcome = { status: "error" as const, code: "UNAUTHORIZED", message: "Only the host can manage participants.", refresh: false, retrySameRequest: false };
     vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
     const page = await SessionParticipantsPage(props);
-    expect(page.props.outcome).toEqual(outcome);
-    expect(page.props.outcome).not.toHaveProperty("session");
-    expect(loadSessionInvitationOptions).not.toHaveBeenCalled();
+    expect(page.props.children.props.outcome).toEqual(outcome);
+    expect(page.props.children.props.outcome).not.toHaveProperty("session");
   });
 
-  test("keeps the participant list available when optional invitations cannot load", async () => {
-    const outcome = { status: "ready" as const, session: { sessionId, venueName: "Sports Hall", sport: "Badminton", startAt: "2045-04-02T10:00:00Z", endAt: "2045-04-02T12:00:00Z", status: "OPEN" as const, availableSlots: 4, totalSlots: 5, canVerifyAttendance: false, booker: { displayName: "Host" }, participants: [] } };
-    vi.mocked(listSessionParticipants).mockResolvedValue(outcome);
-    vi.mocked(loadSessionInvitationOptions).mockResolvedValue({ status: "error", message: "Try again." });
-    const page = await SessionParticipantsPage(props);
-    expect(page.props.outcome).toEqual(outcome);
-    expect(page.props.invitationOptions).toEqual({ status: "error", message: "Try again." });
-  });
 });

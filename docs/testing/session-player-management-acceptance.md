@@ -28,7 +28,7 @@ of replaying the source's 50 commits.
   replacement places. Removal refunds, recovery, history, and attendance remain
   available through their existing workflows.
 
-## Verification
+## Initial implementation verification
 
 | Check | Result |
 | --- | --- |
@@ -53,6 +53,57 @@ recoverable invitation reads, pending lookups, keyboard tabs, closing/reopening
 during a send, unavailable history, dialog focus restoration, cancellation
 labels, and narrow-screen overflow. Real pointer hover is tested with
 Playwright; synthetic Storybook hover does not activate CSS `:hover`.
+
+## Invitation HTTP API and React Query follow-up
+
+The follow-up replaces invitation Server Actions with documented HTTP APIs:
+
+| Method | Endpoint | Authentication | Behavior |
+| --- | --- | --- | --- |
+| GET | `/api/sessions/{sessionId}/invitations` | Bearer or login cookie | Owner-only groups, eligible members and invitation history |
+| POST | `/api/sessions/{sessionId}/invitations` | Bearer | Direct exact-handle or selected group-member invitation batch |
+
+POST accepts `{ source: "direct", handles: [...] }` or
+`{ source: "group", groupId, userIds: [...] }`. Both responses are `no-store`.
+The shared Zod contracts document request/response shapes and failures in OpenAPI.
+Participant response documentation now includes authoritative `totalSlots`.
+
+The participant controller uses React Query queries for roster and invitation
+options, `fetchQuery` for exact-player lookup, invitation links and refund
+previews, and mutations for invitation sends and removals. Queries are scoped
+by account and session. Reads accept cancellation; writes have no automatic
+retries. Successful sends refresh invitation history. Optional invitation
+loading/errors preserve existing participant controls; saved removal retries
+retain the original target, preview version and idempotency key.
+
+The participant route provides its own account-keyed React Query provider,
+matching the existing sessions-page pattern. Production browser testing verifies
+this assembly as well as the injected controller stories.
+
+| Follow-up check | Result |
+| --- | --- |
+| Full unit suite | 3,569 passed; existing 75 skipped and 1 todo retained |
+| Disposable Supabase database suite | 142 passed across 18 files |
+| Production Chromium/browser and HTTP suite | 83 passed |
+| Relevant Storybook interactions/accessibility | 42 passed across 4 files |
+| Production Next.js/Storybook build | Passed |
+| Typecheck, ESLint, Swagger validation, migration numbers, diff whitespace | Passed |
+
+Real HTTP/browser checks cover both invitation sources, normalized duplicate
+IDs, owner rejection, current group membership, no enrollment or money movement,
+cookie reads, bearer-only writes, UI sends and history refresh. Existing removal
+browser checks verify full refunds, changed previews and durable replay after
+losing a committed response.
+
+The original invitation Server Actions and their obsolete tests were removed.
+API authentication inventory coverage includes both new operations. New browser
+checks exercise the real production controller rather than only the visual view.
+
+Fresh review found and fixed two issues: POST documentation incorrectly claimed
+cookie write support, and optional loading disabled participant controls. Each
+correction was verified with a failing regression followed by a passing run.
+The missing-configuration API path was also corrected to return the documented
+503 response while unexpected assembly failures remain opaque 500 responses.
 
 ## Visual evidence
 

@@ -13,7 +13,7 @@ import styles from "./session-participants.module.css";
 
 export type { ImportGroup } from "../session-invitation-contract";
 
-/** Browser-facing boundaries. Production supplies server actions; Storybook supplies inert fakes. */
+/** Browser-facing boundaries. Production supplies HTTP queries/mutations; Storybook supplies inert fakes. */
 export interface SessionInvitationsTransport {
   readonly findPlayer: (previousState: FindPlayerState, formData: FormData) => Promise<FindPlayerState>;
   readonly loadSessionInvitation: LoadSessionInvitation;

@@ -15,6 +15,14 @@ test("reads the exact owner's link with cookies and no caching", async () => {
     expect.objectContaining({ credentials: "same-origin", cache: "no-store" }));
 });
 
+test("cancels an invitation-link read with its React Query signal", async () => {
+  fetcher.mockResolvedValueOnce(Response.json({ invitationPath: path }));
+  const controller = new AbortController();
+  await loadSessionInvitation(sessionId, controller.signal);
+  controller.abort();
+  expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+});
+
 test.each([
   "https://elsewhere.example/invitation", "//elsewhere.example/invitation", "/sessions/another/join?token=secret",
   `/sessions/${sessionId}/join`, `/sessions/${sessionId}/join?token=one&token=two`, `${path}#fragment`,

@@ -151,3 +151,20 @@ not change the sidebar. Any inability to reproduce a specific asset exactly
 must be disclosed with the resulting screenshots.
 
 Status: user approved design and implementation on 2026-11-04.
+
+## API correction requested on PR #178
+
+The user's follow-up requires HTTP APIs, OpenAPI, and React Query. Replace the
+new invitation Server Actions with authenticated GET/POST
+`/api/sessions/{sessionId}/invitations`. GET returns owner-only groups and
+invitation history; POST accepts either exact handles or a group/member selection.
+Reuse the transactional use case and existing authentication policy: bearer or
+login cookie for reads, bearer only for writes.
+Document both operations and their shared runtime schemas in OpenAPI, including
+the participant response's authoritative `totalSlots`.
+
+The participant controller uses React Query for HTTP reads and mutations,
+including the existing participant, removal, user lookup and invitation-link APIs.
+Keep server-rendered participant data, optional-read failure recovery, account/session
+cache isolation, mutation invalidation, and saved removal request safety. Do not
+automatically retry sends or refunds. Preserve the UI and domain/payment policy.

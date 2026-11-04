@@ -1,30 +1,13 @@
 import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
-import { z, errorResponse } from "@/app/openapi/contracts";
+import { errorResponse } from "@/app/openapi/contracts";
 import { removalParamsSchema, removalRequestSchema, removalSessionParamsSchema } from "./removal-input";
+import { participantRemovalPreviewSchema, participantRemovalResultSchema, sessionParticipantsSchema } from "./participant-management-contract";
 import { SESSION_REMOVAL_UNAVAILABLE_MESSAGE } from "./removal-unavailable";
 
 export function registerParticipantRemovalApi(registry: OpenAPIRegistry): void {
-  const identities = { sessionId: z.string().uuid(), participationId: z.string().uuid() };
-  const preview = registry.register("ParticipantRemovalPreview", z.object({
-    ...identities, refundCents: z.number().int().nonnegative(), previewVersion: z.string().regex(/^[a-f0-9]{64}$/),
-  }));
-  const result = registry.register("ParticipantRemovalResult", z.object({
-    ...identities, status: z.literal("REMOVED"), refundCents: z.number().int().nonnegative(),
-  }));
-  const participants = registry.register("SessionParticipants", z.object({
-    sessionId: z.string().uuid(), venueName: z.string(), sport: z.string(),
-    startAt: z.string().datetime(), endAt: z.string().datetime(),
-    status: z.enum(["OPEN", "CANCELLED", "AWAITING_PAYOUT", "PAYOUT_PENDING", "SETTLED"]),
-    availableSlots: z.number().int().nonnegative(),
-    booker: z.object({ displayName: z.string(), participationId: z.string().uuid().optional() }),
-    canVerifyAttendance: z.boolean(),
-    participants: z.array(z.object({
-      participationId: z.string().uuid(), displayName: z.string(),
-      status: z.enum(["WAITLISTED", "COMMITTED", "LEFT_WAITLIST", "WITHDRAWN", "REMOVED", "CANCELLED"]),
-      attendance: z.enum(["UNVERIFIED", "ATTENDED", "ABSENT"]),
-      canRemove: z.boolean(),
-    })),
-  }));
+  const preview = registry.register("ParticipantRemovalPreview", participantRemovalPreviewSchema);
+  const result = registry.register("ParticipantRemovalResult", participantRemovalResultSchema);
+  const participants = registry.register("SessionParticipants", sessionParticipantsSchema);
   const errors = {
     400: errorResponse("Malformed IDs, JSON, request key or preview version.", "INVALID_REQUEST", "Invalid participant removal request"),
     401: errorResponse("Bearer authentication required.", "UNAUTHENTICATED", "Authentication is required"),
