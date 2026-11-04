@@ -13,3 +13,7 @@ export interface SessionEditingRepositories {
 export interface SessionEditingTransaction {
   run<T>(work: (repositories: SessionEditingRepositories) => Promise<T>): Promise<T>;
 }
+
+export interface SessionEditingVersioner {
+  of(session: Session): string;
+}

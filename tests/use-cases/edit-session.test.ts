@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Money, Session } from "@/domain";
 import { EditSession } from "@/use-cases/sessions/EditSession";
+import { sessionEditingVersioner } from "@/lib/sessions/session-editing-version";
 import type { SessionEditingTransaction } from "@/use-cases/sessions/session-editing-transaction";
 import { createTestUser } from "../domain/accounts/user-fixtures";
 import { createTestSession, hoursBeforeSessionStart, sessionStartsAt, sessionDetails } from "../domain/sessions/session/session-fixtures";
@@ -14,7 +15,7 @@ function scenario(session = createTestSession()) {
     users: { get: async (id) => createTestUser({ userId: id, accountStatus: active ? "ACTIVE" : "INACTIVE" }) },
     sessions: { get: async () => stored, saveDetails: async (next) => { stored = next; writes++; } },
   }) };
-  const editor = new EditSession({ transaction, clock: { now: () => now } });
+  const editor = new EditSession({ transaction, clock: { now: () => now }, versioner: sessionEditingVersioner });
   return { editor, get stored() { return stored; }, get writes() { return writes; },
     deactivate: () => { active = false; }, start: () => { now = sessionStartsAt; },
     replace: (next: Session) => { stored = next; },
