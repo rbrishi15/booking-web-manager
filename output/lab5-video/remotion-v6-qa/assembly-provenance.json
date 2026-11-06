@@ -1,0 +1,10 @@
+{
+  "fresh_prefix_frames": 1500,
+  "unchanged_tail_start_frame": 1500,
+  "tail_end_frame": 11709,
+  "splice_preceding_frame_mean_pixel_error": 0.03389242541152263,
+  "prefix_sha256": "4a8b4d0e9c31ccb75030f971a78193844a6bf11ae63afc5a4d85ad746eff337e",
+  "tail_sha256": "cd35eecaf7cda7825d7ac060ea2075fe00826d2008c4fedfc051cbcd43c9f347",
+  "audio": "All chapter WAVs from current source; ending-v6 includes original dot foley. Prefix-preview AAC is excluded.",
+  "portable_rebuild": "npm run render renders the complete current Remotion source and does not require the previous tail."
+}

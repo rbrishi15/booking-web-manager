@@ -17,6 +17,7 @@ export default tseslint.config(
       "test-results/**",
       "storybook-static/**",
       "public/storybook/**",
+      "docs/lab5/video/remotion/**",
     ],
   },
   eslint.configs.recommended,

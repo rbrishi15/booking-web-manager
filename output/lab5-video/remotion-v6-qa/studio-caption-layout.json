@@ -1,0 +1,29 @@
+{
+  "pages_checked": 65,
+  "text_digest_fnv1a": 4021860868,
+  "all_text_matches": true,
+  "missing_pages": 0,
+  "neutral_caption_max_height_px": 60,
+  "caption_font_px": 23,
+  "caption_weight": 500,
+  "caption_background": "#20252A",
+  "caption_text": "#F5F5F3",
+  "maximum_lines": 2,
+  "silent_gaps_checked": 46,
+  "lingering_caption_pages": 0,
+  "social_progression": {
+    "early_alone_frame": 10839,
+    "early_players": [
+      "Neoh"
+    ],
+    "final_selfie_frame": 11139,
+    "final_players": [
+      "Neoh",
+      "Harrison",
+      "Joseph"
+    ],
+    "story_illustration_label_present": true
+  },
+  "studio_error": null,
+  "scope": "Fresh V6 visible-composition caption text/gap audit; inspected the live-to-prepared transition. Prior65 pages and timings retained."
+}
