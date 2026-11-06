@@ -26,7 +26,13 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["**/*.test.ts"],
-          exclude: ["node_modules", ".next", "tests/e2e/**", "tests/integration/**"],
+          exclude: [
+            "node_modules",
+            ".next",
+            "tests/e2e/**",
+            "tests/integration/**",
+            "docs/lab5/video/remotion/**",
+          ],
         },
       },
       {

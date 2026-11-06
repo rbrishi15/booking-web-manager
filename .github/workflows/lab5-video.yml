@@ -1,0 +1,33 @@
+name: Lab 5 video source
+
+on:
+  pull_request:
+    paths:
+      - "docs/lab5/video/remotion/**"
+      - ".github/workflows/lab5-video.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/lab5/video/remotion/**"
+      - ".github/workflows/lab5-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  remotion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: docs/lab5/video/remotion
+    steps:
+      # Lint and type checking do not load the LFS media or render the video.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/lab5/video/remotion/package-lock.json
+      - run: npm ci
+      - run: npm run lint

@@ -1,0 +1,19 @@
+{
+  "voice": "am_michael",
+  "engine": "Kokoro-82M via Apple MLX",
+  "speed": 1.0,
+  "chapters": [
+    {
+      "id": "ending-academic",
+      "title": "Academic credit",
+      "lines": [
+        "Booking Web Manager by SC2006 Group 3.",
+        "Thank you for watching."
+      ],
+      "spoken_lines": [
+        "Booking Web Manager, by S C two zero zero six, Group three.",
+        "Thank you for watching."
+      ]
+    }
+  ]
+}
