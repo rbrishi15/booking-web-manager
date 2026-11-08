@@ -168,3 +168,14 @@ test("writes only visibility and rejects a missing update target", async () => {
   ]);
   await expect(repository.saveVisibility(session)).rejects.toMatchObject({ name: "SessionPersistenceError" });
 });
+
+test("persists editable details in one statement without writing participant or financial state", async () => {
+  const query = vi.fn<SqlExecutor["query"]>().mockResolvedValueOnce([{ session_id: "s" }]).mockResolvedValueOnce([]);
+  const repository = new PostgresSessionManagementRepository({ query: query as SqlExecutor["query"] });
+  await repository.saveDetails(createTestSession());
+  expect(query.mock.calls[0]?.[0]).toMatch(/update sessions set venue_name = \$2/);
+  expect(query.mock.calls[0]?.[0]).not.toMatch(/status =|holding_account_id =|next_queue_sequence =|payout|participations|fund_holds/);
+  expect(query.mock.calls[0]?.[1]).toEqual(["s", "Court", "North", "Badminton",
+    new Date("2026-10-10T10:00:00Z"), new Date("2026-10-10T12:00:00Z"), 1000, 3, 500, "PUBLIC"]);
+  await expect(repository.saveDetails(createTestSession())).rejects.toMatchObject({ name: "SessionPersistenceError" });
+});

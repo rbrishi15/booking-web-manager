@@ -15,6 +15,8 @@ import { sessionTitle, sessionVenueLabel, sessionTime } from "./session-display"
 import { ParticipantRemovalDialog, type ParticipantRemovalTransport, type RemovalResult, type RemovalTarget } from "./participant-removal-dialog";
 import { SessionGroupImportDialog, SessionInviteDialog, type ImportGroup, type SessionInvitationsTransport } from "./session-participants-invitations";
 import styles from "./session-participants.module.css";
+import { SessionEditDialog } from "./session-edit-dialog";
+import type { SessionEditingTransport } from "../editing-transport";
 
 export interface SessionParticipantsViewProps {
   readonly sessionId: string;
@@ -27,6 +29,8 @@ export interface SessionParticipantsViewProps {
   readonly refreshing: boolean;
   readonly removal: ParticipantRemovalTransport;
   readonly onRefresh: () => void;
+  readonly editingTransport?: SessionEditingTransport;
+  readonly onSessionEdited?: () => void;
 }
 
 type RosterTab = "participants" | "waitlist" | "withdrawn" | "invitations";
@@ -54,7 +58,7 @@ function PlayerAvatar({ name }: { readonly name: string }) {
 }
 
 /** Editorial host roster, with the original transaction-safe refund removal and attendance workflows intact. */
-export function SessionParticipantsView({ sessionId, outcome, groups, invitations, invitationTransport, invitationError, invitationsLoading = false, refreshing, removal, onRefresh }: SessionParticipantsViewProps) {
+export function SessionParticipantsView({ sessionId, outcome, groups, invitations, invitationTransport, invitationError, invitationsLoading = false, refreshing, removal, onRefresh, editingTransport, onSessionEdited }: SessionParticipantsViewProps) {
   const [selected, setSelected] = useState<RemovalTarget | null>(null);
   const [removed, setRemoved] = useState<ReadonlyMap<string, RemovalResult>>(new Map());
   const [success, setSuccess] = useState<{ result: RemovalResult; displayName: string } | null>(null);
@@ -65,6 +69,8 @@ export function SessionParticipantsView({ sessionId, outcome, groups, invitation
   const [menuId, setMenuId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editNotice, setEditNotice] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const invitationTrigger = useRef<HTMLButtonElement | null>(null);
@@ -133,10 +139,15 @@ export function SessionParticipantsView({ sessionId, outcome, groups, invitation
     <div className={styles.topbar}>
       <Link className={styles.back} href="/sessions"><ArrowLeft size={20} aria-hidden="true" /> My sessions</Link>
       <div className={styles.topActions}>
-        <button type="button" disabled title="Editing sessions is not yet supported" className={styles.outlineAction} aria-label="Edit session (unavailable)"><Pencil size={19} aria-hidden="true" /> Edit session</button>
+        <button type="button" disabled={!canInvite || refreshing} title={!canInvite ? "Only upcoming open sessions can be edited" : undefined}
+          className={styles.outlineAction} onClick={() => setShowEditor(true)}><Pencil size={19} aria-hidden="true" /> Edit session</button>
         <Link className={styles.moreButton} href="/sessions" aria-label="Return to session management"><MoreHorizontal size={25} aria-hidden="true" /></Link>
       </div>
     </div>
+
+    {showEditor && <SessionEditDialog sessionId={sessionId} transport={editingTransport} onClose={() => setShowEditor(false)}
+      onSaved={() => { setShowEditor(false); setEditNotice(true); (onSessionEdited ?? onRefresh)(); }} />}
+    {editNotice && <p role="status" className="mb-4 rounded-lg border border-current/20 px-4 py-3 text-sm">Session updated.</p>}
 
     <header className={styles.heroHeader}>
       <p className={styles.eyebrow}>Session details</p>

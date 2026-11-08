@@ -6,7 +6,11 @@ import type { SqlExecutor } from "@/lib/money/sql";
 import { PostgresSessionManagementRepository } from "@/lib/sessions/postgres-session-management-repository";
 import { PostgresSessionManagementTransaction } from "@/lib/sessions/postgres-session-management-transaction";
 import { ListHostedSessions } from "@/use-cases/sessions/ListHostedSessions";
+import { EditSession } from "@/use-cases/sessions/EditSession";
+import { sessionEditingVersioner } from "@/lib/sessions/session-editing-version";
+import { PostgresSessionEditingTransaction } from "@/lib/sessions/postgres-session-editing-transaction";
 import { sessionTestContext, type SessionTestContext } from "../support/session-test-context";
+import { GET as loadEditingRoute, PATCH as saveEditingRoute } from "@/app/api/sessions/[sessionId]/edit/route";
 
 const now = new Date("2040-01-01T00:00:00Z");
 const startAt = new Date("2040-01-02T10:00:00Z");
@@ -133,6 +137,65 @@ describe("UC2-03a PostgreSQL management", () => {
     expect(after).toEqual({ ...before, visibility: "PUBLIC" });
     expect((await context.pool.query("select count(*)::int as count from ledger_entries where session_id=$1", [sessionId])).rows)
       .toEqual([{ count: 0 }]);
+  });
+
+  test("persists session edits and rejects stale versions after reload", async () => {
+    const booker = await context.identity(false);
+    const sessionId = await createSession(booker.userId);
+    const editor = new EditSession({ transaction: new PostgresSessionEditingTransaction(() => context.pool, clock), clock, versioner: sessionEditingVersioner });
+    const original = await editor.detailsForBooker(booker.userId, sessionId);
+    const saved = await editor.forBooker(booker.userId, sessionId, { ...original, totalSlots: 4,
+      booking: { ...original.booking, venueName: "Edited court", totalCostCents: 2000, pricePerSlotCents: 500 } });
+    expect(await editor.detailsForBooker(booker.userId, sessionId)).toEqual(saved);
+    expect((await context.pool.query("select venue_name,total_slots,total_cost_cents,booking_share_cents from sessions where session_id=$1", [sessionId])).rows)
+      .toEqual([{ venue_name: "Edited court", total_slots: 4, total_cost_cents: "2000", booking_share_cents: "500" }]);
+    await expect(editor.forBooker(booker.userId, sessionId, original)).rejects.toMatchObject({ code: "STALE_SESSION" });
+    expect((await context.pool.query("select count(*)::int as count from ledger_entries where session_id=$1", [sessionId])).rows).toEqual([{ count: 0 }]);
+  });
+
+  test("authenticated editing API persists details and denies a different owner", async () => {
+    const booker = await context.identity(false);
+    const foreign = await context.identity(false);
+    const sessionId = await createSession(booker.userId);
+    const routeContext = { params: Promise.resolve({ sessionId }) };
+    const url = `http://localhost/api/sessions/${sessionId}/edit`;
+    const loaded = await loadEditingRoute(new Request(url, { headers: { Authorization: `Bearer ${booker.token}` } }), routeContext);
+    expect(loaded.status).toBe(200);
+    const original = await loaded.json();
+    const response = await saveEditingRoute(new Request(url, { method: "PATCH", headers: { Authorization: `Bearer ${booker.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...original, totalSlots: 4, bookerId: foreign.userId }) }), routeContext);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ sessionId, totalSlots: 4 });
+    expect((await context.pool.query("select total_slots,booker_id from sessions where session_id=$1", [sessionId])).rows).toEqual([{ total_slots: 4, booker_id: booker.userId }]);
+    expect((await loadEditingRoute(new Request(url, { headers: { Authorization: `Bearer ${foreign.token}` } }), routeContext)).status).toBe(403);
+  });
+
+  test("a joining player invalidates an open editor and locks booking terms without altering their hold", async () => {
+    const booker = await context.identity(false);
+    const player = await context.identity(false);
+    const sessionId = await createSession(booker.userId);
+    const editor = new EditSession({ transaction: new PostgresSessionEditingTransaction(() => context.pool, clock), clock, versioner: sessionEditingVersioner });
+    const original = await editor.detailsForBooker(booker.userId, sessionId);
+    const { holdId } = await addParticipant(executor(), sessionId, player);
+    await expect(editor.forBooker(booker.userId, sessionId, original)).rejects.toMatchObject({ code: "STALE_SESSION" });
+    const current = await editor.detailsForBooker(booker.userId, sessionId);
+    expect(current).toMatchObject({ bookingLocked: true, minimumSlots: 2 });
+    await expect(editor.forBooker(booker.userId, sessionId, { ...current, booking: { ...current.booking, venueName: "Changed" } })).rejects.toMatchObject({ code: "SESSION_DETAILS_LOCKED" });
+    await editor.forBooker(booker.userId, sessionId, { ...current, totalSlots: 4 });
+    expect((await context.pool.query("select amount_cents,state from fund_holds where hold_id=$1", [holdId])).rows).toEqual([{ amount_cents: "500", state: "HELD" }]);
+  });
+
+  test("rolls back editable details when transaction completion fails", async () => {
+    const booker = await context.identity(false);
+    const sessionId = await createSession(booker.userId);
+    const tx = new PostgresSessionEditingTransaction(() => context.pool, clock);
+    const editor = new EditSession({ transaction: tx, clock, versioner: sessionEditingVersioner });
+    const original = await editor.detailsForBooker(booker.userId, sessionId);
+    const failing = new EditSession({ clock, versioner: sessionEditingVersioner, transaction: { run: (work) => tx.run(async (repositories) => {
+      await work(repositories); throw new Error("Commit aborted");
+    }) } });
+    await expect(failing.forBooker(booker.userId, sessionId, { ...original, totalSlots: 4 })).rejects.toThrow("Commit aborted");
+    expect(await editor.detailsForBooker(booker.userId, sessionId)).toEqual(original);
   });
 
   test("rolls back a visibility write if later work fails", async () => {
