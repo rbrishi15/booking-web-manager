@@ -1,0 +1,97 @@
+{
+  "capture": "live-landing-continuous-take-g.mp4",
+  "source": "https://booking-web-manager.vercel.app/",
+  "native_capture": "ScreenCaptureKit / Chrome anonymous window /30FPS / cursor and audio excluded",
+  "source_crop": [
+    0,
+    174,
+    2920,
+    1504
+  ],
+  "native_motion_windows_frames": [
+    [
+      579,
+      598
+    ],
+    [
+      748,
+      859
+    ],
+    [
+      1632,
+      1710
+    ]
+  ],
+  "retimed_contiguous_source_ranges": [
+    {
+      "in_frame": 213,
+      "out_frame": 579,
+      "output_frames": 366,
+      "type": "hold"
+    },
+    {
+      "in_frame": 579,
+      "out_frame": 598,
+      "output_frames": 24,
+      "type": "scroll"
+    },
+    {
+      "in_frame": 598,
+      "out_frame": 748,
+      "output_frames": 132,
+      "type": "hold"
+    },
+    {
+      "in_frame": 748,
+      "out_frame": 859,
+      "output_frames": 60,
+      "type": "scroll"
+    },
+    {
+      "in_frame": 859,
+      "out_frame": 1632,
+      "output_frames": 102,
+      "type": "hold"
+    },
+    {
+      "in_frame": 1632,
+      "out_frame": 1710,
+      "output_frames": 60,
+      "type": "scroll"
+    },
+    {
+      "in_frame": 1710,
+      "out_frame": 1866,
+      "output_frames": 156,
+      "type": "hold"
+    }
+  ],
+  "all_ranges_contiguous": true,
+  "no_internal_cuts": true,
+  "raw_outcome": "Hero to sports to explanation to hosting in one downward traversal",
+  "motion_conversion": "Small native wheel steps; motion-compensated frame-rate conversion only in the three scroll windows. No application outcome is synthesized.",
+  "new_opening_handle_frames": 180,
+  "landing_frames": 720,
+  "events": [
+    {
+      "event": "Discover anchor",
+      "epoch": 1793892127.924
+    },
+    {
+      "event": "Explanation scroll start",
+      "epoch": 1793892133.656
+    },
+    {
+      "event": "Explanation scroll end",
+      "epoch": 1793892137.028
+    },
+    {
+      "event": "Host scroll start",
+      "epoch": 1793892163.116
+    },
+    {
+      "event": "Host scroll end",
+      "epoch": 1793892165.41
+    }
+  ]
+}

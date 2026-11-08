@@ -1,0 +1,278 @@
+1
+00:00:00,300 --> 00:00:02,985
+Neoh has booked a tennis court.
+
+2
+00:00:03,100 --> 00:00:06,460
+His friend agreed off-app, then cancelled.
+
+3
+00:00:06,600 --> 00:00:10,685
+They never joined a session or committed any funds.
+
+4
+00:00:10,800 --> 00:00:14,835
+Now Neoh needs players, and a firmer commitment.
+
+5
+00:00:16,400 --> 00:00:21,260
+New to Booking Web Manager, Neoh starts at the landing page.
+
+6
+00:00:22,200 --> 00:00:27,610
+The animated court catches his eye, and he explores the sports
+on offer.
+
+7
+00:00:27,700 --> 00:00:33,010
+The page explains how to find games, check details, and share a
+court.
+
+8
+00:00:33,200 --> 00:00:37,710
+He already has a venue. Now he needs people to play with.
+
+9
+00:00:40,300 --> 00:00:45,660
+Neoh creates his first public tennis session for Sunday, six to
+eight.
+
+10
+00:00:47,300 --> 00:00:52,285
+He enters Kallang Tennis Hub and the thirty-dollar venue cost.
+
+11
+00:00:55,300 --> 00:01:00,260
+Three places include Neoh. Each guest contributes ten dollars.
+
+12
+00:01:00,300 --> 00:01:04,485
+He saves the session. Now two places are open.
+
+13
+00:01:05,300 --> 00:01:09,760
+Meet Harrison. He wants a game that fits his weekend.
+
+14
+00:01:09,800 --> 00:01:14,635
+Harrison uses a prepared demo account with a funded wallet.
+
+15
+00:01:15,300 --> 00:01:20,210
+Harrison narrows Discover to tennis in the Central region.
+
+16
+00:01:21,600 --> 00:01:26,735
+Neoh's Sunday session gives him the venue, time and price up
+front.
+
+17
+00:01:27,000 --> 00:01:30,810
+He reviews the booking before choosing to join.
+
+18
+00:01:31,000 --> 00:01:36,310
+The confirmation explains that ten dollars will be held from his
+wallet.
+
+19
+00:01:39,500 --> 00:01:42,735
+He confirms, and his place is secured.
+
+20
+00:01:48,000 --> 00:01:53,910
+Harrison can see both his place and his contribution, without
+chasing a chat.
+
+21
+00:01:54,000 --> 00:01:59,260
+In Wallet, his available balance falls from twenty dollars to
+ten.
+
+22
+00:01:59,400 --> 00:02:03,360
+The other ten dollars is held for this session.
+
+23
+00:02:03,500 --> 00:02:06,585
+It has not been paid to Neoh yet.
+
+24
+00:02:07,600 --> 00:02:12,285
+Joseph discovers the same public session from his own account.
+
+25
+00:02:16,300 --> 00:02:20,910
+He checks the details and confirms his ten-dollar share too.
+
+26
+00:02:26,700 --> 00:02:31,910
+Back in Neoh's Booking Room, all three places are now accounted
+for.
+
+27
+00:02:35,600 --> 00:02:40,710
+Neoh, Harrison and Joseph can rotate through their tennis
+practice.
+
+28
+00:02:41,000 --> 00:02:44,085
+The court no longer goes to waste.
+
+29
+00:02:44,600 --> 00:02:49,835
+And the participant list gives Neoh one clear view of who is
+playing.
+
+30
+00:02:52,900 --> 00:02:56,585
+But what happens if somebody's plans change again?
+
+31
+00:02:56,750 --> 00:03:02,535
+These next examples use separate sessions, leaving our main game
+intact.
+
+32
+00:03:02,600 --> 00:03:07,510
+First, a two-person session is full when Joseph discovers it.
+
+33
+00:03:10,300 --> 00:03:14,910
+He joins the waitlist. No money is held while he waits.
+
+34
+00:03:16,200 --> 00:03:21,310
+With more than thirty hours left, Harrison decides to withdraw.
+
+35
+00:03:24,100 --> 00:03:27,985
+The app shows his full refund before he confirms.
+
+36
+00:03:28,600 --> 00:03:31,700
+His ten dollars returns to his wallet,
+
+37
+00:03:31,700 --> 00:03:34,460
+and he opens the place to the waitlist.
+
+38
+00:03:38,200 --> 00:03:42,735
+The next eligible player can take the opening in queue order.
+
+39
+00:03:47,200 --> 00:03:51,485
+Now consider a different session, starting later today.
+
+40
+00:03:54,200 --> 00:03:58,560
+Harrison is withdrawing late, so his share stays held.
+
+41
+00:03:58,600 --> 00:04:04,535
+He finds Joseph by user ID and invites him as a named
+replacement.
+
+42
+00:04:04,700 --> 00:04:09,860
+Sending an invitation alone does not earn Harrison a refund.
+
+43
+00:04:17,700 --> 00:04:22,810
+Joseph must accept and cover the place before the session
+starts.
+
+44
+00:04:28,900 --> 00:04:31,612
+Only then is Harrison refunded.
+
+45
+00:04:31,612 --> 00:04:35,210
+Without a replacement, his share goes to the booker.
+
+46
+00:04:39,750 --> 00:04:44,710
+After tennis, Neoh closes the loop by confirming attendance.
+
+47
+00:04:44,800 --> 00:04:50,310
+This is a prepared ended-session example, so we can show the
+next stage.
+
+48
+00:04:50,400 --> 00:04:55,560
+He reviews Harrison and Joseph, marks them as attended, and
+saves.
+
+49
+00:04:55,600 --> 00:05:00,835
+Attendance verification and withdrawing earnings are separate
+actions.
+
+50
+00:05:00,900 --> 00:05:05,860
+Once everyone is verified, the session is ready to withdraw.
+
+51
+00:05:05,900 --> 00:05:09,210
+The two guest shares total twenty dollars.
+
+52
+00:05:09,400 --> 00:05:14,985
+This demonstration stops at readiness; it does not make a bank
+transfer.
+
+53
+00:05:15,800 --> 00:05:20,510
+One good game gives Neoh a reason to organise another.
+
+54
+00:05:20,600 --> 00:05:25,035
+He creates a regular group for their Sunday tennis sessions.
+
+55
+00:05:25,200 --> 00:05:30,510
+He finds Harrison and Joseph by their user IDs and invites them.
+
+56
+00:05:30,600 --> 00:05:36,035
+An invitation is not membership. The player chooses whether to
+join.
+
+57
+00:05:36,700 --> 00:05:41,685
+Each player accepts from their own account before becoming a
+member.
+
+58
+00:05:48,200 --> 00:05:52,160
+Now their group is ready for the next invitation.
+
+59
+00:05:53,700 --> 00:05:58,785
+Neoh can organise another session with people he already knows.
+
+60
+00:05:59,700 --> 00:06:03,835
+Neoh started with a court, but no one to play with.
+
+61
+00:06:04,200 --> 00:06:08,660
+Through Booking Web Manager, he found Harrison and Joseph.
+
+62
+00:06:08,900 --> 00:06:14,085
+One cancelled plan became a game, and a reason to meet again.
+
+63
+00:06:19,800 --> 00:06:21,325
+Booking Web Manager
+
+64
+00:06:21,325 --> 00:06:24,835
+by SC2006 Group 3.
+
+65
+00:06:25,300 --> 00:06:30,300
+Thank you for watching.

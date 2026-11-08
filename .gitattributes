@@ -1,0 +1,5 @@
+output/lab5-video/audio-michael/*.wav filter=lfs diff=lfs merge=lfs -text
+output/lab5-video/*.zip filter=lfs diff=lfs merge=lfs -text
+docs/lab5/video/remotion/public/screens/*.mp4 filter=lfs diff=lfs merge=lfs -text
+docs/lab5/video/remotion/public/audio/*.wav filter=lfs diff=lfs merge=lfs -text
+output/lab5-video/**/*.mp4 filter=lfs diff=lfs merge=lfs -text

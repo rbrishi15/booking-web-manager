@@ -1,0 +1,16 @@
+{
+  "voice": "am_michael",
+  "engine": "Kokoro-82M via Apple MLX",
+  "speed": 1.0,
+  "chapters": [
+    {
+      "id": "ending-social",
+      "title": "From an empty court to a group",
+      "lines": [
+        "Neoh started with a court, but no one to play with.",
+        "Through Booking Web Manager, he found Harrison and Joseph.",
+        "One cancelled plan became a game, and a reason to meet again."
+      ]
+    }
+  ]
+}

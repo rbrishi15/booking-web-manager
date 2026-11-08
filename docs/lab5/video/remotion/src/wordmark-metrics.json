@@ -1,0 +1,19 @@
+{
+  "iDot": {
+    "x": 427.5,
+    "y": 89.375,
+    "width": 30.9375,
+    "height": 28.75
+  },
+  "period": {
+    "x": 688.59375,
+    "y": 186.015625,
+    "width": 32.1875,
+    "height": 31.71875
+  },
+  "fontSize": 160,
+  "baseline": 200,
+  "width": 718.4375,
+  "upem": 2048,
+  "source": "components/ui/booking-logo.tsx + inter-v20-latin.woff2; weight900; HarfBuzz kern"
+}

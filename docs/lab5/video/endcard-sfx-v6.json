@@ -1,0 +1,47 @@
+{
+  "type": "Original procedural sound effects, no licensed sample assets",
+  "rate": 48000,
+  "duration": 16,
+  "peak": 0.17052631784144376,
+  "events": [
+    {
+      "local_seconds": 0.15,
+      "duration": 0.65,
+      "kind": "air",
+      "gain": 0.035
+    },
+    {
+      "local_seconds": 1.2,
+      "duration": 0.38,
+      "kind": "air",
+      "gain": 0.045
+    },
+    {
+      "local_seconds": 2.2,
+      "duration": 0.24,
+      "kind": "air",
+      "gain": 0.18
+    },
+    {
+      "local_seconds": 3.2,
+      "duration": 0.19,
+      "kind": "bounce",
+      "gain": 0.22
+    },
+    {
+      "local_seconds": 4.4,
+      "duration": 0.16,
+      "kind": "bounce",
+      "gain": 0.16
+    },
+    {
+      "local_seconds": 4.9,
+      "duration": 0.13,
+      "kind": "settle",
+      "gain": 0.14
+    }
+  ],
+  "ending_chapter_offset": 15,
+  "full_video_offset": 374.3,
+  "voice_overlap": false
+}

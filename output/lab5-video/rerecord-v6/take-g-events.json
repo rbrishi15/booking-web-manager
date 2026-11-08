@@ -1,0 +1,22 @@
+[
+  {
+    "event": "Discover anchor",
+    "epoch": 1793892127.924
+  },
+  {
+    "event": "Explanation scroll start",
+    "epoch": 1793892133.656
+  },
+  {
+    "event": "Explanation scroll end",
+    "epoch": 1793892137.028
+  },
+  {
+    "event": "Host scroll start",
+    "epoch": 1793892163.116
+  },
+  {
+    "event": "Host scroll end",
+    "epoch": 1793892165.41
+  }
+]

@@ -1,0 +1,750 @@
+{
+  "status": "passed",
+  "duration": 390.3,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "video_frames": 11709,
+  "video_bitrate_bps": 9995321,
+  "codec": "H.264/AAC",
+  "narration_phrases": 62,
+  "caption_pages": 65,
+  "neutral_encoded_caption_samples": 186,
+  "speech_alignment": [
+    {
+      "id": "hook-01",
+      "correlation": 0.9913222502983369
+    },
+    {
+      "id": "hook-02",
+      "correlation": 0.993211203020805
+    },
+    {
+      "id": "hook-03",
+      "correlation": 0.9937566988014057
+    },
+    {
+      "id": "hook-04",
+      "correlation": 0.9834320230242943
+    },
+    {
+      "id": "landing-01",
+      "correlation": 0.9831229966070889
+    },
+    {
+      "id": "landing-02",
+      "correlation": 0.9974064849407716
+    },
+    {
+      "id": "landing-03",
+      "correlation": 0.9798728101535241
+    },
+    {
+      "id": "landing-04",
+      "correlation": 0.9655807896003769
+    },
+    {
+      "id": "create-fast-01",
+      "correlation": 0.9960269856132887
+    },
+    {
+      "id": "create-fast-02",
+      "correlation": 0.9947466069362525
+    },
+    {
+      "id": "create-fast-03",
+      "correlation": 0.971027916629015
+    },
+    {
+      "id": "create-fast-04",
+      "correlation": 0.9776693685906938
+    },
+    {
+      "id": "harrison-01",
+      "correlation": 0.9830653514906987
+    },
+    {
+      "id": "harrison-02",
+      "correlation": 0.9791950374595069
+    },
+    {
+      "id": "harrison-03",
+      "correlation": 0.97839059831531
+    },
+    {
+      "id": "harrison-04",
+      "correlation": 0.9880354098755534
+    },
+    {
+      "id": "harrison-05",
+      "correlation": 0.9723021993487888
+    },
+    {
+      "id": "harrison-06",
+      "correlation": 0.9888288474565009
+    },
+    {
+      "id": "harrison-07",
+      "correlation": 0.946858234334302
+    },
+    {
+      "id": "harrison-11",
+      "correlation": 0.9726534297432144
+    },
+    {
+      "id": "harrison-08",
+      "correlation": 0.9809251076287545
+    },
+    {
+      "id": "harrison-09",
+      "correlation": 0.9757518810203493
+    },
+    {
+      "id": "harrison-10",
+      "correlation": 0.9787971682844918
+    },
+    {
+      "id": "joseph-01",
+      "correlation": 0.9871696856706607
+    },
+    {
+      "id": "joseph-02",
+      "correlation": 0.9742030260721555
+    },
+    {
+      "id": "joseph-03",
+      "correlation": 0.9478132659134708
+    },
+    {
+      "id": "joseph-04",
+      "correlation": 0.9911376439126667
+    },
+    {
+      "id": "joseph-05",
+      "correlation": 0.9666544210825815
+    },
+    {
+      "id": "joseph-06",
+      "correlation": 0.9918765842038295
+    },
+    {
+      "id": "changes-01",
+      "correlation": 0.9810769345538501
+    },
+    {
+      "id": "changes-02",
+      "correlation": 0.9920685013269633
+    },
+    {
+      "id": "changes-03",
+      "correlation": 0.9718446138019349
+    },
+    {
+      "id": "changes-04",
+      "correlation": 0.9970182019373383
+    },
+    {
+      "id": "changes-05",
+      "correlation": 0.9949680589530185
+    },
+    {
+      "id": "changes-06",
+      "correlation": 0.9880169490049744
+    },
+    {
+      "id": "changes-07",
+      "correlation": 0.9825618340051249
+    },
+    {
+      "id": "changes-08",
+      "correlation": 0.9958180976560068
+    },
+    {
+      "id": "changes-09",
+      "correlation": 0.9738196214337023
+    },
+    {
+      "id": "changes-10",
+      "correlation": 0.9824199274472799
+    },
+    {
+      "id": "changes-11",
+      "correlation": 0.9717509627578849
+    },
+    {
+      "id": "changes-12",
+      "correlation": 0.9880651719541851
+    },
+    {
+      "id": "changes-13",
+      "correlation": 0.9816493788960324
+    },
+    {
+      "id": "changes-14",
+      "correlation": 0.9763657738879036
+    },
+    {
+      "id": "attendance-01",
+      "correlation": 0.9858451229622401
+    },
+    {
+      "id": "attendance-02",
+      "correlation": 0.9890781025616907
+    },
+    {
+      "id": "attendance-03",
+      "correlation": 0.9561855563717145
+    },
+    {
+      "id": "attendance-07",
+      "correlation": 0.9903252680858006
+    },
+    {
+      "id": "attendance-05",
+      "correlation": 0.9800482741197787
+    },
+    {
+      "id": "attendance-06",
+      "correlation": 0.9815447912990485
+    },
+    {
+      "id": "attendance-09",
+      "correlation": 0.9911351482147599
+    },
+    {
+      "id": "group-01",
+      "correlation": 0.9749837893841367
+    },
+    {
+      "id": "group-02",
+      "correlation": 0.9974817174012889
+    },
+    {
+      "id": "group-03",
+      "correlation": 0.9748905785565548
+    },
+    {
+      "id": "group-05",
+      "correlation": 0.9830694109622174
+    },
+    {
+      "id": "group-04",
+      "correlation": 0.9945568184892818
+    },
+    {
+      "id": "group-06",
+      "correlation": 0.9684354552978603
+    },
+    {
+      "id": "group-07",
+      "correlation": 0.9854520775493526
+    },
+    {
+      "id": "ending-social-01",
+      "correlation": 0.9820509124539049
+    },
+    {
+      "id": "ending-social-02",
+      "correlation": 0.9841917637773866
+    },
+    {
+      "id": "ending-social-03",
+      "correlation": 0.9643017238868096
+    },
+    {
+      "id": "ending-academic-01",
+      "correlation": 0.9729165935055873
+    },
+    {
+      "id": "ending-academic-02",
+      "correlation": 0.9676278075629118
+    }
+  ],
+  "minimum_speech_correlation": 0.946858234334302,
+  "studio_text_style_gap_and_semantic_audit": {
+    "pages_checked": 65,
+    "text_digest_fnv1a": 4021860868,
+    "all_text_matches": true,
+    "missing_pages": 0,
+    "neutral_caption_max_height_px": 60,
+    "caption_font_px": 23,
+    "caption_weight": 500,
+    "caption_background": "#20252A",
+    "caption_text": "#F5F5F3",
+    "maximum_lines": 2,
+    "silent_gaps_checked": 46,
+    "lingering_caption_pages": 0,
+    "social_progression": {
+      "early_alone_frame": 10839,
+      "early_players": [
+        "Neoh"
+      ],
+      "final_selfie_frame": 11139,
+      "final_players": [
+        "Neoh",
+        "Harrison",
+        "Joseph"
+      ],
+      "story_illustration_label_present": true
+    },
+    "studio_error": null,
+    "scope": "Fresh V6 visible-composition caption text/gap audit; inspected the live-to-prepared transition. Prior65 pages and timings retained."
+  },
+  "ui_return_checks": [
+    {
+      "actor": "Harrison",
+      "kind": "desktop",
+      "time": 69.23333333333333,
+      "source_time": 4.233333333333334,
+      "mean_pixel_error": 0.7929333382098359
+    },
+    {
+      "actor": "Joseph",
+      "kind": "desktop",
+      "time": 130.83333333333334,
+      "source_time": 0.5333333333333314,
+      "mean_pixel_error": 1.0585497281349816
+    },
+    {
+      "actor": "Neoh",
+      "kind": "desktop",
+      "time": 149.93333333333334,
+      "source_time": 0.3333333333333428,
+      "mean_pixel_error": 0.654599761051374
+    },
+    {
+      "actor": "Joseph",
+      "kind": "intro",
+      "time": 182.60000033333333,
+      "source_time": 7.0000003333333325,
+      "mean_pixel_error": 0.22498394817903267
+    },
+    {
+      "actor": "Harrison",
+      "kind": "early",
+      "time": 199.43333333333334,
+      "source_time": 0.8333333333333428,
+      "mean_pixel_error": 0.7402185485902844
+    },
+    {
+      "actor": "Harrison",
+      "kind": "early-refund",
+      "time": 214.43333333333334,
+      "source_time": 15.833333333333343,
+      "mean_pixel_error": 0.16767935370085907
+    },
+    {
+      "actor": "Joseph",
+      "kind": "queue",
+      "time": 222.66666633333332,
+      "source_time": 2.0666663333333304,
+      "mean_pixel_error": 0.7297161875502889
+    },
+    {
+      "actor": "Harrison",
+      "kind": "late",
+      "time": 238.53333333333333,
+      "source_time": 8.933333333333337,
+      "mean_pixel_error": 0.3278874990856558
+    },
+    {
+      "actor": "Joseph",
+      "kind": "accept",
+      "time": 262.66666633333335,
+      "source_time": 5.266666333333376,
+      "mean_pixel_error": 0.25379290306325636
+    },
+    {
+      "actor": "Harrison",
+      "kind": "refund",
+      "time": 275.2000003333334,
+      "source_time": 4.300000333333401,
+      "mean_pixel_error": 0.7891109729435382
+    },
+    {
+      "actor": "Neoh",
+      "kind": "desktop",
+      "time": 282.6333333333334,
+      "source_time": 0.23333333333340533,
+      "mean_pixel_error": 0.6265671860141906
+    },
+    {
+      "actor": "Harrison",
+      "kind": "desktop",
+      "time": 339.53333333333336,
+      "source_time": 0.2333333333333485,
+      "mean_pixel_error": 0.735502970602817
+    },
+    {
+      "actor": "Joseph",
+      "kind": "desktop",
+      "time": 346.03333333333336,
+      "source_time": 0.2333333333333485,
+      "mean_pixel_error": 0.7416408618405547
+    },
+    {
+      "actor": "Neoh",
+      "kind": "desktop",
+      "time": 355.53333333333336,
+      "source_time": 0.2333333333333485,
+      "mean_pixel_error": 0.7272771235136828
+    }
+  ],
+  "encoded_silent_gap_checks": [
+    {
+      "time": 6.529999999999999,
+      "distance_from_caption_surface": 7.898611111111111
+    },
+    {
+      "time": 15.6175,
+      "distance_from_caption_surface": 7.657986111111112
+    },
+    {
+      "time": 21.729999999999997,
+      "distance_from_caption_surface": 11.0
+    },
+    {
+      "time": 33.105000000000004,
+      "distance_from_caption_surface": 11.0
+    },
+    {
+      "time": 39.004999999999995,
+      "distance_from_caption_surface": 0.3333333333333333
+    },
+    {
+      "time": 46.48,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 53.7925,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 64.8925,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 74.9675,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 80.905,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 86.8675,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 90.905,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 97.905,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 105.3675,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 119.33,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 123.43,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 127.0925,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 134.29250000000002,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 143.805,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 153.755,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 160.85500000000002,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 164.3425,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 171.3675,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 176.66750000000002,
+      "distance_from_caption_surface": 197.0
+    },
+    {
+      "time": 188.90499999999997,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 195.555,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 202.70499999999998,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 208.2925,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 216.32999999999998,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 224.96749999999997,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 232.84249999999997,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 244.6175,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 253.78,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 265.855,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 277.48,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 309.30499999999995,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 315.3924999999999,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 325.11749999999995,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 336.36749999999995,
+      "distance_from_caption_surface": 188.0
+    },
+    {
+      "time": 344.9425,
+      "distance_from_caption_surface": 102.0
+    },
+    {
+      "time": 352.93,
+      "distance_from_caption_surface": 188.0
+    },
+    {
+      "time": 359.2425,
+      "distance_from_caption_surface": 23.333333333333332
+    },
+    {
+      "time": 364.01750000000004,
+      "distance_from_caption_surface": 204.33333333333334
+    },
+    {
+      "time": 368.78000000000003,
+      "distance_from_caption_surface": 204.33333333333334
+    },
+    {
+      "time": 376.9425,
+      "distance_from_caption_surface": 37.0
+    },
+    {
+      "time": 385.0675,
+      "distance_from_caption_surface": 37.0
+    }
+  ],
+  "i_dot_animation": "in-flight source dot removed; original i-dot and real full-stop glyph restored at landing",
+  "opening_cutoff_check": "full scene visible at frame119, after prior96-frame preview cutoff",
+  "final_credit": "Booking Web Manager by SC2006 Group3; Thank you for watching",
+  "full_decode": "passed",
+  "continuous_human_listening_review": "not_performed",
+  "sha256": "994a36a7b12c69b28f61b1155b01bafc6da1add990588d26d323aa4b1fb43c53",
+  "opening_to_landing_mean_pixel_difference": 0.21224688057040997,
+  "selected_landing_source_ranges_contiguous": true,
+  "assembly_provenance": {
+    "fresh_prefix_frames": 1500,
+    "unchanged_tail_start_frame": 1500,
+    "tail_end_frame": 11709,
+    "splice_preceding_frame_mean_pixel_error": 0.03389242541152263,
+    "prefix_sha256": "4a8b4d0e9c31ccb75030f971a78193844a6bf11ae63afc5a4d85ad746eff337e",
+    "tail_sha256": "cd35eecaf7cda7825d7ac060ea2075fe00826d2008c4fedfc051cbcd43c9f347",
+    "audio": "All chapter WAVs from current source; ending-v6 includes original dot foley. Prefix-preview AAC is excluded.",
+    "portable_rebuild": "npm run render renders the complete current Remotion source and does not require the previous tail."
+  },
+  "closing_foley_correlation": 0.9878187104984706,
+  "closing_foley_timed_events": [
+    {
+      "local_seconds": 0.15,
+      "duration": 0.65,
+      "kind": "air",
+      "gain": 0.035
+    },
+    {
+      "local_seconds": 1.2,
+      "duration": 0.38,
+      "kind": "air",
+      "gain": 0.045
+    },
+    {
+      "local_seconds": 2.2,
+      "duration": 0.24,
+      "kind": "air",
+      "gain": 0.18
+    },
+    {
+      "local_seconds": 3.2,
+      "duration": 0.19,
+      "kind": "bounce",
+      "gain": 0.22
+    },
+    {
+      "local_seconds": 4.4,
+      "duration": 0.16,
+      "kind": "bounce",
+      "gain": 0.16
+    },
+    {
+      "local_seconds": 4.9,
+      "duration": 0.13,
+      "kind": "settle",
+      "gain": 0.14
+    }
+  ],
+  "landing_capture": {
+    "capture": "live-landing-continuous-take-g.mp4",
+    "source": "https://booking-web-manager.vercel.app/",
+    "native_capture": "ScreenCaptureKit / Chrome anonymous window /30FPS / cursor and audio excluded",
+    "source_crop": [
+      0,
+      174,
+      2920,
+      1504
+    ],
+    "native_motion_windows_frames": [
+      [
+        579,
+        598
+      ],
+      [
+        748,
+        859
+      ],
+      [
+        1632,
+        1710
+      ]
+    ],
+    "retimed_contiguous_source_ranges": [
+      {
+        "in_frame": 213,
+        "out_frame": 579,
+        "output_frames": 366,
+        "type": "hold"
+      },
+      {
+        "in_frame": 579,
+        "out_frame": 598,
+        "output_frames": 24,
+        "type": "scroll"
+      },
+      {
+        "in_frame": 598,
+        "out_frame": 748,
+        "output_frames": 132,
+        "type": "hold"
+      },
+      {
+        "in_frame": 748,
+        "out_frame": 859,
+        "output_frames": 60,
+        "type": "scroll"
+      },
+      {
+        "in_frame": 859,
+        "out_frame": 1632,
+        "output_frames": 102,
+        "type": "hold"
+      },
+      {
+        "in_frame": 1632,
+        "out_frame": 1710,
+        "output_frames": 60,
+        "type": "scroll"
+      },
+      {
+        "in_frame": 1710,
+        "out_frame": 1866,
+        "output_frames": 156,
+        "type": "hold"
+      }
+    ],
+    "all_ranges_contiguous": true,
+    "no_internal_cuts": true,
+    "raw_outcome": "Hero to sports to explanation to hosting in one downward traversal",
+    "motion_conversion": "Small native wheel steps; motion-compensated frame-rate conversion only in the three scroll windows. No application outcome is synthesized.",
+    "new_opening_handle_frames": 180,
+    "landing_frames": 720,
+    "events": [
+      {
+        "event": "Discover anchor",
+        "epoch": 1793892127.924
+      },
+      {
+        "event": "Explanation scroll start",
+        "epoch": 1793892133.656
+      },
+      {
+        "event": "Explanation scroll end",
+        "epoch": 1793892137.028
+      },
+      {
+        "event": "Host scroll start",
+        "epoch": 1793892163.116
+      },
+      {
+        "event": "Host scroll end",
+        "epoch": 1793892165.41
+      }
+    ]
+  },
+  "visual_review": {
+    "status": "passed",
+    "inspected": [
+      "Fresh native small-step scroll frames, including moving text and settled sports/explanation/host views",
+      "Actual encoded landing and live-to-prepared handoff; page controls and captions readable",
+      "Opening-to-landing viewport continuity, mean pixel difference0.212",
+      "Actual encoded flying dot and final academic credit; original foley waveform correlation0.988"
+    ],
+    "evidence": [
+      "review/v6-gradual-scroll-inspection.jpg",
+      "review/v6-final-scenes.jpg"
+    ],
+    "browser_chrome": "Top address/tab UI excluded; a small native hovered-link status may appear at the lower-left in the sports view. No editor outlines or zoom tooltips are rendered.",
+    "continuous_human_listening_review": "not_performed"
+  }
+}
