@@ -49,6 +49,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Hosting: Story = {};
 export const HostingDark: Story = { parameters: { themes: { themeOverride: "dark" } }, globals: { theme: "dark" } };
+export const HostingCompactDesktop: Story = {
+  ...Hosting,
+  play: async (context) => {
+    if (meta.play) await meta.play(context);
+    const element = await screen.findByRole("dialog", { name: "Tennis session" });
+    if (window.innerHeight >= 720 && window.innerHeight <= 860) {
+      await waitFor(() => expect(element.scrollHeight).toBeLessThanOrEqual(element.clientHeight + 1));
+    }
+  },
+};
 export const HostingMobile: Story = { globals: { viewport: { value: "phone", isRotated: false } } };
 export const HostingMobileDark: Story = { parameters: { themes: { themeOverride: "dark" } }, globals: { theme: "dark", viewport: { value: "phone", isRotated: false } } };
 

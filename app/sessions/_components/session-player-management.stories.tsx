@@ -61,6 +61,18 @@ type Story = StoryObj<typeof meta>;
 
 export const Dark: Story = { args: { referenceDate: true } };
 export const Light: Story = { args: { referenceDate: true }, globals: { theme: "light" }, parameters: { themes: { themeOverride: "light" } } };
+export const MacbookAirNarrow: Story = {
+  args: { referenceDate: true },
+  play: async ({ canvas }) => {
+    const tabsList = canvas.getByRole("tablist", { name: "Participant status" });
+    await expect(canvas.getByRole("tab", { name: "Invitations (0)" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: /^Import from group$/ })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: /^Invite player$/ })).toBeVisible();
+    if (window.innerWidth >= 1200 && window.innerWidth <= 1440) {
+      await waitFor(() => expect(tabsList.scrollWidth).toBeLessThanOrEqual(tabsList.clientWidth + 2));
+    }
+  },
+};
 
 export const InvitePlayers: Story = {
   play: async ({ canvas }) => {

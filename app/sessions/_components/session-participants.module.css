@@ -40,7 +40,8 @@
 .progress { height:10px; overflow:hidden; border-radius:20px; background:#282e38; margin-top:18px; }
 .progress > span { display:block; height:100%; border-radius:20px; background:#f3f3f0; transition:width .2s; }
 .actionsBar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid #353a42; margin-top:47px; }
-.tabs { display:flex; align-items:center; gap:clamp(24px,3vw,56px); min-width:0; max-width:100%; overflow-x:auto; }
+.tabs { display:flex; align-items:center; gap:clamp(24px,3vw,56px); min-width:0; max-width:100%; overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none; }
+.tabs::-webkit-scrollbar { display:none; }
 .tab { position:relative; display:block; flex:none; min-height:70px; padding:12px 5px 22px; color:#b9bbc2; font-size:16px; text-align:left; white-space:nowrap; }
 .tab[aria-selected="true"] { color:#fff; font-weight:600; }
 .tab[aria-selected="true"]::after { content:""; position:absolute; bottom:-1px; left:0; width:100%; height:3px; background:#fafafa; }
@@ -71,8 +72,9 @@
 .page button:disabled { opacity:.48; cursor:not-allowed; }
 .attendance { margin-top:36px; }
 .invitationOverlay { background:rgb(0 0 0 / 48%); backdrop-filter:blur(6px); }
-.dialog.dialog { --dialog-ink:#f7f7f7; --dialog-muted:#b2b4bc; --dialog-line:#343841; display:block; width:calc(100% - 40px); max-width:964px; max-height:calc(100dvh - 48px); overflow-y:auto; padding:37px 47px 38px; border:1px solid #3a3e47; border-radius:20px; background:#0c1017; color:var(--dialog-ink); box-shadow:0 28px 90px #000a; }
-.dialogWide.dialog { max-width:1158px; padding:42px 55px 34px; }
+.dialog.dialog { --dialog-ink:#f7f7f7; --dialog-muted:#b2b4bc; --dialog-line:#343841; display:block; width:calc(100% - 40px); max-width:964px; max-height:calc(100dvh - 48px); overflow-y:auto; scrollbar-width:none; -ms-overflow-style:none; padding:37px 47px 38px; border:1px solid #3a3e47; border-radius:20px; background:#0c1017; color:var(--dialog-ink); box-shadow:0 28px 90px #000a; }
+.dialogWide.dialog { max-width:1158px; padding:42px 55px 34px; scrollbar-width:none; -ms-overflow-style:none; }
+.dialog.dialog::-webkit-scrollbar,.dialogWide.dialog::-webkit-scrollbar { display:none; }
 .dialog > button:last-child { right:40px; top:31px; opacity:1; }
 .dialog > button:last-child svg { width:25px; height:25px; }
 .dialogHeader { display:flex; gap:30px; align-items:flex-start; margin-bottom:42px; padding-right:45px; }
@@ -122,7 +124,8 @@
 .groupIdentity small { display:block; margin-top:10px; color:var(--dialog-muted); font-size:15px; }
 .memberHeading { margin-bottom:10px; }
 .memberSubheading { margin:0 0 21px; color:var(--dialog-muted); font-size:16px; }
-.memberList { list-style:none; margin:0; padding:0 0 0 10px; max-height:330px; overflow:auto; }
+.memberList { list-style:none; margin:0; padding:0 0 0 10px; max-height:330px; overflow:auto; scrollbar-width:none; -ms-overflow-style:none; }
+.memberList::-webkit-scrollbar { display:none; }
 .memberRow { display:flex; align-items:center; gap:28px; min-height:73px; border-bottom:1px solid #343942; }
 .memberRow .avatar { width:47px; height:47px; font-size:16px; }
 .memberRow label { display:flex; align-items:center; gap:18px; width:100%; cursor:pointer; }
@@ -131,12 +134,46 @@
 .dialogWide .modalFooter { margin-top:38px; }
 .dialog :is(button,input,a):focus-visible { outline:2px solid #f5f5f5; outline-offset:3px; }
 .dialog button:disabled { cursor:not-allowed; opacity:.5; }
-@media (max-width: 1180px) {
-  .actionsBar { align-items:flex-start; flex-wrap:wrap; }
+@media (max-width: 1440px) {
+  .page { padding:32px clamp(20px, 2.5vw, 40px) 80px; }
+  .summaryCard { padding:22px 28px; }
+  .summaryItem { gap:16px; padding:6px 14px 6px 0; }
+  .summaryItem + .summaryItem { padding-left:22px; }
+  .summaryValue { font-size:clamp(18px, 1.6vw, 24px); }
+  .summaryDescription { font-size:14px; }
+  .actionsBar { margin-top:36px; gap:16px; }
+  .tabs { gap:clamp(12px, 1.8vw, 28px); }
+  .tab { font-size:14.5px; min-height:58px; padding:10px 4px 18px; }
+  .rosterActions { gap:14px; padding-bottom:8px; }
+  .inviteButton { min-height:46px; padding:0 16px; font-size:14px; gap:8px; }
+  .inviteButton > svg { width:18px; height:18px; }
+  .importButton { gap:8px; font-size:13.5px; }
+  .importButton > svg { width:18px; height:18px; }
+  .actionDivider { height:20px; }
+  :global(:root:not(.dark)) .page { padding:32px clamp(20px, 2.5vw, 40px) 80px; }
+  :global(:root:not(.dark)) .topbar { margin-bottom:44px; }
+  :global(:root:not(.dark)) .title { font-size:clamp(36px, 3.5vw, 48px); }
+  :global(:root:not(.dark)) .outlineAction { font-size:15px; padding:0 16px; }
+}
+@media (max-width: 1024px) {
+  .actionsBar { align-items:flex-start; flex-wrap:wrap; gap:12px; }
+  .tabs { width:100%; }
   .rosterActions { margin-left:auto; }
-  .summaryCard { padding:25px; }
-  .summaryItem { gap:15px; padding-right:15px; }
-  .summaryItem + .summaryItem { padding-left:20px; }
+  .summaryCard { padding:22px 20px; }
+  .summaryItem { gap:14px; padding-right:12px; }
+  .summaryItem + .summaryItem { padding-left:18px; }
+}
+@media (max-height: 840px) {
+  .dialog.dialog, .dialogWide.dialog { padding:28px 32px 24px; }
+  .dialogHeader { margin-bottom:24px; gap:20px; }
+  .dialogIcon { width:58px; height:58px; flex-basis:58px; }
+  .dialogIcon svg { width:30px; height:30px; }
+  .modalTabs { margin-bottom:24px; }
+  .modalTab { min-height:50px; padding:0 24px 12px; }
+  .groupColumns { min-height:280px; gap:24px; }
+  .groupChoice { min-height:80px; gap:16px; padding:10px 14px; }
+  .memberList { max-height:240px; }
+  .modalFooter { margin-top:24px; padding-top:18px; }
 }
 @media (max-width: 760px) {
   .page { padding:28px 20px 64px; }
