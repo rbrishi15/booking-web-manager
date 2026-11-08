@@ -42,14 +42,21 @@ These are not diagrams and stay where they are:
 
 | Diagram | Type | Area owner | Source | Export | Used in |
 | --- | --- | --- | --- | --- | --- |
+| UC1 user and wallet management | Use case | Rishi | Not in repo (SRS) | [uc1-user-and-wallet-management.png](./use-case/uc1-user-and-wallet-management.png) | SRS |
 | UC2 session management | Use case | Yajie | Not in repo (SRS) | [uc2-session-management.png](./use-case/uc2-session-management.png) | SRS, [Lab 3](../../lab3/README.md) |
 | Dialog map | Dialog map | Yajie | [dialog-map/*.drawio](./dialog-map/README.md) | [PNG](./dialog-map/dialog-map.png), [SVG](./dialog-map/dialog-map.svg), [PDF](./dialog-map/dialog-map.pdf) | [Lab 3](../../lab3/README.md) |
 | UC1-06 Groups experience (current UI) | Dialog map | Joseph | [DOT](./dialog-map/uc1-06-groups-experience.dot) | [SVG](./dialog-map/uc1-06-groups-experience.svg) | [Groups](../../app/groups/README.md), supersedes the Lab 3 snapshot's group creation transition |
+| Runtime architecture and external services | Architecture | Rishi | Not in repo (SRS) | [runtime-architecture.png](./architecture/runtime-architecture.png) | SRS (Appendix F) |
+| ECB layered overview | Class | - | Not in repo (SRS) | [ecb-layered-overview.png](./class/ecb-layered-overview.png) | SRS (Appendix B) |
 | Domain class diagram (overview) | Class | Rishi | [domain-class-diagram.puml](../domain-class-diagram.puml) | [SVG](../assets/domain-class-diagram.svg), [PNG](../assets/domain-class-diagram.png) | [Domain class diagram](../domain-class-diagram.md) |
-| Domain: accounts and groups | Class | Rishi | [domain-accounts.puml](./domain-accounts.puml) | [SVG](../assets/domain-accounts.svg) | [Domain class diagram](../domain-class-diagram.md) |
-| Domain: sessions | Class | Rishi | [domain-sessions.puml](./domain-sessions.puml) | [SVG](../assets/domain-sessions.svg) | [Domain class diagram](../domain-class-diagram.md) |
-| Domain: settlement | Class | Rishi | [domain-settlement.puml](./domain-settlement.puml) | [SVG](../assets/domain-settlement.svg) | [Domain class diagram](../domain-class-diagram.md) |
-| Domain: ledger | Class | Rishi | [domain-ledger.puml](./domain-ledger.puml) | [SVG](../assets/domain-ledger.svg) | [Domain class diagram](../domain-class-diagram.md) |
+| Domain: accounts and groups | Class | Rishi | [domain-accounts.puml](./domain-accounts.puml) | [PNG](./class/domain-model-a-accounts.png), [SVG](../assets/domain-accounts.svg) | [Domain class diagram](../domain-class-diagram.md), SRS |
+| Domain: sessions aggregate | Class | Rishi | [domain-sessions.puml](./domain-sessions.puml) | [PNG](./class/domain-model-b-sessions.png), [SVG](../assets/domain-sessions.svg) | [Domain class diagram](../domain-class-diagram.md), SRS |
+| Domain: participation & reliability | Class | Rishi | [domain-sessions.puml](./domain-sessions.puml) | [PNG](./class/domain-model-c-participation.png), [SVG](../assets/domain-sessions.svg) | [Domain class diagram](../domain-class-diagram.md), SRS |
+| Domain: settlement | Class | Rishi | [domain-settlement.puml](./domain-settlement.puml) | [PNG](./class/domain-model-d-settlement.png), [SVG](../assets/domain-settlement.svg) | [Domain class diagram](../domain-class-diagram.md), SRS |
+| Domain: ledger | Class | Rishi | [domain-ledger.puml](./domain-ledger.puml) | [PNG](./class/domain-model-e-ledger.png), [SVG](../assets/domain-ledger.svg) | [Domain class diagram](../domain-class-diagram.md), SRS |
+| White-box CFG: Participant.join (UC2-04) | Control flow | Harrison | Not in repo (SRS) | [cfg-participant-join.png](./cfg/cfg-participant-join.png) | SRS (Appendix D) |
+| White-box CFG: Participant.withdraw (UC2-05) | Control flow | Harrison | Not in repo (SRS) | [cfg-participant-withdraw.png](./cfg/cfg-participant-withdraw.png) | SRS (Appendix D) |
+| White-box CFG: parseTopUpInput (UC1-05) | Control flow | - | Not in repo (SRS) | [cfg-parse-top-up.png](./cfg/cfg-parse-top-up.png) | SRS (Appendix D) |
 | Session use-case context | Use case | Neoh | Not in repo | [session-use-case-context.png](../adr/assets/session-use-case-context.png) | [ADR-0001](../adr/0001-use-case-driven-development.md) |
 | Participant states (product-owner reference) | State | Neoh | Not in repo | [PNG](../assets/participant-state-diagram-product-owner-reference.png) | [Waitlist and replacement options](../discussions/waitlist-and-replacement-options.md) |
 | Account white-box control-flow graphs (5) | Control flow | Joseph | [figures/*.dot](../testing/account-testing/figures/) | [figures/*-cfg.png](../testing/account-testing/figures/) | [Account testing](../testing/account-testing/README.md) |
