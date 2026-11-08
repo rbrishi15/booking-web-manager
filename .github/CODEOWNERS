@@ -104,6 +104,7 @@
 /use-cases/sessions/CreateSessions.ts @liang799
 /use-cases/sessions/DiscoverSessions.ts @liang799
 /use-cases/sessions/ManageSession.ts @liang799
+/use-cases/sessions/EditSession.ts @liang799
 /use-cases/sessions/ToggleSessionVisibility.ts @liang799
 /use-cases/sessions/ListHostedSessions.ts @liang799
 /use-cases/sessions/ListSessionFeed.ts @liang799
@@ -114,10 +115,12 @@
 /use-cases/sessions/session-creation-transaction.ts @liang799
 /use-cases/sessions/session-discovery-transaction.ts @liang799
 /use-cases/sessions/session-management-transaction.ts @liang799
+/use-cases/sessions/session-editing-transaction.ts @liang799
 /use-cases/sessions/README.md @liang799
 /use-case-config/sessions.ts @liang799
 /use-case-config/discovery.ts @liang799
 /use-case-config/session-management.ts @liang799
+/use-case-config/session-editing.ts @liang799
 /use-case-config/session-feed.ts @liang799
 /use-case-config/invitations.ts @liang799
 /use-case-config/invitation-preview.ts @liang799
@@ -133,6 +136,7 @@
 /tests/integration/session-management-persistence.test.ts @liang799
 /tests/integration/session-feed-persistence.test.ts @liang799
 /tests/use-cases/list-session-feed.test.ts @liang799
+/tests/use-cases/edit-session.test.ts @liang799
 /tests/integration/session-invitation-persistence.test.ts @liang799
 /tests/use-cases/session-invitations.test.ts @liang799
 /tests/support/invitation-fixtures.ts @liang799
@@ -146,6 +150,7 @@
 /tests/e2e/session-overview-helpers.ts @liang799
 /public/images/sessions/ @liang799
 /docs/assets/sessions/ @liang799
+/docs/assets/session-edit-*.jpg @liang799
 /tests/e2e/sessions-invitations.spec.ts @liang799 @Jolingoes @Wyjessie
 /tests/e2e/discovery*.spec.ts @liang799
 /tests/e2e/session-api-unavailable.spec.ts @liang799

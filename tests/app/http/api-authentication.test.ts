@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/app/sessions/server-dependencies", () => ({ getSessionDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/management-server-dependencies", () => ({ getSessionManagementDependencies: mocks.protectedDependencies }));
+vi.mock("@/app/sessions/editing-server-dependencies", () => ({ getSessionEditingDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/cancellation-server-dependencies", () => ({ getSessionCancellationDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/invitation-server-dependencies", () => ({ getSessionInvitationDependencies: mocks.protectedDependencies }));
 vi.mock("@/app/sessions/session-invitation-server-dependencies", () => ({ getSessionInvitationManagementDependencies: mocks.protectedDependencies }));
@@ -56,6 +57,7 @@ import * as participants from "@/app/api/sessions/[sessionId]/participants/route
 import * as removal from "@/app/api/sessions/[sessionId]/participants/[participationId]/remove/route";
 import * as removalPreview from "@/app/api/sessions/[sessionId]/participants/[participationId]/removal-preview/route";
 import * as visibility from "@/app/api/sessions/[sessionId]/visibility/route";
+import * as editing from "@/app/api/sessions/[sessionId]/edit/route";
 import * as withdrawalPreview from "@/app/api/sessions/[sessionId]/withdrawal-preview/route";
 import * as wallet from "@/app/api/wallet/route";
 import * as walletTransactions from "@/app/api/wallet/transactions/route";
@@ -97,6 +99,7 @@ const routes: Route[] = [
   { path: "/api/sessions/[sessionId]/participants/[participationId]/remove", handlers: removal },
   { path: "/api/sessions/[sessionId]/participants/[participationId]/removal-preview", handlers: removalPreview },
   { path: "/api/sessions/[sessionId]/visibility", handlers: visibility },
+  { path: "/api/sessions/[sessionId]/edit", handlers: editing },
   { path: "/api/sessions/[sessionId]/withdrawal-preview", handlers: withdrawalPreview },
   { path: "/api/wallet", handlers: wallet },
   { path: "/api/wallet/transactions", handlers: walletTransactions },
